@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <!--
+    If you are serving your web app in a path other than the root, change the
+    href value below to reflect the base path you are serving from.
+
+    The path provided below has to start and end with a slash "/" in order for
+    it to work correctly.
+
+    For more details:
+    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
+
+    This is a placeholder for base href that will be replaced by the value of
+    the `--base-href` argument provided to `flutter build`.
+  -->
+  <base href="/">
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="description" content="A new Flutter project.">
+
+  <!-- iOS meta tags & icons -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="fomra_ls">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="favicon.png"/>
+
+  <title>fomra_ls</title>
+  <link rel="manifest" href="manifest.json">
+</head>
+<body>
+  <!-- Stub for passkeys_web (supabase_flutter transitive dep).
+       The real Corbado bundle.js is not needed — we use email/password auth only.
+       Without this stub, passkeys_web closes the browser window on startup. -->
+  <script>
+    window.PasskeyAuthenticator = {
+      init: function() {},
+      register: function() { return Promise.reject('passkeys not enabled'); },
+      login: function() { return Promise.reject('passkeys not enabled'); },
+      cancelCurrentAuthenticatorOperation: function() {},
+      isUserVerifyingPlatformAuthenticatorAvailable: function() { return Promise.resolve(false); },
+      isConditionalMediationAvailable: function() { return Promise.resolve(false); },
+      hasPasskeySupport: function() { return false; }
+    };
+  </script>
+
+  <!-- Visible loading screen — stays until Flutter's first frame fires -->
+  <div id="loading" style="
+    position:fixed;inset:0;background:#1B3A6B;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    font-family:sans-serif;color:#fff;z-index:9999;">
+    <div style="font-size:28px;font-weight:700;letter-spacing:1px;">FomraLS</div>
+    <div id="loading-sub" style="margin-top:12px;font-size:14px;opacity:.7;">Loading…</div>
+  </div>
+  <script>
+    window.addEventListener('flutter-first-frame', function() {
+      var el = document.getElementById('loading');
+      if (el) el.style.display = 'none';
+    });
+    // If Flutter hasn't started within 12 seconds, show error hint
+    setTimeout(function() {
+      var sub = document.getElementById('loading-sub');
+      if (sub) {
+        sub.style.color = '#ff8a80';
+        sub.textContent = 'Taking too long — open Console (F12) for errors';
+      }
+    }, 12000);
+  </script>
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+</html>

@@ -1,0 +1,33 @@
+name: fomra_ls
+description: FomraLS - Land & Property Management System for Fomra Housing
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.6
+  flutter_svg: ^2.0.9
+  intl: ^0.19.0
+  fl_chart: ^0.66.2
+  geolocator: ^13.0.0
+  http: ^1.2.0
+  file_picker: ^8.0.0
+  flutter_map: ^7.0.2
+  latlong2: ^0.9.1
+  shared_preferences: ^2.3.2
+  url_launcher: ^6.3.0
+  supabase_flutter: ^2.5.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/

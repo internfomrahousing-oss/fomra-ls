@@ -1,0 +1,30 @@
+{
+  "outputDirectory": "build/web",
+  "buildCommand": "",
+  "installCommand": "npm install",
+  "functions": {
+    "api/poi.js":         { "maxDuration": 60 },
+    "api/magicbricks.js": { "maxDuration": 60 },
+    "api/tnrera.js":      { "maxDuration": 30 },
+    "api/tnlands.js":     { "maxDuration": 60 }
+  },
+  "headers": [
+    {
+      "source": "/flutter_service_worker.js",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-store, no-cache, must-revalidate" },
+        { "key": "Pragma",        "value": "no-cache" }
+      ]
+    },
+    {
+      "source": "/index.html",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-store, no-cache, must-revalidate" },
+        { "key": "Pragma",        "value": "no-cache" }
+      ]
+    }
+  ],
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}

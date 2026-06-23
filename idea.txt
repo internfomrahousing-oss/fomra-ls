@@ -1,0 +1,8 @@
+in legal verification create two tabs 
+field executive and legal team
+in field executive tab give fields to upload option for 
+Sale Deed
+Parent Documents
+Power of Attorney
+Approval Documents
+it should be upload as a file upto 1mb size this uploaded should be shown for legalteam

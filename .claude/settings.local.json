@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell($env:Path += \";C:\\\\src\\\\flutter\\\\bin\"; Set-Location \"C:\\\\Users\\\\satha\\\\OneDrive\\\\Desktop\\\\FomraLS\"; flutter analyze 2>&1)"
+    ]
+  }
+}
