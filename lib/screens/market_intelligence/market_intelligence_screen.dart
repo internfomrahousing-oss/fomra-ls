@@ -114,6 +114,8 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
   bool _fetchingMb = false;
   String? _mbError;
   String _mbSource = 'MagicBricks';
+  String _compFilter = 'All';   // All | Ongoing | Completed | Plot | Old
+  int _oldYearsFilter = 5;       // 2 | 5 | 10
 
   // EC & Patta â€“ location data passed to the section widget
   String? _detectedDistrict;
@@ -567,6 +569,30 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
     }
   }
 
+  List<Map<String, dynamic>> get _filteredMbListings {
+    if (_compFilter == 'All') return _mbListings;
+    final curYear = DateTime.now().year;
+    return _mbListings.where((item) {
+      final status      = (item['status'] as String? ?? '').toLowerCase();
+      final projectType = (item['projectType'] as String?) ?? 'Building';
+      final regYear     = item['registeredYear'] as int?;
+      switch (_compFilter) {
+        case 'Ongoing':
+          return projectType == 'Building' &&
+              (status.contains('register') || status.contains('construct') || status.contains('ongoing'));
+        case 'Completed':
+          return status.contains('complet') || status.contains('ready') || status.contains('move');
+        case 'Plot':
+          return projectType == 'Layout';
+        case 'Old':
+          if (regYear == null) return false;
+          return (curYear - regYear) >= _oldYearsFilter;
+        default:
+          return true;
+      }
+    }).toList();
+  }
+
   Widget _buildMagicBricksSection() {
     const mbColor = Color(0xFFE65100);
     final city = (_detectedDistrict ?? '')
@@ -644,12 +670,57 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
 
         if (_mbListings.isNotEmpty) ...[
           const SizedBox(height: 12),
-          Text('${_mbListings.length} listing${_mbListings.length == 1 ? '' : 's'} found',
-              style: const TextStyle(
-                  fontSize: 12, fontWeight: FontWeight.w600,
-                  color: AppColors.textSecondary)),
+          // ── Project type filters ────────────────────────────────────────
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(children: [
+              for (final f in ['All', 'Ongoing', 'Completed', 'Plot', 'Old Projects'])
+                Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: ChoiceChip(
+                    label: Text(f, style: const TextStyle(fontSize: 11)),
+                    selected: _compFilter == (f == 'Old Projects' ? 'Old' : f),
+                    selectedColor: mbColor,
+                    labelStyle: TextStyle(
+                      color: _compFilter == (f == 'Old Projects' ? 'Old' : f)
+                          ? Colors.white : AppColors.textPrimary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    onSelected: (_) => setState(() {
+                      _compFilter = f == 'Old Projects' ? 'Old' : f;
+                    }),
+                  ),
+                ),
+            ]),
+          ),
+          if (_compFilter == 'Old') ...[
+            const SizedBox(height: 8),
+            Row(children: [
+              const Text('Max age:', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+              const SizedBox(width: 8),
+              for (final yrs in [2, 5, 10])
+                Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: ChoiceChip(
+                    label: Text('< ${yrs}yrs', style: const TextStyle(fontSize: 11)),
+                    selected: _oldYearsFilter == yrs,
+                    selectedColor: AppColors.primary,
+                    labelStyle: TextStyle(
+                      color: _oldYearsFilter == yrs ? Colors.white : AppColors.textPrimary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    onSelected: (_) => setState(() => _oldYearsFilter = yrs),
+                  ),
+                ),
+            ]),
+          ],
           const SizedBox(height: 8),
-          ..._mbListings.take(20).map((item) {
+          Text(
+            '${_filteredMbListings.length} of ${_mbListings.length} project${_mbListings.length == 1 ? '' : 's'}',
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 8),
+          ..._filteredMbListings.take(30).map((item) {
             final name      = item['projectName'] as String? ?? '';
             final locality  = item['locality']    as String? ?? '';
             final bhk       = item['bhkType']     as String? ?? '';

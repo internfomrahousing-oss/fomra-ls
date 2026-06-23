@@ -154,6 +154,8 @@ function mapListing(p) {
     possession:     typeof poss === 'string' ? poss : 'N/A',
     completionYear: null,
     reraNo:         p.reraId || p.reraNo || p.reraNumber || '',
+    projectType:    'Building',
+    registeredYear: null,
     lat:            null,
     lng:            null,
   };
@@ -286,6 +288,8 @@ router.get('/', async (req, res) => {
 
   let listings = [];
   const errors = [];
+  // On Netlify the function timeout is 10s — skip slow MB strategies
+  const onNetlify = !!process.env.NETLIFY;
 
   const searchApiBase =
     `https://www.magicbricks.com/mbsrp/propertySearch.html` +
@@ -293,7 +297,7 @@ router.get('/', async (req, res) => {
     `&proptype=${mbPropType}&pgNo=1&resi_flag=1&newPropFlag=3&type=search`;
 
   // ── Strategy 1: Android Dalvik UA (mimics mobile app) ──────────────────
-  if (listings.length === 0) {
+  if (!onNetlify && listings.length === 0) {
     try {
       const r = await fetchRaw(searchApiBase, ANDROID_HEADERS);
       if (r.status === 200) {
@@ -308,7 +312,7 @@ router.get('/', async (req, res) => {
   }
 
   // ── Strategy 2: iOS app UA ──────────────────────────────────────────────
-  if (listings.length === 0) {
+  if (!onNetlify && listings.length === 0) {
     try {
       const r = await fetchRaw(searchApiBase, IOS_HEADERS);
       if (r.status === 200) {
@@ -323,7 +327,7 @@ router.get('/', async (req, res) => {
   }
 
   // ── Strategy 3: Minimal headers (no Sec-* fingerprinting) ──────────────
-  if (listings.length === 0) {
+  if (!onNetlify && listings.length === 0) {
     try {
       const r = await fetchRaw(searchApiBase, MINIMAL_HEADERS);
       if (r.status === 200) {
@@ -338,7 +342,7 @@ router.get('/', async (req, res) => {
   }
 
   // ── Strategy 4: Mobile site m.magicbricks.com ───────────────────────────
-  if (listings.length === 0) {
+  if (!onNetlify && listings.length === 0) {
     try {
       const mUrl =
         `https://m.magicbricks.com/new-projects-in-${city.toLowerCase()}-pppfsale`;
@@ -351,7 +355,7 @@ router.get('/', async (req, res) => {
   }
 
   // ── Strategy 5: propSearch alt endpoint with Android UA ─────────────────
-  if (listings.length === 0) {
+  if (!onNetlify && listings.length === 0) {
     try {
       const altUrl =
         `https://www.magicbricks.com/propSearch.html` +
@@ -370,7 +374,7 @@ router.get('/', async (req, res) => {
   }
 
   // ── Strategy 6: Desktop listing page with session cookie ────────────────
-  if (listings.length === 0) {
+  if (!onNetlify && listings.length === 0) {
     try {
       let cookie = '';
       try {
@@ -395,51 +399,62 @@ router.get('/', async (req, res) => {
     } catch (e) { errors.push(`Desktop(6): ${e.message}`); }
   }
 
-  // ── Fallback: TNRERA registered projects (government site, never IP-blocked) ──
+  // ── Fallback: TNRERA (parallel fetch, short timeout — safe for Netlify 10s limit) ──
   let source = 'MagicBricks';
   if (listings.length === 0) {
     try {
-      const TNRERA_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
-      const tnAll = [];
+      const TNRERA_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36';
+      const TNRERA_HDR = { 'User-Agent': TNRERA_UA, 'Accept': 'text/html,*/*', 'Referer': 'https://rera.tn.gov.in/' };
       const curYear = new Date().getFullYear();
-      for (const yr of [curYear, curYear - 1]) {
-        for (const type of ['Building', 'Normal_Layout']) {
-          try {
-            const url = `https://rera.tn.gov.in/cms/reg_projects_tamilnadu/${type}/${yr}.php`;
-            const r = await fetchRaw(url, {
-              'User-Agent': TNRERA_UA,
-              'Accept':     'text/html,*/*',
-              'Referer':    'https://rera.tn.gov.in/',
-            }, 25000);
-            if (r.status === 200) tnAll.push(...parseTnreraTable(r.body));
-          } catch (_) {}
+      // Netlify: current year only (faster). Vercel: current + last year.
+      const years = onNetlify ? [curYear] : [curYear, curYear - 1];
+      const types = ['Building', 'Normal_Layout'];
+
+      // Fetch all combinations in parallel
+      const tnResults = await Promise.allSettled(
+        years.flatMap(yr => types.map(async (type) => {
+          const url = `https://rera.tn.gov.in/cms/reg_projects_tamilnadu/${type}/${yr}.php`;
+          const r = await fetchRaw(url, TNRERA_HDR, onNetlify ? 7000 : 20000);
+          return r.status === 200 ? { rows: parseTnreraTable(r.body), type, yr } : null;
+        }))
+      );
+
+      const tnAll = [];
+      for (const result of tnResults) {
+        if (result.status === 'fulfilled' && result.value) {
+          const { rows, type, yr } = result.value;
+          rows.forEach(p => tnAll.push({ ...p, _type: type, _yr: yr }));
         }
       }
+
       const cityLower = city.toLowerCase();
       const filtered = tnAll.filter(p => {
         const d = (p.district || '').toLowerCase();
         return d.includes(cityLower) || cityLower.includes(d);
       });
+
       if (filtered.length > 0) {
         const seen2 = new Map();
         for (const p of filtered) {
           if (!seen2.has(p.reraNo)) seen2.set(p.reraNo, p);
         }
         listings = [...seen2.values()].map(p => ({
-          id:           `tnrera_${p.reraNo.replace(/[^a-zA-Z0-9]/g,'_')}`,
-          projectName:  p.projectName || p.reraNo,
-          locality:     p.district || city,
-          bhkType:      '',
-          priceRupees:  0,
-          pricePerSqft: 0,
-          area:         0,
-          status:       p.status || 'Registered',
-          possession:   'N/A',
+          id:             `tnrera_${p.reraNo.replace(/[^a-zA-Z0-9]/g,'_')}`,
+          projectName:    p.projectName || p.reraNo,
+          locality:       p.district || city,
+          bhkType:        '',
+          priceRupees:    0,
+          pricePerSqft:   0,
+          area:           0,
+          status:         p.status || 'Registered',
+          possession:     'N/A',
           completionYear: null,
-          reraNo:       p.reraNo,
-          developer:    p.developer || '',
-          lat:          null,
-          lng:          null,
+          reraNo:         p.reraNo,
+          developer:      p.developer || '',
+          projectType:    p._type === 'Normal_Layout' ? 'Layout' : 'Building',
+          registeredYear: p._yr || null,
+          lat:            null,
+          lng:            null,
         }));
         source = 'TNRERA';
       }
