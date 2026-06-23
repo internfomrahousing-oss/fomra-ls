@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../../models/land_lead.dart';
+import '../../models/site_verification.dart';
 import '../../services/app_store.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_drawer.dart';
@@ -90,6 +91,16 @@ class _LegalVerificationScreenState extends State<LegalVerificationScreen>
 
   void _onStoreUpdate() => setState(() {});
 
+  List<LandLead> get _siteVerifiedLeads {
+    final completedRefs = AppStore.instance.siteVerifications
+        .where((sv) => sv.status == VerificationStatus.completed)
+        .map((sv) => sv.leadReference)
+        .toSet();
+    return AppStore.instance.leads
+        .where((l) => completedRefs.contains(l.leadId))
+        .toList();
+  }
+
   Map<String, _DocFile?> _docsFor(String leadId) =>
       _leadDocs[leadId] ?? {for (final t in _docTypes) t: null};
 
@@ -123,7 +134,8 @@ class _LegalVerificationScreenState extends State<LegalVerificationScreen>
               controller: _tabController,
               children: [
                 _FieldExecutiveTab(
-                  leads: AppStore.instance.leads,
+                  leads: _siteVerifiedLeads,
+                  allLeadsCount: AppStore.instance.leads.length,
                   docsFor: _docsFor,
                   onUpload: _openUpload,
                 ),
@@ -177,11 +189,13 @@ class _LegalVerificationScreenState extends State<LegalVerificationScreen>
 
 class _FieldExecutiveTab extends StatelessWidget {
   final List<LandLead> leads;
+  final int allLeadsCount;
   final Map<String, _DocFile?> Function(String leadId) docsFor;
   final void Function(LandLead) onUpload;
 
   const _FieldExecutiveTab({
     required this.leads,
+    required this.allLeadsCount,
     required this.docsFor,
     required this.onUpload,
   });
@@ -200,30 +214,41 @@ class _FieldExecutiveTab extends StatelessWidget {
     );
   }
 
-  Widget _emptyState() => Center(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Container(
-            width: 80,
-            height: 80,
-            decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha: 0.08),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(Icons.upload_file_outlined,
-                size: 38, color: AppColors.primary.withValues(alpha: 0.4)),
+  Widget _emptyState() {
+    final hasLeads = allLeadsCount > 0;
+    return Center(
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Container(
+          width: 80,
+          height: 80,
+          decoration: BoxDecoration(
+            color: AppColors.primary.withValues(alpha: 0.08),
+            shape: BoxShape.circle,
           ),
-          const SizedBox(height: 16),
-          const Text('No leads available',
-              style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textSecondary)),
-          const SizedBox(height: 4),
-          const Text('Add leads in Land Lead Management first.',
-              style: TextStyle(
-                  fontSize: 12, color: AppColors.textSecondary)),
-        ]),
-      );
+          child: Icon(Icons.upload_file_outlined,
+              size: 38, color: AppColors.primary.withValues(alpha: 0.4)),
+        ),
+        const SizedBox(height: 16),
+        Text(
+          hasLeads
+              ? 'No leads have completed site verification'
+              : 'No leads found',
+          style: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textSecondary),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          hasLeads
+              ? 'Complete site verification first to upload documents here.'
+              : 'Add leads in Land Lead Management, then complete site verification.',
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+        ),
+      ]),
+    );
+  }
 }
 
 class _LeadDocCard extends StatelessWidget {
