@@ -1,11 +1,35 @@
-const serverless = require('serverless-http');
-const express    = require('express');
-const cors       = require('cors');
-const router     = require('../../backend/src/routes/poi');
+const router = require('../../backend/src/routes/poi');
 
-const app = express();
-app.use(cors());
-app.use(express.json());
-app.use('/.netlify/functions/poi', router);
+const CORS = {
+  'Content-Type': 'application/json',
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'Content-Type',
+};
 
-module.exports.handler = serverless(app);
+exports.handler = async (event) => {
+  if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: CORS, body: '' };
+
+  return new Promise((resolve) => {
+    const req = {
+      method:  event.httpMethod || 'GET',
+      url:     '/',
+      query:   event.queryStringParameters || {},
+      params:  {},
+      headers: event.headers || {},
+      body:    event.body ? (() => { try { return JSON.parse(event.body); } catch { return {}; } })() : {},
+    };
+    let statusCode = 200;
+    const res = {
+      status(c) { statusCode = c; return this; },
+      setHeader() { return this; },
+      json(data) { resolve({ statusCode, headers: CORS, body: JSON.stringify(data) }); },
+    };
+    router.handle(req, res, (err) => {
+      resolve({
+        statusCode: err ? 500 : 404,
+        headers: CORS,
+        body: JSON.stringify({ error: err ? err.message : 'Not found' }),
+      });
+    });
+  });
+};
