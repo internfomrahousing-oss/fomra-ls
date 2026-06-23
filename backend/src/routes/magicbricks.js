@@ -200,6 +200,44 @@ function extractEmbedded(html) {
   return [];
 }
 
+// ── TNRERA HTML table parser (fallback source) ────────────────────────────────
+
+function parseTnreraTable(html) {
+  const rows = [];
+  function stripHtml(s) {
+    return s.replace(/<[^>]+>/g,' ').replace(/&nbsp;/g,' ').replace(/&amp;/g,'&').replace(/\s+/g,' ').trim();
+  }
+  const thPat = /<th[^>]*>([\s\S]*?)<\/th>/gi;
+  const headers = [];
+  let m;
+  while ((m = thPat.exec(html)) !== null) headers.push(stripHtml(m[1]).toLowerCase());
+  const iReg  = headers.findIndex(h => h.includes('reg') || h.includes('rera'));
+  const iName = headers.findIndex(h => h.includes('project') || h.includes('name'));
+  const iDev  = headers.findIndex(h => h.includes('promot') || h.includes('developer') || h.includes('builder'));
+  const iDist = headers.findIndex(h => h.includes('district'));
+  const iStat = headers.findIndex(h => h.includes('status'));
+  const tbodyM = html.match(/<tbody[^>]*>([\s\S]*?)<\/tbody>/i);
+  if (!tbodyM) return rows;
+  const rowPat = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+  let rowM;
+  while ((rowM = rowPat.exec(tbodyM[1])) !== null) {
+    const cellPat = /<td[^>]*>([\s\S]*?)<\/td>/gi;
+    const cells = [];
+    let cellM;
+    while ((cellM = cellPat.exec(rowM[1])) !== null) cells.push(stripHtml(cellM[1]));
+    if (cells.length < 3) continue;
+    const pick = (idx) => (idx >= 0 && idx < cells.length ? cells[idx] : '') || '';
+    const reraNo = pick(iReg >= 0 ? iReg : 1);
+    const name   = pick(iName >= 0 ? iName : 2);
+    const dev    = pick(iDev >= 0 ? iDev : 3);
+    const dist   = pick(iDist >= 0 ? iDist : 4);
+    const status = pick(iStat >= 0 ? iStat : 5);
+    if (!name && !reraNo) continue;
+    rows.push({ reraNo, projectName: name || reraNo, developer: dev, district: dist, status });
+  }
+  return rows;
+}
+
 // ── Geocode localities ─────────────────────────────────────────────────────────
 
 function geocodeOne(query) {
@@ -357,11 +395,61 @@ router.get('/', async (req, res) => {
     } catch (e) { errors.push(`Desktop(6): ${e.message}`); }
   }
 
+  // ── Fallback: TNRERA registered projects (government site, never IP-blocked) ──
+  let source = 'MagicBricks';
+  if (listings.length === 0) {
+    try {
+      const TNRERA_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+      const tnAll = [];
+      const curYear = new Date().getFullYear();
+      for (const yr of [curYear, curYear - 1]) {
+        for (const type of ['Building', 'Normal_Layout']) {
+          try {
+            const url = `https://rera.tn.gov.in/cms/reg_projects_tamilnadu/${type}/${yr}.php`;
+            const r = await fetchRaw(url, {
+              'User-Agent': TNRERA_UA,
+              'Accept':     'text/html,*/*',
+              'Referer':    'https://rera.tn.gov.in/',
+            }, 25000);
+            if (r.status === 200) tnAll.push(...parseTnreraTable(r.body));
+          } catch (_) {}
+        }
+      }
+      const cityLower = city.toLowerCase();
+      const filtered = tnAll.filter(p => {
+        const d = (p.district || '').toLowerCase();
+        return d.includes(cityLower) || cityLower.includes(d);
+      });
+      if (filtered.length > 0) {
+        const seen2 = new Map();
+        for (const p of filtered) {
+          if (!seen2.has(p.reraNo)) seen2.set(p.reraNo, p);
+        }
+        listings = [...seen2.values()].map(p => ({
+          id:           `tnrera_${p.reraNo.replace(/[^a-zA-Z0-9]/g,'_')}`,
+          projectName:  p.projectName || p.reraNo,
+          locality:     p.district || city,
+          bhkType:      '',
+          priceRupees:  0,
+          pricePerSqft: 0,
+          area:         0,
+          status:       p.status || 'Registered',
+          possession:   'N/A',
+          completionYear: null,
+          reraNo:       p.reraNo,
+          developer:    p.developer || '',
+          lat:          null,
+          lng:          null,
+        }));
+        source = 'TNRERA';
+      }
+    } catch (e) { errors.push(`TNRERA: ${e.message}`); }
+  }
+
   if (listings.length === 0) {
     return res.status(502).json({
-      error:   `No listings found for "${city}". MagicBricks is blocking server IPs.`,
+      error:   `No listings found for "${city}". MagicBricks is blocking server IPs and TNRERA returned no results.`,
       details: errors.join(' | '),
-      hint:    'MagicBricks uses IP-based blocking for cloud servers. Try later.',
     });
   }
 
@@ -395,7 +483,7 @@ router.get('/', async (req, res) => {
     });
   }
 
-  res.json({ source: 'MagicBricks', city, count: listings.length, listings });
+  res.json({ source, city, count: listings.length, listings });
 });
 
 module.exports = router;

@@ -109,10 +109,11 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
   String _developmentPotential = 'Medium';
   _ValuationResult? _valuationResult;
 
-  // MagicBricks Competitor Projects
+  // Competitor Projects (MagicBricks or TNRERA fallback)
   List<Map<String, dynamic>> _mbListings = [];
   bool _fetchingMb = false;
   String? _mbError;
+  String _mbSource = 'MagicBricks';
 
   // EC & Patta â€“ location data passed to the section widget
   String? _detectedDistrict;
@@ -550,6 +551,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
       final listings = (result['listings'] as List<dynamic>?) ?? [];
       setState(() {
         _mbListings = listings.cast<Map<String, dynamic>>();
+        _mbSource = (result['source'] as String?) ?? 'MagicBricks';
         _fetchingMb = false;
       });
     } on ApiException catch (e) {
@@ -596,8 +598,8 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
         Row(children: [
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Text('Source: MagicBricks',
-                  style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+              Text('Source: $_mbSource',
+                  style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
               const SizedBox(height: 2),
               Text('Area: ${city.isEmpty ? 'Chennai' : city}',
                   style: const TextStyle(fontSize: 12, color: AppColors.textPrimary)),
@@ -648,12 +650,14 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                   color: AppColors.textSecondary)),
           const SizedBox(height: 8),
           ..._mbListings.take(20).map((item) {
-            final name     = item['projectName'] as String? ?? '';
-            final locality = item['locality']    as String? ?? '';
-            final bhk      = item['bhkType']     as String? ?? '';
-            final poss     = item['possession']  as String? ?? '';
-            final rera     = item['reraNo']      as String? ?? '';
-            final price    = fmtPrice(item);
+            final name      = item['projectName'] as String? ?? '';
+            final locality  = item['locality']    as String? ?? '';
+            final bhk       = item['bhkType']     as String? ?? '';
+            final poss      = item['possession']  as String? ?? '';
+            final rera      = item['reraNo']      as String? ?? '';
+            final developer = item['developer']   as String? ?? '';
+            final price     = fmtPrice(item);
+            final isTnrera  = _mbSource == 'TNRERA';
             return Container(
               margin: const EdgeInsets.only(bottom: 8),
               padding: const EdgeInsets.all(12),
@@ -692,6 +696,14 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                     ),
                   ],
                 ]),
+                if (developer.isNotEmpty && isTnrera) ...[
+                  const SizedBox(height: 3),
+                  Text(developer,
+                      style: const TextStyle(
+                          fontSize: 11, color: AppColors.textSecondary,
+                          fontStyle: FontStyle.italic),
+                      maxLines: 1, overflow: TextOverflow.ellipsis),
+                ],
                 if (locality.isNotEmpty) ...[
                   const SizedBox(height: 4),
                   Row(children: [
@@ -713,7 +725,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                     if (bhk.isNotEmpty) chip(bhk, const Color(0xFF1565C0)),
                     if (poss.isNotEmpty && poss != 'N/A')
                       chip(poss, AppColors.success),
-                    if (rera.isNotEmpty) chip('RERA âœ“', AppColors.primary),
+                    if (rera.isNotEmpty) chip('RERA ✓', AppColors.primary),
                   ]),
                 ],
               ]),
@@ -727,7 +739,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                   color: mbColor.withValues(alpha: 0.3)),
               const SizedBox(height: 8),
               const Text(
-                'Tap "Fetch Projects" to search\nMagicBricks for competitor listings.',
+                'Tap "Fetch Projects" to load\ncompetitor projects for this area.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                     fontSize: 12, color: AppColors.textSecondary, height: 1.4),
