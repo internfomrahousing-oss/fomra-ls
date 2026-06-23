@@ -399,22 +399,22 @@ router.get('/', async (req, res) => {
     } catch (e) { errors.push(`Desktop(6): ${e.message}`); }
   }
 
-  // ── Fallback: TNRERA (parallel fetch, short timeout — safe for Netlify 10s limit) ──
+  // ── Fallback: TNRERA (all years in parallel — safe within Netlify 10s) ──
   let source = 'MagicBricks';
   if (listings.length === 0) {
     try {
       const TNRERA_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36';
       const TNRERA_HDR = { 'User-Agent': TNRERA_UA, 'Accept': 'text/html,*/*', 'Referer': 'https://rera.tn.gov.in/' };
       const curYear = new Date().getFullYear();
-      // Netlify: current year only (faster). Vercel: current + last year.
-      const years = onNetlify ? [curYear] : [curYear, curYear - 1];
+      // Always fetch 3 years × 2 types in parallel — parallel so total time ≈ single request
+      const years = [curYear, curYear - 1, curYear - 2];
       const types = ['Building', 'Normal_Layout'];
 
-      // Fetch all combinations in parallel
+      // Fetch all 6 combinations in parallel with 8s timeout each
       const tnResults = await Promise.allSettled(
         years.flatMap(yr => types.map(async (type) => {
           const url = `https://rera.tn.gov.in/cms/reg_projects_tamilnadu/${type}/${yr}.php`;
-          const r = await fetchRaw(url, TNRERA_HDR, onNetlify ? 7000 : 20000);
+          const r = await fetchRaw(url, TNRERA_HDR, 8000);
           return r.status === 200 ? { rows: parseTnreraTable(r.body), type, yr } : null;
         }))
       );
@@ -477,13 +477,15 @@ router.get('/', async (req, res) => {
   }
   listings = [...seen.values()];
 
-  // ── Geocode localities ────────────────────────────────────────────────────
-  const localityList = [...new Set(listings.map(l => l.locality).filter(Boolean))];
-  const geoCache     = await geocodeLocalities(localityList);
-  listings = listings.map(l => {
-    const g = geoCache[l.locality] || null;
-    return { ...l, lat: g?.lat ?? null, lng: g?.lng ?? null };
-  });
+  // ── Geocode localities (skip on Netlify to stay within 10s timeout) ──────
+  if (!onNetlify) {
+    const localityList = [...new Set(listings.map(l => l.locality).filter(Boolean))];
+    const geoCache     = await geocodeLocalities(localityList);
+    listings = listings.map(l => {
+      const g = geoCache[l.locality] || null;
+      return { ...l, lat: g?.lat ?? null, lng: g?.lng ?? null };
+    });
+  }
 
   // ── Radius filter ─────────────────────────────────────────────────────────
   if (hasRadius) {
