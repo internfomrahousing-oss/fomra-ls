@@ -1,8 +1,19 @@
-in legal verification create two tabs 
-field executive and legal team
-in field executive tab give fields to upload option for 
-Sale Deed
-Parent Documents
-Power of Attorney
-Approval Documents
-it should be upload as a file upto 1mb size this uploaded should be shown for legalteam
+upload files in field executive tab should be asked as one lead if clicked it should ask separate files to upload
+all the documents uploaded should be showed here as a lead 
+Legal Review
+
+Check:
+Ownership ask a fill up
+Mortgage keep it as mcq like yes or no if yes clicked ask a reason
+Court Cases keep it as mcq like yes or no if yes clicked ask a reason
+Government Acquisition Risk keep it as mcq like yes or no if yes clicked ask a reason
+Title Chain ask a fill up 
+Encumbrances ask a fill up
+Document Validity ask a fill up 
+
+this is different result of the documents
+Legal Result should be a mcq and if selected ask a fill up
+CLEAR
+OBSERVATION
+HIGH RISK
+REJECT
