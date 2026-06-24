@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../../models/land_lead.dart';
-import '../../models/site_verification.dart';
 import '../../services/app_store.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_drawer.dart';
@@ -44,8 +43,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
         .length;
     final acquired = leads.where((l) => l.status == LeadStatus.closed).length;
     final rejected = leads.where((l) => l.status == LeadStatus.lost).length;
-    final pendingLegal = store.siteVerifications
-        .where((v) => v.status == VerificationStatus.scheduled)
+    final pendingLegal = leads
+        .where((l) =>
+            l.status == LeadStatus.siteVisit ||
+            l.status == LeadStatus.negotiation)
         .length;
 
     return Scaffold(

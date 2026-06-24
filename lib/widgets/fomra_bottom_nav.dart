@@ -11,8 +11,8 @@ class FomraBottomNav extends StatelessWidget {
         AppColors.primary),
     _NavItem('/land-lead', Icons.add_location_alt_outlined,
         Icons.add_location_alt, 'Land Lead', AppColors.primary),
-    _NavItem('/site-verification', Icons.verified_outlined,
-        Icons.verified_rounded, 'Site Verify', AppColors.primary),
+    _NavItem('/market-intelligence', Icons.insights_outlined,
+        Icons.insights_rounded, 'Market', AppColors.primary),
   ];
 
   void _onTap(BuildContext context, _NavItem item) {
