@@ -206,18 +206,18 @@ function extractEmbedded(html) {
 
 // City aliases for TNRERA address text matching
 const TNRERA_CITY_ALIASES = {
-  ‘chennai’:         [‘chennai’, ‘madras’],
-  ‘kancheepuram’:    [‘kancheepuram’, ‘kanchipuram’],
-  ‘chengalpattu’:    [‘chengalpattu’, ‘chengelpet’],
-  ‘tiruchirappalli’: [‘tiruchirappalli’, ‘trichy’, ‘trichinopoly’],
-  ‘thoothukudi’:     [‘thoothukudi’, ‘tuticorin’],
-  ‘tirunelveli’:     [‘tirunelveli’, ‘tinnevelly’],
+  "chennai":         ["chennai", "madras"],
+  "kancheepuram":    ["kancheepuram", "kanchipuram"],
+  "chengalpattu":    ["chengalpattu", "chengelpet"],
+  "tiruchirappalli": ["tiruchirappalli", "trichy", "trichinopoly"],
+  "thoothukudi":     ["thoothukudi", "tuticorin"],
+  "tirunelveli":     ["tirunelveli", "tinnevelly"],
 };
 
 function parseTnreraTable(html) {
   const rows = [];
   function stripHtml(s) {
-    return s.replace(/<[^>]+>/g,’ ‘).replace(/&nbsp;/g,’ ‘).replace(/&amp;/g,’&’).replace(/\s+/g,’ ‘).trim();
+    return s.replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/\s+/g, " ").trim();
   }
   // TNRERA tables have fixed columns (no reliable <th> district column):
   // 0: S.No.  1: Reg No.  2: Promoter+Address  3: Project Details+Name  4: Approval  5: Completion  6: Other  7: Status
@@ -236,16 +236,16 @@ function parseTnreraTable(html) {
     if (cells.length < 3) continue;
     // Skip header row (first cell is not a number)
     if (!/^\d+$/.test(cells[0])) continue;
-    const reraNo = (cells[1] || ‘’).replace(/\s+dated\s+.*/i, ‘’).trim();
-    const promoterAddr = cells[2] || ‘’;
-    const detailsCell  = cells[3] || ‘’;
-    const otherCell    = cells[6] || ‘’;
-    const status       = cells[7] || cells[5] || ‘Registered’;
-    // Extract project name from ‘Project Name: “X”’ pattern
-    const nameM = detailsCell.match(/Project\s+Name\s*:\s*[“’”’]([^”’”’]+)[“’”’]/i);
-    const projectName = nameM ? nameM[1].trim() : (detailsCell.split(‘-’)[0].trim().slice(0, 60) || reraNo);
+    const reraNo = (cells[1] || "").replace(/\s+dated\s+.*/i, "").trim();
+    const promoterAddr = cells[2] || "";
+    const detailsCell  = cells[3] || "";
+    const otherCell    = cells[6] || "";
+    const status       = cells[7] || cells[5] || "Registered";
+    // Extract project name from Project Name: "X" pattern (matches smart + straight quotes)
+    const nameM = detailsCell.match(/Project\s+Name\s*:\s*["'‘’“”]([^"'‘’“”]+)["'‘’“”]/i);
+    const projectName = nameM ? nameM[1].trim() : (detailsCell.split("-")[0].trim().slice(0, 60) || reraNo);
     // Combine searchable address text for city matching (no dedicated district column)
-    const addressText = `${promoterAddr} ${detailsCell} ${otherCell}`;
+    const addressText = promoterAddr + " " + detailsCell + " " + otherCell;
     if (!projectName && !reraNo) continue;
     rows.push({ reraNo, projectName: projectName || reraNo, address: addressText, status });
   }
