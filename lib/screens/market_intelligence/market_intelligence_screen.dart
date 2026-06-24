@@ -2247,15 +2247,17 @@ class _GovtDocsSection extends StatefulWidget {
 }
 
 class _GovtDocsSectionState extends State<_GovtDocsSection> {
-  // â”€â”€ Patta state â”€â”€
+  // ── Patta state ──
   bool   _initingPatta = false;
   List<_Option> _districts = _kStaticDistricts;
   _Option? _selDistrict;
   List<_Option> _taluks   = [];
   bool   _loadingTaluks   = false;
+  String? _talukError;
   _Option? _selTaluk;
   List<_Option> _villages = [];
   bool   _loadingVillages = false;
+  String? _villageError;
   _Option? _selVillage;
   final _surveyCtrl  = TextEditingController();
   final _subDivCtrl  = TextEditingController();
@@ -2346,7 +2348,16 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
         }
       });
     } catch (_) {
-      setState(() => _districts = _kStaticDistricts);
+      // Fall back to static list but still try to auto-match the district
+      setState(() {
+        _districts = _kStaticDistricts;
+        if (widget.district != null) {
+          _selDistrict = _matchOption(_kStaticDistricts, widget.district);
+          if (_selDistrict != null) {
+            Future.microtask(() => _loadTaluks(_selDistrict!, autoFill: true));
+          }
+        }
+      });
     } finally {
       setState(() => _initingPatta = false);
     }
@@ -2357,7 +2368,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
       _selDistrict = district;
       _taluks = []; _selTaluk = null;
       _villages = []; _selVillage = null;
-      _loadingTaluks = true;
+      _loadingTaluks = true; _talukError = null;
     });
     try {
       final data = await ApiClient.getList('/api/tnlands/taluks?dc=${district.code}');
@@ -2367,8 +2378,11 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
         final match = _matchOption(loaded, widget.taluk);
         if (match != null) await _loadVillages(match, autoFill: true);
       }
-    } catch (_) {
-      setState(() => _loadingTaluks = false);
+    } catch (e) {
+      setState(() {
+        _loadingTaluks = false;
+        _talukError = 'Failed to load taluks. Tap to retry.';
+      });
     }
   }
 
@@ -2376,7 +2390,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
     setState(() {
       _selTaluk = taluk;
       _villages = []; _selVillage = null;
-      _loadingVillages = true;
+      _loadingVillages = true; _villageError = null;
     });
     try {
       final data = await ApiClient.getList(
@@ -2389,8 +2403,11 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
         }
         _loadingVillages = false;
       });
-    } catch (_) {
-      setState(() => _loadingVillages = false);
+    } catch (e) {
+      setState(() {
+        _loadingVillages = false;
+        _villageError = 'Failed to load villages. Tap to retry.';
+      });
     }
   }
 
@@ -2576,6 +2593,26 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
           loading: _loadingTaluks,
           hint: _selDistrict == null ? 'Select district first' : 'Select Taluk',
           onChanged: (opt) => _loadVillages(opt)),
+      if (_talukError != null) ...[
+        const SizedBox(height: 4),
+        GestureDetector(
+          onTap: _selDistrict == null ? null : () => _loadTaluks(_selDistrict!),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: AppColors.error.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
+            ),
+            child: const Row(children: [
+              Icon(Icons.refresh, size: 14, color: AppColors.error),
+              SizedBox(width: 6),
+              Text('Failed to load taluks — tap to retry',
+                  style: TextStyle(fontSize: 11, color: AppColors.error)),
+            ]),
+          ),
+        ),
+      ],
       const SizedBox(height: 10),
 
       // Village
@@ -2584,6 +2621,26 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
           loading: _loadingVillages,
           hint: _selTaluk == null ? 'Select taluk first' : 'Select Village',
           onChanged: (opt) => setState(() => _selVillage = opt)),
+      if (_villageError != null) ...[
+        const SizedBox(height: 4),
+        GestureDetector(
+          onTap: _selTaluk == null ? null : () => _loadVillages(_selTaluk!),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: AppColors.error.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
+            ),
+            child: const Row(children: [
+              Icon(Icons.refresh, size: 14, color: AppColors.error),
+              SizedBox(width: 6),
+              Text('Failed to load villages — tap to retry',
+                  style: TextStyle(fontSize: 11, color: AppColors.error)),
+            ]),
+          ),
+        ),
+      ],
       const SizedBox(height: 10),
 
       // Survey No + Sub Div

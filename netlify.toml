@@ -6,6 +6,9 @@
 [build.environment]
   NODE_VERSION = "18"
 
+[functions]
+  node_bundler = "esbuild"
+
 # ── API routes → Netlify Functions ────────────────────────────────────────────
 [[redirects]]
   from = "/api/magicbricks"
