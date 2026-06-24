@@ -95,7 +95,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
   String? _selectedLeadId;
 
   // POI
-  int _selectedRadius = 2;
+  final int _selectedRadius = 2;
   Map<String, int> _poiCounts = {};
   Map<String, List<Map<String, dynamic>>> _poiPlaces = {};
   bool _collectingPois = false;
@@ -1254,6 +1254,19 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
     );
   }
 
+  Widget _buildZoomButton(IconData icon, VoidCallback onTap) => Material(
+        color: AppColors.primary,
+        borderRadius: BorderRadius.circular(8),
+        child: InkWell(
+          onTap: _mapReady ? onTap : null,
+          borderRadius: BorderRadius.circular(8),
+          child: Padding(
+            padding: const EdgeInsets.all(8),
+            child: Icon(icon, color: Colors.white, size: 20),
+          ),
+        ),
+      );
+
   // â”€â”€ Section: Map Visualization â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   Widget _buildMapSection() {
     final activeLoc = _activeLatLng;
@@ -1361,37 +1374,29 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
 
         // â”€â”€ Radius selector â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         Row(children: [
-          const Text('Search Radius:',
+          const Text('Zoom:',
               style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
                   color: AppColors.textSecondary)),
           const Spacer(),
-          ...[2, 5, 10].map((r) => Padding(
-                padding: const EdgeInsets.only(left: 8),
-                child: ChoiceChip(
-                  label: Text('${r}km'),
-                  selected: _selectedRadius == r,
-                  onSelected: (_) {
-                    setState(() => _selectedRadius = r);
-                    if (_mapReady && activeLoc != null) {
-                      _mapController.move(activeLoc, _zoomForRadius(r));
-                    }
-                  },
-                  selectedColor: AppColors.primary,
-                  labelStyle: TextStyle(
-                      color: _selectedRadius == r
-                          ? Colors.white
-                          : AppColors.textPrimary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600),
-                  side: BorderSide(
-                      color: _selectedRadius == r
-                          ? AppColors.primary
-                          : const Color(0xFFE5E7EB)),
-                  showCheckmark: false,
-                ),
-              )),
+          _buildZoomButton(Icons.remove, () {
+            if (_mapReady) {
+              _mapController.move(
+                _mapController.camera.center,
+                (_mapController.camera.zoom - 1).clamp(3.0, 18.0),
+              );
+            }
+          }),
+          const SizedBox(width: 8),
+          _buildZoomButton(Icons.add, () {
+            if (_mapReady) {
+              _mapController.move(
+                _mapController.camera.center,
+                (_mapController.camera.zoom + 1).clamp(3.0, 18.0),
+              );
+            }
+          }),
         ]),
         const SizedBox(height: 12),
 
