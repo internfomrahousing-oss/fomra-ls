@@ -65,6 +65,7 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
   String? _ecError;
   final _ecFromCtrl = TextEditingController();
   final _ecToCtrl   = TextEditingController();
+  bool _autoFetchTriggered = false;
 
   @override
   void initState() {
@@ -74,7 +75,10 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
         '${now.day.toString().padLeft(2, '0')}/${now.month.toString().padLeft(2, '0')}/${now.year}';
     _ecFromCtrl.text = '01/01/1990';
     // Rebuild when survey number changes so the Fetch button reacts
-    _surveyCtrl.addListener(() { if (mounted) setState(() {}); });
+    _surveyCtrl.addListener(() {
+      _autoFetchTriggered = false;
+      if (mounted) setState(() {});
+    });
   }
 
   @override
@@ -171,6 +175,14 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
           district.isNotEmpty ? district : taluk,
           taluk,
           village,
+          hints: [
+            location,
+            village,
+            taluk,
+            district,
+            _first(addr, ['state_district', 'county', 'state']),
+            _first(addr, ['city', 'town', 'municipality', 'suburb', 'neighbourhood']),
+          ],
         );
       } else {
         _setStatus('Address lookup failed — GPS coordinates saved.');
@@ -233,7 +245,8 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
   }
 
   Future<void> _resolveLocationCodes(
-      String district, String taluk, String village) async {
+      String district, String taluk, String village,
+      {List<String> hints = const []}) async {
     if (!mounted) return;
     setState(() {
       _resolvingCodes = true;
@@ -244,9 +257,17 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
     });
 
     try {
+      final districtCandidates = [district, ...hints].where((s) => s.trim().isNotEmpty).toList();
+      final talukCandidates = [taluk, ...hints].where((s) => s.trim().isNotEmpty).toList();
+      final villageCandidates = [village, ...hints].where((s) => s.trim().isNotEmpty).toList();
+
       // Step 1 — districts
       final districts = await ApiClient.getList('/api/tnlands/districts');
-      final dMatch = _fuzzyMatch(districts, district);
+      Map<String, dynamic>? dMatch;
+      for (final candidate in districtCandidates) {
+        dMatch = _fuzzyMatch(districts, candidate);
+        if (dMatch != null) break;
+      }
       if (dMatch == null) {
         _setCodeStatus('District not found in TN records — enter survey data manually.');
         return;
@@ -255,11 +276,15 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
 
       // Step 2 — taluks
       final taluks = await ApiClient.getList('/api/tnlands/taluks?dc=$dc');
-      final tMatch = _fuzzyMatch(taluks, taluk);
+      Map<String, dynamic>? tMatch;
+      for (final candidate in talukCandidates) {
+        tMatch = _fuzzyMatch(taluks, candidate);
+        if (tMatch != null) break;
+      }
       if (tMatch == null) {
         if (mounted) setState(() => _resolvedDc = dc);
         _setCodeStatus('District matched. Taluk not found — select manually.');
-        _resolveEcCodes(district);
+        _resolveEcCodes([district, taluk, ...hints]);
         return;
       }
       final tc = tMatch['code'] as String;
@@ -267,7 +292,11 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
       // Step 3 — villages
       final villages =
           await ApiClient.getList('/api/tnlands/villages?dc=$dc&tc=$tc');
-      final vMatch = _fuzzyMatch(villages, village);
+      Map<String, dynamic>? vMatch;
+      for (final candidate in villageCandidates) {
+        vMatch = _fuzzyMatch(villages, candidate);
+        if (vMatch != null) break;
+      }
 
       if (!mounted) return;
       setState(() {
@@ -280,7 +309,7 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
           ? 'Land codes resolved ✓  Ready to fetch Patta & EC'
           : 'District & taluk matched. Village not found — fetch may still work.');
 
-      _resolveEcCodes(district);
+      _resolveEcCodes([district, taluk, village, ...hints]);
     } on ApiException catch (e) {
       _setCodeStatus('Code lookup failed: ${e.message}');
     } catch (e) {
@@ -288,12 +317,16 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
     }
   }
 
-  Future<void> _resolveEcCodes(String districtName) async {
+  Future<void> _resolveEcCodes(List<String> districtHints) async {
     for (final zone in ['1', '2', '3']) {
       try {
         final ecDistricts =
             await ApiClient.getList('/api/tnlands/ec/districts?zone=$zone');
-        final dMatch = _fuzzyMatch(ecDistricts, districtName);
+        Map<String, dynamic>? dMatch;
+        for (final hint in districtHints.where((s) => s.trim().isNotEmpty)) {
+          dMatch = _fuzzyMatch(ecDistricts, hint);
+          if (dMatch != null) break;
+        }
         if (dMatch != null) {
           if (!mounted) return;
           setState(() {
@@ -318,11 +351,24 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
       if (!mounted) return;
       setState(() {
         _ecSroList = sros.map((s) => s as Map<String, dynamic>).toList();
+        if (_ecSroList.isNotEmpty && _selectedEcSro == null) {
+          _selectedEcSro = _ecSroList.first['code'] as String?;
+        }
         _loadingEcSros = false;
       });
+      _maybeAutoFetchRecords();
     } catch (_) {
       if (mounted) setState(() => _loadingEcSros = false);
     }
+  }
+
+  void _maybeAutoFetchRecords() {
+    if (!mounted || _autoFetchTriggered) return;
+    if (_surveyCtrl.text.trim().isEmpty) return;
+    if (!_pattaReady || !_ecReady) return;
+    _autoFetchTriggered = true;
+    _fetchPatta();
+    _fetchEc();
   }
 
   void _setCodeStatus(String msg) {
@@ -508,6 +554,12 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
       _surveyCtrl.text.trim().isNotEmpty &&
       _ecFromCtrl.text.trim().isNotEmpty &&
       _ecToCtrl.text.trim().isNotEmpty;
+
+  @override
+  void didUpdateWidget(covariant AddLeadScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _maybeAutoFetchRecords();
+  }
 
   @override
   Widget build(BuildContext context) {

@@ -130,6 +130,12 @@ function extractAspNetTokens(html) {
   };
 }
 
+function extractHiddenValue(html, name) {
+  const m = html.match(new RegExp(`id="${name}"[^>]*value="([^"]*)"`, 'i')) ||
+            html.match(new RegExp(`name="${name}"[^>]*value="([^"]*)"`, 'i'));
+  return m ? m[1] : '';
+}
+
 function encodeForm(obj) {
   return Object.entries(obj)
     .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v ?? '')}`)
@@ -219,16 +225,27 @@ function extractUpdatePanelHtml(body) {
 // ── Patta (eservices.tn.gov.in) ───────────────────────────────────────────────
 
 const PATTA_BASE = 'https://eservices.tn.gov.in';
-const PATTA_PATH = '/eservicesnew/land/patta_chitta_view.html';
-const PATTA_URL  = PATTA_BASE + PATTA_PATH + '?lang=en';
+const PATTA_HOME_URL = `${PATTA_BASE}/eservicesnew/home.html`;
+const PATTA_PATH = '/eservicesnew/land/chittaExtract_ta.html';
+const PATTA_FORM_PATH = '/eservicesnew/land/chittaNewRuralTamil.html';
+const PATTA_URL  = PATTA_BASE + PATTA_PATH + '?lan=ta';
 
 const PATTA_CTRL = {
-  district: 'ctl00$ContentPlaceHolder1$ddlDistrict',
-  taluk:    'ctl00$ContentPlaceHolder1$ddlTaluk',
-  village:  'ctl00$ContentPlaceHolder1$ddlVillage',
-  surveyNo: 'ctl00$ContentPlaceHolder1$txtSurveyNo',
-  subDiv:   'ctl00$ContentPlaceHolder1$txtSubDivisionNo',
-  button:   'ctl00$ContentPlaceHolder1$btnGetPCDetails',
+  district: 'districtCode',
+  taluk:    'talukCode',
+  village:  'villageCode',
+  viewOpt:  'viewOpt',
+  landtype: 'landtype',
+  pattaNo:  'pattaNo',
+  owner:    'searchPattaName',
+  surveyNo: 'surveyNo',
+  subDiv:   'subdivNo',
+  mobile:   'mobileno',
+  otp:      'otpno',
+  task:     'task',
+  searchpattano: 'searchpattano',
+  chkrno:   'chkrno',
+  ajaxRno:  'ajax_rno',
 };
 
 const STATIC_TN_DISTRICTS = [
@@ -262,15 +279,33 @@ async function getPattaPage() {
   if (_pattaPageCache && (now - _pattaPageCache.time) < PATTA_CACHE_TTL) {
     return _pattaPageCache;
   }
-  const res = await fetchRaw(PATTA_URL, { headers: { Referer: PATTA_BASE } });
+  const home = await fetchRaw(PATTA_HOME_URL, {
+    headers: {
+      Referer: PATTA_HOME_URL,
+      'Upgrade-Insecure-Requests': '1',
+    },
+  });
+  if (home.status !== 200) throw new Error(`Patta home page returned HTTP ${home.status}`);
+
+  const landingM = home.body.match(/href="(land\/chittaNewRuralTamil\.html\?lan=ta&rno=[^"]+)"/i);
+  const landingUrl = landingM ? `${PATTA_BASE}/eservicesnew/${landingM[1]}` : `${PATTA_BASE}${PATTA_FORM_PATH}?lan=ta`;
+  const res = await fetchRaw(landingUrl, {
+    headers: {
+      Referer: PATTA_HOME_URL,
+      'Upgrade-Insecure-Requests': '1',
+    },
+    cookies: home.cookies,
+  });
   if (res.status !== 200) throw new Error(`Patta page returned HTTP ${res.status}`);
-  const ctx = { html: res.body, cookies: res.cookies, time: now };
+  const ctx = { html: res.body, cookies: res.cookies || home.cookies, time: now, url: landingUrl };
   _pattaPageCache = ctx;
   return ctx;
 }
 
 async function pattaPostback(pageCtx, eventTarget, fieldValues) {
   const tokens = extractAspNetTokens(pageCtx.html);
+  const ajaxRno = extractHiddenValue(pageCtx.html, 'ajax_rno');
+  const chkrno  = extractHiddenValue(pageCtx.html, 'chkrno');
   const body   = encodeForm({
     __EVENTTARGET:          eventTarget,
     __EVENTARGUMENT:        '',
@@ -278,15 +313,17 @@ async function pattaPostback(pageCtx, eventTarget, fieldValues) {
     __VIEWSTATE:            tokens.__VIEWSTATE,
     __VIEWSTATEGENERATOR:   tokens.__VIEWSTATEGENERATOR,
     __EVENTVALIDATION:      tokens.__EVENTVALIDATION,
+    chkrno:                 chkrno,
+    ajax_rno:               ajaxRno,
     ...fieldValues,
   });
 
-  const res = await fetchRaw(PATTA_BASE + PATTA_PATH, {
+  const res = await fetchRaw(PATTA_BASE + PATTA_PATH + '?lan=ta', {
     method:  'POST',
     body,
     cookies: pageCtx.cookies,
     headers: {
-      Referer:             PATTA_URL,
+      Referer:             pageCtx.url || PATTA_URL,
       Origin:              PATTA_BASE,
       'X-MicrosoftAjax':  'Delta=true',
       'X-Requested-With': 'XMLHttpRequest',
@@ -355,7 +392,7 @@ function parsePattaResult(html) {
 router.get('/districts', async (req, res) => {
   try {
     const { html } = await getPattaPage();
-    const districts = parseSelectOptions(html, 'ddlDistrict')
+    const districts = parseSelectOptions(html, 'districtCode')
       .filter(d => !d.name.toLowerCase().includes('select'));
     res.json(districts.length > 0 ? districts : STATIC_TN_DISTRICTS);
   } catch (_) {
@@ -372,7 +409,7 @@ router.get('/taluks', async (req, res) => {
     const ctx     = await pattaPostback(pageCtx, PATTA_CTRL.district, {
       [PATTA_CTRL.district]: dc,
     });
-    const taluks = parseSelectOptions(ctx.html, 'ddlTaluk');
+    const taluks = parseSelectOptions(ctx.html, 'talukCode');
     if (taluks.length === 0) return res.status(502).json({ error: 'Could not fetch taluks — check district code.' });
     res.json(taluks);
   } catch (err) {
@@ -393,7 +430,7 @@ router.get('/villages', async (req, res) => {
       [PATTA_CTRL.district]: dc,
       [PATTA_CTRL.taluk]:    tc,
     });
-    const villages = parseSelectOptions(afterTaluk.html, 'ddlVillage');
+    const villages = parseSelectOptions(afterTaluk.html, 'villageCode');
     if (villages.length === 0) return res.status(502).json({ error: 'Could not fetch villages — check taluk code.' });
     res.json(villages);
   } catch (err) {
@@ -402,9 +439,9 @@ router.get('/villages', async (req, res) => {
 });
 
 router.get('/patta', async (req, res) => {
-  const { dc, tc, vc, surveyNo, subDiv } = req.query;
-  if (!dc || !tc || !vc || !surveyNo) {
-    return res.status(400).json({ error: 'dc, tc, vc, surveyNo required' });
+  const { dc, tc, vc, surveyNo, subDiv, pattaNo, ownerName, viewOpt, landtype } = req.query;
+  if (!dc || !tc || !vc || (!surveyNo && !pattaNo && !ownerName)) {
+    return res.status(400).json({ error: 'dc, tc, vc and a patta identifier are required' });
   }
 
   try {
@@ -412,24 +449,32 @@ router.get('/patta', async (req, res) => {
     const tokens  = extractAspNetTokens(pageCtx.html);
 
     const body = encodeForm({
-      __EVENTTARGET:          '',
-      __EVENTARGUMENT:        '',
-      __VIEWSTATE:            tokens.__VIEWSTATE,
-      __VIEWSTATEGENERATOR:   tokens.__VIEWSTATEGENERATOR,
-      __EVENTVALIDATION:      tokens.__EVENTVALIDATION,
-      [PATTA_CTRL.district]:  dc,
-      [PATTA_CTRL.taluk]:     tc,
-      [PATTA_CTRL.village]:   vc,
-      [PATTA_CTRL.surveyNo]:  surveyNo,
-      [PATTA_CTRL.subDiv]:    subDiv || '',
-      [PATTA_CTRL.button]:    'View Patta & FMB',
+      [PATTA_CTRL.task]:          'chittaTam',
+      [PATTA_CTRL.searchpattano]: 'no',
+      [PATTA_CTRL.chkrno]:        tokens.__VIEWSTATE || '',
+      [PATTA_CTRL.ajaxRno]:       tokens.__VIEWSTATE || '',
+      [PATTA_CTRL.district]:      dc,
+      [PATTA_CTRL.taluk]:         tc,
+      [PATTA_CTRL.village]:       vc,
+      [PATTA_CTRL.viewOpt]:       viewOpt || (pattaNo ? 'pt' : 'sur'),
+      [PATTA_CTRL.landtype]:      landtype || 'R',
+      [PATTA_CTRL.pattaNo]:       pattaNo || '',
+      [PATTA_CTRL.owner]:         ownerName || '',
+      [PATTA_CTRL.surveyNo]:      surveyNo || '',
+      [PATTA_CTRL.subDiv]:        subDiv || '',
+      [PATTA_CTRL.mobile]:        '',
+      [PATTA_CTRL.otp]:           '',
     });
 
     const result = await fetchRaw(PATTA_BASE + PATTA_PATH, {
       method:  'POST',
       body,
       cookies: pageCtx.cookies,
-      headers: { Referer: PATTA_URL, Origin: PATTA_BASE },
+      headers: {
+        Referer: PATTA_URL,
+        Origin:  PATTA_BASE,
+        'X-Requested-With': 'XMLHttpRequest',
+      },
     });
 
     if (result.status !== 200) {
@@ -457,15 +502,17 @@ const EC_PATH = '/portal/webHP.aspx';
 const EC_URL  = `${EC_BASE}${EC_PATH}?appname=EC`;
 
 const EC_CTRL = {
-  zone:     'ctl00$ContentPlaceHolder1$ddlZone',
-  district: 'ctl00$ContentPlaceHolder1$ddlDistrict',
-  sro:      'ctl00$ContentPlaceHolder1$ddlSRO',
-  village:  'ctl00$ContentPlaceHolder1$txtVillageName',
-  surveyNo: 'ctl00$ContentPlaceHolder1$txtSurveyNo',
-  subDiv:   'ctl00$ContentPlaceHolder1$txtSubdivisionNo',
-  fromDate: 'ctl00$ContentPlaceHolder1$txtFromDate',
-  toDate:   'ctl00$ContentPlaceHolder1$txtToDate',
-  search:   'ctl00$ContentPlaceHolder1$btnSearch',
+  zone:     'cmb_Zone',
+  district: 'cmb_District',
+  sro:      'cmb_SroName',
+  village:  'multi_cmb_Village',
+  surveyNo: 'multi_SurveyNo',
+  subDiv:   'multi_SubDivisionNo',
+  fromDate: 'txt_PeriodStartDt',
+  toDate:   'txt_PeriodEndDt',
+  captcha:  'txt_Captcha',
+  captchaVal: 'captcha_val',
+  search:   'searchDocYearWise',
 };
 
 const EC_ZONES = [
@@ -569,7 +616,7 @@ router.get('/ec/districts', async (req, res) => {
   try {
     const pageCtx   = await getEcPage();
     const ctx       = await ecPostback(pageCtx, EC_CTRL.zone, { [EC_CTRL.zone]: zone });
-    const districts = parseSelectOptions(ctx.html, 'ddlDistrict');
+    const districts = parseSelectOptions(ctx.html, 'cmb_District');
     if (districts.length === 0) return res.status(502).json({ error: 'Could not fetch EC districts.' });
     res.json(districts);
   } catch (err) {
@@ -588,7 +635,7 @@ router.get('/ec/sros', async (req, res) => {
       [EC_CTRL.zone]:     zone,
       [EC_CTRL.district]: dc,
     });
-    const sros = parseSelectOptions(afterDist.html, 'ddlSRO');
+    const sros = parseSelectOptions(afterDist.html, 'cmb_SroName');
     if (sros.length === 0) return res.status(502).json({ error: 'Could not fetch SROs.' });
     res.json(sros);
   } catch (err) {
@@ -607,29 +654,39 @@ router.get('/ec/search', async (req, res) => {
   try {
     const pageCtx = await getEcPage();
     const tokens  = extractAspNetTokens(pageCtx.html);
+    const csrf    = (pageCtx.html.match(/var\s+csrf\s*=\s*'([^']+)'/i) || [])[1] || '';
 
     const body = encodeForm({
-      __EVENTTARGET:          '',
-      __EVENTARGUMENT:        '',
-      __VIEWSTATE:            tokens.__VIEWSTATE,
-      __VIEWSTATEGENERATOR:   tokens.__VIEWSTATEGENERATOR,
-      __EVENTVALIDATION:      tokens.__EVENTVALIDATION,
-      [EC_CTRL.zone]:         zone,
-      [EC_CTRL.district]:     dc,
-      [EC_CTRL.sro]:          sro,
-      [EC_CTRL.village]:      req.query.village || '',
-      [EC_CTRL.surveyNo]:     surveyNo,
-      [EC_CTRL.subDiv]:       subDiv || '',
-      [EC_CTRL.fromDate]:     fromDate,
-      [EC_CTRL.toDate]:       toDate,
-      [EC_CTRL.search]:       'Search',
+      requestType:              'ApplicationRH',
+      actionVal:                'searchDocYearWise',
+      screenId:                 '8400001',
+      divId:                    'searchComponentSection',
+      isPlotFlatWise:           'false',
+      _csrf:                    csrf,
+      authToken:                (pageCtx.html.match(/id="authToken"[^>]*value="([^"]*)"/i) || [])[1] || '',
+      formId:                   'EncumbranceCertificateForm',
+      [EC_CTRL.zone]:           zone,
+      [EC_CTRL.district]:       dc,
+      [EC_CTRL.sro]:            sro,
+      [EC_CTRL.village]:        req.query.village || '',
+      [EC_CTRL.surveyNo]:       surveyNo,
+      [EC_CTRL.subDiv]:         subDiv || '',
+      [EC_CTRL.fromDate]:       fromDate,
+      [EC_CTRL.toDate]:         toDate,
+      [EC_CTRL.captcha]:        req.query.captcha || '',
+      [EC_CTRL.captchaVal]:     req.query.captcha || '',
+      [EC_CTRL.search]:         'Search',
     });
 
-    const result = await fetchRaw(EC_BASE + EC_PATH + '?appname=EC', {
+    const result = await fetchRaw(EC_BASE + '/portal/webHP?requestType=ApplicationRH&actionVal=searchDocYearWise&screenId=8400001&divId=searchComponentSection&isPlotFlatWise=false&_csrf=' + csrf, {
       method:  'POST',
       body,
       cookies: pageCtx.cookies,
-      headers: { Referer: EC_URL, Origin: EC_BASE },
+      headers: {
+        Referer: EC_URL,
+        Origin:  EC_BASE,
+        'X-Requested-With': 'XMLHttpRequest',
+      },
     });
 
     if (result.status !== 200) {
