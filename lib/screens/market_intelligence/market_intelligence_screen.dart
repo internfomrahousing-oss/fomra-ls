@@ -975,7 +975,10 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
 
   // â”€â”€ Section: Lead-Based Location Setup â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   Widget _buildLeadBasedSection() {
-    final leads = AppStore.instance.leads;
+    final allLeads = AppStore.instance.leads;
+    final leads = allLeads
+        .where((l) => l.status.index >= LeadStatus.siteVisit.index)
+        .toList();
     return _SectionCard(
       title: 'Lead-Based Location Setup',
       icon: Icons.assignment_outlined,
@@ -996,24 +999,38 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                   const Icon(Icons.warning_amber_rounded,
                       color: Color(0xFFDC2626), size: 28),
                   const SizedBox(height: 8),
-                  const Text(
-                    'No Land Leads available.',
-                    style: TextStyle(
+                  Text(
+                    allLeads.isEmpty
+                        ? 'No Land Leads available.'
+                        : 'No leads have completed site verification.',
+                    style: const TextStyle(
                         fontWeight: FontWeight.bold, color: Color(0xFF991B1B)),
                   ),
                   const SizedBox(height: 4),
-                  const Text(
-                    'Please add a lead in Land Lead Management first to select it here.',
+                  Text(
+                    allLeads.isEmpty
+                        ? 'Add a lead in Land Lead Management first.'
+                        : 'Complete site verification for a lead — it will appear here.',
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 12, color: Color(0xFF7F1D1D)),
+                    style: const TextStyle(fontSize: 12, color: Color(0xFF7F1D1D)),
                   ),
                   const SizedBox(height: 12),
                   ElevatedButton.icon(
                     onPressed: () {
-                      Navigator.pushNamed(context, '/land-lead');
+                      Navigator.pushNamed(
+                        context,
+                        allLeads.isEmpty ? '/land-lead' : '/site-verification',
+                      );
                     },
-                    icon: const Icon(Icons.add_location_alt_outlined, size: 16),
-                    label: const Text('Go to Land Lead Management'),
+                    icon: Icon(
+                      allLeads.isEmpty
+                          ? Icons.add_location_alt_outlined
+                          : Icons.location_searching,
+                      size: 16,
+                    ),
+                    label: Text(allLeads.isEmpty
+                        ? 'Go to Land Lead Management'
+                        : 'Go to Site Verification'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFFDC2626),
                       foregroundColor: Colors.white,

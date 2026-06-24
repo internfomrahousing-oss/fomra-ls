@@ -4,7 +4,6 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../../models/land_lead.dart';
-import '../../models/site_verification.dart';
 import '../../services/app_store.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_drawer.dart';
@@ -91,15 +90,9 @@ class _LegalVerificationScreenState extends State<LegalVerificationScreen>
 
   void _onStoreUpdate() => setState(() {});
 
-  List<LandLead> get _siteVerifiedLeads {
-    final completedRefs = AppStore.instance.siteVerifications
-        .where((sv) => sv.status == VerificationStatus.completed)
-        .map((sv) => sv.leadReference)
-        .toSet();
-    return AppStore.instance.leads
-        .where((l) => completedRefs.contains(l.leadId))
-        .toList();
-  }
+  List<LandLead> get _siteVerifiedLeads => AppStore.instance.leads
+      .where((l) => l.status.index >= LeadStatus.siteVisit.index)
+      .toList();
 
   Map<String, _DocFile?> _docsFor(String leadId) =>
       _leadDocs[leadId] ?? {for (final t in _docTypes) t: null};

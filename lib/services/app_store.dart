@@ -22,7 +22,10 @@ class AppStore extends ChangeNotifier {
         nearbyLandmarks: '',
         siteObservations: '',
         capturedOn: lead.addedOn,
-        status: VerificationStatus.scheduled,
+        // siteVisit or beyond means the field visit is done — treat as completed.
+        status: lead.status.index >= LeadStatus.siteVisit.index
+            ? VerificationStatus.completed
+            : VerificationStatus.scheduled,
       );
 
   void addLead(LandLead lead) {
