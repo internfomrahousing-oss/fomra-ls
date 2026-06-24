@@ -397,6 +397,120 @@ function parsePattaResult(html) {
   return { fields, owners };
 }
 
+// ── TNGIS (Tamil Nadu GIS) cadastral source ─────────────────────────────────────
+//
+// TNGIS publishes a fully public GeoServer WFS (no auth, no captcha) with a
+// 6.2M-parcel cadastral layer. We query it by survey number constrained to the
+// map location (lat/lon) the Market Intelligence page already has — this avoids
+// the eservices↔TNGIS code-mapping problem entirely.
+//
+// Verified facts about this GeoServer:
+//   • Layer:    cadastral_analysis:view_cadastral  (FMB sibling: view_fmb)
+//   • Geometry axis order in CQL is LAT/LON (Y/X):
+//       DWITHIN(the_geom, POINT(<lat> <lon>), <r>, meters)
+//       BBOX(the_geom, <minLat>, <minLon>, <maxLat>, <maxLon>)
+//   • Useful attributes: survey_number, sub_division, patta_no, land_type,
+//     type_cate (e.g. "Poramboke"), govt_pri, ext_ares, calculated_area,
+//     tax_hect, is_fmb, district_code/taluk_code/village_code.
+
+const TNGIS_WFS = 'https://tngis.tn.gov.in/tngismaps/wfs';
+const TNGIS_CADASTRAL_LAYER = 'cadastral_analysis:view_cadastral';
+
+function tngisWfsUrl(cqlFilter, count = 25) {
+  const params = new URLSearchParams({
+    service:      'WFS',
+    version:      '2.0.0',
+    request:      'GetFeature',
+    typeNames:    TNGIS_CADASTRAL_LAYER,
+    outputFormat: 'application/json',
+    count:        String(count),
+    cql_filter:   cqlFilter,
+  });
+  return `${TNGIS_WFS}?${params.toString()}`;
+}
+
+// Escape single quotes for CQL string literals.
+function cqlStr(v) {
+  return String(v).replace(/'/g, "''");
+}
+
+// Map a TNGIS cadastral feature's attributes to the same { fields } shape the
+// frontend uses for patta results. Only non-empty values are included.
+function tngisFeatureToFields(props) {
+  const fields = {};
+  const put = (label, val) => {
+    if (val !== null && val !== undefined && String(val).trim() !== '' &&
+        String(val).trim() !== '-') {
+      fields[label] = String(val).trim();
+    }
+  };
+  put('Survey Number',     props.survey_number);
+  put('Sub Division',      props.sub_division);
+  if (props.patta_no !== null && props.patta_no !== undefined &&
+      Number(props.patta_no) > 0) {
+    put('Patta Number', props.patta_no);
+  }
+  put('Land Classification', props.type_cate);
+  if (props.govt_pri !== null && props.govt_pri !== undefined) {
+    const g = String(props.govt_pri).trim();
+    if (g === '1') fields['Ownership Type'] = 'Government';
+    else if (g === '2' || g === '0') fields['Ownership Type'] = 'Private';
+  }
+  put('Extent (Ares)',     props.ext_ares);
+  put('Computed Area (Hectare)', props.calculated_area);
+  put('Tax (Hectare)',     props.tax_hect);
+  put('FMB Available',     props.is_fmb === 1 || props.is_fmb === '1' ? 'Yes' : undefined);
+  put('Remarks',           props.remarks_unicode || props.remarks1_unicode);
+  return fields;
+}
+
+// Query TNGIS for a survey number near a location. Returns { fields, owners }
+// (owners is always [] — the public cadastral layer carries no owner names)
+// or null if nothing is found.
+async function fetchTngisPatta({ surveyNo, subDiv, lat, lon, radiusMeters = 5000 }) {
+  const hasPoint = Number.isFinite(lat) && Number.isFinite(lon);
+  const clauses = [];
+  if (surveyNo) clauses.push(`survey_number='${cqlStr(surveyNo)}'`);
+  if (subDiv)   clauses.push(`sub_division='${cqlStr(subDiv)}'`);
+  if (hasPoint) {
+    // Axis order is LAT/LON for this GeoServer.
+    clauses.push(`DWITHIN(the_geom, POINT(${lat} ${lon}), ${radiusMeters}, meters)`);
+  }
+  if (clauses.length === 0) return null;
+
+  const url = tngisWfsUrl(clauses.join(' AND '), surveyNo ? 25 : 5);
+  const res = await fetchRaw(url, {
+    headers: { Accept: 'application/json', Referer: 'https://tngis.tn.gov.in/' },
+  });
+  if (res.status !== 200) throw new Error(`TNGIS WFS returned HTTP ${res.status}`);
+
+  let data;
+  try { data = JSON.parse(res.body); } catch (_) { return null; }
+  const features = Array.isArray(data.features) ? data.features : [];
+  if (features.length === 0) return null;
+
+  // Prefer the parcel closest to the point when several share a survey number:
+  // GeoServer returns nearest-ish first for DWITHIN, so take the first feature
+  // for the primary fields and list the rest as additional matching parcels.
+  const primary = tngisFeatureToFields(features[0].properties || {});
+  const owners = features.slice(1, 10).map(f => {
+    const p = f.properties || {};
+    const row = {};
+    if (p.survey_number) row['Survey No'] = String(p.survey_number);
+    if (p.sub_division && String(p.sub_division).trim() !== '-') {
+      row['Sub Div'] = String(p.sub_division);
+    }
+    if (p.type_cate) row['Classification'] = String(p.type_cate);
+    if (p.ext_ares !== null && p.ext_ares !== undefined) {
+      row['Extent (Ares)'] = String(p.ext_ares);
+    }
+    return row;
+  }).filter(r => Object.keys(r).length > 0);
+
+  if (Object.keys(primary).length === 0 && owners.length === 0) return null;
+  return { fields: primary, owners };
+}
+
 // ── Patta Routes ──────────────────────────────────────────────────────────────
 
 router.get('/districts', async (req, res) => {
@@ -443,10 +557,21 @@ router.get('/villages', async (req, res) => {
 });
 
 router.get('/patta', async (req, res) => {
-  const { dc, tc, vc, surveyNo, subDiv, pattaNo, ownerName, viewOpt, landtype } = req.query;
+  const { dc, tc, vc, surveyNo, subDiv, pattaNo, ownerName, viewOpt, landtype,
+          lat, lon } = req.query;
   if (!dc || !tc || !vc || (!surveyNo && !pattaNo && !ownerName)) {
     return res.status(400).json({ error: 'dc, tc, vc and a patta identifier are required' });
   }
+
+  // TNGIS fallback: query the public GeoServer cadastral layer by survey number
+  // constrained to the map location. Used when the eservices portal fails or
+  // returns nothing (it blocks Vercel IPs / requires OTP for some queries).
+  const tngisFallback = async () => {
+    if (!surveyNo) return null;
+    const latN = parseFloat(lat);
+    const lonN = parseFloat(lon);
+    return fetchTngisPatta({ surveyNo, subDiv, lat: latN, lon: lonN });
+  };
 
   try {
     const pageCtx = await getPattaPage();
@@ -480,20 +605,27 @@ router.get('/patta', async (req, res) => {
       },
     });
 
-    if (result.status !== 200) {
-      return res.status(502).json({ error: `Portal returned HTTP ${result.status}` });
+    const parsed = result.status === 200 ? parsePattaResult(result.body) : null;
+    if (parsed) {
+      return res.json({ source: 'eservices.tn.gov.in', ...parsed });
     }
 
-    const parsed = parsePattaResult(result.body);
-    if (!parsed) {
-      return res.status(422).json({
-        error: 'No patta data found. Verify district/taluk/village codes and survey number.',
-        hint:  'Use the exact survey number as shown in your land document.',
-      });
+    // eservices returned nothing usable — try TNGIS.
+    const tngis = await tngisFallback().catch(() => null);
+    if (tngis) {
+      return res.json({ source: 'TNGIS (tngis.tn.gov.in)', ...tngis });
     }
 
-    res.json({ source: 'eservices.tn.gov.in', ...parsed });
+    return res.status(422).json({
+      error: 'No patta data found on eservices or TNGIS.',
+      hint:  'Verify the survey number; TNGIS also needs the map location (lat/lon).',
+    });
   } catch (err) {
+    // eservices threw (timeout / blocked) — try TNGIS before giving up.
+    const tngis = await tngisFallback().catch(() => null);
+    if (tngis) {
+      return res.json({ source: 'TNGIS (tngis.tn.gov.in)', ...tngis });
+    }
     res.status(502).json({ error: err.message });
   }
 });

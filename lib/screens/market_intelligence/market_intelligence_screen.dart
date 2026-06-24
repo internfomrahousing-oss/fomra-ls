@@ -837,12 +837,15 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
         if (s.isNotEmpty) surveyNo = s;
       }
     }
+    final loc = _activeLatLng;
     return _GovtDocsSection(
       district: _detectedDistrict,
       taluk: _detectedTaluk,
       village: _detectedVillage,
       surveyNumber: surveyNo,
       subDivision: subDiv,
+      lat: loc?.latitude,
+      lon: loc?.longitude,
     );
   }
 
@@ -2280,12 +2283,16 @@ class _GovtDocsSection extends StatefulWidget {
   final String? village;
   final String? surveyNumber;
   final String? subDivision;
+  final double? lat; // active map location — enables the TNGIS patta fallback
+  final double? lon;
   const _GovtDocsSection({
     this.district,
     this.taluk,
     this.village,
     this.surveyNumber,
     this.subDivision,
+    this.lat,
+    this.lon,
   });
 
   @override
@@ -2537,11 +2544,17 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
       _pattaOwners = []; _pattaError = null;
     });
     try {
-      final params = 'dc=${_selDistrict!.code}'
+      var params = 'dc=${_selDistrict!.code}'
           '&tc=${_selTaluk!.code}'
           '&vc=${_selVillage!.code}'
           '&surveyNo=${Uri.encodeComponent(_surveyCtrl.text.trim())}'
           '&subDiv=${Uri.encodeComponent(_subDivCtrl.text.trim())}';
+      // Pass the active map location so the backend can fall back to the TNGIS
+      // cadastral layer (queried by survey number near this point) when the
+      // eservices portal is unavailable.
+      if (widget.lat != null && widget.lon != null) {
+        params += '&lat=${widget.lat}&lon=${widget.lon}';
+      }
       final result = await ApiClient.get('/api/tnlands/patta?$params');
       final fields = (result['fields'] as Map<String, dynamic>? ?? {})
           .map((k, v) => MapEntry(k, v.toString()));
