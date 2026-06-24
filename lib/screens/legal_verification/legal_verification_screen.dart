@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../../models/land_lead.dart';
 import '../../services/app_store.dart';
+import '../../services/legal_verification_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_drawer.dart';
 import '../../widgets/fomra_app_bar.dart';
@@ -29,8 +30,8 @@ const Map<String, IconData> _docIcons = {
 class _DocFile {
   final String name;
   final int size;
-  final Uint8List bytes;
-  _DocFile({required this.name, required this.size, required this.bytes});
+  final Uint8List? bytes; // null for rows restored from DB (bytes not stored)
+  _DocFile({required this.name, required this.size, this.bytes});
 }
 
 // ── Main Screen ───────────────────────────────────────────────────────────────
@@ -66,11 +67,17 @@ class _LegalVerificationScreenState extends State<LegalVerificationScreen>
   String _legalResult              = '';
   final _legalResultNotesCtrl      = TextEditingController();
 
+  // Per-lead review selection and backend state
+  String? _reviewLeadId;
+  final Map<String, Map<String, dynamic>> _loadedReviews = {};
+  bool _reviewSaving = false;
+
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     AppStore.instance.addListener(_onStoreUpdate);
+    _loadAllLegalData();
   }
 
   @override
@@ -97,6 +104,132 @@ class _LegalVerificationScreenState extends State<LegalVerificationScreen>
   Map<String, _DocFile?> _docsFor(String leadId) =>
       _leadDocs[leadId] ?? {for (final t in _docTypes) t: null};
 
+  Future<void> _loadAllLegalData() async {
+    try {
+      final rows = await LegalVerificationService.getAll();
+      if (!mounted) return;
+      setState(() {
+        for (final row in rows) {
+          final leadId = row['lead_id'] as String;
+          _loadedReviews[leadId] = row;
+          // Restore doc names (no bytes — files are session-only)
+          _leadDocs[leadId] = {
+            for (final t in _docTypes)
+              t: _docNameFromRow(row, t).isNotEmpty
+                  ? _DocFile(name: _docNameFromRow(row, t), size: 0)
+                  : null,
+          };
+        }
+      });
+    } catch (_) {}
+  }
+
+  String _docNameFromRow(Map<String, dynamic> row, String docType) {
+    final col = _docTypeToColumn(docType);
+    return row[col] as String? ?? '';
+  }
+
+  String _docTypeToColumn(String type) => switch (type) {
+        'Sale Deed'           => 'doc_sale_deed',
+        'Parent Documents'    => 'doc_parent_docs',
+        'Power of Attorney'   => 'doc_power_of_attorney',
+        'Approval Documents'  => 'doc_approval_docs',
+        _                     => 'doc_sale_deed',
+      };
+
+  void _selectReviewLead(String? leadId) {
+    setState(() {
+      _reviewLeadId = leadId;
+      if (leadId == null) {
+        _clearReviewFields();
+        return;
+      }
+      final row = _loadedReviews[leadId];
+      if (row != null) {
+        _ownershipCtrl.text       = row['ownership']         as String? ?? '';
+        _mortgageAnswer           = row['mortgage']          as String? ?? '';
+        _mortgageReasonCtrl.text  = row['mortgage_reason']   as String? ?? '';
+        _courtAnswer              = row['court_cases']       as String? ?? '';
+        _courtReasonCtrl.text     = row['court_reason']      as String? ?? '';
+        _govtRiskAnswer           = row['govt_risk']         as String? ?? '';
+        _govtRiskReasonCtrl.text  = row['govt_risk_reason']  as String? ?? '';
+        _titleChainCtrl.text      = row['title_chain']       as String? ?? '';
+        _encumbrancesCtrl.text    = row['encumbrances']      as String? ?? '';
+        _docValidityCtrl.text     = row['doc_validity']      as String? ?? '';
+        _legalResult              = row['legal_result']      as String? ?? '';
+        _legalResultNotesCtrl.text = row['legal_result_notes'] as String? ?? '';
+      } else {
+        _clearReviewFields();
+      }
+    });
+  }
+
+  void _clearReviewFields() {
+    _ownershipCtrl.clear();
+    _mortgageAnswer = '';
+    _mortgageReasonCtrl.clear();
+    _courtAnswer = '';
+    _courtReasonCtrl.clear();
+    _govtRiskAnswer = '';
+    _govtRiskReasonCtrl.clear();
+    _titleChainCtrl.clear();
+    _encumbrancesCtrl.clear();
+    _docValidityCtrl.clear();
+    _legalResult = '';
+    _legalResultNotesCtrl.clear();
+  }
+
+  Future<void> _saveReview() async {
+    final leadId = _reviewLeadId;
+    if (leadId == null) return;
+    setState(() => _reviewSaving = true);
+    try {
+      final data = {
+        'ownership':           _ownershipCtrl.text.trim(),
+        'mortgage':            _mortgageAnswer,
+        'mortgage_reason':     _mortgageReasonCtrl.text.trim(),
+        'court_cases':         _courtAnswer,
+        'court_reason':        _courtReasonCtrl.text.trim(),
+        'govt_risk':           _govtRiskAnswer,
+        'govt_risk_reason':    _govtRiskReasonCtrl.text.trim(),
+        'title_chain':         _titleChainCtrl.text.trim(),
+        'encumbrances':        _encumbrancesCtrl.text.trim(),
+        'doc_validity':        _docValidityCtrl.text.trim(),
+        'legal_result':        _legalResult,
+        'legal_result_notes':  _legalResultNotesCtrl.text.trim(),
+      };
+      await LegalVerificationService.save(leadId, data);
+      _loadedReviews[leadId] = {'lead_id': leadId, ...data};
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Legal review saved.'),
+          backgroundColor: AppColors.success,
+        ));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Save failed: $e'),
+          backgroundColor: AppColors.error,
+          duration: const Duration(seconds: 5),
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _reviewSaving = false);
+    }
+  }
+
+  Future<void> _saveDocNames(String leadId, Map<String, _DocFile?> docs) async {
+    try {
+      await LegalVerificationService.save(leadId, {
+        'doc_sale_deed':          docs['Sale Deed']?.name          ?? '',
+        'doc_parent_docs':        docs['Parent Documents']?.name   ?? '',
+        'doc_power_of_attorney':  docs['Power of Attorney']?.name  ?? '',
+        'doc_approval_docs':      docs['Approval Documents']?.name ?? '',
+      });
+    } catch (_) {}
+  }
+
   void _openUpload(LandLead lead) {
     showModalBottomSheet(
       context: context,
@@ -107,6 +240,7 @@ class _LegalVerificationScreenState extends State<LegalVerificationScreen>
         docs: Map.from(_docsFor(lead.leadId)),
         onSave: (updated) {
           setState(() => _leadDocs[lead.leadId] = updated);
+          _saveDocNames(lead.leadId, updated);
         },
       ),
     );
@@ -133,6 +267,9 @@ class _LegalVerificationScreenState extends State<LegalVerificationScreen>
                   onUpload: _openUpload,
                 ),
                 _LegalReviewTab(
+                  siteVerifiedLeads:    _siteVerifiedLeads,
+                  reviewLeadId:         _reviewLeadId,
+                  onLeadChanged:        _selectReviewLead,
                   ownershipCtrl:        _ownershipCtrl,
                   mortgageAnswer:       _mortgageAnswer,
                   mortgageReasonCtrl:   _mortgageReasonCtrl,
@@ -149,6 +286,8 @@ class _LegalVerificationScreenState extends State<LegalVerificationScreen>
                   legalResult:          _legalResult,
                   legalResultNotesCtrl: _legalResultNotesCtrl,
                   onResultChanged:      (v) => setState(() => _legalResult = v),
+                  onSave:               _saveReview,
+                  saving:               _reviewSaving,
                 ),
               ],
             ),
@@ -619,6 +758,9 @@ class _UploadSheetState extends State<_UploadSheet> {
 // ── Legal Review Tab ──────────────────────────────────────────────────────────
 
 class _LegalReviewTab extends StatelessWidget {
+  final List<LandLead> siteVerifiedLeads;
+  final String? reviewLeadId;
+  final void Function(String?) onLeadChanged;
   final TextEditingController ownershipCtrl;
   final String mortgageAnswer;
   final TextEditingController mortgageReasonCtrl;
@@ -635,8 +777,13 @@ class _LegalReviewTab extends StatelessWidget {
   final String legalResult;
   final TextEditingController legalResultNotesCtrl;
   final void Function(String) onResultChanged;
+  final Future<void> Function() onSave;
+  final bool saving;
 
   const _LegalReviewTab({
+    required this.siteVerifiedLeads,
+    required this.reviewLeadId,
+    required this.onLeadChanged,
     required this.ownershipCtrl,
     required this.mortgageAnswer,
     required this.mortgageReasonCtrl,
@@ -653,6 +800,8 @@ class _LegalReviewTab extends StatelessWidget {
     required this.legalResult,
     required this.legalResultNotesCtrl,
     required this.onResultChanged,
+    required this.onSave,
+    required this.saving,
   });
 
   @override
@@ -660,53 +809,133 @@ class _LegalReviewTab extends StatelessWidget {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        _sectionHeader('Check', Icons.fact_check_outlined),
-        const SizedBox(height: 14),
-
-        _fillField('Ownership', ownershipCtrl,
-            hint: 'Enter ownership details'),
+        // Lead picker
+        _sectionHeader('Select Lead', Icons.assignment_outlined),
         const SizedBox(height: 10),
+        if (siteVerifiedLeads.isEmpty)
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.warning.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AppColors.warning.withValues(alpha: 0.3)),
+            ),
+            child: const Text(
+              'No site-verified leads yet. Complete site verification first.',
+              style: TextStyle(fontSize: 12, color: AppColors.warning),
+            ),
+          )
+        else
+          DropdownButtonFormField<String>(
+            value: reviewLeadId,
+            decoration: InputDecoration(
+              hintText: 'Pick a lead to review',
+              filled: true,
+              fillColor: Colors.grey.shade50,
+              border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
+              enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            ),
+            isExpanded: true,
+            items: siteVerifiedLeads.map((l) => DropdownMenuItem(
+              value: l.leadId,
+              child: Text(
+                '${l.leadId} — ${l.ownerName}',
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 13),
+              ),
+            )).toList(),
+            onChanged: onLeadChanged,
+          ),
 
-        _yesNoField(
-          label: 'Mortgage',
-          answer: mortgageAnswer,
-          reasonCtrl: mortgageReasonCtrl,
-          onChanged: onMortgageChanged,
-        ),
-        const SizedBox(height: 10),
+        if (reviewLeadId == null) ...[
+          const SizedBox(height: 24),
+          Center(
+            child: Text(
+              'Select a lead above to fill in the legal review.',
+              style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+            ),
+          ),
+        ] else ...[
+          const SizedBox(height: 24),
+          _sectionHeader('Check', Icons.fact_check_outlined),
+          const SizedBox(height: 14),
 
-        _yesNoField(
-          label: 'Court Cases',
-          answer: courtAnswer,
-          reasonCtrl: courtReasonCtrl,
-          onChanged: onCourtChanged,
-        ),
-        const SizedBox(height: 10),
+          _fillField('Ownership', ownershipCtrl,
+              hint: 'Enter ownership details'),
+          const SizedBox(height: 10),
 
-        _yesNoField(
-          label: 'Government Acquisition Risk',
-          answer: govtRiskAnswer,
-          reasonCtrl: govtRiskReasonCtrl,
-          onChanged: onGovtRiskChanged,
-        ),
-        const SizedBox(height: 10),
+          _yesNoField(
+            label: 'Mortgage',
+            answer: mortgageAnswer,
+            reasonCtrl: mortgageReasonCtrl,
+            onChanged: onMortgageChanged,
+          ),
+          const SizedBox(height: 10),
 
-        _fillField('Title Chain', titleChainCtrl,
-            hint: 'Describe title chain details'),
-        const SizedBox(height: 10),
+          _yesNoField(
+            label: 'Court Cases',
+            answer: courtAnswer,
+            reasonCtrl: courtReasonCtrl,
+            onChanged: onCourtChanged,
+          ),
+          const SizedBox(height: 10),
 
-        _fillField('Encumbrances', encumbrancesCtrl,
-            hint: 'List any encumbrances'),
-        const SizedBox(height: 10),
+          _yesNoField(
+            label: 'Government Acquisition Risk',
+            answer: govtRiskAnswer,
+            reasonCtrl: govtRiskReasonCtrl,
+            onChanged: onGovtRiskChanged,
+          ),
+          const SizedBox(height: 10),
 
-        _fillField('Document Validity', docValidityCtrl,
-            hint: 'Describe document validity'),
-        const SizedBox(height: 24),
+          _fillField('Title Chain', titleChainCtrl,
+              hint: 'Describe title chain details'),
+          const SizedBox(height: 10),
 
-        _sectionHeader('Legal Result', Icons.verified_outlined),
-        const SizedBox(height: 14),
-        _resultPicker(),
-        const SizedBox(height: 40),
+          _fillField('Encumbrances', encumbrancesCtrl,
+              hint: 'List any encumbrances'),
+          const SizedBox(height: 10),
+
+          _fillField('Document Validity', docValidityCtrl,
+              hint: 'Describe document validity'),
+          const SizedBox(height: 24),
+
+          _sectionHeader('Legal Result', Icons.verified_outlined),
+          const SizedBox(height: 14),
+          _resultPicker(),
+          const SizedBox(height: 24),
+
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: ElevatedButton.icon(
+              onPressed: saving ? null : onSave,
+              icon: saving
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                          color: Colors.white, strokeWidth: 2))
+                  : const Icon(Icons.save_outlined, size: 18),
+              label: Text(saving ? 'Saving…' : 'Save Legal Review',
+                  style: const TextStyle(
+                      fontSize: 14, fontWeight: FontWeight.bold)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
+          ),
+          const SizedBox(height: 32),
+        ],
       ]),
     );
   }

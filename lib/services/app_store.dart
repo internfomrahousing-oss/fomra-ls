@@ -79,6 +79,17 @@ class AppStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Replaces in-memory SV placeholders with real data loaded from Supabase.
+  /// Any DB SV whose lead is not in the current leads list is ignored.
+  void mergeSiteVerifications(List<SiteVerification> dbSvs) {
+    for (final dbSv in dbSvs) {
+      final idx = siteVerifications
+          .indexWhere((sv) => sv.leadReference == dbSv.leadReference);
+      if (idx != -1) siteVerifications[idx] = dbSv;
+    }
+    notifyListeners();
+  }
+
   int get pendingSiteVerifications =>
       siteVerifications.where((sv) => sv.status == VerificationStatus.scheduled).length;
 }

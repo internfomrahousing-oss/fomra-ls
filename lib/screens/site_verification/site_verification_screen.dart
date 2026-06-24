@@ -3,6 +3,7 @@ import '../../models/land_lead.dart';
 import '../../models/site_verification.dart';
 import '../../services/app_store.dart';
 import '../../services/land_lead_service.dart';
+import '../../services/site_verification_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_drawer.dart';
 import '../../widgets/fomra_app_bar.dart';
@@ -24,6 +25,14 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen> {
   void initState() {
     super.initState();
     AppStore.instance.addListener(_onStoreUpdate);
+    _loadSiteVerifications();
+  }
+
+  Future<void> _loadSiteVerifications() async {
+    try {
+      final dbSvs = await SiteVerificationService.getAll();
+      AppStore.instance.mergeSiteVerifications(dbSvs);
+    } catch (_) {}
   }
 
   @override
@@ -92,8 +101,9 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen> {
     );
     if (result != null) {
       AppStore.instance.completePendingVerification(pending.id, result);
-      // Advance lead status to siteVisit so it persists across sessions
-      // and unlocks Market Intelligence / Legal Verification for this lead.
+      // Persist site verification form data to Supabase.
+      SiteVerificationService.save(result).catchError((_) {});
+      // Advance lead status to siteVisit so MI and Legal unlock.
       final leadId = pending.leadReference;
       if (leadId.isNotEmpty) {
         AppStore.instance.updateLeadStatus(leadId, LeadStatus.siteVisit);
