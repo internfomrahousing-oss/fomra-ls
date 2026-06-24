@@ -6,7 +6,9 @@
     "api/poi.js":         { "maxDuration": 60 },
     "api/magicbricks.js": { "maxDuration": 60 },
     "api/tnrera.js":      { "maxDuration": 30 },
-    "api/tnlands.js":     { "maxDuration": 60 }
+    "api/tnlands.js":     { "maxDuration": 60 },
+    "api/99acres.js":     { "maxDuration": 60 },
+    "api/housing.js":     { "maxDuration": 60 }
   },
   "headers": [
     {

@@ -3,14 +3,16 @@ const express = require('express');
 const cors    = require('cors');
 const path    = require('path');
 
-const authRoutes       = require('./routes/auth');
-const leadsRoutes      = require('./routes/leads');
-const tasksRoutes      = require('./routes/tasks');
-const siteVisitRoutes  = require('./routes/siteVisits');
-const tnreraRoutes     = require('./routes/tnrera');
-const magicbricksRoutes = require('./routes/magicbricks');
-const tnlandsRoutes    = require('./routes/tnlands');
-const poiRoutes        = require('./routes/poi');
+const authRoutes         = require('./routes/auth');
+const leadsRoutes        = require('./routes/leads');
+const tasksRoutes        = require('./routes/tasks');
+const siteVisitRoutes    = require('./routes/siteVisits');
+const tnreraRoutes       = require('./routes/tnrera');
+const magicbricksRoutes  = require('./routes/magicbricks');
+const tnlandsRoutes      = require('./routes/tnlands');
+const poiRoutes          = require('./routes/poi');
+const ninetyNineAcresRoutes = require('./routes/ninetyninacres');
+const housingRoutes      = require('./routes/housing');
 
 const app = express();
 
@@ -27,6 +29,8 @@ app.use('/api/tnrera',      tnreraRoutes);
 app.use('/api/magicbricks', magicbricksRoutes);
 app.use('/api/tnlands',     tnlandsRoutes);
 app.use('/api/poi',         poiRoutes);
+app.use('/api/99acres',     ninetyNineAcresRoutes);
+app.use('/api/housing',     housingRoutes);
 
 // Local dev: serve the compiled Flutter web build from the same server.
 // On Vercel, static files are served by the CDN (vercel.json outputDirectory).
