@@ -1,4 +1,7 @@
--- Run this in your Supabase SQL Editor
+-- Run this in your Supabase SQL Editor (safe to re-run).
+-- The app uses a shared company login that does NOT create a per-user Supabase
+-- session, so the client talks to Supabase as the "anon" role. The policies
+-- below therefore allow BOTH anon and authenticated roles to manage leads.
 
 -- Counter table for yearly sequential IDs
 CREATE TABLE IF NOT EXISTS land_lead_year_counter (
@@ -26,7 +29,7 @@ CREATE TABLE IF NOT EXISTS land_leads (
   notes TEXT DEFAULT '',
   status TEXT NOT NULL DEFAULT 'new_',
   added_on TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  created_by UUID REFERENCES auth.users(id),
+  created_by UUID,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -50,12 +53,18 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+-- Allow the shared (anon) and authenticated logins to call the ID generator
+GRANT EXECUTE ON FUNCTION generate_land_lead_id() TO anon, authenticated;
+
 -- Enable RLS
 ALTER TABLE land_leads ENABLE ROW LEVEL SECURITY;
 
--- Authenticated users can manage all land leads
-CREATE POLICY "authenticated can manage land_leads"
+-- Replace any older, stricter policy with one that allows both roles
+DROP POLICY IF EXISTS "authenticated can manage land_leads" ON land_leads;
+DROP POLICY IF EXISTS "anyone can manage land_leads" ON land_leads;
+
+CREATE POLICY "anyone can manage land_leads"
   ON land_leads FOR ALL
-  TO authenticated
+  TO anon, authenticated
   USING (true)
   WITH CHECK (true);
