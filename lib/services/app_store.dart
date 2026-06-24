@@ -9,12 +9,8 @@ class AppStore extends ChangeNotifier {
   final List<LandLead> leads = [];
   final List<SiteVerification> siteVerifications = [];
 
-  void addLead(LandLead lead) {
-    leads.insert(0, lead);
-    siteVerifications.insert(
-      0,
-      SiteVerification(
-        id: SiteVerification.generateId(),
+  SiteVerification _svFromLead(LandLead lead) => SiteVerification(
+        id: 'SV-${lead.leadId}',
         leadReference: lead.leadId,
         geoCoordinates: lead.gpsCoordinates,
         geoAddress: [lead.location, lead.village, lead.taluk, lead.district]
@@ -27,8 +23,11 @@ class AppStore extends ChangeNotifier {
         siteObservations: '',
         capturedOn: lead.addedOn,
         status: VerificationStatus.scheduled,
-      ),
-    );
+      );
+
+  void addLead(LandLead lead) {
+    leads.insert(0, lead);
+    siteVerifications.insert(0, _svFromLead(lead));
     notifyListeners();
   }
 
@@ -71,6 +70,9 @@ class AppStore extends ChangeNotifier {
     leads.clear();
     leads.addAll(newLeads);
     siteVerifications.clear();
+    for (final lead in newLeads) {
+      siteVerifications.add(_svFromLead(lead));
+    }
     notifyListeners();
   }
 
