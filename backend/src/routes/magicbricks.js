@@ -435,9 +435,13 @@ router.get('/', async (req, res) => {
       for (const result of tnResults) {
         if (result.status === 'fulfilled' && result.value) {
           const { rows, type, yr } = result.value;
+          console.log(`[TNRERA] ${type}/${yr}: ${rows.length} rows`);
           rows.forEach(p => tnAll.push({ ...p, _type: type, _yr: yr }));
+        } else if (result.status === 'rejected') {
+          console.log(`[TNRERA] fetch failed: ${result.reason}`);
         }
       }
+      console.log(`[TNRERA] total rows across all files: ${tnAll.length}`);
 
       const cityLower = city.toLowerCase();
       const cityAliases = TNRERA_CITY_ALIASES[cityLower] || [cityLower];
@@ -446,9 +450,11 @@ router.get('/', async (req, res) => {
       let filtered = tnAll.filter(p =>
         cityAliases.some(alias => (p.address || '').toLowerCase().includes(alias))
       );
+      console.log(`[TNRERA] city="${city}" aliases=${JSON.stringify(cityAliases)} filtered=${filtered.length}`);
 
       // If city filter yields nothing but we have TN-wide data, show all (better than an error)
       if (filtered.length === 0 && tnAll.length > 0) {
+        console.log('[TNRERA] city filter empty — returning all TN projects');
         filtered = tnAll;
       }
 
