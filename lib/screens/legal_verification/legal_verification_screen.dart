@@ -97,9 +97,7 @@ class _LegalVerificationScreenState extends State<LegalVerificationScreen>
 
   void _onStoreUpdate() => setState(() {});
 
-  List<LandLead> get _siteVerifiedLeads => AppStore.instance.leads
-      .where((l) => l.status.index >= LeadStatus.siteVisit.index)
-      .toList();
+  List<LandLead> get _siteVerifiedLeads => AppStore.instance.leads;
 
   Map<String, _DocFile?> _docsFor(String leadId) =>
       _leadDocs[leadId] ?? {for (final t in _docTypes) t: null};
@@ -347,7 +345,6 @@ class _FieldExecutiveTab extends StatelessWidget {
   }
 
   Widget _emptyState() {
-    final hasLeads = allLeadsCount > 0;
     return Center(
       child: Column(mainAxisSize: MainAxisSize.min, children: [
         Container(
@@ -361,22 +358,18 @@ class _FieldExecutiveTab extends StatelessWidget {
               size: 38, color: AppColors.primary.withValues(alpha: 0.4)),
         ),
         const SizedBox(height: 16),
-        Text(
-          hasLeads
-              ? 'No leads have completed site verification'
-              : 'No leads found',
-          style: const TextStyle(
+        const Text(
+          'No leads found',
+          style: TextStyle(
               fontSize: 15,
               fontWeight: FontWeight.w600,
               color: AppColors.textSecondary),
         ),
         const SizedBox(height: 4),
-        Text(
-          hasLeads
-              ? 'Complete site verification first to upload documents here.'
-              : 'Add leads in Land Lead Management, then complete site verification.',
+        const Text(
+          'Add leads in Land Lead Management to upload documents here.',
           textAlign: TextAlign.center,
-          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+          style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
         ),
       ]),
     );
@@ -821,7 +814,7 @@ class _LegalReviewTab extends StatelessWidget {
               border: Border.all(color: AppColors.warning.withValues(alpha: 0.3)),
             ),
             child: const Text(
-              'No site-verified leads yet. Complete site verification first.',
+              'No leads yet. Add a lead in Land Lead Management first.',
               style: TextStyle(fontSize: 12, color: AppColors.warning),
             ),
           )

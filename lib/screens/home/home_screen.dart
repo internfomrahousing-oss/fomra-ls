@@ -17,7 +17,6 @@ class _HomeScreenState extends State<HomeScreen> {
   final List<AppNotification> _notifications = [];
 
   int get _totalLeads => AppStore.instance.leads.length;
-  int get _sitePending => AppStore.instance.pendingSiteVerifications;
   static const int _legalPending = 0;
 
   int get _unreadCount => _notifications.where((n) => !n.isRead).length;
@@ -133,21 +132,6 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                         onTap: () =>
                             Navigator.pushNamed(context, '/land-lead'),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _StatCard(
-                        icon: Icons.verified_outlined,
-                        label: 'Site\nPending',
-                        count: _sitePending,
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFFF59E0B), Color(0xFFFBBF24)],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        onTap: () => Navigator.pushNamed(
-                            context, '/site-verification'),
                       ),
                     ),
                     const SizedBox(width: 12),

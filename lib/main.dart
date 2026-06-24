@@ -6,7 +6,6 @@ import 'theme/app_theme.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/home/home_screen.dart';
 import 'screens/land_lead/land_lead_screen.dart';
-import 'screens/site_verification/site_verification_screen.dart';
 import 'screens/market_intelligence/market_intelligence_screen.dart';
 import 'screens/legal_verification/legal_verification_screen.dart';
 import 'screens/task_management/task_management_screen.dart';
@@ -37,7 +36,6 @@ class FomraLSApp extends StatelessWidget {
         '/login':               (_) => const LoginScreen(),
         '/home':                (_) => const HomeScreen(),
         '/land-lead':           (_) => const LandLeadScreen(),
-        '/site-verification':   (_) => const SiteVerificationScreen(),
         '/market-intelligence': (_) => const MarketIntelligenceScreen(),
         '/legal-verification':  (_) => const LegalVerificationScreen(),
         '/task-management':     (_) => const TaskManagementScreen(),
