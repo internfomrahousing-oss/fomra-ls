@@ -204,18 +204,31 @@ function extractEmbedded(html) {
 
 // ── TNRERA HTML table parser (fallback source) ────────────────────────────────
 
+// City aliases for TNRERA address text matching
+const TNRERA_CITY_ALIASES = {
+  ‘chennai’:         [‘chennai’, ‘madras’],
+  ‘kancheepuram’:    [‘kancheepuram’, ‘kanchipuram’],
+  ‘chengalpattu’:    [‘chengalpattu’, ‘chengelpet’],
+  ‘tiruchirappalli’: [‘tiruchirappalli’, ‘trichy’, ‘trichinopoly’],
+  ‘thoothukudi’:     [‘thoothukudi’, ‘tuticorin’],
+  ‘tirunelveli’:     [‘tirunelveli’, ‘tinnevelly’],
+};
+
 function parseTnreraTable(html) {
   const rows = [];
   function stripHtml(s) {
-    return s.replace(/<[^>]+>/g,' ').replace(/&nbsp;/g,' ').replace(/&amp;/g,'&').replace(/\s+/g,' ').trim();
+    return s.replace(/<[^>]+>/g,’ ‘).replace(/&nbsp;/g,’ ‘).replace(/&amp;/g,’&’).replace(/\s+/g,’ ‘).trim();
   }
   // TNRERA tables have fixed columns (no reliable <th> district column):
   // 0: S.No.  1: Reg No.  2: Promoter+Address  3: Project Details+Name  4: Approval  5: Completion  6: Other  7: Status
-  const tbodyM = html.match(/<tbody[^>]*>([\s\S]*?)<\/tbody>/i);
-  if (!tbodyM) return rows;
+
+  // Use greedy match to handle nested tables; fall back to full document if no <tbody>
+  const tbodyM = html.match(/<tbody[^>]*>([\s\S]*)<\/tbody>/i);
+  const searchContent = tbodyM ? tbodyM[1] : html;
+
   const rowPat = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
   let rowM;
-  while ((rowM = rowPat.exec(tbodyM[1])) !== null) {
+  while ((rowM = rowPat.exec(searchContent)) !== null) {
     const cellPat = /<td[^>]*>([\s\S]*?)<\/td>/gi;
     const cells = [];
     let cellM;
@@ -223,14 +236,14 @@ function parseTnreraTable(html) {
     if (cells.length < 3) continue;
     // Skip header row (first cell is not a number)
     if (!/^\d+$/.test(cells[0])) continue;
-    const reraNo = (cells[1] || '').replace(/\s+dated\s+.*/i, '').trim();
-    const promoterAddr = cells[2] || '';
-    const detailsCell  = cells[3] || '';
-    const otherCell    = cells[6] || '';
-    const status       = cells[7] || cells[5] || 'Registered';
-    // Extract project name from 'Project Name: "X"' pattern
-    const nameM = detailsCell.match(/Project\s+Name\s*:\s*[“‘"']([^”’"']+)[”’"']/i);
-    const projectName = nameM ? nameM[1].trim() : (detailsCell.split('-')[0].trim().slice(0, 60) || reraNo);
+    const reraNo = (cells[1] || ‘’).replace(/\s+dated\s+.*/i, ‘’).trim();
+    const promoterAddr = cells[2] || ‘’;
+    const detailsCell  = cells[3] || ‘’;
+    const otherCell    = cells[6] || ‘’;
+    const status       = cells[7] || cells[5] || ‘Registered’;
+    // Extract project name from ‘Project Name: “X”’ pattern
+    const nameM = detailsCell.match(/Project\s+Name\s*:\s*[“’”’]([^”’”’]+)[“’”’]/i);
+    const projectName = nameM ? nameM[1].trim() : (detailsCell.split(‘-’)[0].trim().slice(0, 60) || reraNo);
     // Combine searchable address text for city matching (no dedicated district column)
     const addressText = `${promoterAddr} ${detailsCell} ${otherCell}`;
     if (!projectName && !reraNo) continue;
@@ -406,7 +419,7 @@ router.get('/', async (req, res) => {
       const TNRERA_HDR = { 'User-Agent': TNRERA_UA, 'Accept': 'text/html,*/*', 'Referer': 'https://rera.tn.gov.in/' };
       const curYear = new Date().getFullYear();
       // Start from curYear-1 — current year file often 404s until TNRERA publishes it
-      const years = [curYear - 1, curYear - 2, curYear - 3];
+      const years = [curYear - 1, curYear - 2, curYear - 3, curYear - 4];
       const types = ['Building', 'Normal_Layout'];
 
       // Fetch all 6 combinations in parallel with 8s timeout each
@@ -427,10 +440,17 @@ router.get('/', async (req, res) => {
       }
 
       const cityLower = city.toLowerCase();
-      // Search city name in combined address text (TNRERA has no dedicated district column)
-      const filtered = tnAll.filter(p =>
-        (p.address || '').toLowerCase().includes(cityLower)
+      const cityAliases = TNRERA_CITY_ALIASES[cityLower] || [cityLower];
+
+      // Search city name (+ aliases) in combined address text
+      let filtered = tnAll.filter(p =>
+        cityAliases.some(alias => (p.address || '').toLowerCase().includes(alias))
       );
+
+      // If city filter yields nothing but we have TN-wide data, show all (better than an error)
+      if (filtered.length === 0 && tnAll.length > 0) {
+        filtered = tnAll;
+      }
 
       if (filtered.length > 0) {
         const seen2 = new Map();

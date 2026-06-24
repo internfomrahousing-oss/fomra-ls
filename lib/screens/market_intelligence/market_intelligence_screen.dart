@@ -547,26 +547,38 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
       _mbListings = [];
     });
 
-    try {
-      final result = await ApiClient.get(
-          '/api/magicbricks?city=${Uri.encodeComponent(city)}');
-      final listings = (result['listings'] as List<dynamic>?) ?? [];
-      setState(() {
-        _mbListings = listings.cast<Map<String, dynamic>>();
-        _mbSource = (result['source'] as String?) ?? 'MagicBricks';
-        _fetchingMb = false;
-      });
-    } on ApiException catch (e) {
-      setState(() {
-        _mbError = e.message;
-        _fetchingMb = false;
-      });
-    } catch (e) {
-      setState(() {
-        _mbError = e.toString().split(':').last.trim();
-        _fetchingMb = false;
-      });
+    final encodedCity = Uri.encodeComponent(city);
+    final endpoints = [
+      '/api/magicbricks?city=$encodedCity',
+      '/api/99acres?city=$encodedCity',
+      '/api/housing?city=$encodedCity',
+    ];
+
+    String? lastError;
+    for (final endpoint in endpoints) {
+      try {
+        final result = await ApiClient.get(endpoint);
+        final listings = (result['listings'] as List<dynamic>?) ?? [];
+        if (listings.isNotEmpty) {
+          setState(() {
+            _mbListings = listings.cast<Map<String, dynamic>>();
+            _mbSource = (result['source'] as String?) ?? 'Projects';
+            _fetchingMb = false;
+          });
+          return;
+        }
+        lastError = 'No listings found for "$city".';
+      } on ApiException catch (e) {
+        lastError = e.message;
+      } catch (e) {
+        lastError = e.toString().split(':').last.trim();
+      }
     }
+
+    setState(() {
+      _mbError = lastError ?? 'No competitor projects found for this area.';
+      _fetchingMb = false;
+    });
   }
 
   List<Map<String, dynamic>> get _filteredMbListings {
