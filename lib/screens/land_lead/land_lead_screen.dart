@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../models/land_lead.dart';
 import '../../services/app_store.dart';
+import '../../services/land_lead_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_drawer.dart';
 import '../../widgets/fomra_app_bar.dart';
@@ -17,11 +18,14 @@ class LandLeadScreen extends StatefulWidget {
 class _LandLeadScreenState extends State<LandLeadScreen> {
   LeadStatus? _filterStatus;
   String _search = '';
+  bool _loading = true;
+  String? _loadError;
 
   @override
   void initState() {
     super.initState();
     AppStore.instance.addListener(_onStoreUpdate);
+    _loadLeads();
   }
 
   @override
@@ -31,6 +35,18 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
   }
 
   void _onStoreUpdate() => setState(() {});
+
+  Future<void> _loadLeads() async {
+    if (mounted) setState(() { _loading = true; _loadError = null; });
+    try {
+      final leads = await LandLeadService.getAll();
+      AppStore.instance.setLeads(leads);
+    } catch (e) {
+      if (mounted) setState(() => _loadError = 'Failed to load leads. Check your connection.');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
 
   List<LandLead> get _leads => AppStore.instance.leads;
 
@@ -51,7 +67,7 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
       appBar: FomraAppBar(
         moduleName: 'Land Lead',
         actions: [
-          if (_leads.isNotEmpty)
+          if (_leads.isNotEmpty && !_loading)
             IconButton(
                 icon: const Icon(Icons.filter_list),
                 onPressed: _showFilter),
@@ -69,49 +85,72 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
               onClearFilter: () => setState(() => _filterStatus = null),
             ),
           Expanded(
-            child: _filtered.isEmpty
-                ? _EmptyState(hasLeads: _leads.isNotEmpty)
-                : ListView.builder(
-                    padding: const EdgeInsets.all(12),
-                    itemCount: _filtered.length,
-                    itemBuilder: (_, i) {
-                      final lead = _filtered[i];
-                      return Dismissible(
-                        key: ValueKey(lead.leadId),
-                        direction: DismissDirection.endToStart,
-                        confirmDismiss: (_) => _confirmDelete(context, lead),
-                        onDismissed: (_) =>
-                            AppStore.instance.removeLead(lead.leadId),
-                        background: Container(
-                          margin: const EdgeInsets.only(bottom: 12),
-                          decoration: BoxDecoration(
-                            color: AppColors.error,
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          alignment: Alignment.centerRight,
-                          padding: const EdgeInsets.only(right: 20),
-                          child: const Column(
+            child: _loading
+                ? const Center(child: CircularProgressIndicator())
+                : _loadError != null
+                    ? Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(32),
+                          child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.delete_outline,
-                                  color: Colors.white, size: 26),
-                              SizedBox(height: 4),
-                              Text('Delete',
-                                  style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w600)),
+                              const Icon(Icons.cloud_off_outlined,
+                                  size: 48, color: AppColors.textSecondary),
+                              const SizedBox(height: 12),
+                              Text(_loadError!,
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                      color: AppColors.textSecondary)),
+                              const SizedBox(height: 16),
+                              ElevatedButton.icon(
+                                onPressed: _loadLeads,
+                                icon: const Icon(Icons.refresh, size: 18),
+                                label: const Text('Retry'),
+                              ),
                             ],
                           ),
                         ),
-                        child: _LeadCard(
-                          lead: lead,
-                          onStatusChange: (s) =>
-                              AppStore.instance.updateLeadStatus(lead.leadId, s),
-                        ),
-                      );
-                    },
-                  ),
+                      )
+                    : _filtered.isEmpty
+                        ? _EmptyState(hasLeads: _leads.isNotEmpty)
+                        : ListView.builder(
+                            padding: const EdgeInsets.all(12),
+                            itemCount: _filtered.length,
+                            itemBuilder: (_, i) {
+                              final lead = _filtered[i];
+                              return Dismissible(
+                                key: ValueKey(lead.leadId),
+                                direction: DismissDirection.endToStart,
+                                confirmDismiss: (_) => _confirmAndDelete(lead),
+                                background: Container(
+                                  margin: const EdgeInsets.only(bottom: 12),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.error,
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                  alignment: Alignment.centerRight,
+                                  padding: const EdgeInsets.only(right: 20),
+                                  child: const Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.delete_outline,
+                                          color: Colors.white, size: 26),
+                                      SizedBox(height: 4),
+                                      Text('Delete',
+                                          style: TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w600)),
+                                    ],
+                                  ),
+                                ),
+                                child: _LeadCard(
+                                  lead: lead,
+                                  onStatusChange: (s) => _updateStatus(lead, s),
+                                ),
+                              );
+                            },
+                          ),
           ),
         ],
       ),
@@ -125,14 +164,13 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
     );
   }
 
-  Future<bool> _confirmDelete(BuildContext context, LandLead lead) async {
-    return await showDialog<bool>(
+  Future<bool> _confirmAndDelete(LandLead lead) async {
+    final confirmed = await showDialog<bool>(
           context: context,
           builder: (_) => AlertDialog(
             title: const Text('Delete Lead?'),
             content: Text(
-              'This will permanently remove lead ${lead.leadId} (${lead.ownerName}) '
-              'and its linked site verification.',
+              'This will permanently remove lead ${lead.leadId} (${lead.ownerName}).',
             ),
             actions: [
               TextButton(
@@ -148,6 +186,30 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
           ),
         ) ??
         false;
+
+    if (!confirmed) return false;
+
+    try {
+      await LandLeadService.delete(lead.leadId);
+      AppStore.instance.removeLead(lead.leadId);
+      return true;
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Delete failed. Check your connection.'),
+          backgroundColor: AppColors.error,
+        ));
+      }
+      return false;
+    }
+  }
+
+  void _updateStatus(LandLead lead, LeadStatus s) {
+    AppStore.instance.updateLeadStatus(lead.leadId, s);
+    LandLeadService.updateStatus(lead.leadId, s).catchError((_) {
+      // Revert optimistic update on failure
+      AppStore.instance.updateLeadStatus(lead.leadId, lead.status);
+    });
   }
 
   Future<void> _openAddLead() async {
@@ -155,7 +217,19 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
       context,
       MaterialPageRoute(builder: (_) => const AddLeadScreen()),
     );
-    if (result != null) AppStore.instance.addLead(result);
+    if (result == null) return;
+
+    try {
+      final saved = await LandLeadService.create(result);
+      AppStore.instance.addLead(saved);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Failed to save lead. Check your connection.'),
+          backgroundColor: AppColors.error,
+        ));
+      }
+    }
   }
 
   void _showFilter() {
