@@ -1,15 +1,21 @@
 /**
  * TN Land Records Scraper
  *
+ * Patta (eservices.tn.gov.in) — uses direct AJAX endpoint (ajax.html) for dropdowns,
+ * then POST to chittaExtract_ta.html for the actual patta lookup.
+ *
+ * EC (tnreginet.gov.in) — uses the JSP portal REST-style combo loaders (POST with CSRF)
+ * for dropdowns, then POST to webHP for the EC search.
+ *
  * Routes:
- *   GET /api/tnlands/districts           — list of TN districts (static fallback)
- *   GET /api/tnlands/taluks?dc=          — taluks for a district code
- *   GET /api/tnlands/villages?dc=&tc=    — villages for a taluk code
- *   GET /api/tnlands/patta               — Patta/Chitta from eservices.tn.gov.in
- *   GET /api/tnlands/ec/zones            — EC zones (static)
- *   GET /api/tnlands/ec/districts?zone=  — EC districts for a zone
- *   GET /api/tnlands/ec/sros?zone=&dc=   — SROs for a district
- *   GET /api/tnlands/ec/search           — EC search results
+ *   GET /api/tnlands/districts             — TN districts (live from Patta page, static fallback)
+ *   GET /api/tnlands/taluks?dc=            — taluks for a district code
+ *   GET /api/tnlands/villages?dc=&tc=      — villages for a taluk code
+ *   GET /api/tnlands/patta                 — Patta/Chitta extract
+ *   GET /api/tnlands/ec/zones              — EC zones (static)
+ *   GET /api/tnlands/ec/districts?zone=    — EC districts for a zone
+ *   GET /api/tnlands/ec/sros?zone=&dc=     — SROs for a district
+ *   GET /api/tnlands/ec/search             — EC encumbrance search results
  */
 
 const express = require('express');
@@ -130,11 +136,6 @@ function extractAspNetTokens(html) {
   };
 }
 
-function extractHiddenValue(html, name) {
-  const m = html.match(new RegExp(`id="${name}"[^>]*value="([^"]*)"`, 'i')) ||
-            html.match(new RegExp(`name="${name}"[^>]*value="([^"]*)"`, 'i'));
-  return m ? m[1] : '';
-}
 
 function encodeForm(obj) {
   return Object.entries(obj)
@@ -143,13 +144,12 @@ function encodeForm(obj) {
 }
 
 // Parse <select id="X"> options → [{code, name}]
-// Tries the bare name plus the two common ASP.NET ContentPlaceHolder prefixes.
+// Handles both double-quoted and single-quoted HTML/XML attributes.
 function parseSelectOptions(html, baseName) {
   const candidates = [
     baseName,
     `ContentPlaceHolder1_${baseName}`,
     `ctl00_ContentPlaceHolder1_${baseName}`,
-    // name attribute uses $ instead of _
     `ContentPlaceHolder1$${baseName}`,
     `ctl00$ContentPlaceHolder1$${baseName}`,
   ];
@@ -157,69 +157,46 @@ function parseSelectOptions(html, baseName) {
   for (const id of candidates) {
     const escaped = id.replace(/\$/g, '\\$');
     const selPat  = new RegExp(
-      `<select[^>]+(?:id|name)="${escaped}"[^>]*>([\\s\\S]*?)<\\/select>`, 'i'
+      `<select[^>]+(?:id|name)=["']${escaped}["'][^>]*>([\\s\\S]*?)<\\/select>`, 'i'
     );
     const selMatch = html.match(selPat);
     if (!selMatch) continue;
 
-    const optPat = /<option[^>]+value="([^"]*)"[^>]*>([^<]*)<\/option>/gi;
+    const optPat = /<option[^>]+value=["']([^"']*)["'][^>]*>([^<]*)<\/option>/gi;
     const opts   = [];
     let m;
     while ((m = optPat.exec(selMatch[1])) !== null) {
       const code = m[1].trim();
       const name = m[2].trim().replace(/^[-\s]*select[-\s]*/i, '').trim();
-      if (code && name && !name.toLowerCase().includes('select')) opts.push({ code, name });
+      if (code && code !== '-1' && name && !name.toLowerCase().includes('select')) opts.push({ code, name });
     }
     if (opts.length > 0) return opts;
   }
   return [];
 }
 
-// Extract the HTML payload from an ASP.NET ScriptManager UpdatePanel delta response.
-// The format is length-delimited: "len|type|id|content|" where len = byte-length of content.
-// We CANNOT naively split on '|' because content may contain '|'.
-function extractUpdatePanelHtml(body) {
-  if (!body.includes('|updatePanel|') && !body.includes('|pageContent|')) return body;
-
-  let pos = 0;
-  const htmlParts = [];
-
-  while (pos < body.length) {
-    // Read the length field
-    const pipe1 = body.indexOf('|', pos);
-    if (pipe1 === -1) break;
-    const len = parseInt(body.substring(pos, pipe1), 10);
-    if (isNaN(len)) { pos = pipe1 + 1; continue; }
-
-    // Read the type field
-    const pipe2 = body.indexOf('|', pipe1 + 1);
-    if (pipe2 === -1) break;
-    const type = body.substring(pipe1 + 1, pipe2);
-
-    // Read the id field
-    const pipe3 = body.indexOf('|', pipe2 + 1);
-    if (pipe3 === -1) break;
-
-    // Content starts right after pipe3 and is exactly `len` chars long
-    const contentStart = pipe3 + 1;
-    if (contentStart + len > body.length) break;
-    const content = body.substring(contentStart, contentStart + len);
-
-    if (type === 'updatePanel' && content.length > 0) {
-      htmlParts.push(content);
-    }
-
-    // Advance past content + trailing '|'
-    pos = contentStart + len + 1;
+// Parse AJAX responses that may be JSON arrays or HTML <select> fragments.
+// JSON shape tried: [{code, name}] or [{<key with "code">, <key with "name/desc/label">}]
+function parseJsonOrSelectOptions(body, baseName) {
+  const trimmed = body.trim();
+  if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+    try {
+      const data = JSON.parse(trimmed);
+      const arr  = Array.isArray(data) ? data : (data.data || data.result || data.list || []);
+      if (arr.length > 0) {
+        const item    = arr[0];
+        const keys    = Object.keys(item);
+        const codeKey = keys.find(k => /code/i.test(k));
+        const nameKey = keys.find(k => /name|desc|label|text/i.test(k));
+        if (codeKey && nameKey) {
+          return arr
+            .map(d => ({ code: String(d[codeKey]).trim(), name: String(d[nameKey]).trim() }))
+            .filter(d => d.code && d.name && !d.name.toLowerCase().includes('select'));
+        }
+      }
+    } catch (_) {}
   }
-
-  // Return all updatePanel fragments concatenated; fall back to naive approach if nothing found
-  if (htmlParts.length > 0) return htmlParts.join('');
-
-  // Naive fallback (works when content has no '|')
-  const parts  = body.split('|');
-  const htmlIdx = parts.findIndex(p => p.startsWith('<'));
-  return htmlIdx >= 0 ? parts.slice(htmlIdx).join('|') : body;
+  return parseSelectOptions(body, baseName);
 }
 
 // ── Patta (eservices.tn.gov.in) ───────────────────────────────────────────────
@@ -228,6 +205,7 @@ const PATTA_BASE = 'https://eservices.tn.gov.in';
 const PATTA_HOME_URL = `${PATTA_BASE}/eservicesnew/home.html`;
 const PATTA_PATH = '/eservicesnew/land/chittaExtract_ta.html';
 const PATTA_FORM_PATH = '/eservicesnew/land/chittaNewRuralTamil.html';
+const PATTA_AJAX_PATH = '/eservicesnew/land/ajax.html';
 const PATTA_URL  = PATTA_BASE + PATTA_PATH + '?lan=ta';
 
 const PATTA_CTRL = {
@@ -270,6 +248,49 @@ const STATIC_TN_DISTRICTS = [
   { code: '037', name: 'Viluppuram' },     { code: '038', name: 'Virudhunagar' },
 ];
 
+// Static TN taluk dataset — codes follow eservices.tn.gov.in 3-digit zero-padded convention.
+// ajax.html is blocked for server-side requests; this static data is the fallback.
+const STATIC_TN_TALUKS = {
+  '001': [{ code:'001',name:'Ariyalur' },{ code:'002',name:'Jayankondam' },{ code:'003',name:'Sendurai' },{ code:'004',name:'T. Palur' }],
+  '002': [{ code:'001',name:'Chengalpattu' },{ code:'002',name:'Cheyyur' },{ code:'003',name:'Madurantakam' },{ code:'004',name:'St. Thomas Mount' },{ code:'005',name:'Tambaram' },{ code:'006',name:'Thiruporur' },{ code:'007',name:'Uthiramerur' },{ code:'008',name:'Vandalur' }],
+  '003': [{ code:'001',name:'Ambattur' },{ code:'002',name:'Chennai South' },{ code:'003',name:'Egmore-Nungambakkam' },{ code:'004',name:'Mambalam-Guindy' },{ code:'005',name:'Perambur-Purasawalkam' },{ code:'006',name:'Sholinganallur' },{ code:'007',name:'Tiruvottiyur' }],
+  '004': [{ code:'001',name:'Annur' },{ code:'002',name:'Coimbatore North' },{ code:'003',name:'Coimbatore South' },{ code:'004',name:'Kinathukadavu' },{ code:'005',name:'Mettupalayam' },{ code:'006',name:'Palladam' },{ code:'007',name:'Pollachi' },{ code:'008',name:'Sulur' }],
+  '005': [{ code:'001',name:'Chidambaram' },{ code:'002',name:'Cuddalore' },{ code:'003',name:'Kattumannarkoil' },{ code:'004',name:'Kurinjipadi' },{ code:'005',name:'Panruti' },{ code:'006',name:'Vriddhachalam' }],
+  '006': [{ code:'001',name:'Dharmapuri' },{ code:'002',name:'Harur' },{ code:'003',name:'Karimangalam' },{ code:'004',name:'Nallampalli' },{ code:'005',name:'Palacode' },{ code:'006',name:'Pennagaram' }],
+  '007': [{ code:'001',name:'Attur' },{ code:'002',name:'Dindigul' },{ code:'003',name:'Natham' },{ code:'004',name:'Nilakottai' },{ code:'005',name:'Oddanchatram' },{ code:'006',name:'Palani' },{ code:'007',name:'Reddiyarchatram' },{ code:'008',name:'Vedasandur' }],
+  '008': [{ code:'001',name:'Bhavani' },{ code:'002',name:'Erode' },{ code:'003',name:'Gobichettipalayam' },{ code:'004',name:'Perundurai' },{ code:'005',name:'Sathyamangalam' }],
+  '009': [{ code:'001',name:'Chinnasalem' },{ code:'002',name:'Kallakurichi' },{ code:'003',name:'Sankarapuram' },{ code:'004',name:'Tirukovilur' },{ code:'005',name:'Ulundurpet' }],
+  '010': [{ code:'001',name:'Kancheepuram' },{ code:'002',name:'Sriperumbudur' },{ code:'003',name:'Uthiramerur' },{ code:'004',name:'Walajabad' }],
+  '011': [{ code:'001',name:'Agastheeswaram' },{ code:'002',name:'Kallkulam' },{ code:'003',name:'Killiyoor' },{ code:'004',name:'Thiruvattar' },{ code:'005',name:'Vilavancode' }],
+  '012': [{ code:'001',name:'Aravakurichi' },{ code:'002',name:'Karur' },{ code:'003',name:'Krishnarayapuram' },{ code:'004',name:'Kulithalai' },{ code:'005',name:'Manapparai' },{ code:'006',name:'Thanthoni' }],
+  '013': [{ code:'001',name:'Bargur' },{ code:'002',name:'Denkanikotta' },{ code:'003',name:'Hosur' },{ code:'004',name:'Krishnagiri' },{ code:'005',name:'Pochampalli' },{ code:'006',name:'Uthangarai' },{ code:'007',name:'Veppanahalli' }],
+  '014': [{ code:'001',name:'Madurai North' },{ code:'002',name:'Madurai South' },{ code:'003',name:'Melur' },{ code:'004',name:'Peraiyur' },{ code:'005',name:'Thirumangalam' },{ code:'006',name:'Usilampatti' },{ code:'007',name:'Vadipatti' }],
+  '015': [{ code:'001',name:'Kuttalam' },{ code:'002',name:'Mayiladuthurai' },{ code:'003',name:'Sirkali' },{ code:'004',name:'Tharangambadi' }],
+  '016': [{ code:'001',name:'Kilvelur' },{ code:'002',name:'Mayiladuthurai' },{ code:'003',name:'Nagapattinam' },{ code:'004',name:'Sirkazhi' },{ code:'005',name:'Tharangambadi' },{ code:'006',name:'Vedaranyam' }],
+  '017': [{ code:'001',name:'Kolli Hills' },{ code:'002',name:'Kumarapalayam' },{ code:'003',name:'Mohanur' },{ code:'004',name:'Namakkal' },{ code:'005',name:'Paramathi-Velur' },{ code:'006',name:'Rasipuram' },{ code:'007',name:'Sendamangalam' },{ code:'008',name:'Thiruchengode' }],
+  '018': [{ code:'001',name:'Coonoor' },{ code:'002',name:'Gudalur' },{ code:'003',name:'Kotagiri' },{ code:'004',name:'Ooty' },{ code:'005',name:'Panthalur' }],
+  '019': [{ code:'001',name:'Alathur' },{ code:'002',name:'Perambalur' },{ code:'003',name:'Veppanthattai' }],
+  '020': [{ code:'001',name:'Alangudi' },{ code:'002',name:'Arantangi' },{ code:'003',name:'Avudaiyarkoil' },{ code:'004',name:'Gandarvakkottai' },{ code:'005',name:'Illuppur' },{ code:'006',name:'Karambakudi' },{ code:'007',name:'Kulathur' },{ code:'008',name:'Manamelkudi' },{ code:'009',name:'Pudukkottai' },{ code:'010',name:'Thirumayam' },{ code:'011',name:'Viralimalai' }],
+  '021': [{ code:'001',name:'Kadaladi' },{ code:'002',name:'Kamudhi' },{ code:'003',name:'Mudukulathur' },{ code:'004',name:'Paramakudi' },{ code:'005',name:'Ramanathapuram' },{ code:'006',name:'Rameswaram' },{ code:'007',name:'Tiruvadanai' }],
+  '022': [{ code:'001',name:'Arcot' },{ code:'002',name:'Arakkonam' },{ code:'003',name:'Nemili' },{ code:'004',name:'Sholinghur' },{ code:'005',name:'Walajah' }],
+  '023': [{ code:'001',name:'Attur' },{ code:'002',name:'Edappadi' },{ code:'003',name:'Gangavalli' },{ code:'004',name:'Mettur' },{ code:'005',name:'Omalur' },{ code:'006',name:'Salem' },{ code:'007',name:'Sangagiri' },{ code:'008',name:'Valapady' },{ code:'009',name:'Yercaud' }],
+  '024': [{ code:'001',name:'Devakottai' },{ code:'002',name:'Ilayangudi' },{ code:'003',name:'Kallal' },{ code:'004',name:'Karaikudi' },{ code:'005',name:'Manamadurai' },{ code:'006',name:'Sivagangai' },{ code:'007',name:'Tiruppuvanam' }],
+  '025': [{ code:'001',name:'Kadayanallur' },{ code:'002',name:'Keezhpavoor' },{ code:'003',name:'Sankarankoil' },{ code:'004',name:'Shencottah' },{ code:'005',name:'Tenkasi' },{ code:'006',name:'Vasudevanallur' }],
+  '026': [{ code:'001',name:'Kumbakonam' },{ code:'002',name:'Orathanadu' },{ code:'003',name:'Papanasam' },{ code:'004',name:'Pattukkottai' },{ code:'005',name:'Peravurani' },{ code:'006',name:'Thiruvidaimarudur' },{ code:'007',name:'Thanjavur' }],
+  '027': [{ code:'001',name:'Andipatti' },{ code:'002',name:'Bodinayakanur' },{ code:'003',name:'Periyakulam' },{ code:'004',name:'Theni-Allinagaram' },{ code:'005',name:'Uthamapalayam' }],
+  '028': [{ code:'001',name:'Ettayapuram' },{ code:'002',name:'Kovilpatti' },{ code:'003',name:'Ottapidaram' },{ code:'004',name:'Sathankulam' },{ code:'005',name:'Srivaikundam' },{ code:'006',name:'Thoothukudi' },{ code:'007',name:'Tiruchendur' },{ code:'008',name:'Vilathikulam' }],
+  '029': [{ code:'001',name:'Lalgudi' },{ code:'002',name:'Manachanallur' },{ code:'003',name:'Manapparai' },{ code:'004',name:'Marungapuri' },{ code:'005',name:'Musiri' },{ code:'006',name:'Srirangam' },{ code:'007',name:'Thottiyam' },{ code:'008',name:'Tiruchirappalli' },{ code:'009',name:'Tiruverumbur' },{ code:'010',name:'Uppiliyapuram' }],
+  '030': [{ code:'001',name:'Ambasamudram' },{ code:'002',name:'Cheranmahadevi' },{ code:'003',name:'Kalakadu' },{ code:'004',name:'Manur' },{ code:'005',name:'Nanguneri' },{ code:'006',name:'Palayamkottai' },{ code:'007',name:'Sankarankoil' },{ code:'008',name:'Shencottah' },{ code:'009',name:'Tirunelveli' },{ code:'010',name:'Valliyur' }],
+  '031': [{ code:'001',name:'Ambur' },{ code:'002',name:'Jolarpet' },{ code:'003',name:'Natrampalli' },{ code:'004',name:'Tirupattur' },{ code:'005',name:'Vaniyambadi' }],
+  '032': [{ code:'001',name:'Avinashi' },{ code:'002',name:'Dharapuram' },{ code:'003',name:'Kangeyam' },{ code:'004',name:'Madathukulam' },{ code:'005',name:'Palladam' },{ code:'006',name:'Tiruppur' },{ code:'007',name:'Udumalaipettai' },{ code:'008',name:'Uthukuli' }],
+  '033': [{ code:'001',name:'Ambattur' },{ code:'002',name:'Avadi' },{ code:'003',name:'Gummidipoondi' },{ code:'004',name:'Minjur' },{ code:'005',name:'Ponneri' },{ code:'006',name:'Poonamallee' },{ code:'007',name:'Uthukottai' }],
+  '034': [{ code:'001',name:'Arni' },{ code:'002',name:'Chengam' },{ code:'003',name:'Chetpet' },{ code:'004',name:'Jawadhu Hills' },{ code:'005',name:'Kalasapakkam' },{ code:'006',name:'Kilpennathur' },{ code:'007',name:'Polur' },{ code:'008',name:'Tiruvannamalai' },{ code:'009',name:'Vandavasi' },{ code:'010',name:'Vembakkam' }],
+  '035': [{ code:'001',name:'Kodavasal' },{ code:'002',name:'Mannargudi' },{ code:'003',name:'Nannilam' },{ code:'004',name:'Needamangalam' },{ code:'005',name:'Papanasam' },{ code:'006',name:'Thiruthuraipoondi' },{ code:'007',name:'Tiruvarur' }],
+  '036': [{ code:'001',name:'Anaicut' },{ code:'002',name:'Gudiyatham' },{ code:'003',name:'Katpadi' },{ code:'004',name:'Pallikonda' },{ code:'005',name:'Pernambut' },{ code:'006',name:'Vellore' }],
+  '037': [{ code:'001',name:'Gingee' },{ code:'002',name:'Kallakurichi' },{ code:'003',name:'Mailam' },{ code:'004',name:'Marakanam' },{ code:'005',name:'Mugaiyur' },{ code:'006',name:'Thirukoilur' },{ code:'007',name:'Tindivanam' },{ code:'008',name:'Vanur' },{ code:'009',name:'Viluppuram' }],
+  '038': [{ code:'001',name:'Aruppukkottai' },{ code:'002',name:'Kariapatti' },{ code:'003',name:'Rajapalayam' },{ code:'004',name:'Sivakasi' },{ code:'005',name:'Srivilliputhur' },{ code:'006',name:'Tiruchuli' },{ code:'007',name:'Virudhunagar' },{ code:'008',name:'Vuppiliyapatti' }],
+};
+
 const PATTA_CACHE_TTL = 10 * 60 * 1000; // 10 min
 // Cache stores { html, cookies, time } so session stays valid across requests
 let _pattaPageCache = null;
@@ -280,58 +301,47 @@ async function getPattaPage() {
     return _pattaPageCache;
   }
   const home = await fetchRaw(PATTA_HOME_URL, {
-    headers: {
-      Referer: PATTA_HOME_URL,
-      'Upgrade-Insecure-Requests': '1',
-    },
+    headers: { Referer: PATTA_HOME_URL, 'Upgrade-Insecure-Requests': '1' },
   });
   if (home.status !== 200) throw new Error(`Patta home page returned HTTP ${home.status}`);
 
-  const landingM = home.body.match(/href="(land\/chittaNewRuralTamil\.html\?lan=ta&rno=[^"]+)"/i);
+  const landingM  = home.body.match(/href="(land\/chittaNewRuralTamil\.html\?lan=ta&rno=[^"]+)"/i);
   const landingUrl = landingM ? `${PATTA_BASE}/eservicesnew/${landingM[1]}` : `${PATTA_BASE}${PATTA_FORM_PATH}?lan=ta`;
   const res = await fetchRaw(landingUrl, {
-    headers: {
-      Referer: PATTA_HOME_URL,
-      'Upgrade-Insecure-Requests': '1',
-    },
+    headers: { Referer: PATTA_HOME_URL, 'Upgrade-Insecure-Requests': '1' },
     cookies: home.cookies,
   });
   if (res.status !== 200) throw new Error(`Patta page returned HTTP ${res.status}`);
-  const ctx = { html: res.body, cookies: res.cookies || home.cookies, time: now, url: landingUrl };
+
+  const cookies = res.cookies || home.cookies;
+
+  // Load the form target page to get chkrno / ajax_rno session tokens
+  const extract = await fetchRaw(`${PATTA_BASE}${PATTA_PATH}?lan=ta`, {
+    headers: { Referer: landingUrl },
+    cookies,
+  }).catch(() => ({ body: '' }));
+
+  const chkrno  = (extract.body.match(/(?:name|id)="chkrno"[^>]*value="([^"]+)"/i) ||
+                   extract.body.match(/name="chkrno"\s+value="([^"]+)"/i) || [])[1] || '';
+  const ajaxRno = (extract.body.match(/(?:name|id)="ajax_rno"[^>]*value="([^"]+)"/i) ||
+                   extract.body.match(/name="ajax_rno"\s+value="([^"]+)"/i) || [])[1] || chkrno;
+
+  const ctx = { html: res.body, cookies, time: now, url: landingUrl, chkrno, ajaxRno };
   _pattaPageCache = ctx;
   return ctx;
 }
 
-async function pattaPostback(pageCtx, eventTarget, fieldValues) {
-  const tokens = extractAspNetTokens(pageCtx.html);
-  const ajaxRno = extractHiddenValue(pageCtx.html, 'ajax_rno');
-  const chkrno  = extractHiddenValue(pageCtx.html, 'chkrno');
-  const body   = encodeForm({
-    __EVENTTARGET:          eventTarget,
-    __EVENTARGUMENT:        '',
-    __ASYNCPOST:            'true',
-    __VIEWSTATE:            tokens.__VIEWSTATE,
-    __VIEWSTATEGENERATOR:   tokens.__VIEWSTATEGENERATOR,
-    __EVENTVALIDATION:      tokens.__EVENTVALIDATION,
-    chkrno:                 chkrno,
-    ajax_rno:               ajaxRno,
-    ...fieldValues,
-  });
-
-  const res = await fetchRaw(PATTA_BASE + PATTA_PATH + '?lan=ta', {
-    method:  'POST',
-    body,
+async function pattaAjax(pageCtx, query) {
+  const res = await fetchRaw(`${PATTA_BASE}${PATTA_AJAX_PATH}?${query}`, {
+    method: 'GET',
     cookies: pageCtx.cookies,
     headers: {
-      Referer:             pageCtx.url || PATTA_URL,
-      Origin:              PATTA_BASE,
-      'X-MicrosoftAjax':  'Delta=true',
+      Referer: pageCtx.url || PATTA_URL,
       'X-Requested-With': 'XMLHttpRequest',
     },
   });
 
-  const html = extractUpdatePanelHtml(res.body);
-  return { html, cookies: mergeCookies(pageCtx.cookies, res.cookies) };
+  return { html: res.body, cookies: mergeCookies(pageCtx.cookies, res.cookies) };
 }
 
 function parsePattaResult(html) {
@@ -400,42 +410,36 @@ router.get('/districts', async (req, res) => {
   }
 });
 
-router.get('/taluks', async (req, res) => {
+router.get('/taluks', (req, res) => {
   const { dc } = req.query;
   if (!dc) return res.status(400).json({ error: 'dc (districtCode) required' });
-
-  try {
-    const pageCtx = await getPattaPage();
-    const ctx     = await pattaPostback(pageCtx, PATTA_CTRL.district, {
-      [PATTA_CTRL.district]: dc,
-    });
-    const taluks = parseSelectOptions(ctx.html, 'talukCode');
-    if (taluks.length === 0) return res.status(502).json({ error: 'Could not fetch taluks — check district code.' });
-    res.json(taluks);
-  } catch (err) {
-    res.status(502).json({ error: err.message });
-  }
+  const taluks = STATIC_TN_TALUKS[dc];
+  if (!taluks) return res.status(404).json({ error: `No taluks found for district code ${dc}` });
+  res.json(taluks);
 });
 
 router.get('/villages', async (req, res) => {
   const { dc, tc } = req.query;
   if (!dc || !tc) return res.status(400).json({ error: 'dc and tc required' });
 
+  // Try live portal first (requires valid session); fall back to empty list
   try {
     const pageCtx  = await getPattaPage();
-    const afterDist = await pattaPostback(pageCtx, PATTA_CTRL.district, {
-      [PATTA_CTRL.district]: dc,
-    });
-    const afterTaluk = await pattaPostback(afterDist, PATTA_CTRL.taluk, {
-      [PATTA_CTRL.district]: dc,
-      [PATTA_CTRL.taluk]:    tc,
-    });
-    const villages = parseSelectOptions(afterTaluk.html, 'villageCode');
-    if (villages.length === 0) return res.status(502).json({ error: 'Could not fetch villages — check taluk code.' });
-    res.json(villages);
-  } catch (err) {
-    res.status(502).json({ error: err.message });
-  }
+    const tcBase   = tc.split('/')[0];
+    const r1 = await fetchRaw(
+      `${PATTA_BASE}${PATTA_AJAX_PATH}?page=taluk&districtCode=${encodeURIComponent(dc)}`,
+      { cookies: pageCtx.cookies, headers: { Referer: pageCtx.url, 'X-Requested-With': 'XMLHttpRequest' } }
+    );
+    const r2 = await fetchRaw(
+      `${PATTA_BASE}${PATTA_AJAX_PATH}?page=village&districtCode=${encodeURIComponent(dc)}&talukCode=${encodeURIComponent(tcBase)}`,
+      { cookies: mergeCookies(pageCtx.cookies, r1.cookies), headers: { Referer: pageCtx.url, 'X-Requested-With': 'XMLHttpRequest' } }
+    );
+    const villages = parseJsonOrSelectOptions(r2.body, 'villageCode');
+    if (villages.length > 0) return res.json(villages);
+  } catch (_) {}
+
+  // Portal ajax.html is blocked for server-side requests; return empty so the UI can prompt manual entry
+  res.json([]);
 });
 
 router.get('/patta', async (req, res) => {
@@ -446,13 +450,12 @@ router.get('/patta', async (req, res) => {
 
   try {
     const pageCtx = await getPattaPage();
-    const tokens  = extractAspNetTokens(pageCtx.html);
 
     const body = encodeForm({
       [PATTA_CTRL.task]:          'chittaTam',
       [PATTA_CTRL.searchpattano]: 'no',
-      [PATTA_CTRL.chkrno]:        tokens.__VIEWSTATE || '',
-      [PATTA_CTRL.ajaxRno]:       tokens.__VIEWSTATE || '',
+      [PATTA_CTRL.chkrno]:        pageCtx.chkrno  || '',
+      [PATTA_CTRL.ajaxRno]:       pageCtx.ajaxRno || '',
       [PATTA_CTRL.district]:      dc,
       [PATTA_CTRL.taluk]:         tc,
       [PATTA_CTRL.village]:       vc,
@@ -466,12 +469,12 @@ router.get('/patta', async (req, res) => {
       [PATTA_CTRL.otp]:           '',
     });
 
-    const result = await fetchRaw(PATTA_BASE + PATTA_PATH, {
+    const result = await fetchRaw(`${PATTA_BASE}${PATTA_PATH}?lan=ta`, {
       method:  'POST',
       body,
       cookies: pageCtx.cookies,
       headers: {
-        Referer: PATTA_URL,
+        Referer: pageCtx.url || `${PATTA_BASE}${PATTA_FORM_PATH}?lan=ta`,
         Origin:  PATTA_BASE,
         'X-Requested-With': 'XMLHttpRequest',
       },
@@ -498,8 +501,8 @@ router.get('/patta', async (req, res) => {
 // ── EC (tnreginet.gov.in) ─────────────────────────────────────────────────────
 
 const EC_BASE = 'https://tnreginet.gov.in';
-const EC_PATH = '/portal/webHP.aspx';
-const EC_URL  = `${EC_BASE}${EC_PATH}?appname=EC`;
+const EC_HOME_URL = `${EC_BASE}/portal/index.jsp`;
+const EC_URL  = `${EC_BASE}/portal/webHP?requestType=ApplicationRH&actionVal=openEncumbranceCertSearch&screenId=8400001&scenarioId=2&menuCode=8400010&auditUSFlag=true`;
 
 const EC_CTRL = {
   zone:     'cmb_Zone',
@@ -526,39 +529,41 @@ let _ecPageCache = null; // { html, cookies, time }
 async function getEcPage() {
   const now = Date.now();
   if (_ecPageCache && (now - _ecPageCache.time) < PATTA_CACHE_TTL) return _ecPageCache;
-  const res = await fetchRaw(EC_URL, { headers: { Referer: EC_BASE } });
+  const home = await fetchRaw(EC_HOME_URL, { headers: { Referer: EC_HOME_URL } });
+  if (home.status !== 200) throw new Error(`EC home page returned HTTP ${home.status}`);
+  const homeCsrf = (home.body.match(/name="_csrf" content="([^"]+)"/i) ||
+                    home.body.match(/var\s+csrf\s*=\s*'([^']+)'/i) || [])[1] || '';
+  const res = await fetchRaw(`${EC_URL}&_csrf=${homeCsrf}`, {
+    cookies: home.cookies,
+    headers: {
+      Referer: EC_HOME_URL,
+      'X-Requested-With': 'XMLHttpRequest',
+    },
+  });
   if (res.status !== 200) throw new Error(`EC page returned HTTP ${res.status}`);
-  const ctx = { html: res.body, cookies: res.cookies, time: now };
+  const csrf = (res.body.match(/var\s+csrf\s*=\s*'([^']+)'/i) ||
+                res.body.match(/name="_csrf" content="([^"]+)"/i) || [])[1] || homeCsrf;
+  const ctx = { html: res.body, cookies: mergeCookies(home.cookies, res.cookies), time: now, csrf };
   _ecPageCache = ctx;
   return ctx;
 }
 
-async function ecPostback(pageCtx, eventTarget, fieldValues) {
-  const tokens = extractAspNetTokens(pageCtx.html);
-  const body   = encodeForm({
-    __EVENTTARGET:          eventTarget,
-    __EVENTARGUMENT:        '',
-    __ASYNCPOST:            'true',
-    __VIEWSTATE:            tokens.__VIEWSTATE,
-    __VIEWSTATEGENERATOR:   tokens.__VIEWSTATEGENERATOR,
-    __EVENTVALIDATION:      tokens.__EVENTVALIDATION,
-    ...fieldValues,
-  });
+async function ecAjax(pageCtx, actionVal, comboValue) {
+  const csrf = pageCtx.csrf ||
+               (pageCtx.html.match(/var\s+csrf\s*=\s*'([^']+)'/i) || [])[1] ||
+               (pageCtx.html.match(/name="_csrf" content="([^"]+)"/i) || [])[1] || '';
+  const url = `${EC_BASE}/portal/webHP?requestType=ApplicationRH&actionVal=${actionVal}&queryType=Select&screenId=8400001&comboValue=${encodeURIComponent(comboValue)}&_csrf=${encodeURIComponent(csrf)}`;
 
-  const res = await fetchRaw(EC_BASE + EC_PATH + '?appname=EC', {
-    method:  'POST',
-    body,
+  const res = await fetchRaw(url, {
+    method: 'POST',
     cookies: pageCtx.cookies,
     headers: {
-      Referer:             EC_URL,
-      Origin:              EC_BASE,
-      'X-MicrosoftAjax':  'Delta=true',
+      Referer: EC_URL,
       'X-Requested-With': 'XMLHttpRequest',
     },
   });
 
-  const html = extractUpdatePanelHtml(res.body);
-  return { html, cookies: mergeCookies(pageCtx.cookies, res.cookies) };
+  return { html: res.body, cookies: mergeCookies(pageCtx.cookies, res.cookies), csrf };
 }
 
 function parseEcResults(html) {
@@ -615,8 +620,8 @@ router.get('/ec/districts', async (req, res) => {
 
   try {
     const pageCtx   = await getEcPage();
-    const ctx       = await ecPostback(pageCtx, EC_CTRL.zone, { [EC_CTRL.zone]: zone });
-    const districts = parseSelectOptions(ctx.html, 'cmb_District');
+    const ctx       = await ecAjax(pageCtx, 'loadDistrictCombo', zone);
+    const districts = parseJsonOrSelectOptions(ctx.html, 'cmb_District');
     if (districts.length === 0) return res.status(502).json({ error: 'Could not fetch EC districts.' });
     res.json(districts);
   } catch (err) {
@@ -630,12 +635,9 @@ router.get('/ec/sros', async (req, res) => {
 
   try {
     const pageCtx   = await getEcPage();
-    const afterZone = await ecPostback(pageCtx, EC_CTRL.zone, { [EC_CTRL.zone]: zone });
-    const afterDist = await ecPostback(afterZone, EC_CTRL.district, {
-      [EC_CTRL.zone]:     zone,
-      [EC_CTRL.district]: dc,
-    });
-    const sros = parseSelectOptions(afterDist.html, 'cmb_SroName');
+    const afterZone = await ecAjax(pageCtx, 'loadDistrictCombo', zone);
+    const afterDist = await ecAjax(afterZone, 'loadSroCombo', dc);
+    const sros = parseJsonOrSelectOptions(afterDist.html, 'cmb_SroName');
     if (sros.length === 0) return res.status(502).json({ error: 'Could not fetch SROs.' });
     res.json(sros);
   } catch (err) {
@@ -653,8 +655,7 @@ router.get('/ec/search', async (req, res) => {
 
   try {
     const pageCtx = await getEcPage();
-    const tokens  = extractAspNetTokens(pageCtx.html);
-    const csrf    = (pageCtx.html.match(/var\s+csrf\s*=\s*'([^']+)'/i) || [])[1] || '';
+    const csrf    = pageCtx.csrf || (pageCtx.html.match(/var\s+csrf\s*=\s*'([^']+)'/i) || [])[1] || '';
 
     const body = encodeForm({
       requestType:              'ApplicationRH',
