@@ -300,8 +300,10 @@ router.get('/', async (req, res) => {
 
   let listings = [];
   const errors = [];
-  // On Netlify the function timeout is 10s — skip slow MB strategies
+  // MagicBricks blocks all serverless IPs — skip on Netlify and Vercel
   const onNetlify = !!process.env.NETLIFY;
+  const onVercel  = !!process.env.VERCEL;
+  const skipMb    = onNetlify || onVercel;
 
   const searchApiBase =
     `https://www.magicbricks.com/mbsrp/propertySearch.html` +
@@ -309,7 +311,7 @@ router.get('/', async (req, res) => {
     `&proptype=${mbPropType}&pgNo=1&resi_flag=1&newPropFlag=3&type=search`;
 
   // ── Strategy 1: Android Dalvik UA (mimics mobile app) ──────────────────
-  if (!onNetlify && listings.length === 0) {
+  if (!skipMb && listings.length === 0) {
     try {
       const r = await fetchRaw(searchApiBase, ANDROID_HEADERS);
       if (r.status === 200) {
@@ -324,7 +326,7 @@ router.get('/', async (req, res) => {
   }
 
   // ── Strategy 2: iOS app UA ──────────────────────────────────────────────
-  if (!onNetlify && listings.length === 0) {
+  if (!skipMb && listings.length === 0) {
     try {
       const r = await fetchRaw(searchApiBase, IOS_HEADERS);
       if (r.status === 200) {
@@ -339,7 +341,7 @@ router.get('/', async (req, res) => {
   }
 
   // ── Strategy 3: Minimal headers (no Sec-* fingerprinting) ──────────────
-  if (!onNetlify && listings.length === 0) {
+  if (!skipMb && listings.length === 0) {
     try {
       const r = await fetchRaw(searchApiBase, MINIMAL_HEADERS);
       if (r.status === 200) {
@@ -354,7 +356,7 @@ router.get('/', async (req, res) => {
   }
 
   // ── Strategy 4: Mobile site m.magicbricks.com ───────────────────────────
-  if (!onNetlify && listings.length === 0) {
+  if (!skipMb && listings.length === 0) {
     try {
       const mUrl =
         `https://m.magicbricks.com/new-projects-in-${city.toLowerCase()}-pppfsale`;
@@ -367,7 +369,7 @@ router.get('/', async (req, res) => {
   }
 
   // ── Strategy 5: propSearch alt endpoint with Android UA ─────────────────
-  if (!onNetlify && listings.length === 0) {
+  if (!skipMb && listings.length === 0) {
     try {
       const altUrl =
         `https://www.magicbricks.com/propSearch.html` +
@@ -386,7 +388,7 @@ router.get('/', async (req, res) => {
   }
 
   // ── Strategy 6: Desktop listing page with session cookie ────────────────
-  if (!onNetlify && listings.length === 0) {
+  if (!skipMb && listings.length === 0) {
     try {
       let cookie = '';
       try {
@@ -502,8 +504,8 @@ router.get('/', async (req, res) => {
   }
   listings = [...seen.values()];
 
-  // ── Geocode localities (skip on Netlify to stay within 10s timeout) ──────
-  if (!onNetlify) {
+  // ── Geocode localities (skip on serverless to stay within timeout) ──────
+  if (!skipMb) {
     const localityList = [...new Set(listings.map(l => l.locality).filter(Boolean))];
     const geoCache     = await geocodeLocalities(localityList);
     listings = listings.map(l => {
