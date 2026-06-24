@@ -67,20 +67,8 @@ function stripTags(s) {
 function parseProjectTable(html) {
   const rows = [];
 
-  // Find the header row to figure out column order
-  const thPat   = /<th[^>]*>([\s\S]*?)<\/th>/gi;
-  const headers  = [];
-  let m;
-  while ((m = thPat.exec(html)) !== null) headers.push(stripTags(m[1]).toLowerCase());
-
-  // Column indices (flexible — works even if columns shift)
-  const iReg  = headers.findIndex(h => h.includes('reg') || h.includes('rera'));
-  const iName = headers.findIndex(h => h.includes('project') || h.includes('name'));
-  const iDev  = headers.findIndex(h => h.includes('promot') || h.includes('developer') || h.includes('builder'));
-  const iDist = headers.findIndex(h => h.includes('district'));
-  const iStat = headers.findIndex(h => h.includes('status'));
-
-  // Parse tbody rows
+  // TNRERA tables have fixed columns (no reliable <th> district column):
+  // 0: S.No.  1: Reg No.  2: Promoter+Address  3: Project Details+Name  4: Approval  5: Completion  6: Other  7: Status
   const tbodyM = html.match(/<tbody[^>]*>([\s\S]*?)<\/tbody>/i);
   if (!tbodyM) return rows;
 
@@ -92,23 +80,29 @@ function parseProjectTable(html) {
     let cellM;
     while ((cellM = cellPat.exec(rowM[1])) !== null) cells.push(stripTags(cellM[1]));
     if (cells.length < 3) continue;
+    // Skip header rows (first cell is not a number)
+    if (!/^\d+$/.test(cells[0])) continue;
 
-    const pick = (idx) => (idx >= 0 && idx < cells.length ? cells[idx] : '') || '';
-    const reraNo = pick(iReg >= 0 ? iReg : 1);
-    const name   = pick(iName >= 0 ? iName : 2);
-    const dev    = pick(iDev >= 0 ? iDev : 3);
-    const dist   = pick(iDist >= 0 ? iDist : 4);
-    const status = pick(iStat >= 0 ? iStat : 5);
+    const reraNo       = (cells[1] || '').replace(/\s+dated\s+.*/i, '').trim();
+    const promoterAddr = cells[2] || '';
+    const detailsCell  = cells[3] || '';
+    const otherCell    = cells[6] || '';
+    const status       = cells[7] || cells[5] || 'Registered';
 
-    if (!name && !reraNo) continue;
+    // Extract project name from 'Project Name: "X"' pattern
+    const nameM = detailsCell.match(/Project\s+Name\s*:\s*["'"']([^"'"']+)["'"']/i);
+    const projectName = nameM ? nameM[1].trim() : (detailsCell.split('-')[0].trim().slice(0, 60) || reraNo);
 
-    const nameKey = (name || reraNo).replace(/[^a-zA-Z0-9]/g, '_').slice(0, 30);
-    const distKey = dist.replace(/[^a-zA-Z0-9]/g, '_').slice(0, 20);
+    if (!projectName && !reraNo) continue;
+
+    // Combine searchable address text (no dedicated district column in TNRERA)
+    const addressText = `${promoterAddr} ${detailsCell} ${otherCell}`;
+    const nameKey = (projectName || reraNo).replace(/[^a-zA-Z0-9]/g, '_').slice(0, 30);
     rows.push({
-      id:          `rera_${nameKey}_${distKey}`,
-      projectName: name || reraNo,
-      developer:   dev,
-      district:    dist,
+      id:          `rera_${nameKey}`,
+      projectName: projectName || reraNo,
+      developer:   promoterAddr.split(',')[0].trim().slice(0, 80),
+      district:    addressText,
       reraNo,
       status:      status || 'Registered',
     });
@@ -126,7 +120,8 @@ router.get('/projects', async (req, res) => {
   const all    = [];
   const errors = [];
 
-  for (const yr of [CURRENT_YEAR, CURRENT_YEAR - 1]) {
+  // Start from CURRENT_YEAR-1 — current year file often 404s until TNRERA publishes it
+  for (const yr of [CURRENT_YEAR - 1, CURRENT_YEAR - 2]) {
     for (const type of VALID_TYPES) {
       try {
         const html = await fetchHtml(type, yr);

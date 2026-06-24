@@ -209,15 +209,8 @@ function parseTnreraTable(html) {
   function stripHtml(s) {
     return s.replace(/<[^>]+>/g,' ').replace(/&nbsp;/g,' ').replace(/&amp;/g,'&').replace(/\s+/g,' ').trim();
   }
-  const thPat = /<th[^>]*>([\s\S]*?)<\/th>/gi;
-  const headers = [];
-  let m;
-  while ((m = thPat.exec(html)) !== null) headers.push(stripHtml(m[1]).toLowerCase());
-  const iReg  = headers.findIndex(h => h.includes('reg') || h.includes('rera'));
-  const iName = headers.findIndex(h => h.includes('project') || h.includes('name'));
-  const iDev  = headers.findIndex(h => h.includes('promot') || h.includes('developer') || h.includes('builder'));
-  const iDist = headers.findIndex(h => h.includes('district'));
-  const iStat = headers.findIndex(h => h.includes('status'));
+  // TNRERA tables have fixed columns (no reliable <th> district column):
+  // 0: S.No.  1: Reg No.  2: Promoter+Address  3: Project Details+Name  4: Approval  5: Completion  6: Other  7: Status
   const tbodyM = html.match(/<tbody[^>]*>([\s\S]*?)<\/tbody>/i);
   if (!tbodyM) return rows;
   const rowPat = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
@@ -228,14 +221,20 @@ function parseTnreraTable(html) {
     let cellM;
     while ((cellM = cellPat.exec(rowM[1])) !== null) cells.push(stripHtml(cellM[1]));
     if (cells.length < 3) continue;
-    const pick = (idx) => (idx >= 0 && idx < cells.length ? cells[idx] : '') || '';
-    const reraNo = pick(iReg >= 0 ? iReg : 1);
-    const name   = pick(iName >= 0 ? iName : 2);
-    const dev    = pick(iDev >= 0 ? iDev : 3);
-    const dist   = pick(iDist >= 0 ? iDist : 4);
-    const status = pick(iStat >= 0 ? iStat : 5);
-    if (!name && !reraNo) continue;
-    rows.push({ reraNo, projectName: name || reraNo, developer: dev, district: dist, status });
+    // Skip header row (first cell is not a number)
+    if (!/^\d+$/.test(cells[0])) continue;
+    const reraNo = (cells[1] || '').replace(/\s+dated\s+.*/i, '').trim();
+    const promoterAddr = cells[2] || '';
+    const detailsCell  = cells[3] || '';
+    const otherCell    = cells[6] || '';
+    const status       = cells[7] || cells[5] || 'Registered';
+    // Extract project name from 'Project Name: "X"' pattern
+    const nameM = detailsCell.match(/Project\s+Name\s*:\s*[“‘"']([^”’"']+)[”’"']/i);
+    const projectName = nameM ? nameM[1].trim() : (detailsCell.split('-')[0].trim().slice(0, 60) || reraNo);
+    // Combine searchable address text for city matching (no dedicated district column)
+    const addressText = `${promoterAddr} ${detailsCell} ${otherCell}`;
+    if (!projectName && !reraNo) continue;
+    rows.push({ reraNo, projectName: projectName || reraNo, address: addressText, status });
   }
   return rows;
 }
@@ -406,8 +405,8 @@ router.get('/', async (req, res) => {
       const TNRERA_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36';
       const TNRERA_HDR = { 'User-Agent': TNRERA_UA, 'Accept': 'text/html,*/*', 'Referer': 'https://rera.tn.gov.in/' };
       const curYear = new Date().getFullYear();
-      // Always fetch 3 years × 2 types in parallel — parallel so total time ≈ single request
-      const years = [curYear, curYear - 1, curYear - 2];
+      // Start from curYear-1 — current year file often 404s until TNRERA publishes it
+      const years = [curYear - 1, curYear - 2, curYear - 3];
       const types = ['Building', 'Normal_Layout'];
 
       // Fetch all 6 combinations in parallel with 8s timeout each
@@ -428,10 +427,10 @@ router.get('/', async (req, res) => {
       }
 
       const cityLower = city.toLowerCase();
-      const filtered = tnAll.filter(p => {
-        const d = (p.district || '').toLowerCase();
-        return d.includes(cityLower) || cityLower.includes(d);
-      });
+      // Search city name in combined address text (TNRERA has no dedicated district column)
+      const filtered = tnAll.filter(p =>
+        (p.address || '').toLowerCase().includes(cityLower)
+      );
 
       if (filtered.length > 0) {
         const seen2 = new Map();
@@ -441,7 +440,7 @@ router.get('/', async (req, res) => {
         listings = [...seen2.values()].map(p => ({
           id:             `tnrera_${p.reraNo.replace(/[^a-zA-Z0-9]/g,'_')}`,
           projectName:    p.projectName || p.reraNo,
-          locality:       p.district || city,
+          locality:       city,
           bhkType:        '',
           priceRupees:    0,
           pricePerSqft:   0,
@@ -450,7 +449,7 @@ router.get('/', async (req, res) => {
           possession:     'N/A',
           completionYear: null,
           reraNo:         p.reraNo,
-          developer:      p.developer || '',
+          developer:      '',
           projectType:    p._type === 'Normal_Layout' ? 'Layout' : 'Building',
           registeredYear: p._yr || null,
           lat:            null,
