@@ -36,13 +36,23 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
 
   void _onStoreUpdate() => setState(() {});
 
+  /// Extracts a readable message from Supabase (PostgrestException/AuthException)
+  /// or any other error so failures are diagnosable instead of generic.
+  String _errMsg(Object e) {
+    try {
+      final m = (e as dynamic).message;
+      if (m is String && m.isNotEmpty) return m;
+    } catch (_) {}
+    return e.toString().replaceFirst('Exception: ', '');
+  }
+
   Future<void> _loadLeads() async {
     if (mounted) setState(() { _loading = true; _loadError = null; });
     try {
       final leads = await LandLeadService.getAll();
       AppStore.instance.setLeads(leads);
     } catch (e) {
-      if (mounted) setState(() => _loadError = 'Failed to load leads. Check your connection.');
+      if (mounted) setState(() => _loadError = 'Failed to load leads: ${_errMsg(e)}');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -195,8 +205,8 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
       return true;
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Delete failed. Check your connection.'),
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Delete failed: ${_errMsg(e)}'),
           backgroundColor: AppColors.error,
         ));
       }
@@ -222,11 +232,18 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
     try {
       final saved = await LandLeadService.create(result);
       AppStore.instance.addLead(saved);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Lead ${saved.leadId} saved.'),
+          backgroundColor: AppColors.success,
+        ));
+      }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Failed to save lead. Check your connection.'),
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Failed to save lead: ${_errMsg(e)}'),
           backgroundColor: AppColors.error,
+          duration: const Duration(seconds: 6),
         ));
       }
     }
