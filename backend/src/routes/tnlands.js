@@ -1,15 +1,21 @@
 /**
  * TN Land Records Scraper
  *
+ * Patta (eservices.tn.gov.in) — uses direct AJAX endpoint (ajax.html) for dropdowns,
+ * then POST to chittaExtract_ta.html for the actual patta lookup.
+ *
+ * EC (tnreginet.gov.in) — uses the JSP portal REST-style combo loaders (POST with CSRF)
+ * for dropdowns, then POST to webHP for the EC search.
+ *
  * Routes:
- *   GET /api/tnlands/districts           — list of TN districts (static fallback)
- *   GET /api/tnlands/taluks?dc=          — taluks for a district code
- *   GET /api/tnlands/villages?dc=&tc=    — villages for a taluk code
- *   GET /api/tnlands/patta               — Patta/Chitta from eservices.tn.gov.in
- *   GET /api/tnlands/ec/zones            — EC zones (static)
- *   GET /api/tnlands/ec/districts?zone=  — EC districts for a zone
- *   GET /api/tnlands/ec/sros?zone=&dc=   — SROs for a district
- *   GET /api/tnlands/ec/search           — EC search results
+ *   GET /api/tnlands/districts             — TN districts (live from Patta page, static fallback)
+ *   GET /api/tnlands/taluks?dc=            — taluks for a district code
+ *   GET /api/tnlands/villages?dc=&tc=      — villages for a taluk code
+ *   GET /api/tnlands/patta                 — Patta/Chitta extract
+ *   GET /api/tnlands/ec/zones              — EC zones (static)
+ *   GET /api/tnlands/ec/districts?zone=    — EC districts for a zone
+ *   GET /api/tnlands/ec/sros?zone=&dc=     — SROs for a district
+ *   GET /api/tnlands/ec/search             — EC encumbrance search results
  */
 
 const express = require('express');
@@ -130,11 +136,6 @@ function extractAspNetTokens(html) {
   };
 }
 
-function extractHiddenValue(html, name) {
-  const m = html.match(new RegExp(`id="${name}"[^>]*value="([^"]*)"`, 'i')) ||
-            html.match(new RegExp(`name="${name}"[^>]*value="([^"]*)"`, 'i'));
-  return m ? m[1] : '';
-}
 
 function encodeForm(obj) {
   return Object.entries(obj)
@@ -175,51 +176,28 @@ function parseSelectOptions(html, baseName) {
   return [];
 }
 
-// Extract the HTML payload from an ASP.NET ScriptManager UpdatePanel delta response.
-// The format is length-delimited: "len|type|id|content|" where len = byte-length of content.
-// We CANNOT naively split on '|' because content may contain '|'.
-function extractUpdatePanelHtml(body) {
-  if (!body.includes('|updatePanel|') && !body.includes('|pageContent|')) return body;
-
-  let pos = 0;
-  const htmlParts = [];
-
-  while (pos < body.length) {
-    // Read the length field
-    const pipe1 = body.indexOf('|', pos);
-    if (pipe1 === -1) break;
-    const len = parseInt(body.substring(pos, pipe1), 10);
-    if (isNaN(len)) { pos = pipe1 + 1; continue; }
-
-    // Read the type field
-    const pipe2 = body.indexOf('|', pipe1 + 1);
-    if (pipe2 === -1) break;
-    const type = body.substring(pipe1 + 1, pipe2);
-
-    // Read the id field
-    const pipe3 = body.indexOf('|', pipe2 + 1);
-    if (pipe3 === -1) break;
-
-    // Content starts right after pipe3 and is exactly `len` chars long
-    const contentStart = pipe3 + 1;
-    if (contentStart + len > body.length) break;
-    const content = body.substring(contentStart, contentStart + len);
-
-    if (type === 'updatePanel' && content.length > 0) {
-      htmlParts.push(content);
-    }
-
-    // Advance past content + trailing '|'
-    pos = contentStart + len + 1;
+// Parse AJAX responses that may be JSON arrays or HTML <select> fragments.
+// JSON shape tried: [{code, name}] or [{<key with "code">, <key with "name/desc/label">}]
+function parseJsonOrSelectOptions(body, baseName) {
+  const trimmed = body.trim();
+  if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+    try {
+      const data = JSON.parse(trimmed);
+      const arr  = Array.isArray(data) ? data : (data.data || data.result || data.list || []);
+      if (arr.length > 0) {
+        const item    = arr[0];
+        const keys    = Object.keys(item);
+        const codeKey = keys.find(k => /code/i.test(k));
+        const nameKey = keys.find(k => /name|desc|label|text/i.test(k));
+        if (codeKey && nameKey) {
+          return arr
+            .map(d => ({ code: String(d[codeKey]).trim(), name: String(d[nameKey]).trim() }))
+            .filter(d => d.code && d.name && !d.name.toLowerCase().includes('select'));
+        }
+      }
+    } catch (_) {}
   }
-
-  // Return all updatePanel fragments concatenated; fall back to naive approach if nothing found
-  if (htmlParts.length > 0) return htmlParts.join('');
-
-  // Naive fallback (works when content has no '|')
-  const parts  = body.split('|');
-  const htmlIdx = parts.findIndex(p => p.startsWith('<'));
-  return htmlIdx >= 0 ? parts.slice(htmlIdx).join('|') : body;
+  return parseSelectOptions(body, baseName);
 }
 
 // ── Patta (eservices.tn.gov.in) ───────────────────────────────────────────────
@@ -228,6 +206,7 @@ const PATTA_BASE = 'https://eservices.tn.gov.in';
 const PATTA_HOME_URL = `${PATTA_BASE}/eservicesnew/home.html`;
 const PATTA_PATH = '/eservicesnew/land/chittaExtract_ta.html';
 const PATTA_FORM_PATH = '/eservicesnew/land/chittaNewRuralTamil.html';
+const PATTA_AJAX_PATH = '/eservicesnew/land/ajax.html';
 const PATTA_URL  = PATTA_BASE + PATTA_PATH + '?lan=ta';
 
 const PATTA_CTRL = {
@@ -302,36 +281,17 @@ async function getPattaPage() {
   return ctx;
 }
 
-async function pattaPostback(pageCtx, eventTarget, fieldValues) {
-  const tokens = extractAspNetTokens(pageCtx.html);
-  const ajaxRno = extractHiddenValue(pageCtx.html, 'ajax_rno');
-  const chkrno  = extractHiddenValue(pageCtx.html, 'chkrno');
-  const body   = encodeForm({
-    __EVENTTARGET:          eventTarget,
-    __EVENTARGUMENT:        '',
-    __ASYNCPOST:            'true',
-    __VIEWSTATE:            tokens.__VIEWSTATE,
-    __VIEWSTATEGENERATOR:   tokens.__VIEWSTATEGENERATOR,
-    __EVENTVALIDATION:      tokens.__EVENTVALIDATION,
-    chkrno:                 chkrno,
-    ajax_rno:               ajaxRno,
-    ...fieldValues,
-  });
-
-  const res = await fetchRaw(PATTA_BASE + PATTA_PATH + '?lan=ta', {
-    method:  'POST',
-    body,
+async function pattaAjax(pageCtx, query) {
+  const res = await fetchRaw(`${PATTA_BASE}${PATTA_AJAX_PATH}?${query}`, {
+    method: 'GET',
     cookies: pageCtx.cookies,
     headers: {
-      Referer:             pageCtx.url || PATTA_URL,
-      Origin:              PATTA_BASE,
-      'X-MicrosoftAjax':  'Delta=true',
+      Referer: pageCtx.url || PATTA_URL,
       'X-Requested-With': 'XMLHttpRequest',
     },
   });
 
-  const html = extractUpdatePanelHtml(res.body);
-  return { html, cookies: mergeCookies(pageCtx.cookies, res.cookies) };
+  return { html: res.body, cookies: mergeCookies(pageCtx.cookies, res.cookies) };
 }
 
 function parsePattaResult(html) {
@@ -406,10 +366,8 @@ router.get('/taluks', async (req, res) => {
 
   try {
     const pageCtx = await getPattaPage();
-    const ctx     = await pattaPostback(pageCtx, PATTA_CTRL.district, {
-      [PATTA_CTRL.district]: dc,
-    });
-    const taluks = parseSelectOptions(ctx.html, 'talukCode');
+    const ctx     = await pattaAjax(pageCtx, `page=taluk&districtCode=${encodeURIComponent(dc)}`);
+    const taluks = parseJsonOrSelectOptions(ctx.html, 'talukCode');
     if (taluks.length === 0) return res.status(502).json({ error: 'Could not fetch taluks — check district code.' });
     res.json(taluks);
   } catch (err) {
@@ -423,14 +381,9 @@ router.get('/villages', async (req, res) => {
 
   try {
     const pageCtx  = await getPattaPage();
-    const afterDist = await pattaPostback(pageCtx, PATTA_CTRL.district, {
-      [PATTA_CTRL.district]: dc,
-    });
-    const afterTaluk = await pattaPostback(afterDist, PATTA_CTRL.taluk, {
-      [PATTA_CTRL.district]: dc,
-      [PATTA_CTRL.taluk]:    tc,
-    });
-    const villages = parseSelectOptions(afterTaluk.html, 'villageCode');
+    const afterDist = await pattaAjax(pageCtx, `page=taluk&districtCode=${encodeURIComponent(dc)}`);
+    const afterTaluk = await pattaAjax(afterDist, `page=village&districtCode=${encodeURIComponent(dc)}&talukCode=${encodeURIComponent(tc.split('/')[0])}`);
+    const villages = parseJsonOrSelectOptions(afterTaluk.html, 'villageCode');
     if (villages.length === 0) return res.status(502).json({ error: 'Could not fetch villages — check taluk code.' });
     res.json(villages);
   } catch (err) {
@@ -498,8 +451,8 @@ router.get('/patta', async (req, res) => {
 // ── EC (tnreginet.gov.in) ─────────────────────────────────────────────────────
 
 const EC_BASE = 'https://tnreginet.gov.in';
-const EC_PATH = '/portal/webHP.aspx';
-const EC_URL  = `${EC_BASE}${EC_PATH}?appname=EC`;
+const EC_HOME_URL = `${EC_BASE}/portal/index.jsp`;
+const EC_URL  = `${EC_BASE}/portal/webHP?requestType=ApplicationRH&actionVal=openEncumbranceCertSearch&screenId=8400001&scenarioId=2&menuCode=8400010&auditUSFlag=true`;
 
 const EC_CTRL = {
   zone:     'cmb_Zone',
@@ -526,39 +479,41 @@ let _ecPageCache = null; // { html, cookies, time }
 async function getEcPage() {
   const now = Date.now();
   if (_ecPageCache && (now - _ecPageCache.time) < PATTA_CACHE_TTL) return _ecPageCache;
-  const res = await fetchRaw(EC_URL, { headers: { Referer: EC_BASE } });
+  const home = await fetchRaw(EC_HOME_URL, { headers: { Referer: EC_HOME_URL } });
+  if (home.status !== 200) throw new Error(`EC home page returned HTTP ${home.status}`);
+  const homeCsrf = (home.body.match(/name="_csrf" content="([^"]+)"/i) ||
+                    home.body.match(/var\s+csrf\s*=\s*'([^']+)'/i) || [])[1] || '';
+  const res = await fetchRaw(`${EC_URL}&_csrf=${homeCsrf}`, {
+    cookies: home.cookies,
+    headers: {
+      Referer: EC_HOME_URL,
+      'X-Requested-With': 'XMLHttpRequest',
+    },
+  });
   if (res.status !== 200) throw new Error(`EC page returned HTTP ${res.status}`);
-  const ctx = { html: res.body, cookies: res.cookies, time: now };
+  const csrf = (res.body.match(/var\s+csrf\s*=\s*'([^']+)'/i) ||
+                res.body.match(/name="_csrf" content="([^"]+)"/i) || [])[1] || homeCsrf;
+  const ctx = { html: res.body, cookies: mergeCookies(home.cookies, res.cookies), time: now, csrf };
   _ecPageCache = ctx;
   return ctx;
 }
 
-async function ecPostback(pageCtx, eventTarget, fieldValues) {
-  const tokens = extractAspNetTokens(pageCtx.html);
-  const body   = encodeForm({
-    __EVENTTARGET:          eventTarget,
-    __EVENTARGUMENT:        '',
-    __ASYNCPOST:            'true',
-    __VIEWSTATE:            tokens.__VIEWSTATE,
-    __VIEWSTATEGENERATOR:   tokens.__VIEWSTATEGENERATOR,
-    __EVENTVALIDATION:      tokens.__EVENTVALIDATION,
-    ...fieldValues,
-  });
+async function ecAjax(pageCtx, actionVal, comboValue) {
+  const csrf = pageCtx.csrf ||
+               (pageCtx.html.match(/var\s+csrf\s*=\s*'([^']+)'/i) || [])[1] ||
+               (pageCtx.html.match(/name="_csrf" content="([^"]+)"/i) || [])[1] || '';
+  const url = `${EC_BASE}/portal/webHP?requestType=ApplicationRH&actionVal=${actionVal}&queryType=Select&screenId=8400001&comboValue=${encodeURIComponent(comboValue)}&_csrf=${encodeURIComponent(csrf)}`;
 
-  const res = await fetchRaw(EC_BASE + EC_PATH + '?appname=EC', {
-    method:  'POST',
-    body,
+  const res = await fetchRaw(url, {
+    method: 'POST',
     cookies: pageCtx.cookies,
     headers: {
-      Referer:             EC_URL,
-      Origin:              EC_BASE,
-      'X-MicrosoftAjax':  'Delta=true',
+      Referer: EC_URL,
       'X-Requested-With': 'XMLHttpRequest',
     },
   });
 
-  const html = extractUpdatePanelHtml(res.body);
-  return { html, cookies: mergeCookies(pageCtx.cookies, res.cookies) };
+  return { html: res.body, cookies: mergeCookies(pageCtx.cookies, res.cookies), csrf };
 }
 
 function parseEcResults(html) {
@@ -615,8 +570,8 @@ router.get('/ec/districts', async (req, res) => {
 
   try {
     const pageCtx   = await getEcPage();
-    const ctx       = await ecPostback(pageCtx, EC_CTRL.zone, { [EC_CTRL.zone]: zone });
-    const districts = parseSelectOptions(ctx.html, 'cmb_District');
+    const ctx       = await ecAjax(pageCtx, 'loadDistrictCombo', zone);
+    const districts = parseJsonOrSelectOptions(ctx.html, 'cmb_District');
     if (districts.length === 0) return res.status(502).json({ error: 'Could not fetch EC districts.' });
     res.json(districts);
   } catch (err) {
@@ -630,12 +585,9 @@ router.get('/ec/sros', async (req, res) => {
 
   try {
     const pageCtx   = await getEcPage();
-    const afterZone = await ecPostback(pageCtx, EC_CTRL.zone, { [EC_CTRL.zone]: zone });
-    const afterDist = await ecPostback(afterZone, EC_CTRL.district, {
-      [EC_CTRL.zone]:     zone,
-      [EC_CTRL.district]: dc,
-    });
-    const sros = parseSelectOptions(afterDist.html, 'cmb_SroName');
+    const afterZone = await ecAjax(pageCtx, 'loadDistrictCombo', zone);
+    const afterDist = await ecAjax(afterZone, 'loadSroCombo', dc);
+    const sros = parseJsonOrSelectOptions(afterDist.html, 'cmb_SroName');
     if (sros.length === 0) return res.status(502).json({ error: 'Could not fetch SROs.' });
     res.json(sros);
   } catch (err) {
@@ -653,8 +605,7 @@ router.get('/ec/search', async (req, res) => {
 
   try {
     const pageCtx = await getEcPage();
-    const tokens  = extractAspNetTokens(pageCtx.html);
-    const csrf    = (pageCtx.html.match(/var\s+csrf\s*=\s*'([^']+)'/i) || [])[1] || '';
+    const csrf    = pageCtx.csrf || (pageCtx.html.match(/var\s+csrf\s*=\s*'([^']+)'/i) || [])[1] || '';
 
     const body = encodeForm({
       requestType:              'ApplicationRH',
