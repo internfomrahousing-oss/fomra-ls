@@ -9,12 +9,8 @@ class AppStore extends ChangeNotifier {
   final List<LandLead> leads = [];
   final List<SiteVerification> siteVerifications = [];
 
-  void addLead(LandLead lead) {
-    leads.insert(0, lead);
-    siteVerifications.insert(
-      0,
-      SiteVerification(
-        id: SiteVerification.generateId(),
+  SiteVerification _svFromLead(LandLead lead) => SiteVerification(
+        id: 'SV-${lead.leadId}',
         leadReference: lead.leadId,
         geoCoordinates: lead.gpsCoordinates,
         geoAddress: [lead.location, lead.village, lead.taluk, lead.district]
@@ -26,9 +22,15 @@ class AppStore extends ChangeNotifier {
         nearbyLandmarks: '',
         siteObservations: '',
         capturedOn: lead.addedOn,
-        status: VerificationStatus.scheduled,
-      ),
-    );
+        // siteVisit or beyond means the field visit is done — treat as completed.
+        status: lead.status.index >= LeadStatus.siteVisit.index
+            ? VerificationStatus.completed
+            : VerificationStatus.scheduled,
+      );
+
+  void addLead(LandLead lead) {
+    leads.insert(0, lead);
+    siteVerifications.insert(0, _svFromLead(lead));
     notifyListeners();
   }
 
@@ -71,6 +73,20 @@ class AppStore extends ChangeNotifier {
     leads.clear();
     leads.addAll(newLeads);
     siteVerifications.clear();
+    for (final lead in newLeads) {
+      siteVerifications.add(_svFromLead(lead));
+    }
+    notifyListeners();
+  }
+
+  /// Replaces in-memory SV placeholders with real data loaded from Supabase.
+  /// Any DB SV whose lead is not in the current leads list is ignored.
+  void mergeSiteVerifications(List<SiteVerification> dbSvs) {
+    for (final dbSv in dbSvs) {
+      final idx = siteVerifications
+          .indexWhere((sv) => sv.leadReference == dbSv.leadReference);
+      if (idx != -1) siteVerifications[idx] = dbSv;
+    }
     notifyListeners();
   }
 
