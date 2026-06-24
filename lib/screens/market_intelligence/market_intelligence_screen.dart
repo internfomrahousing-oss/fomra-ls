@@ -824,11 +824,27 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
 
   // â”€â”€ Section: EC & Patta â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-  Widget _buildGovtDocsSection() => _GovtDocsSection(
-        district: _detectedDistrict,
-        taluk: _detectedTaluk,
-        village: _detectedVillage,
-      );
+  Widget _buildGovtDocsSection() {
+    // In lead-based mode the selected lead carries a survey number, which lets
+    // EC & Patta auto-fetch end-to-end. Search/GPS mode has no survey number.
+    String? surveyNo;
+    String? subDiv;
+    if (_isLeadBasedMode && _selectedLeadId != null) {
+      final leads = AppStore.instance.leads;
+      final idx = leads.indexWhere((l) => l.leadId == _selectedLeadId);
+      if (idx != -1) {
+        final s = leads[idx].surveyNumber.trim();
+        if (s.isNotEmpty) surveyNo = s;
+      }
+    }
+    return _GovtDocsSection(
+      district: _detectedDistrict,
+      taluk: _detectedTaluk,
+      village: _detectedVillage,
+      surveyNumber: surveyNo,
+      subDivision: subDiv,
+    );
+  }
 
   // â”€â”€ Build â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -2245,7 +2261,15 @@ class _GovtDocsSection extends StatefulWidget {
   final String? district;
   final String? taluk;
   final String? village;
-  const _GovtDocsSection({this.district, this.taluk, this.village});
+  final String? surveyNumber;
+  final String? subDivision;
+  const _GovtDocsSection({
+    this.district,
+    this.taluk,
+    this.village,
+    this.surveyNumber,
+    this.subDivision,
+  });
 
   @override
   State<_GovtDocsSection> createState() => _GovtDocsSectionState();
@@ -2298,8 +2322,79 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
     _ecFromCtrl.text = '01/01/2000';
     _ecToCtrl.text =
         '${now.day.toString().padLeft(2, '0')}/${now.month.toString().padLeft(2, '0')}/${now.year}';
+    _applySurveyNumber();
     _initDistricts();
     if (widget.district != null) _tryAutoEcFill();
+  }
+
+  /// Mirrors a lead's survey number / sub-division into the Patta + EC inputs.
+  void _applySurveyNumber() {
+    final s = widget.surveyNumber?.trim() ?? '';
+    if (s.isNotEmpty) {
+      if (_surveyCtrl.text != s) _surveyCtrl.text = s;
+      if (_ecSurveyCtrl.text != s) _ecSurveyCtrl.text = s;
+    }
+    final sd = widget.subDivision?.trim() ?? '';
+    if (sd.isNotEmpty) {
+      if (_subDivCtrl.text != sd) _subDivCtrl.text = sd;
+      if (_ecSubDivCtrl.text != sd) _ecSubDivCtrl.text = sd;
+    }
+  }
+
+  /// Auto-fetches Patta once district/taluk/village are resolved AND a survey
+  /// number is available (lead-based mode). No-op otherwise.
+  void _maybeAutoFetchPatta() {
+    final s = widget.surveyNumber?.trim() ?? '';
+    if (s.isEmpty || _fetchingPatta) return;
+    if (_selDistrict == null || _selTaluk == null || _selVillage == null) return;
+    _surveyCtrl.text = s;
+    _fetchPatta();
+  }
+
+  /// Auto-fetches EC once zone/district/SRO are resolved AND a survey number is
+  /// available (lead-based mode). No-op otherwise.
+  void _maybeAutoFetchEc() {
+    final s = widget.surveyNumber?.trim() ?? '';
+    if (s.isEmpty || _fetchingEc) return;
+    if (_selZone == null || _selEcDist == null || _selEcSro == null) return;
+    _ecSurveyCtrl.text = s;
+    _searchEc();
+  }
+
+  @override
+  void didUpdateWidget(covariant _GovtDocsSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Location is resolved asynchronously (GPS + reverse geocode), so the
+    // district/taluk/village usually arrive AFTER the first build. Re-run the
+    // auto-fill whenever they change so EC & Patta populate with the location.
+    final locationChanged = oldWidget.district != widget.district ||
+        oldWidget.taluk != widget.taluk ||
+        oldWidget.village != widget.village;
+    final surveyChanged = oldWidget.surveyNumber != widget.surveyNumber ||
+        oldWidget.subDivision != widget.subDivision;
+
+    if (surveyChanged) _applySurveyNumber();
+
+    if (locationChanged && widget.district != null) {
+      final match = _matchOption(_districts, widget.district);
+      if (match != null && match.code != _selDistrict?.code) {
+        _loadTaluks(match, autoFill: true);
+      } else if (match != null) {
+        // Same district but taluk/village changed — re-match down the chain.
+        if (_taluks.isNotEmpty && widget.taluk != null) {
+          final tMatch = _matchOption(_taluks, widget.taluk);
+          if (tMatch != null && tMatch.code != _selTaluk?.code) {
+            _loadVillages(tMatch, autoFill: true);
+          }
+        }
+      }
+      _tryAutoEcFill();
+    } else if (surveyChanged) {
+      // Same location, new survey number → dropdowns already populated, so just
+      // fetch the documents directly.
+      _maybeAutoFetchPatta();
+      _maybeAutoFetchEc();
+    }
   }
 
   @override
@@ -2408,6 +2503,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
         }
         _loadingVillages = false;
       });
+      if (autoFill) _maybeAutoFetchPatta();
     } catch (e) {
       setState(() {
         _loadingVillages = false;
@@ -2501,6 +2597,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
         if (autoFirst && loaded.isNotEmpty) _selEcSro = loaded.first;
         _loadingEcSros = false;
       });
+      if (autoFirst) _maybeAutoFetchEc();
     } catch (_) {
       setState(() => _loadingEcSros = false);
     }
