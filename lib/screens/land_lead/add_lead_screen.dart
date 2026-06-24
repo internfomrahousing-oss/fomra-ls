@@ -499,7 +499,6 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
   bool get _pattaReady =>
       _resolvedDc != null &&
       _resolvedTc != null &&
-      _resolvedVc != null &&
       _surveyCtrl.text.trim().isNotEmpty;
 
   bool get _ecReady =>
