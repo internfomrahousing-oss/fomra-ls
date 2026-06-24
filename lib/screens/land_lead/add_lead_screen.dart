@@ -518,7 +518,7 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
     if (!_formKey.currentState!.validate()) return;
 
     final lead = LandLead(
-      leadId: LandLead.generateId(),
+      leadId: '',
       inputSource: _inputSource!,
       location: _locationCtrl.text.trim(),
       gpsCoordinates: _gpsCtrl.text.trim(),

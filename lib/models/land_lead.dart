@@ -45,11 +45,6 @@ class LandLead {
     this.status = LeadStatus.new_,
   });
 
-  static String generateId() {
-    final now = DateTime.now();
-    final seq = (now.millisecondsSinceEpoch % 10000).toString().padLeft(4, '0');
-    return 'LL-${now.year}${now.month.toString().padLeft(2, '0')}$seq';
-  }
 }
 
 extension InputSourceLabel on InputSource {

@@ -67,6 +67,13 @@ class AppStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setLeads(List<LandLead> newLeads) {
+    leads.clear();
+    leads.addAll(newLeads);
+    siteVerifications.clear();
+    notifyListeners();
+  }
+
   int get pendingSiteVerifications =>
       siteVerifications.where((sv) => sv.status == VerificationStatus.scheduled).length;
 }
