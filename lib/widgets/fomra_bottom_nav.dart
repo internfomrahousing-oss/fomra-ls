@@ -11,7 +11,7 @@ class FomraBottomNav extends StatelessWidget {
         AppColors.primary),
     _NavItem('/land-lead', Icons.space_dashboard_outlined,
         Icons.space_dashboard, 'Land Workspace', AppColors.primary),
-    _NavItem('/market-intelligence', Icons.assessment_outlined,
+    _NavItem('/dashboard', Icons.assessment_outlined,
         Icons.assessment, 'Reports', AppColors.primary),
   ];
 
