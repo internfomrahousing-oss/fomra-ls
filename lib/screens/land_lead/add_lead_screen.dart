@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'dart:typed_data';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
@@ -6,6 +8,14 @@ import '../../models/land_lead.dart';
 import '../../theme/app_theme.dart';
 
 enum _LocationMode { manual, live }
+
+const _kTermsOptions = [
+  ('Outrate',          Icons.currency_rupee_outlined),
+  ('Joint Venture',    Icons.handshake_outlined),
+  ('Marketing',        Icons.campaign_outlined),
+  ('Deferred Payment', Icons.schedule_outlined),
+  ('Others',           Icons.more_horiz_outlined),
+];
 
 class AddLeadScreen extends StatefulWidget {
   const AddLeadScreen({super.key});
@@ -20,7 +30,7 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
   // Section 1 — MCQ
   InputSource? _inputSource;
 
-  // Section 2 — fill-up fields
+  // Section 2 — location fill-up
   final _locationCtrl   = TextEditingController();
   final _gpsCtrl        = TextEditingController();
   final _villageCtrl    = TextEditingController();
@@ -33,7 +43,6 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
   final _contactCtrl    = TextEditingController();
   final _pincodeCtrl    = TextEditingController();
   final _roadWidthCtrl  = TextEditingController();
-  final _accessCtrl     = TextEditingController();
   final _notesCtrl      = TextEditingController();
   LandType _landType = LandType.agricultural;
 
@@ -41,17 +50,38 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
   bool _fetchingLocation = false;
   String? _locationStatus;
 
-  @override
-  void initState() {
-    super.initState();
-  }
+  // Terms
+  String? _termsType;
+  final _outrateRateCtrl      = TextEditingController();
+  final _outrateScheduleCtrl  = TextEditingController();
+  final _jvDevShareCtrl       = TextEditingController();
+  final _jvLandShareCtrl      = TextEditingController();
+  final _jvTimelineCtrl       = TextEditingController();
+  final _jvModelCtrl          = TextEditingController();
+  final _mktCommissionCtrl    = TextEditingController();
+  final _mktPeriodCtrl        = TextEditingController();
+  final _mktAgencyCtrl        = TextEditingController();
+  final _defInitialCtrl       = TextEditingController();
+  final _defDeferredCtrl      = TextEditingController();
+  final _defTimelineCtrl      = TextEditingController();
+  final _defInterestCtrl      = TextEditingController();
+  final _othersCtrl           = TextEditingController();
+
+  // Photo
+  Uint8List? _photoBytes;
+  String?    _photoName;
 
   @override
   void dispose() {
     for (final c in [
       _locationCtrl, _gpsCtrl, _villageCtrl, _talukCtrl, _districtCtrl,
       _pincodeCtrl, _surveyCtrl, _subDivCtrl, _extentCtrl, _ownerCtrl,
-      _contactCtrl, _roadWidthCtrl, _accessCtrl, _notesCtrl,
+      _contactCtrl, _roadWidthCtrl, _notesCtrl,
+      _outrateRateCtrl, _outrateScheduleCtrl,
+      _jvDevShareCtrl, _jvLandShareCtrl, _jvTimelineCtrl, _jvModelCtrl,
+      _mktCommissionCtrl, _mktPeriodCtrl, _mktAgencyCtrl,
+      _defInitialCtrl, _defDeferredCtrl, _defTimelineCtrl, _defInterestCtrl,
+      _othersCtrl,
     ]) {
       c.dispose();
     }
@@ -159,6 +189,53 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
     return '';
   }
 
+  // ── Photo picker ───────────────────────────────────────────────────────────
+
+  Future<void> _pickPhoto() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+      allowMultiple: false,
+      withData: true,
+    );
+    if (result == null || result.files.isEmpty) return;
+    final file = result.files.first;
+    if (file.bytes != null) {
+      setState(() {
+        _photoBytes = file.bytes;
+        _photoName  = file.name;
+      });
+    }
+  }
+
+  // ── Build terms details string ─────────────────────────────────────────────
+
+  String _buildTermsDetails() {
+    if (_termsType == null) return '';
+    final buf = StringBuffer('Terms: $_termsType\n');
+    switch (_termsType) {
+      case 'Outrate':
+        if (_outrateRateCtrl.text.isNotEmpty) { buf.writeln('Rate: ${_outrateRateCtrl.text}'); }
+        if (_outrateScheduleCtrl.text.isNotEmpty) { buf.writeln('Payment Schedule: ${_outrateScheduleCtrl.text}'); }
+      case 'Joint Venture':
+        if (_jvDevShareCtrl.text.isNotEmpty) { buf.writeln('Developer Share: ${_jvDevShareCtrl.text}%'); }
+        if (_jvLandShareCtrl.text.isNotEmpty) { buf.writeln('Landowner Share: ${_jvLandShareCtrl.text}%'); }
+        if (_jvTimelineCtrl.text.isNotEmpty) { buf.writeln('Timeline: ${_jvTimelineCtrl.text}'); }
+        if (_jvModelCtrl.text.isNotEmpty) { buf.writeln('Revenue Model: ${_jvModelCtrl.text}'); }
+      case 'Marketing':
+        if (_mktCommissionCtrl.text.isNotEmpty) { buf.writeln('Commission: ${_mktCommissionCtrl.text}%'); }
+        if (_mktPeriodCtrl.text.isNotEmpty) { buf.writeln('Marketing Period: ${_mktPeriodCtrl.text}'); }
+        if (_mktAgencyCtrl.text.isNotEmpty) { buf.writeln('Agency: ${_mktAgencyCtrl.text}'); }
+      case 'Deferred Payment':
+        if (_defInitialCtrl.text.isNotEmpty) { buf.writeln('Initial Payment: ${_defInitialCtrl.text}'); }
+        if (_defDeferredCtrl.text.isNotEmpty) { buf.writeln('Deferred Amount: ${_defDeferredCtrl.text}'); }
+        if (_defTimelineCtrl.text.isNotEmpty) { buf.writeln('Payment Timeline: ${_defTimelineCtrl.text}'); }
+        if (_defInterestCtrl.text.isNotEmpty) { buf.writeln('Interest Rate: ${_defInterestCtrl.text}%'); }
+      case 'Others':
+        if (_othersCtrl.text.isNotEmpty) { buf.writeln(_othersCtrl.text); }
+    }
+    return buf.toString().trim();
+  }
+
   // ── Submit ─────────────────────────────────────────────────────────────────
 
   void _submit() {
@@ -172,6 +249,12 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
       return;
     }
     if (!_formKey.currentState!.validate()) return;
+
+    final termsDetails = _buildTermsDetails();
+    final combinedNotes = [
+      if (termsDetails.isNotEmpty) termsDetails,
+      if (_notesCtrl.text.trim().isNotEmpty) _notesCtrl.text.trim(),
+    ].join('\n\n');
 
     final lead = LandLead(
       leadId: '',
@@ -188,8 +271,8 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
       contactDetails: _contactCtrl.text.trim(),
       landType: _landType,
       roadWidth: _roadWidthCtrl.text.trim(),
-      accessDetails: _accessCtrl.text.trim(),
-      notes: _notesCtrl.text.trim(),
+      accessDetails: _termsType ?? '',
+      notes: combinedNotes,
       addedOn: DateTime.now(),
     );
 
@@ -329,7 +412,6 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
             ),
             const SizedBox(height: 12),
 
-            // Survey No + Sub Division side by side
             Row(children: [
               Expanded(
                 child: _Field(
@@ -366,7 +448,6 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
               label: 'Owner Name',
               hint: 'Full name of the land owner',
               icon: Icons.person_outline,
-              required: true,
             ),
             const SizedBox(height: 12),
 
@@ -376,7 +457,6 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
               hint: 'Phone / Email',
               icon: Icons.phone_outlined,
               keyboardType: TextInputType.phone,
-              required: true,
             ),
             const SizedBox(height: 12),
 
@@ -392,16 +472,42 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
               hint: 'e.g. 30 ft / 9 m',
               icon: Icons.open_in_full,
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 20),
 
-            _Field(
-              ctrl: _accessCtrl,
-              label: 'Access Details',
-              hint: 'Approach road, entry point…',
-              icon: Icons.directions_outlined,
-              maxLines: 2,
+            // ── Section 3: Terms ─────────────────────────────────────
+            const _SectionHeader(
+              number: '3',
+              title: 'Terms',
+              subtitle: 'Select the deal terms',
+            ),
+            const SizedBox(height: 14),
+
+            _TermsDropdown(
+              value: _termsType,
+              onChanged: (v) => setState(() => _termsType = v),
             ),
             const SizedBox(height: 12),
+
+            if (_termsType != null) ...[
+              _TermsForm(
+                termsType:          _termsType!,
+                outrateRateCtrl:    _outrateRateCtrl,
+                outrateScheduleCtrl: _outrateScheduleCtrl,
+                jvDevShareCtrl:     _jvDevShareCtrl,
+                jvLandShareCtrl:    _jvLandShareCtrl,
+                jvTimelineCtrl:     _jvTimelineCtrl,
+                jvModelCtrl:        _jvModelCtrl,
+                mktCommissionCtrl:  _mktCommissionCtrl,
+                mktPeriodCtrl:      _mktPeriodCtrl,
+                mktAgencyCtrl:      _mktAgencyCtrl,
+                defInitialCtrl:     _defInitialCtrl,
+                defDeferredCtrl:    _defDeferredCtrl,
+                defTimelineCtrl:    _defTimelineCtrl,
+                defInterestCtrl:    _defInterestCtrl,
+                othersCtrl:         _othersCtrl,
+              ),
+              const SizedBox(height: 12),
+            ],
 
             _Field(
               ctrl: _notesCtrl,
@@ -409,6 +515,25 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
               hint: 'Any additional observations',
               icon: Icons.notes_outlined,
               maxLines: 3,
+            ),
+            const SizedBox(height: 20),
+
+            // ── Section 4: Photo ─────────────────────────────────────
+            const _SectionHeader(
+              number: '4',
+              title: 'Site Photo',
+              subtitle: 'Upload a photo of the land',
+            ),
+            const SizedBox(height: 14),
+
+            _PhotoUpload(
+              photoBytes: _photoBytes,
+              photoName:  _photoName,
+              onPick:     _pickPhoto,
+              onRemove:   () => setState(() {
+                _photoBytes = null;
+                _photoName  = null;
+              }),
             ),
 
             const SizedBox(height: 28),
@@ -420,8 +545,7 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
                 onPressed: _submit,
                 icon: const Icon(Icons.save_outlined),
                 label: const Text('Save Lead',
-                    style:
-                        TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
@@ -436,7 +560,344 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
       ),
     );
   }
+}
 
+// ── Terms Dropdown ──────────────────────────────────────────────────────────
+
+class _TermsDropdown extends StatelessWidget {
+  final String? value;
+  final ValueChanged<String?> onChanged;
+  const _TermsDropdown({required this.value, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return DropdownButtonFormField<String>(
+      initialValue: value,
+      onChanged: onChanged,
+      decoration: InputDecoration(
+        labelText: 'Terms',
+        hintText: 'Select deal terms',
+        prefixIcon: const Icon(Icons.handshake_outlined,
+            size: 20, color: AppColors.primary),
+        filled: true,
+        fillColor: Colors.white,
+        border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: Color(0xFFE0E0E0))),
+        enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: Color(0xFFE0E0E0))),
+        focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: AppColors.primary, width: 2)),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      ),
+      items: _kTermsOptions
+          .map((t) => DropdownMenuItem(
+                value: t.$1,
+                child: Row(children: [
+                  Icon(t.$2, size: 18, color: AppColors.primary),
+                  const SizedBox(width: 10),
+                  Text(t.$1),
+                ]),
+              ))
+          .toList(),
+    );
+  }
+}
+
+// ── Terms Form (conditional) ────────────────────────────────────────────────
+
+class _TermsForm extends StatelessWidget {
+  final String termsType;
+  final TextEditingController outrateRateCtrl;
+  final TextEditingController outrateScheduleCtrl;
+  final TextEditingController jvDevShareCtrl;
+  final TextEditingController jvLandShareCtrl;
+  final TextEditingController jvTimelineCtrl;
+  final TextEditingController jvModelCtrl;
+  final TextEditingController mktCommissionCtrl;
+  final TextEditingController mktPeriodCtrl;
+  final TextEditingController mktAgencyCtrl;
+  final TextEditingController defInitialCtrl;
+  final TextEditingController defDeferredCtrl;
+  final TextEditingController defTimelineCtrl;
+  final TextEditingController defInterestCtrl;
+  final TextEditingController othersCtrl;
+
+  const _TermsForm({
+    required this.termsType,
+    required this.outrateRateCtrl,
+    required this.outrateScheduleCtrl,
+    required this.jvDevShareCtrl,
+    required this.jvLandShareCtrl,
+    required this.jvTimelineCtrl,
+    required this.jvModelCtrl,
+    required this.mktCommissionCtrl,
+    required this.mktPeriodCtrl,
+    required this.mktAgencyCtrl,
+    required this.defInitialCtrl,
+    required this.defDeferredCtrl,
+    required this.defTimelineCtrl,
+    required this.defInterestCtrl,
+    required this.othersCtrl,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 250),
+      child: Container(
+        key: ValueKey(termsType),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppColors.primary.withValues(alpha: 0.04),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+              color: AppColors.primary.withValues(alpha: 0.2)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(termsType,
+                style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.primary)),
+            const SizedBox(height: 12),
+            ..._buildFields(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  List<Widget> _buildFields() {
+    switch (termsType) {
+      case 'Outrate':
+        return [
+          _Field(
+              ctrl: outrateRateCtrl,
+              label: 'Rate per Acre / Sq.ft',
+              hint: 'e.g. ₹50 lakhs per acre',
+              icon: Icons.currency_rupee_outlined),
+          const SizedBox(height: 10),
+          _Field(
+              ctrl: outrateScheduleCtrl,
+              label: 'Payment Schedule',
+              hint: 'e.g. 30% advance, balance on registration',
+              icon: Icons.calendar_today_outlined,
+              maxLines: 2),
+        ];
+      case 'Joint Venture':
+        return [
+          Row(children: [
+            Expanded(
+              child: _Field(
+                  ctrl: jvDevShareCtrl,
+                  label: 'Developer Share %',
+                  hint: 'e.g. 60',
+                  icon: Icons.business_outlined,
+                  keyboardType: TextInputType.number),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _Field(
+                  ctrl: jvLandShareCtrl,
+                  label: 'Landowner Share %',
+                  hint: 'e.g. 40',
+                  icon: Icons.person_outline,
+                  keyboardType: TextInputType.number),
+            ),
+          ]),
+          const SizedBox(height: 10),
+          _Field(
+              ctrl: jvTimelineCtrl,
+              label: 'JV Timeline',
+              hint: 'e.g. 3 years from agreement',
+              icon: Icons.schedule_outlined),
+          const SizedBox(height: 10),
+          _Field(
+              ctrl: jvModelCtrl,
+              label: 'Revenue Sharing Model',
+              hint: 'e.g. built-up area / revenue share',
+              icon: Icons.pie_chart_outline,
+              maxLines: 2),
+        ];
+      case 'Marketing':
+        return [
+          _Field(
+              ctrl: mktCommissionCtrl,
+              label: 'Commission %',
+              hint: 'e.g. 2',
+              icon: Icons.percent_outlined,
+              keyboardType: TextInputType.number),
+          const SizedBox(height: 10),
+          _Field(
+              ctrl: mktPeriodCtrl,
+              label: 'Marketing Period',
+              hint: 'e.g. 6 months',
+              icon: Icons.date_range_outlined),
+          const SizedBox(height: 10),
+          _Field(
+              ctrl: mktAgencyCtrl,
+              label: 'Agency / Broker',
+              hint: 'Name of marketing agency or broker',
+              icon: Icons.campaign_outlined),
+        ];
+      case 'Deferred Payment':
+        return [
+          Row(children: [
+            Expanded(
+              child: _Field(
+                  ctrl: defInitialCtrl,
+                  label: 'Initial Payment',
+                  hint: 'e.g. ₹20 lakhs',
+                  icon: Icons.currency_rupee_outlined),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _Field(
+                  ctrl: defDeferredCtrl,
+                  label: 'Deferred Amount',
+                  hint: 'e.g. ₹80 lakhs',
+                  icon: Icons.currency_rupee_outlined),
+            ),
+          ]),
+          const SizedBox(height: 10),
+          _Field(
+              ctrl: defTimelineCtrl,
+              label: 'Payment Timeline',
+              hint: 'e.g. balance in 18 months',
+              icon: Icons.schedule_outlined),
+          const SizedBox(height: 10),
+          _Field(
+              ctrl: defInterestCtrl,
+              label: 'Interest Rate % (if any)',
+              hint: 'e.g. 9',
+              icon: Icons.percent_outlined,
+              keyboardType: TextInputType.number),
+        ];
+      case 'Others':
+      default:
+        return [
+          _Field(
+              ctrl: othersCtrl,
+              label: 'Terms Description',
+              hint: 'Describe the deal terms…',
+              icon: Icons.description_outlined,
+              maxLines: 4),
+        ];
+    }
+  }
+}
+
+// ── Photo Upload ────────────────────────────────────────────────────────────
+
+class _PhotoUpload extends StatelessWidget {
+  final Uint8List? photoBytes;
+  final String?    photoName;
+  final VoidCallback onPick;
+  final VoidCallback onRemove;
+
+  const _PhotoUpload({
+    required this.photoBytes,
+    required this.photoName,
+    required this.onPick,
+    required this.onRemove,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (photoBytes != null) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Stack(children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Image.memory(
+                photoBytes!,
+                width: double.infinity,
+                height: 200,
+                fit: BoxFit.cover,
+              ),
+            ),
+            Positioned(
+              top: 8,
+              right: 8,
+              child: GestureDetector(
+                onTap: onRemove,
+                child: Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: const BoxDecoration(
+                      color: Colors.black54, shape: BoxShape.circle),
+                  child: const Icon(Icons.close, color: Colors.white, size: 18),
+                ),
+              ),
+            ),
+          ]),
+          if (photoName != null) ...[
+            const SizedBox(height: 6),
+            Text(photoName!,
+                style: const TextStyle(
+                    fontSize: 11, color: AppColors.textSecondary)),
+          ],
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: onPick,
+            icon: const Icon(Icons.refresh, size: 16),
+            label: const Text('Replace Photo'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.primary,
+              side: const BorderSide(color: AppColors.primary),
+            ),
+          ),
+        ],
+      );
+    }
+
+    return GestureDetector(
+      onTap: onPick,
+      child: Container(
+        width: double.infinity,
+        height: 140,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+              color: AppColors.primary.withValues(alpha: 0.35),
+              width: 1.5,
+              style: BorderStyle.solid),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.08),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.add_a_photo_outlined,
+                  color: AppColors.primary, size: 28),
+            ),
+            const SizedBox(height: 10),
+            const Text('Tap to upload site photo',
+                style: TextStyle(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14)),
+            const SizedBox(height: 3),
+            const Text('JPG, PNG supported',
+                style:
+                    TextStyle(color: AppColors.textSecondary, fontSize: 11)),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 // ── Location Mode Toggle ────────────────────────────────────────────────────
