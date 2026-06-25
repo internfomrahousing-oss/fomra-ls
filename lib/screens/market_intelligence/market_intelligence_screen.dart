@@ -1275,80 +1275,86 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
             borderRadius: BorderRadius.circular(14),
             child: SizedBox(
               height: 260,
-              child: activeLoc != null || _fetchingLocation
-                  ? FlutterMap(
-                      mapController: _mapController,
-                      options: MapOptions(
-                        initialCenter: activeLoc ?? _kDefaultCenter,
-                        initialZoom: _zoomForRadius(_selectedRadius),
-                        onMapReady: () => setState(() => _mapReady = true),
-                        onTap: (_, point) => _handleMapTap(point),
+              child: Stack(
+                children: [
+                  FlutterMap(
+                    mapController: _mapController,
+                    options: MapOptions(
+                      initialCenter: activeLoc ?? _kDefaultCenter,
+                      initialZoom: _zoomForRadius(_selectedRadius),
+                      onMapReady: () => setState(() => _mapReady = true),
+                      onTap: (_, point) => _handleMapTap(point),
+                    ),
+                    children: [
+                      TileLayer(
+                        urlTemplate:
+                            'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                        userAgentPackageName: 'in.fomrahousing.fomrals',
                       ),
-                      children: [
-                        TileLayer(
-                          urlTemplate:
-                              'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-                          subdomains: const ['a', 'b', 'c'],
-                        ),
-                        // Circle Layer
-                        CircleLayer(circles: [
-                          if (activeLoc != null)
-                            CircleMarker(
-                              point: activeLoc,
-                              radius: _selectedRadius * 1000.0,
-                              useRadiusInMeter: true,
-                              color: AppColors.primary.withValues(alpha: 0.1),
-                              borderColor: AppColors.primary,
-                              borderStrokeWidth: 2,
-                            ),
-                        ]),
-                        MarkerLayer(markers: [
-                          if (activeLoc != null)
-                            Marker(
-                              point: activeLoc,
-                              width: 40,
-                              height: 48,
-                              child: Icon(Icons.location_on,
-                                  color: _searchMode
-                                      ? const Color(0xFF1565C0)
-                                      : const Color(0xFFE53935),
-                                  size: 40),
-                            ),
-                          if (_tappedPoint != null)
-                            Marker(
-                              point: _tappedPoint!,
-                              width: 36,
-                              height: 44,
-                              child: const Icon(Icons.location_searching,
-                                  color: Color(0xFF6A1B9A), size: 32),
-                            ),
-                        ]),
-                      ],
-                    )
-                  : Container(
-                      color: const Color(0xFFE8EEF8),
-                      child: Center(
-                        child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              _fetchingLocation || _searchingLocation
-                                  ? const CircularProgressIndicator(
-                                      color: AppColors.primary,
-                                      strokeWidth: 2.5)
-                                  : const Icon(Icons.map_outlined,
-                                      size: 52, color: AppColors.primary),
-                              const SizedBox(height: 10),
-                              Text(
-                                _fetchingLocation
-                                    ? 'Getting your location...'
-                                    : 'Search above or tap the map to set location',
-                                style: const TextStyle(
-                                    fontSize: 13,
-                                    color: AppColors.textSecondary),
-                              ),
-                            ]),
+                      CircleLayer(circles: [
+                        if (activeLoc != null)
+                          CircleMarker(
+                            point: activeLoc,
+                            radius: _selectedRadius * 1000.0,
+                            useRadiusInMeter: true,
+                            color: AppColors.primary.withValues(alpha: 0.1),
+                            borderColor: AppColors.primary,
+                            borderStrokeWidth: 2,
+                          ),
+                      ]),
+                      MarkerLayer(markers: [
+                        if (activeLoc != null)
+                          Marker(
+                            point: activeLoc,
+                            width: 40,
+                            height: 48,
+                            child: Icon(Icons.location_on,
+                                color: _searchMode
+                                    ? const Color(0xFF1565C0)
+                                    : const Color(0xFFE53935),
+                                size: 40),
+                          ),
+                        if (_tappedPoint != null)
+                          Marker(
+                            point: _tappedPoint!,
+                            width: 36,
+                            height: 44,
+                            child: const Icon(Icons.location_searching,
+                                color: Color(0xFF6A1B9A), size: 32),
+                          ),
+                      ]),
+                    ],
+                  ),
+                  if (_fetchingLocation || _searchingLocation)
+                    Container(
+                      color: Colors.black26,
+                      child: const Center(
+                        child: CircularProgressIndicator(
+                            color: Colors.white, strokeWidth: 2.5),
                       ),
                     ),
+                  if (activeLoc == null && !_fetchingLocation && !_searchingLocation)
+                    Positioned(
+                      bottom: 8,
+                      left: 0,
+                      right: 0,
+                      child: Center(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.black54,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: const Text(
+                            'Tap to set location',
+                            style: TextStyle(color: Colors.white, fontSize: 12),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 10),
