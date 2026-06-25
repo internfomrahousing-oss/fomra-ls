@@ -52,20 +52,6 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
 
   // Terms
   String? _termsType;
-  final _outrateRateCtrl      = TextEditingController();
-  final _outrateScheduleCtrl  = TextEditingController();
-  final _jvDevShareCtrl       = TextEditingController();
-  final _jvLandShareCtrl      = TextEditingController();
-  final _jvTimelineCtrl       = TextEditingController();
-  final _jvModelCtrl          = TextEditingController();
-  final _mktCommissionCtrl    = TextEditingController();
-  final _mktPeriodCtrl        = TextEditingController();
-  final _mktAgencyCtrl        = TextEditingController();
-  final _defInitialCtrl       = TextEditingController();
-  final _defDeferredCtrl      = TextEditingController();
-  final _defTimelineCtrl      = TextEditingController();
-  final _defInterestCtrl      = TextEditingController();
-  final _othersCtrl           = TextEditingController();
 
   // Photo
   Uint8List? _photoBytes;
@@ -77,11 +63,6 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
       _locationCtrl, _gpsCtrl, _villageCtrl, _talukCtrl, _districtCtrl,
       _pincodeCtrl, _surveyCtrl, _subDivCtrl, _extentCtrl, _ownerCtrl,
       _contactCtrl, _roadWidthCtrl, _notesCtrl,
-      _outrateRateCtrl, _outrateScheduleCtrl,
-      _jvDevShareCtrl, _jvLandShareCtrl, _jvTimelineCtrl, _jvModelCtrl,
-      _mktCommissionCtrl, _mktPeriodCtrl, _mktAgencyCtrl,
-      _defInitialCtrl, _defDeferredCtrl, _defTimelineCtrl, _defInterestCtrl,
-      _othersCtrl,
     ]) {
       c.dispose();
     }
@@ -209,33 +190,6 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
 
   // ── Build terms details string ─────────────────────────────────────────────
 
-  String _buildTermsDetails() {
-    if (_termsType == null) return '';
-    final buf = StringBuffer('Terms: $_termsType\n');
-    switch (_termsType) {
-      case 'Outrate':
-        if (_outrateRateCtrl.text.isNotEmpty) { buf.writeln('Rate: ${_outrateRateCtrl.text}'); }
-        if (_outrateScheduleCtrl.text.isNotEmpty) { buf.writeln('Payment Schedule: ${_outrateScheduleCtrl.text}'); }
-      case 'Joint Venture':
-        if (_jvDevShareCtrl.text.isNotEmpty) { buf.writeln('Developer Share: ${_jvDevShareCtrl.text}%'); }
-        if (_jvLandShareCtrl.text.isNotEmpty) { buf.writeln('Landowner Share: ${_jvLandShareCtrl.text}%'); }
-        if (_jvTimelineCtrl.text.isNotEmpty) { buf.writeln('Timeline: ${_jvTimelineCtrl.text}'); }
-        if (_jvModelCtrl.text.isNotEmpty) { buf.writeln('Revenue Model: ${_jvModelCtrl.text}'); }
-      case 'Marketing':
-        if (_mktCommissionCtrl.text.isNotEmpty) { buf.writeln('Commission: ${_mktCommissionCtrl.text}%'); }
-        if (_mktPeriodCtrl.text.isNotEmpty) { buf.writeln('Marketing Period: ${_mktPeriodCtrl.text}'); }
-        if (_mktAgencyCtrl.text.isNotEmpty) { buf.writeln('Agency: ${_mktAgencyCtrl.text}'); }
-      case 'Deferred Payment':
-        if (_defInitialCtrl.text.isNotEmpty) { buf.writeln('Initial Payment: ${_defInitialCtrl.text}'); }
-        if (_defDeferredCtrl.text.isNotEmpty) { buf.writeln('Deferred Amount: ${_defDeferredCtrl.text}'); }
-        if (_defTimelineCtrl.text.isNotEmpty) { buf.writeln('Payment Timeline: ${_defTimelineCtrl.text}'); }
-        if (_defInterestCtrl.text.isNotEmpty) { buf.writeln('Interest Rate: ${_defInterestCtrl.text}%'); }
-      case 'Others':
-        if (_othersCtrl.text.isNotEmpty) { buf.writeln(_othersCtrl.text); }
-    }
-    return buf.toString().trim();
-  }
-
   // ── Submit ─────────────────────────────────────────────────────────────────
 
   void _submit() {
@@ -250,11 +204,7 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
     }
     if (!_formKey.currentState!.validate()) return;
 
-    final termsDetails = _buildTermsDetails();
-    final combinedNotes = [
-      if (termsDetails.isNotEmpty) termsDetails,
-      if (_notesCtrl.text.trim().isNotEmpty) _notesCtrl.text.trim(),
-    ].join('\n\n');
+    final combinedNotes = _notesCtrl.text.trim();
 
     final lead = LandLead(
       leadId: '',
@@ -488,26 +438,6 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
             ),
             const SizedBox(height: 12),
 
-            if (_termsType != null) ...[
-              _TermsForm(
-                termsType:          _termsType!,
-                outrateRateCtrl:    _outrateRateCtrl,
-                outrateScheduleCtrl: _outrateScheduleCtrl,
-                jvDevShareCtrl:     _jvDevShareCtrl,
-                jvLandShareCtrl:    _jvLandShareCtrl,
-                jvTimelineCtrl:     _jvTimelineCtrl,
-                jvModelCtrl:        _jvModelCtrl,
-                mktCommissionCtrl:  _mktCommissionCtrl,
-                mktPeriodCtrl:      _mktPeriodCtrl,
-                mktAgencyCtrl:      _mktAgencyCtrl,
-                defInitialCtrl:     _defInitialCtrl,
-                defDeferredCtrl:    _defDeferredCtrl,
-                defTimelineCtrl:    _defTimelineCtrl,
-                defInterestCtrl:    _defInterestCtrl,
-                othersCtrl:         _othersCtrl,
-              ),
-              const SizedBox(height: 12),
-            ],
 
             _Field(
               ctrl: _notesCtrl,
@@ -594,204 +524,12 @@ class _TermsDropdown extends StatelessWidget {
             const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       ),
       items: _kTermsOptions
-          .map((t) => DropdownMenuItem(
-                value: t.$1,
-                child: Row(children: [
-                  Icon(t.$2, size: 18, color: AppColors.primary),
-                  const SizedBox(width: 10),
-                  Text(t.$1),
-                ]),
-              ))
+          .map((t) => DropdownMenuItem(value: t.$1, child: Text(t.$1)))
           .toList(),
     );
   }
 }
 
-// ── Terms Form (conditional) ────────────────────────────────────────────────
-
-class _TermsForm extends StatelessWidget {
-  final String termsType;
-  final TextEditingController outrateRateCtrl;
-  final TextEditingController outrateScheduleCtrl;
-  final TextEditingController jvDevShareCtrl;
-  final TextEditingController jvLandShareCtrl;
-  final TextEditingController jvTimelineCtrl;
-  final TextEditingController jvModelCtrl;
-  final TextEditingController mktCommissionCtrl;
-  final TextEditingController mktPeriodCtrl;
-  final TextEditingController mktAgencyCtrl;
-  final TextEditingController defInitialCtrl;
-  final TextEditingController defDeferredCtrl;
-  final TextEditingController defTimelineCtrl;
-  final TextEditingController defInterestCtrl;
-  final TextEditingController othersCtrl;
-
-  const _TermsForm({
-    required this.termsType,
-    required this.outrateRateCtrl,
-    required this.outrateScheduleCtrl,
-    required this.jvDevShareCtrl,
-    required this.jvLandShareCtrl,
-    required this.jvTimelineCtrl,
-    required this.jvModelCtrl,
-    required this.mktCommissionCtrl,
-    required this.mktPeriodCtrl,
-    required this.mktAgencyCtrl,
-    required this.defInitialCtrl,
-    required this.defDeferredCtrl,
-    required this.defTimelineCtrl,
-    required this.defInterestCtrl,
-    required this.othersCtrl,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 250),
-      child: Container(
-        key: ValueKey(termsType),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: AppColors.primary.withValues(alpha: 0.04),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-              color: AppColors.primary.withValues(alpha: 0.2)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(termsType,
-                style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.primary)),
-            const SizedBox(height: 12),
-            ..._buildFields(),
-          ],
-        ),
-      ),
-    );
-  }
-
-  List<Widget> _buildFields() {
-    switch (termsType) {
-      case 'Outrate':
-        return [
-          _Field(
-              ctrl: outrateRateCtrl,
-              label: 'Rate per Acre / Sq.ft',
-              hint: 'e.g. ₹50 lakhs per acre',
-              icon: Icons.currency_rupee_outlined),
-          const SizedBox(height: 10),
-          _Field(
-              ctrl: outrateScheduleCtrl,
-              label: 'Payment Schedule',
-              hint: 'e.g. 30% advance, balance on registration',
-              icon: Icons.calendar_today_outlined,
-              maxLines: 2),
-        ];
-      case 'Joint Venture':
-        return [
-          Row(children: [
-            Expanded(
-              child: _Field(
-                  ctrl: jvDevShareCtrl,
-                  label: 'Developer Share %',
-                  hint: 'e.g. 60',
-                  icon: Icons.business_outlined,
-                  keyboardType: TextInputType.number),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _Field(
-                  ctrl: jvLandShareCtrl,
-                  label: 'Landowner Share %',
-                  hint: 'e.g. 40',
-                  icon: Icons.person_outline,
-                  keyboardType: TextInputType.number),
-            ),
-          ]),
-          const SizedBox(height: 10),
-          _Field(
-              ctrl: jvTimelineCtrl,
-              label: 'JV Timeline',
-              hint: 'e.g. 3 years from agreement',
-              icon: Icons.schedule_outlined),
-          const SizedBox(height: 10),
-          _Field(
-              ctrl: jvModelCtrl,
-              label: 'Revenue Sharing Model',
-              hint: 'e.g. built-up area / revenue share',
-              icon: Icons.pie_chart_outline,
-              maxLines: 2),
-        ];
-      case 'Marketing':
-        return [
-          _Field(
-              ctrl: mktCommissionCtrl,
-              label: 'Commission %',
-              hint: 'e.g. 2',
-              icon: Icons.percent_outlined,
-              keyboardType: TextInputType.number),
-          const SizedBox(height: 10),
-          _Field(
-              ctrl: mktPeriodCtrl,
-              label: 'Marketing Period',
-              hint: 'e.g. 6 months',
-              icon: Icons.date_range_outlined),
-          const SizedBox(height: 10),
-          _Field(
-              ctrl: mktAgencyCtrl,
-              label: 'Agency / Broker',
-              hint: 'Name of marketing agency or broker',
-              icon: Icons.campaign_outlined),
-        ];
-      case 'Deferred Payment':
-        return [
-          Row(children: [
-            Expanded(
-              child: _Field(
-                  ctrl: defInitialCtrl,
-                  label: 'Initial Payment',
-                  hint: 'e.g. ₹20 lakhs',
-                  icon: Icons.currency_rupee_outlined),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _Field(
-                  ctrl: defDeferredCtrl,
-                  label: 'Deferred Amount',
-                  hint: 'e.g. ₹80 lakhs',
-                  icon: Icons.currency_rupee_outlined),
-            ),
-          ]),
-          const SizedBox(height: 10),
-          _Field(
-              ctrl: defTimelineCtrl,
-              label: 'Payment Timeline',
-              hint: 'e.g. balance in 18 months',
-              icon: Icons.schedule_outlined),
-          const SizedBox(height: 10),
-          _Field(
-              ctrl: defInterestCtrl,
-              label: 'Interest Rate % (if any)',
-              hint: 'e.g. 9',
-              icon: Icons.percent_outlined,
-              keyboardType: TextInputType.number),
-        ];
-      case 'Others':
-      default:
-        return [
-          _Field(
-              ctrl: othersCtrl,
-              label: 'Terms Description',
-              hint: 'Describe the deal terms…',
-              icon: Icons.description_outlined,
-              maxLines: 4),
-        ];
-    }
-  }
-}
 
 // ── Photo Upload ────────────────────────────────────────────────────────────
 
