@@ -2546,6 +2546,42 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
     }
   }
 
+  /// GPS-only TNGIS lookup — no district/taluk/village needed.
+  /// Sends the map pin location and lets TNGIS return the nearest parcel,
+  /// including its survey number.
+  Future<void> _fetchPattaByGps() async {
+    if (widget.lat == null || widget.lon == null) return;
+    setState(() {
+      _fetchingPatta = true; _pattaFields = null;
+      _pattaOwners = []; _pattaError = null;
+    });
+    try {
+      final result = await ApiClient.get(
+          '/api/tnlands/patta?lat=${widget.lat}&lon=${widget.lon}');
+      final fields = (result['fields'] as Map<String, dynamic>? ?? {})
+          .map((k, v) => MapEntry(k, v.toString()));
+      final owners = (result['owners'] as List<dynamic>? ?? []).map((o) {
+        return (o as Map<String, dynamic>).map((k, v) => MapEntry(k, v.toString()));
+      }).toList();
+      // Auto-populate survey number field from TNGIS result
+      final surveyNo = fields['Survey Number'];
+      if (surveyNo != null && surveyNo.isNotEmpty && _surveyCtrl.text.isEmpty) {
+        _surveyCtrl.text = surveyNo;
+      }
+      final subDiv = fields['Sub Division'];
+      if (subDiv != null && subDiv.isNotEmpty && subDiv != '-' && _subDivCtrl.text.isEmpty) {
+        _subDivCtrl.text = subDiv;
+      }
+      setState(() { _pattaFields = fields; _pattaOwners = owners; });
+    } on ApiException catch (e) {
+      setState(() => _pattaError = e.message);
+    } catch (e) {
+      setState(() => _pattaError = e.toString().replaceAll('Exception: ', ''));
+    } finally {
+      setState(() => _fetchingPatta = false);
+    }
+  }
+
   Future<void> _fetchPatta() async {
     if (_selDistrict == null || _selTaluk == null ||
         _selVillage == null || _surveyCtrl.text.trim().isEmpty) { return; }
@@ -2798,6 +2834,39 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
         ])),
       ]),
       const SizedBox(height: 14),
+
+      // GPS / TNGIS button — shown when map location is set
+      if (widget.lat != null && widget.lon != null) ...[
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: _fetchingPatta ? null : _fetchPattaByGps,
+            icon: _fetchingPatta
+                ? const SizedBox(width: 14, height: 14,
+                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                : const Icon(Icons.gps_fixed, size: 16),
+            label: Text(_fetchingPatta ? 'Fetching...' : 'Fetch Patta via GPS (TNGIS)',
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF0D47A1),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(children: [
+          const Expanded(child: Divider()),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            child: Text('or enter manually',
+                style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+          ),
+          const Expanded(child: Divider()),
+        ]),
+        const SizedBox(height: 8),
+      ],
 
       SizedBox(
         width: double.infinity,

@@ -559,8 +559,32 @@ router.get('/villages', async (req, res) => {
 router.get('/patta', async (req, res) => {
   const { dc, tc, vc, surveyNo, subDiv, pattaNo, ownerName, viewOpt, landtype,
           lat, lon } = req.query;
+
+  const latN = parseFloat(lat);
+  const lonN = parseFloat(lon);
+  const hasGps = Number.isFinite(latN) && Number.isFinite(lonN);
+
+  // GPS-only mode: no district/taluk/village — query TNGIS directly by location.
+  // A small radius (500 m) finds the parcel the pin lands on; TNGIS returns
+  // survey_number, patta_no, extent, land classification etc. for that parcel.
+  if (hasGps && (!dc || !tc || !vc) && !surveyNo && !pattaNo && !ownerName) {
+    try {
+      const tngis = await fetchTngisPatta({ lat: latN, lon: lonN, radiusMeters: 500 });
+      if (tngis) return res.json({ source: 'TNGIS (tngis.tn.gov.in)', ...tngis });
+      // Widen the search before giving up
+      const tngisWide = await fetchTngisPatta({ lat: latN, lon: lonN, radiusMeters: 2000 });
+      if (tngisWide) return res.json({ source: 'TNGIS (tngis.tn.gov.in)', ...tngisWide });
+      return res.status(422).json({
+        error: 'No parcel found at this GPS location in TNGIS.',
+        hint:  'Tap directly on the plot boundary on the map, or enter the survey number manually.',
+      });
+    } catch (err) {
+      return res.status(502).json({ error: err.message });
+    }
+  }
+
   if (!dc || !tc || !vc || (!surveyNo && !pattaNo && !ownerName)) {
-    return res.status(400).json({ error: 'dc, tc, vc and a patta identifier are required' });
+    return res.status(400).json({ error: 'dc, tc, vc and a patta identifier are required (or set the map location for GPS lookup)' });
   }
 
   // TNGIS fallback: query the public GeoServer cadastral layer by survey number
@@ -568,8 +592,6 @@ router.get('/patta', async (req, res) => {
   // returns nothing (it blocks Vercel IPs / requires OTP for some queries).
   const tngisFallback = async () => {
     if (!surveyNo) return null;
-    const latN = parseFloat(lat);
-    const lonN = parseFloat(lon);
     return fetchTngisPatta({ surveyNo, subDiv, lat: latN, lon: lonN });
   };
 
