@@ -96,7 +96,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
   String? _selectedLeadId;
 
   // POI
-  final int _selectedRadius = 2;
+  int _selectedRadius = 2;
   Map<String, int> _poiCounts = {};
   Map<String, List<Map<String, dynamic>>> _poiPlaces = {};
   bool _collectingPois = false;
@@ -1244,32 +1244,6 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
               ),
             ),
           ],
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: _fetchingLocation
-                  ? null
-                  : () {
-                      setState(() {
-                        _selectedLeadId = null; // Clear lead selection
-                      });
-                      _detectLocation();
-                    },
-              icon: _fetchingLocation
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                          color: Colors.white, strokeWidth: 2))
-                  : const Icon(Icons.gps_fixed, size: 18),
-              label: Text(_position == null
-                  ? 'Detect My Location'
-                  : 'Refresh Location'),
-              style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 12)),
-            ),
-          ),
         ],
       ),
     );
@@ -1425,7 +1399,12 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
         SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
-              onPressed: _fetchingLocation ? null : _detectLocation,
+              onPressed: _fetchingLocation
+                  ? null
+                  : () {
+                      setState(() => _selectedLeadId = null);
+                      _detectLocation();
+                    },
               icon: _fetchingLocation
                   ? const SizedBox(
                       width: 16,
@@ -1460,6 +1439,52 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
         title: 'POI Discovery',
         icon: Icons.place_outlined,
         child: Column(children: [
+          Row(children: [
+            const Text('Radius:',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600,
+                    color: AppColors.textSecondary)),
+            const SizedBox(width: 10),
+            ...([2, 5, 10]).map((km) {
+              final selected = _selectedRadius == km;
+              return Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: GestureDetector(
+                  onTap: () => setState(() {
+                    _selectedRadius = km;
+                    _poisCollected = false;
+                    _poiCounts = {};
+                    _poiPlaces = {};
+                    if (_activeLatLng != null && _mapReady) {
+                      _mapController.move(
+                          _activeLatLng!, _zoomForRadius(km));
+                    }
+                  }),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: selected
+                          ? const Color(0xFF00838F)
+                          : const Color(0xFFF3F4F6),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                          color: selected
+                              ? const Color(0xFF00838F)
+                              : const Color(0xFFD1D5DB)),
+                    ),
+                    child: Text('${km}km',
+                        style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: selected
+                                ? Colors.white
+                                : AppColors.textSecondary)),
+                  ),
+                ),
+              );
+            }),
+          ]),
+          const SizedBox(height: 12),
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
@@ -2521,6 +2546,42 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
     }
   }
 
+  /// GPS-only TNGIS lookup — no district/taluk/village needed.
+  /// Sends the map pin location and lets TNGIS return the nearest parcel,
+  /// including its survey number.
+  Future<void> _fetchPattaByGps() async {
+    if (widget.lat == null || widget.lon == null) return;
+    setState(() {
+      _fetchingPatta = true; _pattaFields = null;
+      _pattaOwners = []; _pattaError = null;
+    });
+    try {
+      final result = await ApiClient.get(
+          '/api/tnlands/patta?lat=${widget.lat}&lon=${widget.lon}');
+      final fields = (result['fields'] as Map<String, dynamic>? ?? {})
+          .map((k, v) => MapEntry(k, v.toString()));
+      final owners = (result['owners'] as List<dynamic>? ?? []).map((o) {
+        return (o as Map<String, dynamic>).map((k, v) => MapEntry(k, v.toString()));
+      }).toList();
+      // Auto-populate survey number field from TNGIS result
+      final surveyNo = fields['Survey Number'];
+      if (surveyNo != null && surveyNo.isNotEmpty && _surveyCtrl.text.isEmpty) {
+        _surveyCtrl.text = surveyNo;
+      }
+      final subDiv = fields['Sub Division'];
+      if (subDiv != null && subDiv.isNotEmpty && subDiv != '-' && _subDivCtrl.text.isEmpty) {
+        _subDivCtrl.text = subDiv;
+      }
+      setState(() { _pattaFields = fields; _pattaOwners = owners; });
+    } on ApiException catch (e) {
+      setState(() => _pattaError = e.message);
+    } catch (e) {
+      setState(() => _pattaError = e.toString().replaceAll('Exception: ', ''));
+    } finally {
+      setState(() => _fetchingPatta = false);
+    }
+  }
+
   Future<void> _fetchPatta() async {
     if (_selDistrict == null || _selTaluk == null ||
         _selVillage == null || _surveyCtrl.text.trim().isEmpty) { return; }
@@ -2773,6 +2834,39 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
         ])),
       ]),
       const SizedBox(height: 14),
+
+      // GPS / TNGIS button — shown when map location is set
+      if (widget.lat != null && widget.lon != null) ...[
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: _fetchingPatta ? null : _fetchPattaByGps,
+            icon: _fetchingPatta
+                ? const SizedBox(width: 14, height: 14,
+                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                : const Icon(Icons.gps_fixed, size: 16),
+            label: Text(_fetchingPatta ? 'Fetching...' : 'Fetch Patta via GPS (TNGIS)',
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF0D47A1),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(children: [
+          const Expanded(child: Divider()),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            child: Text('or enter manually',
+                style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+          ),
+          const Expanded(child: Divider()),
+        ]),
+        const SizedBox(height: 8),
+      ],
 
       SizedBox(
         width: double.infinity,

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../models/land_lead.dart';
 import '../../services/app_store.dart';
 import '../../theme/app_theme.dart';
 import '../../models/app_notification.dart';
@@ -17,6 +18,9 @@ class _HomeScreenState extends State<HomeScreen> {
   final List<AppNotification> _notifications = [];
 
   int get _totalLeads => AppStore.instance.leads.length;
+  int get _brokerLeads => AppStore.instance.leads
+      .where((l) => l.inputSource == InputSource.broker)
+      .length;
   static const int _legalPending = 0;
 
   int get _unreadCount => _notifications.where((n) => !n.isRead).length;
@@ -127,6 +131,21 @@ class _HomeScreenState extends State<HomeScreen> {
                         count: _totalLeads,
                         gradient: const LinearGradient(
                           colors: [Color(0xFF1565C0), Color(0xFF1976D2)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        onTap: () =>
+                            Navigator.pushNamed(context, '/land-lead'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _StatCard(
+                        icon: Icons.handshake_outlined,
+                        label: 'Broker\nLeads',
+                        count: _brokerLeads,
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF059669), Color(0xFF10B981)],
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                         ),
