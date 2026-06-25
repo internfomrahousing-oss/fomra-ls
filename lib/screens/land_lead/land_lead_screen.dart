@@ -267,7 +267,7 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
                 setState(() => _filterStatus = null);
                 Navigator.pop(context);
               }),
-          ...LeadStatus.values.map((s) => ListTile(
+          ...LeadStatus.values.where((s) => s != LeadStatus.siteVisit).map((s) => ListTile(
                 leading: CircleAvatar(
                     radius: 8, backgroundColor: _statusColor(s)),
                 title: Text(s.label),
@@ -331,7 +331,7 @@ class _LeadSummary extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: LeadStatus.values.map((s) {
+        children: LeadStatus.values.where((s) => s != LeadStatus.siteVisit).map((s) {
           final count = leads.where((l) => l.status == s).length;
           return Column(children: [
             Text('$count',
@@ -513,7 +513,7 @@ class _LeadCard extends StatelessWidget {
                     scrollDirection: Axis.horizontal,
                     child: Row(
                       children: LeadStatus.values
-                          .where((s) => s != lead.status)
+                          .where((s) => s != lead.status && s != LeadStatus.siteVisit)
                           .map((s) => Padding(
                                 padding: const EdgeInsets.only(right: 6),
                                 child: OutlinedButton(
