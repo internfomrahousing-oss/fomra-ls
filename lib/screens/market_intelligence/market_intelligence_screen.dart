@@ -96,7 +96,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
   String? _selectedLeadId;
 
   // POI
-  final int _selectedRadius = 2;
+  int _selectedRadius = 2;
   Map<String, int> _poiCounts = {};
   Map<String, List<Map<String, dynamic>>> _poiPlaces = {};
   bool _collectingPois = false;
@@ -1460,6 +1460,52 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
         title: 'POI Discovery',
         icon: Icons.place_outlined,
         child: Column(children: [
+          Row(children: [
+            const Text('Radius:',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600,
+                    color: AppColors.textSecondary)),
+            const SizedBox(width: 10),
+            ...([2, 5, 10]).map((km) {
+              final selected = _selectedRadius == km;
+              return Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: GestureDetector(
+                  onTap: () => setState(() {
+                    _selectedRadius = km;
+                    _poisCollected = false;
+                    _poiCounts = {};
+                    _poiPlaces = {};
+                    if (_activeLatLng != null && _mapReady) {
+                      _mapController.move(
+                          _activeLatLng!, _zoomForRadius(km));
+                    }
+                  }),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: selected
+                          ? const Color(0xFF00838F)
+                          : const Color(0xFFF3F4F6),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                          color: selected
+                              ? const Color(0xFF00838F)
+                              : const Color(0xFFD1D5DB)),
+                    ),
+                    child: Text('${km}km',
+                        style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: selected
+                                ? Colors.white
+                                : AppColors.textSecondary)),
+                  ),
+                ),
+              );
+            }),
+          ]),
+          const SizedBox(height: 12),
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
