@@ -2333,6 +2333,34 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
   final List<_Option> _ecZones = const [
     _Option('1', 'North'), _Option('2', 'South'), _Option('3', 'Central'),
   ];
+
+  static const _kStaticEcDistricts = <String, List<_Option>>{
+    '1': [ // North Zone
+      _Option('2', 'Chennai'), _Option('8', 'Chengalpattu'),
+      _Option('9', 'Kancheepuram'), _Option('21', 'Ranipet'),
+      _Option('28', 'Tiruvallur'), _Option('29', 'Tiruvannamalai'),
+      _Option('30', 'Vellore'), _Option('32', 'Viluppuram'),
+      _Option('6', 'Kallakurichi'), _Option('25', 'Tirupattur'),
+    ],
+    '2': [ // South Zone
+      _Option('4', 'Coimbatore'), _Option('7', 'Dharmapuri'),
+      _Option('10', 'Erode'), _Option('11', 'Krishnagiri'),
+      _Option('14', 'Namakkal'), _Option('15', 'Nilgiris'),
+      _Option('20', 'Salem'), _Option('26', 'Tiruppur'),
+    ],
+    '3': [ // Central Zone
+      _Option('1', 'Ariyalur'), _Option('3', 'Cuddalore'),
+      _Option('5', 'Dindigul'), _Option('12', 'Kanniyakumari'),
+      _Option('13', 'Karur'), _Option('16', 'Madurai'),
+      _Option('17', 'Mayiladuthurai'), _Option('18', 'Nagapattinam'),
+      _Option('19', 'Perambalur'), _Option('22', 'Pudukkottai'),
+      _Option('23', 'Ramanathapuram'), _Option('24', 'Sivagangai'),
+      _Option('27', 'Thanjavur'), _Option('31', 'Tenkasi'),
+      _Option('33', 'Theni'), _Option('34', 'Tiruchirappalli'),
+      _Option('35', 'Tirunelveli'), _Option('36', 'Tiruvarur'),
+      _Option('37', 'Thoothukudi'), _Option('38', 'Virudhunagar'),
+    ],
+  };
   bool   _autoFillingEc = false;
   _Option? _selZone;
   List<_Option> _ecDists = [];
@@ -2718,25 +2746,24 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
       return;
     }
 
-    bool anyLoaded = false;
     try {
       for (final zone in _ecZones) {
+        List<_Option> dists = [];
         try {
           final data = await ApiClient.getList(
               '/api/tnlands/ec/districts?zone=${zone.code}');
-          final dists = _toOptions(data);
-          if (dists.isNotEmpty) anyLoaded = true;
-          final matchDist = _matchOption(dists, district);
-          if (matchDist != null) {
-            setState(() { _selZone = zone; _ecDists = dists; _selEcDist = matchDist; });
-            await _loadEcSros(matchDist, autoFirst: true);
-            return;
-          }
+          dists = _toOptions(data);
         } catch (_) {}
+        if (dists.isEmpty) dists = _kStaticEcDistricts[zone.code] ?? [];
+        final matchDist = _matchOption(dists, district);
+        if (matchDist != null) {
+          setState(() { _selZone = zone; _ecDists = dists; _selEcDist = matchDist; });
+          await _loadEcSros(matchDist, autoFirst: true);
+          return;
+        }
       }
-      setState(() => _ecError = anyLoaded
-          ? 'District "$district" not matched. Select zone/district/SRO manually below.'
-          : 'EC registry (tnreginet.gov.in) is unreachable from server. Select zone/district/SRO manually below.');
+      setState(() => _ecError =
+          'District "$district" not matched. Select zone/district/SRO manually below.');
     } finally {
       setState(() => _autoFillingEc = false);
     }
@@ -2750,9 +2777,18 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
     try {
       final data = await ApiClient.getList(
           '/api/tnlands/ec/districts?zone=${zone.code}');
-      setState(() { _ecDists = _toOptions(data); _loadingEcDists = false; });
+      final loaded = _toOptions(data);
+      setState(() {
+        _ecDists = loaded.isNotEmpty
+            ? loaded
+            : (_kStaticEcDistricts[zone.code] ?? []);
+        _loadingEcDists = false;
+      });
     } catch (_) {
-      setState(() => _loadingEcDists = false);
+      setState(() {
+        _ecDists = _kStaticEcDistricts[zone.code] ?? [];
+        _loadingEcDists = false;
+      });
     }
   }
 
