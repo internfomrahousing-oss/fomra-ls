@@ -9,7 +9,8 @@ import '../../widgets/fomra_bottom_nav.dart';
 import 'add_lead_screen.dart';
 
 class LandLeadScreen extends StatefulWidget {
-  const LandLeadScreen({super.key});
+  final bool isTab;
+  const LandLeadScreen({super.key, this.isTab = false});
 
   @override
   State<LandLeadScreen> createState() => _LandLeadScreenState();
@@ -73,6 +74,100 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final body = Column(
+      children: [
+        if (_leads.isNotEmpty) _LeadSummary(leads: _leads),
+        if (_leads.isNotEmpty)
+          _SearchBar(
+            onChanged: (q) => setState(() => _search = q),
+            filterStatus: _filterStatus,
+            onClearFilter: () => setState(() => _filterStatus = null),
+            onFilter: widget.isTab && _leads.isNotEmpty && !_loading
+                ? _showFilter
+                : null,
+          ),
+        Expanded(
+          child: _loading
+              ? const Center(child: CircularProgressIndicator())
+              : _loadError != null
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(32),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.cloud_off_outlined,
+                                size: 48, color: AppColors.textSecondary),
+                            const SizedBox(height: 12),
+                            Text(_loadError!,
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                    color: AppColors.textSecondary)),
+                            const SizedBox(height: 16),
+                            ElevatedButton.icon(
+                              onPressed: _loadLeads,
+                              icon: const Icon(Icons.refresh, size: 18),
+                              label: const Text('Retry'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                  : _filtered.isEmpty
+                      ? _EmptyState(hasLeads: _leads.isNotEmpty)
+                      : ListView.builder(
+                          padding: const EdgeInsets.all(12),
+                          itemCount: _filtered.length,
+                          itemBuilder: (_, i) {
+                            final lead = _filtered[i];
+                            return Dismissible(
+                              key: ValueKey(lead.leadId),
+                              direction: DismissDirection.endToStart,
+                              confirmDismiss: (_) => _confirmAndDelete(lead),
+                              background: Container(
+                                margin: const EdgeInsets.only(bottom: 12),
+                                decoration: BoxDecoration(
+                                  color: AppColors.error,
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                alignment: Alignment.centerRight,
+                                padding: const EdgeInsets.only(right: 20),
+                                child: const Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.delete_outline,
+                                        color: Colors.white, size: 26),
+                                    SizedBox(height: 4),
+                                    Text('Delete',
+                                        style: TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w600)),
+                                  ],
+                                ),
+                              ),
+                              child: _LeadCard(
+                                lead: lead,
+                                onStatusChange: (s) => _updateStatus(lead, s),
+                              ),
+                            );
+                          },
+                        ),
+        ),
+      ],
+    );
+
+    final fab = FloatingActionButton.extended(
+      onPressed: _openAddLead,
+      icon: const Icon(Icons.add_location_alt_outlined),
+      label: const Text('Add Lead'),
+      backgroundColor: AppColors.primary,
+      foregroundColor: Colors.white,
+    );
+
+    if (widget.isTab) {
+      return Scaffold(body: body, floatingActionButton: fab);
+    }
     return Scaffold(
       appBar: FomraAppBar(
         moduleName: 'Land Lead',
@@ -85,92 +180,8 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
       ),
       drawer: const AppDrawer(currentRoute: '/land-lead'),
       bottomNavigationBar: const FomraBottomNav(currentRoute: '/land-lead'),
-      body: Column(
-        children: [
-          if (_leads.isNotEmpty) _LeadSummary(leads: _leads),
-          if (_leads.isNotEmpty)
-            _SearchBar(
-              onChanged: (q) => setState(() => _search = q),
-              filterStatus: _filterStatus,
-              onClearFilter: () => setState(() => _filterStatus = null),
-            ),
-          Expanded(
-            child: _loading
-                ? const Center(child: CircularProgressIndicator())
-                : _loadError != null
-                    ? Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(32),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.cloud_off_outlined,
-                                  size: 48, color: AppColors.textSecondary),
-                              const SizedBox(height: 12),
-                              Text(_loadError!,
-                                  textAlign: TextAlign.center,
-                                  style: const TextStyle(
-                                      color: AppColors.textSecondary)),
-                              const SizedBox(height: 16),
-                              ElevatedButton.icon(
-                                onPressed: _loadLeads,
-                                icon: const Icon(Icons.refresh, size: 18),
-                                label: const Text('Retry'),
-                              ),
-                            ],
-                          ),
-                        ),
-                      )
-                    : _filtered.isEmpty
-                        ? _EmptyState(hasLeads: _leads.isNotEmpty)
-                        : ListView.builder(
-                            padding: const EdgeInsets.all(12),
-                            itemCount: _filtered.length,
-                            itemBuilder: (_, i) {
-                              final lead = _filtered[i];
-                              return Dismissible(
-                                key: ValueKey(lead.leadId),
-                                direction: DismissDirection.endToStart,
-                                confirmDismiss: (_) => _confirmAndDelete(lead),
-                                background: Container(
-                                  margin: const EdgeInsets.only(bottom: 12),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.error,
-                                    borderRadius: BorderRadius.circular(16),
-                                  ),
-                                  alignment: Alignment.centerRight,
-                                  padding: const EdgeInsets.only(right: 20),
-                                  child: const Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(Icons.delete_outline,
-                                          color: Colors.white, size: 26),
-                                      SizedBox(height: 4),
-                                      Text('Delete',
-                                          style: TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 11,
-                                              fontWeight: FontWeight.w600)),
-                                    ],
-                                  ),
-                                ),
-                                child: _LeadCard(
-                                  lead: lead,
-                                  onStatusChange: (s) => _updateStatus(lead, s),
-                                ),
-                              );
-                            },
-                          ),
-          ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _openAddLead,
-        icon: const Icon(Icons.add_location_alt_outlined),
-        label: const Text('Add Lead'),
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
-      ),
+      body: body,
+      floatingActionButton: fab,
     );
   }
 
@@ -355,11 +366,13 @@ class _SearchBar extends StatelessWidget {
   final ValueChanged<String> onChanged;
   final LeadStatus? filterStatus;
   final VoidCallback onClearFilter;
+  final VoidCallback? onFilter;
 
   const _SearchBar({
     required this.onChanged,
     required this.filterStatus,
     required this.onClearFilter,
+    this.onFilter,
   });
 
   @override
@@ -368,22 +381,34 @@ class _SearchBar extends StatelessWidget {
       Container(
         color: AppColors.primary,
         padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-        child: TextField(
-          onChanged: onChanged,
-          style: const TextStyle(color: Colors.white),
-          decoration: InputDecoration(
-            hintText: 'Search by owner, location, survey no…',
-            hintStyle: const TextStyle(color: Colors.white54),
-            prefixIcon: const Icon(Icons.search, color: Colors.white54),
-            filled: true,
-            fillColor: Colors.white.withValues(alpha: 0.15),
-            border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: BorderSide.none),
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: Row(children: [
+          Expanded(
+            child: TextField(
+              onChanged: onChanged,
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                hintText: 'Search by owner, location, survey no…',
+                hintStyle: const TextStyle(color: Colors.white54),
+                prefixIcon: const Icon(Icons.search, color: Colors.white54),
+                filled: true,
+                fillColor: Colors.white.withValues(alpha: 0.15),
+                border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide.none),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              ),
+            ),
           ),
-        ),
+          if (onFilter != null) ...[
+            const SizedBox(width: 8),
+            IconButton(
+              icon: const Icon(Icons.filter_list, color: Colors.white70),
+              onPressed: onFilter,
+              tooltip: 'Filter',
+            ),
+          ],
+        ]),
       ),
       if (filterStatus != null)
         Container(

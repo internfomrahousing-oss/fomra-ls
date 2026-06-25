@@ -65,7 +65,8 @@ class _ValuationResult {
 // â”€â”€ Main Screen â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class MarketIntelligenceScreen extends StatefulWidget {
-  const MarketIntelligenceScreen({super.key});
+  final bool isTab;
+  const MarketIntelligenceScreen({super.key, this.isTab = false});
 
   @override
   State<MarketIntelligenceScreen> createState() =>
@@ -853,12 +854,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: const FomraAppBar(moduleName: 'Market Intelligence'),
-      drawer: const AppDrawer(currentRoute: '/market-intelligence'),
-      bottomNavigationBar:
-          const FomraBottomNav(currentRoute: '/market-intelligence'),
-      body: SingleChildScrollView(
+    final body = SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -938,7 +934,14 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
             const SizedBox(height: 40),
           ],
         ),
-      ),
+      );
+    if (widget.isTab) return Scaffold(body: body);
+    return Scaffold(
+      appBar: const FomraAppBar(moduleName: 'Market Intelligence'),
+      drawer: const AppDrawer(currentRoute: '/market-intelligence'),
+      bottomNavigationBar:
+          const FomraBottomNav(currentRoute: '/market-intelligence'),
+      body: body,
     );
   }
 
