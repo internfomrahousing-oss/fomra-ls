@@ -1288,7 +1288,8 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                     children: [
                       TileLayer(
                         urlTemplate:
-                            'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                            'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+                        subdomains: const ['a', 'b', 'c', 'd'],
                         userAgentPackageName: 'in.fomrahousing.fomrals',
                       ),
                       CircleLayer(circles: [
