@@ -23,8 +23,6 @@ class _HomeScreenState extends State<HomeScreen> {
                      LeadStatus.siteVisit, LeadStatus.negotiation]
           .contains(l.status))
       .length;
-  int get _acquired    => AppStore.instance.leads
-      .where((l) => l.status == LeadStatus.closed).length;
   int get _brokerLeads => AppStore.instance.leads
       .where((l) => l.inputSource == InputSource.broker).length;
 
@@ -117,9 +115,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     const SizedBox(width: 8),
                     _KpiChip(label: 'Active', value: _activeLeads,
                         color: AppColors.success),
-                    const SizedBox(width: 8),
-                    _KpiChip(label: 'Acquired', value: _acquired,
-                        color: AppColors.secondary),
                     const SizedBox(width: 8),
                     _KpiChip(label: 'Broker', value: _brokerLeads,
                         color: AppColors.accent),
