@@ -5,10 +5,7 @@ import 'services/supabase_config.dart';
 import 'theme/app_theme.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/home/home_screen.dart';
-import 'screens/land_lead/land_lead_screen.dart';
-import 'screens/market_intelligence/market_intelligence_screen.dart';
-import 'screens/legal_verification/legal_verification_screen.dart';
-import 'screens/task_management/task_management_screen.dart';
+import 'screens/land_lead/land_workspace_screen.dart';
 import 'screens/document_management/document_management_screen.dart';
 import 'screens/dashboard/dashboard_screen.dart';
 
@@ -35,10 +32,10 @@ class FomraLSApp extends StatelessWidget {
       routes: {
         '/login':               (_) => const LoginScreen(),
         '/home':                (_) => const HomeScreen(),
-        '/land-lead':           (_) => const LandLeadScreen(),
-        '/market-intelligence': (_) => const MarketIntelligenceScreen(),
-        '/legal-verification':  (_) => const LegalVerificationScreen(),
-        '/task-management':     (_) => const TaskManagementScreen(),
+        '/land-lead':           (_) => const LandWorkspaceScreen(initialTab: 0),
+        '/market-intelligence': (_) => const LandWorkspaceScreen(initialTab: 1),
+        '/legal-verification':  (_) => const LandWorkspaceScreen(initialTab: 2),
+        '/task-management':     (_) => const LandWorkspaceScreen(initialTab: 3),
         '/document-management': (_) => const DocumentManagementScreen(),
         '/dashboard':           (_) => const DashboardScreen(),
       },

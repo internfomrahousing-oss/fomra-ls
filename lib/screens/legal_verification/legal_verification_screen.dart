@@ -37,7 +37,8 @@ class _DocFile {
 // ── Main Screen ───────────────────────────────────────────────────────────────
 
 class LegalVerificationScreen extends StatefulWidget {
-  const LegalVerificationScreen({super.key});
+  final bool isTab;
+  const LegalVerificationScreen({super.key, this.isTab = false});
 
   @override
   State<LegalVerificationScreen> createState() =>
@@ -246,52 +247,54 @@ class _LegalVerificationScreenState extends State<LegalVerificationScreen>
 
   @override
   Widget build(BuildContext context) {
+    final body = Column(
+      children: [
+        _buildTabBar(),
+        Expanded(
+          child: TabBarView(
+            controller: _tabController,
+            children: [
+              _FieldExecutiveTab(
+                leads: _siteVerifiedLeads,
+                allLeadsCount: AppStore.instance.leads.length,
+                docsFor: _docsFor,
+                onUpload: _openUpload,
+              ),
+              _LegalReviewTab(
+                siteVerifiedLeads:    _siteVerifiedLeads,
+                reviewLeadId:         _reviewLeadId,
+                onLeadChanged:        _selectReviewLead,
+                ownershipCtrl:        _ownershipCtrl,
+                mortgageAnswer:       _mortgageAnswer,
+                mortgageReasonCtrl:   _mortgageReasonCtrl,
+                onMortgageChanged:    (v) => setState(() => _mortgageAnswer = v),
+                courtAnswer:          _courtAnswer,
+                courtReasonCtrl:      _courtReasonCtrl,
+                onCourtChanged:       (v) => setState(() => _courtAnswer = v),
+                govtRiskAnswer:       _govtRiskAnswer,
+                govtRiskReasonCtrl:   _govtRiskReasonCtrl,
+                onGovtRiskChanged:    (v) => setState(() => _govtRiskAnswer = v),
+                titleChainCtrl:       _titleChainCtrl,
+                encumbrancesCtrl:     _encumbrancesCtrl,
+                docValidityCtrl:      _docValidityCtrl,
+                legalResult:          _legalResult,
+                legalResultNotesCtrl: _legalResultNotesCtrl,
+                onResultChanged:      (v) => setState(() => _legalResult = v),
+                onSave:               _saveReview,
+                saving:               _reviewSaving,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+    if (widget.isTab) return Scaffold(body: body);
     return Scaffold(
       appBar: const FomraAppBar(moduleName: 'Legal Verification'),
       drawer: const AppDrawer(currentRoute: '/legal-verification'),
       bottomNavigationBar:
           const FomraBottomNav(currentRoute: '/legal-verification'),
-      body: Column(
-        children: [
-          _buildTabBar(),
-          Expanded(
-            child: TabBarView(
-              controller: _tabController,
-              children: [
-                _FieldExecutiveTab(
-                  leads: _siteVerifiedLeads,
-                  allLeadsCount: AppStore.instance.leads.length,
-                  docsFor: _docsFor,
-                  onUpload: _openUpload,
-                ),
-                _LegalReviewTab(
-                  siteVerifiedLeads:    _siteVerifiedLeads,
-                  reviewLeadId:         _reviewLeadId,
-                  onLeadChanged:        _selectReviewLead,
-                  ownershipCtrl:        _ownershipCtrl,
-                  mortgageAnswer:       _mortgageAnswer,
-                  mortgageReasonCtrl:   _mortgageReasonCtrl,
-                  onMortgageChanged:    (v) => setState(() => _mortgageAnswer = v),
-                  courtAnswer:          _courtAnswer,
-                  courtReasonCtrl:      _courtReasonCtrl,
-                  onCourtChanged:       (v) => setState(() => _courtAnswer = v),
-                  govtRiskAnswer:       _govtRiskAnswer,
-                  govtRiskReasonCtrl:   _govtRiskReasonCtrl,
-                  onGovtRiskChanged:    (v) => setState(() => _govtRiskAnswer = v),
-                  titleChainCtrl:       _titleChainCtrl,
-                  encumbrancesCtrl:     _encumbrancesCtrl,
-                  docValidityCtrl:      _docValidityCtrl,
-                  legalResult:          _legalResult,
-                  legalResultNotesCtrl: _legalResultNotesCtrl,
-                  onResultChanged:      (v) => setState(() => _legalResult = v),
-                  onSave:               _saveReview,
-                  saving:               _reviewSaving,
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
+      body: body,
     );
   }
 

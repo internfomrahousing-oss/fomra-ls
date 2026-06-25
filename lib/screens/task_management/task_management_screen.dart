@@ -139,7 +139,8 @@ String _slaLabel(TaskPriority p) => switch (p) {
 // ── Main Screen ───────────────────────────────────────────────────────────────
 
 class TaskManagementScreen extends StatefulWidget {
-  const TaskManagementScreen({super.key});
+  final bool isTab;
+  const TaskManagementScreen({super.key, this.isTab = false});
 
   @override
   State<TaskManagementScreen> createState() => _TaskManagementScreenState();
@@ -228,9 +229,114 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
 
   int get _unread => _notifications.where((n) => !n.isRead).length;
 
+  Widget _buildTaskTabBar() => Container(
+        color: AppColors.primaryDark,
+        child: Row(children: [
+          Expanded(
+            child: TabBar(
+              controller: _tabController,
+              indicatorColor: AppColors.accent,
+              labelColor: Colors.white,
+              unselectedLabelColor: const Color(0xFF90A4AE),
+              isScrollable: true,
+              tabs: [
+                _tabLabel('All', _tasks.length),
+                _tabLabel('To Do',
+                    _tasks.where((t) => t.status == TaskStatus.todo).length),
+                _tabLabel('In Progress',
+                    _tasks.where((t) => t.status == TaskStatus.inProgress).length),
+                _tabLabel('Done',
+                    _tasks.where((t) => t.status == TaskStatus.done).length),
+                _tabLabel('Overdue',
+                    _tasks.where((t) => t.status == TaskStatus.overdue).length),
+              ],
+            ),
+          ),
+          Stack(clipBehavior: Clip.none, children: [
+            IconButton(
+              icon: const Icon(Icons.notifications_outlined, color: Colors.white70),
+              onPressed: _showNotificationsSheet,
+            ),
+            if (_unread > 0)
+              Positioned(
+                right: 6,
+                top: 6,
+                child: Container(
+                  width: 16,
+                  height: 16,
+                  decoration: const BoxDecoration(
+                      color: AppColors.error, shape: BoxShape.circle),
+                  child: Center(
+                    child: Text('$_unread',
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ),
+          ]),
+        ]),
+      );
+
   @override
   Widget build(BuildContext context) {
     _refreshStatuses();
+
+    final taskTabBar = TabBar(
+      controller: _tabController,
+      indicatorColor: AppColors.accent,
+      labelColor: Colors.white,
+      unselectedLabelColor: const Color(0xFF90A4AE),
+      isScrollable: true,
+      tabs: [
+        _tabLabel('All', _tasks.length),
+        _tabLabel('To Do',
+            _tasks.where((t) => t.status == TaskStatus.todo).length),
+        _tabLabel('In Progress',
+            _tasks.where((t) => t.status == TaskStatus.inProgress).length),
+        _tabLabel('Done',
+            _tasks.where((t) => t.status == TaskStatus.done).length),
+        _tabLabel('Overdue',
+            _tasks.where((t) => t.status == TaskStatus.overdue).length),
+      ],
+    );
+
+    final taskListView = TabBarView(
+      controller: _tabController,
+      children: List.generate(
+        5,
+        (i) => _TaskList(
+          tasks: _tasksForTab(i),
+          onStatusChange: (task, s) => setState(() {
+            task.status = s;
+            if (s == TaskStatus.done) task.completedAt = DateTime.now();
+          }),
+          onTap: (task) => _showTaskDetail(task),
+        ),
+      ),
+    );
+
+    final fab = _tabController.index == 0
+        ? FloatingActionButton.extended(
+            onPressed: _openAddTask,
+            icon: const Icon(Icons.add_task),
+            label: const Text('Add Task'),
+            backgroundColor: AppColors.primary,
+            foregroundColor: Colors.white,
+          )
+        : null;
+
+    if (widget.isTab) {
+      return Scaffold(
+        body: Column(children: [
+          _buildTaskTabBar(),
+          Expanded(child: taskListView),
+        ]),
+        floatingActionButton: fab,
+      );
+    }
+
     return Scaffold(
       appBar: FomraAppBar(
         moduleName: 'Task Management',
@@ -260,51 +366,13 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
               ),
           ]),
         ],
-        bottom: TabBar(
-          controller: _tabController,
-          indicatorColor: AppColors.accent,
-          labelColor: Colors.white,
-          unselectedLabelColor: const Color(0xFF90A4AE),
-          isScrollable: true,
-          tabs: [
-            _tabLabel('All', _tasks.length),
-            _tabLabel('To Do',
-                _tasks.where((t) => t.status == TaskStatus.todo).length),
-            _tabLabel('In Progress',
-                _tasks.where((t) => t.status == TaskStatus.inProgress).length),
-            _tabLabel('Done',
-                _tasks.where((t) => t.status == TaskStatus.done).length),
-            _tabLabel('Overdue',
-                _tasks.where((t) => t.status == TaskStatus.overdue).length),
-          ],
-        ),
+        bottom: taskTabBar,
       ),
       drawer: const AppDrawer(currentRoute: '/task-management'),
       bottomNavigationBar:
           const FomraBottomNav(currentRoute: '/task-management'),
-      body: TabBarView(
-        controller: _tabController,
-        children: List.generate(
-          5,
-          (i) => _TaskList(
-            tasks: _tasksForTab(i),
-            onStatusChange: (task, s) => setState(() {
-              task.status = s;
-              if (s == TaskStatus.done) task.completedAt = DateTime.now();
-            }),
-            onTap: (task) => _showTaskDetail(task),
-          ),
-        ),
-      ),
-      floatingActionButton: _tabController.index == 0
-          ? FloatingActionButton.extended(
-              onPressed: _openAddTask,
-              icon: const Icon(Icons.add_task),
-              label: const Text('Add Task'),
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-            )
-          : null,
+      body: taskListView,
+      floatingActionButton: fab,
     );
   }
 

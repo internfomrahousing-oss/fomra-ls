@@ -12,9 +12,6 @@ class _MenuItem {
 
 const _menuItems = [
   _MenuItem('Land Lead Management', Icons.location_on_outlined, '/land-lead'),
-  _MenuItem('Market Intelligence', Icons.insights_outlined, '/market-intelligence'),
-  _MenuItem('Legal Verification', Icons.gavel_outlined, '/legal-verification'),
-  _MenuItem('Task Management', Icons.task_alt_outlined, '/task-management'),
   _MenuItem('Document Management', Icons.folder_outlined, '/document-management'),
   _MenuItem('Dashboard & Reports', Icons.dashboard_outlined, '/dashboard'),
 ];
