@@ -12,7 +12,6 @@ class _MenuItem {
 
 const _menuItems = [
   _MenuItem('LandWorkspace', Icons.location_on_outlined, '/land-lead'),
-  _MenuItem('Document Management', Icons.folder_outlined, '/document-management'),
   _MenuItem('Dashboard & Reports', Icons.dashboard_outlined, '/dashboard'),
 ];
 

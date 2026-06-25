@@ -6,7 +6,6 @@ import 'theme/app_theme.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/home/home_screen.dart';
 import 'screens/land_lead/land_workspace_screen.dart';
-import 'screens/document_management/document_management_screen.dart';
 import 'screens/dashboard/dashboard_screen.dart';
 
 void main() {
@@ -36,7 +35,6 @@ class FomraLSApp extends StatelessWidget {
         '/market-intelligence': (_) => const LandWorkspaceScreen(initialTab: 1),
         '/legal-verification':  (_) => const LandWorkspaceScreen(initialTab: 2),
         '/task-management':     (_) => const LandWorkspaceScreen(initialTab: 3),
-        '/document-management': (_) => const DocumentManagementScreen(),
         '/dashboard':           (_) => const DashboardScreen(),
       },
     );
