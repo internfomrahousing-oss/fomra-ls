@@ -17,13 +17,21 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final List<AppNotification> _notifications = [];
 
-  int get _totalLeads => AppStore.instance.leads.length;
-  int get _brokerLeads => AppStore.instance.leads
-      .where((l) => l.inputSource == InputSource.broker)
+  int get _totalLeads  => AppStore.instance.leads.length;
+  int get _activeLeads => AppStore.instance.leads
+      .where((l) => [LeadStatus.new_, LeadStatus.contacted,
+                     LeadStatus.siteVisit, LeadStatus.negotiation]
+          .contains(l.status))
       .length;
-  static const int _legalPending = 0;
+  int get _acquired    => AppStore.instance.leads
+      .where((l) => l.status == LeadStatus.closed).length;
+  int get _brokerLeads => AppStore.instance.leads
+      .where((l) => l.inputSource == InputSource.broker).length;
 
   int get _unreadCount => _notifications.where((n) => !n.isRead).length;
+
+  List<LandLead> get _recentLeads =>
+      AppStore.instance.leads.reversed.take(5).toList();
 
   @override
   void initState() {
@@ -50,9 +58,7 @@ class _HomeScreenState extends State<HomeScreen> {
           _notifications.firstWhere((n) => n.id == id).isRead = true;
         }),
         onMarkAllRead: () => setState(() {
-          for (final n in _notifications) {
-            n.isRead = true;
-          }
+          for (final n in _notifications) { n.isRead = true; }
         }),
       ),
     );
@@ -61,42 +67,29 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final hour = DateTime.now().hour;
-    final greeting = hour < 12
-        ? 'Good Morning'
-        : hour < 17
-            ? 'Good Afternoon'
-            : 'Good Evening';
-    final greetIcon = hour < 12
-        ? Icons.wb_sunny_outlined
-        : hour < 17
-            ? Icons.wb_cloudy_outlined
-            : Icons.nights_stay_outlined;
+    final greeting = hour < 12 ? 'Good Morning' : hour < 17 ? 'Good Afternoon' : 'Good Evening';
+    final greetIcon = hour < 12 ? Icons.wb_sunny_outlined
+        : hour < 17 ? Icons.wb_cloudy_outlined : Icons.nights_stay_outlined;
 
     return Scaffold(
       appBar: FomraAppBar(
         actions: [
           Stack(clipBehavior: Clip.none, children: [
-            Container(
-              margin: const EdgeInsets.only(right: 4),
-              child: IconButton(
-                icon: const Icon(Icons.notifications_outlined, size: 24),
-                onPressed: _showNotifications,
-              ),
+            IconButton(
+              icon: const Icon(Icons.notifications_outlined, size: 22),
+              onPressed: _showNotifications,
             ),
             if (_unreadCount > 0)
               Positioned(
-                right: 6,
-                top: 6,
+                right: 8, top: 8,
                 child: Container(
-                  width: 16,
-                  height: 16,
+                  width: 14, height: 14,
                   decoration: const BoxDecoration(
                       color: AppColors.accent, shape: BoxShape.circle),
                   child: Center(
                     child: Text('$_unreadCount',
                         style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 9,
+                            color: Colors.white, fontSize: 8,
                             fontWeight: FontWeight.bold)),
                   ),
                 ),
@@ -105,107 +98,125 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(width: 4),
         ],
       ),
-      drawer: const AppDrawer(currentRoute: '/'),
-      bottomNavigationBar: const FomraBottomNav(currentRoute: '/'),
+      drawer: const AppDrawer(currentRoute: '/home'),
+      bottomNavigationBar: const FomraBottomNav(currentRoute: '/home'),
       body: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── Hero Banner ────────────────────────────────────────
             _HeroBanner(greeting: greeting, greetIcon: greetIcon),
-            const SizedBox(height: 24),
+            const SizedBox(height: 20),
 
-            // ── Overview Stats ─────────────────────────────────────
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const _SectionHeader('Overview'),
-                  const SizedBox(height: 14),
+                  // ── KPI strip ─────────────────────────────────────
                   Row(children: [
-                    Expanded(
-                      child: _StatCard(
-                        icon: Icons.add_location_alt_outlined,
-                        label: 'Total\nLeads',
-                        count: _totalLeads,
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFF1565C0), Color(0xFF1976D2)],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
+                    _KpiChip(label: 'Total', value: _totalLeads,
+                        color: AppColors.primary),
+                    const SizedBox(width: 8),
+                    _KpiChip(label: 'Active', value: _activeLeads,
+                        color: AppColors.success),
+                    const SizedBox(width: 8),
+                    _KpiChip(label: 'Acquired', value: _acquired,
+                        color: AppColors.secondary),
+                    const SizedBox(width: 8),
+                    _KpiChip(label: 'Broker', value: _brokerLeads,
+                        color: AppColors.accent),
+                  ]),
+                  const SizedBox(height: 24),
+
+                  // ── Quick actions ──────────────────────────────────
+                  const _SectionHeader('Quick Actions'),
+                  const SizedBox(height: 12),
+                  GridView.count(
+                    crossAxisCount: 2,
+                    crossAxisSpacing: 12,
+                    mainAxisSpacing: 12,
+                    childAspectRatio: 1.55,
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    children: const [
+                      _ActionCard(
+                        icon: Icons.space_dashboard_outlined,
+                        label: 'Land Workspace',
+                        sub: 'Leads, Market & Legal',
+                        route: '/land-lead',
+                        gradient: LinearGradient(
+                          colors: [Color(0xFF0F3EB5), Color(0xFF2563EB)],
+                          begin: Alignment.topLeft, end: Alignment.bottomRight,
                         ),
-                        onTap: () =>
-                            Navigator.pushNamed(context, '/land-lead'),
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _StatCard(
-                        icon: Icons.handshake_outlined,
-                        label: 'Broker\nLeads',
-                        count: _brokerLeads,
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFF059669), Color(0xFF10B981)],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
+                      _ActionCard(
+                        icon: Icons.insights_outlined,
+                        label: 'Market Intel',
+                        sub: 'Maps, POI & Patta',
+                        route: '/market-intelligence',
+                        gradient: LinearGradient(
+                          colors: [Color(0xFF5B21B6), Color(0xFF7C3AED)],
+                          begin: Alignment.topLeft, end: Alignment.bottomRight,
                         ),
-                        onTap: () =>
-                            Navigator.pushNamed(context, '/land-lead'),
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _StatCard(
+                      _ActionCard(
+                        icon: Icons.assessment_outlined,
+                        label: 'Reports',
+                        sub: 'Pipeline & analytics',
+                        route: '/dashboard',
+                        gradient: LinearGradient(
+                          colors: [Color(0xFF047857), Color(0xFF059669)],
+                          begin: Alignment.topLeft, end: Alignment.bottomRight,
+                        ),
+                      ),
+                      _ActionCard(
                         icon: Icons.gavel_outlined,
-                        label: 'Legal\nPending',
-                        count: _legalPending,
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFFEF4444), Color(0xFFF87171)],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
+                        label: 'Legal Review',
+                        sub: 'Document checks',
+                        route: '/legal-verification',
+                        gradient: LinearGradient(
+                          colors: [Color(0xFFB45309), Color(0xFFD97706)],
+                          begin: Alignment.topLeft, end: Alignment.bottomRight,
                         ),
-                        onTap: () => Navigator.pushNamed(
-                            context, '/legal-verification'),
                       ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+
+                  // ── Recent leads ───────────────────────────────────
+                  Row(children: [
+                    const Expanded(child: _SectionHeader('Recent Leads')),
+                    TextButton(
+                      onPressed: () =>
+                          Navigator.pushNamed(context, '/land-lead'),
+                      style: TextButton.styleFrom(
+                          padding: EdgeInsets.zero,
+                          minimumSize: const Size(0, 32)),
+                      child: const Text('See all',
+                          style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.primary)),
                     ),
                   ]),
-
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 10),
+                  _recentLeads.isEmpty
+                      ? _EmptyLeads(
+                          onAdd: () =>
+                              Navigator.pushNamed(context, '/land-lead'))
+                      : Column(
+                          children: _recentLeads
+                              .map((l) => _LeadTile(lead: l))
+                              .toList()),
+                  const SizedBox(height: 32),
                 ],
               ),
             ),
-
           ],
         ),
       ),
     );
   }
-}
-
-// ── Section Header ────────────────────────────────────────────────────────────
-
-class _SectionHeader extends StatelessWidget {
-  final String title;
-  const _SectionHeader(this.title);
-
-  @override
-  Widget build(BuildContext context) => Row(children: [
-        Container(
-          width: 4,
-          height: 18,
-          decoration: BoxDecoration(
-            gradient: AppColors.primaryGradient,
-            borderRadius: BorderRadius.circular(2),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Text(title,
-            style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                color: AppColors.textPrimary,
-                letterSpacing: 0.2)),
-      ]);
 }
 
 // ── Hero Banner ───────────────────────────────────────────────────────────────
@@ -219,112 +230,70 @@ class _HeroBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [AppColors.primaryDark, AppColors.primaryLight],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
+      decoration: const BoxDecoration(gradient: AppColors.heroGradient),
       child: Stack(children: [
-        // Decorative circles
-        Positioned(
-          right: -30,
-          top: -30,
-          child: Container(
-            width: 160,
-            height: 160,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: Colors.white.withValues(alpha: 0.05),
-            ),
-          ),
-        ),
-        Positioned(
-          right: 40,
-          bottom: -20,
-          child: Container(
-            width: 100,
-            height: 100,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: Colors.white.withValues(alpha: 0.04),
-            ),
-          ),
-        ),
-        Positioned(
-          left: -20,
-          bottom: 20,
-          child: Container(
-            width: 80,
-            height: 80,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: Colors.white.withValues(alpha: 0.04),
-            ),
-          ),
-        ),
-        // Content
+        // Decorative blobs
+        const Positioned(right: -40, top: -40,
+            child: _Blob(200, Colors.white, 0.04)),
+        const Positioned(right: 60, bottom: -30,
+            child: _Blob(120, Colors.white, 0.04)),
+        const Positioned(left: -30, bottom: 10,
+            child: _Blob(90, AppColors.accent, 0.08)),
         Padding(
-          padding: const EdgeInsets.fromLTRB(24, 24, 24, 28),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Greeting pill
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  Icon(greetIcon,
-                      color: AppColors.accentLight, size: 14),
-                  const SizedBox(width: 6),
-                  Text(greeting,
-                      style: const TextStyle(
-                          color: AppColors.accentLight,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500)),
-                ]),
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            // Greeting pill
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.14),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.18), width: 1),
               ),
-              const SizedBox(height: 14),
-              const Text('Welcome to FomraLS',
-                  style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 24,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -0.3)),
-              const SizedBox(height: 4),
-              const Text('Fomra Housing Land Management',
-                  style: TextStyle(
-                      color: Colors.white60,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w400)),
-              const SizedBox(height: 16),
-              Row(children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(mainAxisSize: MainAxisSize.min, children: [
-                    const Icon(Icons.calendar_today_outlined,
-                        color: Colors.white60, size: 12),
-                    const SizedBox(width: 6),
-                    Text(_formattedDate(),
-                        style: const TextStyle(
-                            color: Colors.white70,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w500)),
-                  ]),
-                ),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(greetIcon, color: AppColors.accentLight, size: 13),
+                const SizedBox(width: 5),
+                Text(greeting,
+                    style: const TextStyle(
+                        color: AppColors.accentLight,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600)),
               ]),
-            ],
-          ),
+            ),
+            const SizedBox(height: 12),
+            const Text('Welcome to FomraLS',
+                style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.4)),
+            const SizedBox(height: 3),
+            Text('Fomra Housing — Land Management',
+                style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.55),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w400)),
+            const SizedBox(height: 14),
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                const Icon(Icons.calendar_today_outlined,
+                    color: Colors.white54, size: 11),
+                const SizedBox(width: 5),
+                Text(_formattedDate(),
+                    style: const TextStyle(
+                        color: Colors.white60,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500)),
+              ]),
+            ),
+          ]),
         ),
       ]),
     );
@@ -332,88 +301,309 @@ class _HeroBanner extends StatelessWidget {
 
   String _formattedDate() {
     final now = DateTime.now();
-    const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-    ];
-    const days = [
-      'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun',
-    ];
+    const months = ['Jan','Feb','Mar','Apr','May','Jun',
+                    'Jul','Aug','Sep','Oct','Nov','Dec'];
+    const days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
     return '${days[now.weekday - 1]}, ${now.day} ${months[now.month - 1]} ${now.year}';
   }
 }
 
-// ── Stat Card ─────────────────────────────────────────────────────────────────
+class _Blob extends StatelessWidget {
+  final double size;
+  final Color color;
+  final double opacity;
+  const _Blob(this.size, this.color, this.opacity);
 
-class _StatCard extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) => Container(
+        width: size, height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: color.withValues(alpha: opacity),
+        ),
+      );
+}
+
+// ── KPI Chip ─────────────────────────────────────────────────────────────────
+
+class _KpiChip extends StatelessWidget {
+  final String label;
+  final int value;
+  final Color color;
+  const _KpiChip({required this.label, required this.value, required this.color});
+
+  @override
+  Widget build(BuildContext context) => Expanded(
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 10),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(AppColors.radiusSm),
+            border: Border.all(color: color.withValues(alpha: 0.18)),
+          ),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('$value',
+                style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                    color: color,
+                    letterSpacing: -0.5)),
+            const SizedBox(height: 2),
+            Text(label,
+                style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w500,
+                    color: color.withValues(alpha: 0.75))),
+          ]),
+        ),
+      );
+}
+
+// ── Section Header ────────────────────────────────────────────────────────────
+
+class _SectionHeader extends StatelessWidget {
+  final String title;
+  const _SectionHeader(this.title);
+
+  @override
+  Widget build(BuildContext context) => Row(children: [
+        Container(
+          width: 3, height: 16,
+          decoration: BoxDecoration(
+            gradient: AppColors.primaryGradient,
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(title,
+            style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary,
+                letterSpacing: 0.1)),
+      ]);
+}
+
+// ── Action Card ───────────────────────────────────────────────────────────────
+
+class _ActionCard extends StatelessWidget {
   final IconData icon;
   final String label;
-  final int count;
+  final String sub;
+  final String route;
   final LinearGradient gradient;
-  final VoidCallback onTap;
-
-  const _StatCard({
+  const _ActionCard({
     required this.icon,
     required this.label,
-    required this.count,
+    required this.sub,
+    required this.route,
     required this.gradient,
-    required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: onTap,
+      onTap: () => Navigator.pushNamed(context, route),
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           gradient: gradient,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: gradient.colors.first.withValues(alpha: 0.3),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
+          borderRadius: BorderRadius.circular(AppColors.radiusMd),
+          boxShadow: AppColors.coloredShadow(gradient.colors.first),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Container(
+            padding: const EdgeInsets.all(7),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.18),
+              borderRadius: BorderRadius.circular(8),
             ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(children: [
-              Container(
-                padding: const EdgeInsets.all(7),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(9),
-                ),
-                child: Icon(icon, color: Colors.white, size: 16),
-              ),
-              const Spacer(),
-              Icon(Icons.arrow_forward_ios,
-                  size: 10,
-                  color: Colors.white.withValues(alpha: 0.5)),
-            ]),
-            const SizedBox(height: 12),
-            Text('$count',
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 26,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.5)),
-            const SizedBox(height: 2),
-            Text(label,
-                style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.8),
-                    fontSize: 11,
-                    height: 1.4)),
-          ],
-        ),
+            child: Icon(icon, color: Colors.white, size: 16),
+          ),
+          const Spacer(),
+          Text(label,
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700)),
+          const SizedBox(height: 2),
+          Text(sub,
+              style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.65),
+                  fontSize: 10,
+                  fontWeight: FontWeight.w400)),
+        ]),
       ),
     );
   }
 }
 
+// ── Lead Tile ─────────────────────────────────────────────────────────────────
+
+class _LeadTile extends StatelessWidget {
+  final LandLead lead;
+  const _LeadTile({required this.lead});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => Navigator.pushNamed(context, '/land-lead'),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(AppColors.radiusSm),
+          border: Border.all(color: AppColors.border),
+          boxShadow: AppColors.cardShadow,
+        ),
+        child: Row(children: [
+          Container(
+            width: 36, height: 36,
+            decoration: BoxDecoration(
+              color: _statusColor(lead.status).withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(Icons.location_on_outlined,
+                color: _statusColor(lead.status), size: 18),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+              Text(
+                lead.location.isNotEmpty ? lead.location : 'Unnamed Lead',
+                style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 2),
+              Text(
+                [
+                  if (lead.district.isNotEmpty) lead.district,
+                  if (lead.landExtent.isNotEmpty) lead.landExtent,
+                ].join(' · '),
+                style: const TextStyle(
+                    fontSize: 11, color: AppColors.textSecondary),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ]),
+          ),
+          const SizedBox(width: 8),
+          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+            _StatusBadge(lead.status),
+            const SizedBox(height: 4),
+            Text(_timeAgo(lead.addedOn),
+                style: const TextStyle(
+                    fontSize: 10, color: AppColors.textTertiary)),
+          ]),
+        ]),
+      ),
+    );
+  }
+
+  static Color _statusColor(LeadStatus s) => switch (s) {
+        LeadStatus.new_        => AppColors.info,
+        LeadStatus.contacted   => AppColors.primary,
+        LeadStatus.siteVisit   => AppColors.secondary,
+        LeadStatus.negotiation => AppColors.warning,
+        LeadStatus.closed      => AppColors.success,
+        LeadStatus.lost        => AppColors.error,
+      };
+
+  static String _timeAgo(DateTime dt) {
+    final diff = DateTime.now().difference(dt);
+    if (diff.inDays > 30)  return '${(diff.inDays / 30).floor()}mo';
+    if (diff.inDays > 0)   return '${diff.inDays}d';
+    if (diff.inHours > 0)  return '${diff.inHours}h';
+    return 'now';
+  }
+}
+
+class _StatusBadge extends StatelessWidget {
+  final LeadStatus status;
+  const _StatusBadge(this.status);
+
+  static const _labels = {
+    LeadStatus.new_:        ('New',         Color(0xFF2563EB)),
+    LeadStatus.contacted:   ('Contacted',   Color(0xFF0F3EB5)),
+    LeadStatus.siteVisit:   ('Site Visit',  Color(0xFF7C3AED)),
+    LeadStatus.negotiation: ('Negotiating', Color(0xFFD97706)),
+    LeadStatus.closed:      ('Acquired',    Color(0xFF059669)),
+    LeadStatus.lost:        ('Lost',        Color(0xFFDC2626)),
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final (label, color) = _labels[status]!;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(5),
+        border: Border.all(color: color.withValues(alpha: 0.25)),
+      ),
+      child: Text(label,
+          style: TextStyle(
+              fontSize: 9,
+              fontWeight: FontWeight.w700,
+              color: color,
+              letterSpacing: 0.3)),
+    );
+  }
+}
+
+// ── Empty Leads ───────────────────────────────────────────────────────────────
+
+class _EmptyLeads extends StatelessWidget {
+  final VoidCallback onAdd;
+  const _EmptyLeads({required this.onAdd});
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(vertical: 28),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceVar,
+          borderRadius: BorderRadius.circular(AppColors.radiusMd),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Column(children: [
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: const BoxDecoration(
+              color: AppColors.background, shape: BoxShape.circle),
+            child: const Icon(Icons.add_location_alt_outlined,
+                size: 28, color: AppColors.primary),
+          ),
+          const SizedBox(height: 10),
+          const Text('No leads yet',
+              style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary)),
+          const SizedBox(height: 4),
+          const Text('Add your first land lead to get started',
+              style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+          const SizedBox(height: 14),
+          ElevatedButton.icon(
+            onPressed: onAdd,
+            icon: const Icon(Icons.add, size: 16),
+            label: const Text('Add Lead'),
+            style: ElevatedButton.styleFrom(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              textStyle: const TextStyle(
+                  fontSize: 13, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ]),
+      );
+}
 
 // ── Notifications Sheet ───────────────────────────────────────────────────────
 
@@ -421,7 +611,6 @@ class _NotificationsSheet extends StatelessWidget {
   final List<AppNotification> notifications;
   final void Function(String id) onMarkRead;
   final VoidCallback onMarkAllRead;
-
   const _NotificationsSheet({
     required this.notifications,
     required this.onMarkRead,
@@ -441,23 +630,19 @@ class _NotificationsSheet extends StatelessWidget {
         minChildSize: 0.3,
         expand: false,
         builder: (_, controller) => Column(children: [
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           Container(
-            width: 36,
-            height: 4,
+            width: 32, height: 4,
             decoration: BoxDecoration(
-              color: const Color(0xFFE5E7EB),
+              color: AppColors.border,
               borderRadius: BorderRadius.circular(2),
             ),
           ),
-          const SizedBox(height: 4),
           Padding(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
             child: Row(children: [
               const Text('Notifications',
-                  style: TextStyle(
-                      fontSize: 18, fontWeight: FontWeight.w700)),
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
               const Spacer(),
               if (notifications.isNotEmpty)
                 TextButton(
@@ -465,10 +650,7 @@ class _NotificationsSheet extends StatelessWidget {
                     onMarkAllRead();
                     Navigator.pop(context);
                   },
-                  child: const Text('Mark all read',
-                      style: TextStyle(
-                          color: AppColors.primary,
-                          fontWeight: FontWeight.w600)),
+                  child: const Text('Mark all read'),
                 ),
             ]),
           ),
@@ -480,16 +662,15 @@ class _NotificationsSheet extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Container(
-                          padding: const EdgeInsets.all(20),
+                          padding: const EdgeInsets.all(18),
                           decoration: const BoxDecoration(
                             color: AppColors.background,
                             shape: BoxShape.circle,
                           ),
                           child: const Icon(Icons.notifications_none,
-                              size: 36,
-                              color: AppColors.textSecondary),
+                              size: 32, color: AppColors.textSecondary),
                         ),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 10),
                         const Text('No notifications yet',
                             style: TextStyle(
                                 color: AppColors.textSecondary,
@@ -500,19 +681,16 @@ class _NotificationsSheet extends StatelessWidget {
                 : ListView.separated(
                     controller: controller,
                     itemCount: notifications.length,
-                    separatorBuilder: (_, __) =>
-                        const Divider(height: 1),
+                    separatorBuilder: (_, __) => const Divider(height: 1),
                     itemBuilder: (_, i) {
                       final n = notifications[i];
                       return ListTile(
-                        contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 20, vertical: 4),
                         leading: CircleAvatar(
-                          radius: 20,
+                          radius: 18,
                           backgroundColor:
-                              _typeColor(n.type).withValues(alpha: 0.12),
+                              _typeColor(n.type).withValues(alpha: 0.1),
                           child: Icon(_typeIcon(n.type),
-                              color: _typeColor(n.type), size: 18),
+                              color: _typeColor(n.type), size: 16),
                         ),
                         title: Text(n.title,
                             style: TextStyle(
@@ -523,22 +701,19 @@ class _NotificationsSheet extends StatelessWidget {
                         subtitle: Text(n.message,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
-                            style:
-                                const TextStyle(fontSize: 12)),
+                            style: const TextStyle(fontSize: 12)),
                         trailing: n.isRead
                             ? null
                             : Container(
-                                width: 8,
-                                height: 8,
+                                width: 7, height: 7,
                                 decoration: const BoxDecoration(
-                                    color: AppColors.accent,
+                                    color: AppColors.primary,
                                     shape: BoxShape.circle),
                               ),
                         onTap: () => onMarkRead(n.id),
                         tileColor: n.isRead
                             ? null
-                            : AppColors.primary
-                                .withValues(alpha: 0.03),
+                            : AppColors.primary.withValues(alpha: 0.03),
                       );
                     },
                   ),
@@ -549,18 +724,18 @@ class _NotificationsSheet extends StatelessWidget {
   }
 
   Color _typeColor(NotificationType t) => switch (t) {
-        NotificationType.lead => AppColors.info,
-        NotificationType.task => AppColors.warning,
-        NotificationType.document => AppColors.success,
-        NotificationType.alert => AppColors.error,
-        NotificationType.verification => const Color(0xFF8B5CF6),
+        NotificationType.lead         => AppColors.info,
+        NotificationType.task         => AppColors.warning,
+        NotificationType.document     => AppColors.success,
+        NotificationType.alert        => AppColors.error,
+        NotificationType.verification => AppColors.secondary,
       };
 
   IconData _typeIcon(NotificationType t) => switch (t) {
-        NotificationType.lead => Icons.location_on,
-        NotificationType.task => Icons.task_alt,
-        NotificationType.document => Icons.description,
-        NotificationType.alert => Icons.warning_amber,
+        NotificationType.lead         => Icons.location_on,
+        NotificationType.task         => Icons.task_alt,
+        NotificationType.document     => Icons.description,
+        NotificationType.alert        => Icons.warning_amber,
         NotificationType.verification => Icons.verified,
       };
 }

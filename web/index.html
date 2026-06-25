@@ -18,18 +18,24 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="FomraLS — Land & Property Management System by Fomra Housing">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="fomra_ls">
+  <meta name="apple-mobile-web-app-title" content="FomraLS">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>fomra_ls</title>
+  <!-- Inter font — loaded early so Flutter picks it up via fontFamily: 'Inter' -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+  <title>FomraLS — Fomra Housing</title>
   <link rel="manifest" href="manifest.json">
 </head>
 <body>
@@ -50,12 +56,31 @@
 
   <!-- Visible loading screen — stays until Flutter's first frame fires -->
   <div id="loading" style="
-    position:fixed;inset:0;background:#1B3A6B;
+    position:fixed;inset:0;
+    background:linear-gradient(135deg,#0A2E6E 0%,#1565C0 100%);
     display:flex;flex-direction:column;align-items:center;justify-content:center;
-    font-family:sans-serif;color:#fff;z-index:9999;">
-    <div style="font-size:28px;font-weight:700;letter-spacing:1px;">FomraLS</div>
-    <div id="loading-sub" style="margin-top:12px;font-size:14px;opacity:.7;">Loading…</div>
+    font-family:'Inter',sans-serif;color:#fff;z-index:9999;gap:0;">
+    <div style="
+      width:64px;height:64px;border-radius:16px;
+      background:rgba(255,255,255,0.15);
+      display:flex;align-items:center;justify-content:center;
+      margin-bottom:20px;
+      box-shadow:0 8px 32px rgba(0,0,0,0.2);">
+      <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+        <polyline points="9 22 9 12 15 12 15 22"/>
+      </svg>
+    </div>
+    <div style="font-size:26px;font-weight:800;letter-spacing:0.5px;">FomraLS</div>
+    <div style="font-size:13px;font-weight:400;opacity:0.6;margin-top:4px;">Fomra Housing</div>
+    <div style="margin-top:28px;width:32px;height:3px;border-radius:2px;background:rgba(255,255,255,0.3);overflow:hidden;">
+      <div id="loading-bar" style="height:100%;width:0;background:#FFC107;border-radius:2px;animation:bar 1.6s ease-in-out infinite;"></div>
+    </div>
+    <div id="loading-sub" style="margin-top:14px;font-size:12px;opacity:.5;">Loading…</div>
   </div>
+  <style>
+    @keyframes bar { 0%{width:0;margin-left:0} 50%{width:100%;margin-left:0} 100%{width:0;margin-left:100%} }
+  </style>
   <script>
     window.addEventListener('flutter-first-frame', function() {
       var el = document.getElementById('loading');
