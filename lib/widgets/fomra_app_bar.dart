@@ -13,46 +13,45 @@ class FomraAppBar extends StatelessWidget implements PreferredSizeWidget {
   Widget build(BuildContext context) {
     return AppBar(
       flexibleSpace: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [AppColors.primaryDark, AppColors.primaryLight],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-        ),
+        decoration: const BoxDecoration(gradient: AppColors.heroGradient),
       ),
       backgroundColor: Colors.transparent,
       surfaceTintColor: Colors.transparent,
+      elevation: 0,
+      scrolledUnderElevation: 0,
       title: GestureDetector(
         onTap: () => _goHome(context),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 30,
-              height: 30,
+              width: 28, height: 28,
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.2),
+                color: Colors.white.withValues(alpha: 0.18),
                 borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.12), width: 1),
               ),
-              child: const Icon(Icons.house_outlined,
-                  color: Colors.white, size: 18),
+              child: const Icon(Icons.house_outlined, color: Colors.white, size: 16),
             ),
             const SizedBox(width: 8),
             const Text('FomraLS',
                 style: TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.w800,
-                    fontSize: 18,
-                    letterSpacing: 0.3)),
+                    fontSize: 17,
+                    letterSpacing: 0.1)),
             if (moduleName != null) ...[
-              const Text('  ·  ',
-                  style: TextStyle(color: Colors.white38, fontSize: 16)),
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 8),
+                width: 1, height: 14,
+                color: Colors.white.withValues(alpha: 0.3),
+              ),
               Text(moduleName!,
-                  style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w400,
-                      color: Colors.white70)),
+                  style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.white.withValues(alpha: 0.75))),
             ],
           ],
         ),
@@ -70,7 +69,7 @@ class FomraAppBar extends StatelessWidget implements PreferredSizeWidget {
           opacity: CurvedAnimation(parent: animation, curve: Curves.easeOut),
           child: child,
         ),
-        transitionDuration: const Duration(milliseconds: 280),
+        transitionDuration: const Duration(milliseconds: 250),
       ),
       (_) => false,
     );
