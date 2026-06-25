@@ -79,12 +79,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       Icons.cancel_outlined, AppColors.error, 'Lost / rejected'),
                   _KpiData('Pending Legal Reviews', '$pendingLegal',
                       Icons.gavel_outlined, const Color(0xFF7C3AED), 'Awaiting review'),
-                  const _KpiData('Avg Acquisition Cost', '—',
-                      Icons.currency_rupee_outlined, AppColors.warning, 'Per land parcel'),
-                  const _KpiData('Pipeline Value', '—',
-                      Icons.account_balance_wallet_outlined, AppColors.secondary, 'Active deals'),
-                  const _KpiData('Expected Revenue', '—',
-                      Icons.insights_outlined, Color(0xFF0891B2), 'Projected'),
                 ]),
 
                 const SizedBox(height: 28),
