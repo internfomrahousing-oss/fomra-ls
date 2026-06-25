@@ -45,7 +45,7 @@ class _LandWorkspaceScreenState extends State<LandWorkspaceScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: FomraAppBar(
-        moduleName: _tabs[_tab.index].label,
+        moduleName: 'Land Workspace',
         bottom: TabBar(
           controller: _tab,
           indicatorColor: AppColors.accent,
