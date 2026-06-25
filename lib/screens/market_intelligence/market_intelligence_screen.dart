@@ -1244,32 +1244,6 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
               ),
             ),
           ],
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: _fetchingLocation
-                  ? null
-                  : () {
-                      setState(() {
-                        _selectedLeadId = null; // Clear lead selection
-                      });
-                      _detectLocation();
-                    },
-              icon: _fetchingLocation
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                          color: Colors.white, strokeWidth: 2))
-                  : const Icon(Icons.gps_fixed, size: 18),
-              label: Text(_position == null
-                  ? 'Detect My Location'
-                  : 'Refresh Location'),
-              style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 12)),
-            ),
-          ),
         ],
       ),
     );
@@ -1425,7 +1399,12 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
         SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
-              onPressed: _fetchingLocation ? null : _detectLocation,
+              onPressed: _fetchingLocation
+                  ? null
+                  : () {
+                      setState(() => _selectedLeadId = null);
+                      _detectLocation();
+                    },
               icon: _fetchingLocation
                   ? const SizedBox(
                       width: 16,
