@@ -138,7 +138,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         sub: 'Leads, Market & Legal',
                         route: '/land-lead',
                         gradient: LinearGradient(
-                          colors: [Color(0xFF0F3EB5), Color(0xFF2563EB)],
+                          colors: [Color(0xFF091D55), Color(0xFF1A4DC9)],
                           begin: Alignment.topLeft, end: Alignment.bottomRight,
                         ),
                       ),
@@ -148,7 +148,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         sub: 'Maps, POI & Patta',
                         route: '/market-intelligence',
                         gradient: LinearGradient(
-                          colors: [Color(0xFF5B21B6), Color(0xFF7C3AED)],
+                          colors: [Color(0xFF0D2E8A), Color(0xFF1A56DB)],
                           begin: Alignment.topLeft, end: Alignment.bottomRight,
                         ),
                       ),
@@ -158,7 +158,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         sub: 'Pipeline & analytics',
                         route: '/dashboard',
                         gradient: LinearGradient(
-                          colors: [Color(0xFF047857), Color(0xFF059669)],
+                          colors: [Color(0xFF1D4ED8), Color(0xFF3B82F6)],
                           begin: Alignment.topLeft, end: Alignment.bottomRight,
                         ),
                       ),
@@ -168,7 +168,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         sub: 'Document checks',
                         route: '/legal-verification',
                         gradient: LinearGradient(
-                          colors: [Color(0xFFB45309), Color(0xFFD97706)],
+                          colors: [Color(0xFF1E40AF), Color(0xFF60A5FA)],
                           begin: Alignment.topLeft, end: Alignment.bottomRight,
                         ),
                       ),
