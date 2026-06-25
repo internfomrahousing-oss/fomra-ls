@@ -2690,6 +2690,43 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
     }
   }
 
+  /// TNGIS lookup by survey number alone — no district/taluk/village needed.
+  Future<void> _fetchPattaBySurveyNo() async {
+    final surveyNo = _surveyCtrl.text.trim();
+    if (surveyNo.isEmpty) {
+      setState(() => _pattaError = 'Enter a survey number first.');
+      return;
+    }
+    setState(() { _fetchingPatta = true; _pattaFields = null; _pattaOwners = []; _pattaError = null; });
+    try {
+      final subDiv = _subDivCtrl.text.trim();
+      var params = 'surveyNo=${Uri.encodeComponent(surveyNo)}';
+      if (subDiv.isNotEmpty) params += '&subDiv=${Uri.encodeComponent(subDiv)}';
+      if (widget.lat != null && widget.lon != null) {
+        params += '&lat=${widget.lat}&lon=${widget.lon}';
+      }
+      final result = await ApiClient.get('/api/tnlands/patta?$params');
+      final fields = (result['fields'] as Map<String, dynamic>? ?? {})
+          .map((k, v) => MapEntry(k, v.toString()));
+      final owners = (result['owners'] as List<dynamic>? ?? []).map((o) {
+        return (o as Map<String, dynamic>).map((k, v) => MapEntry(k, v.toString()));
+      }).toList();
+      setState(() {
+        _pattaFields = fields.isEmpty ? null : fields;
+        _pattaOwners = owners;
+        if (fields.isEmpty && owners.isEmpty) {
+          _pattaError = 'No record found for survey number "$surveyNo" in TNGIS.';
+        }
+      });
+    } on ApiException catch (e) {
+      setState(() => _pattaError = e.message);
+    } catch (e) {
+      setState(() => _pattaError = e.toString().replaceAll('Exception: ', ''));
+    } finally {
+      setState(() => _fetchingPatta = false);
+    }
+  }
+
   Future<void> _fetchPatta() async {
     if (_selDistrict == null || _selTaluk == null ||
         _selVillage == null || _surveyCtrl.text.trim().isEmpty) { return; }
@@ -3032,7 +3069,38 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
           TextField(controller: _subDivCtrl, decoration: _inputDec('Optional')),
         ])),
       ]),
-      const SizedBox(height: 14),
+      const SizedBox(height: 10),
+
+      // Fetch by Survey Number via TNGIS
+      SizedBox(
+        width: double.infinity,
+        child: ElevatedButton.icon(
+          onPressed: _fetchingPatta ? null : _fetchPattaBySurveyNo,
+          icon: _fetchingPatta
+              ? const SizedBox(width: 14, height: 14,
+                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+              : const Icon(Icons.search, size: 16),
+          label: Text(_fetchingPatta ? 'Fetching...' : 'Fetch by Survey No.',
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF2E7D32),
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        ),
+      ),
+      const SizedBox(height: 8),
+      Row(children: [
+        const Expanded(child: Divider()),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          child: Text('or use GPS',
+              style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+        ),
+        const Expanded(child: Divider()),
+      ]),
+      const SizedBox(height: 8),
 
       // GPS / TNGIS button — always visible; detects location inline if needed
       SizedBox(
