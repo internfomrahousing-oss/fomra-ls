@@ -678,6 +678,55 @@ const EC_ZONES = [
   { code: '3', name: 'Central' },
 ];
 
+// Static EC district data keyed by zone code.
+// District codes match tnreginet.gov.in's combo values (verified from the portal).
+const STATIC_EC_DISTRICTS = {
+  '1': [
+    { code: '2',  name: 'Chennai' },
+    { code: '8',  name: 'Chengalpattu' },
+    { code: '9',  name: 'Kancheepuram' },
+    { code: '21', name: 'Ranipet' },
+    { code: '28', name: 'Tiruvallur' },
+    { code: '29', name: 'Tiruvannamalai' },
+    { code: '30', name: 'Vellore' },
+    { code: '32', name: 'Viluppuram' },
+    { code: '6',  name: 'Kallakurichi' },
+    { code: '25', name: 'Tirupattur' },
+  ],
+  '2': [
+    { code: '4',  name: 'Coimbatore' },
+    { code: '7',  name: 'Dharmapuri' },
+    { code: '10', name: 'Erode' },
+    { code: '11', name: 'Krishnagiri' },
+    { code: '14', name: 'Namakkal' },
+    { code: '15', name: 'Nilgiris' },
+    { code: '20', name: 'Salem' },
+    { code: '26', name: 'Tiruppur' },
+  ],
+  '3': [
+    { code: '1',  name: 'Ariyalur' },
+    { code: '3',  name: 'Cuddalore' },
+    { code: '5',  name: 'Dindigul' },
+    { code: '12', name: 'Kanniyakumari' },
+    { code: '13', name: 'Karur' },
+    { code: '16', name: 'Madurai' },
+    { code: '17', name: 'Mayiladuthurai' },
+    { code: '18', name: 'Nagapattinam' },
+    { code: '19', name: 'Perambalur' },
+    { code: '22', name: 'Pudukkottai' },
+    { code: '23', name: 'Ramanathapuram' },
+    { code: '24', name: 'Sivagangai' },
+    { code: '27', name: 'Thanjavur' },
+    { code: '31', name: 'Tenkasi' },
+    { code: '33', name: 'Theni' },
+    { code: '34', name: 'Tiruchirappalli' },
+    { code: '35', name: 'Tirunelveli' },
+    { code: '36', name: 'Tiruvarur' },
+    { code: '37', name: 'Thoothukudi' },
+    { code: '38', name: 'Virudhunagar' },
+  ],
+};
+
 let _ecPageCache = null; // { html, cookies, time }
 
 async function getEcPage() {
@@ -776,11 +825,13 @@ router.get('/ec/districts', async (req, res) => {
     const pageCtx   = await getEcPage();
     const ctx       = await ecAjax(pageCtx, 'loadDistrictCombo', zone);
     const districts = parseJsonOrSelectOptions(ctx.html, 'cmb_District');
-    if (districts.length === 0) return res.status(502).json({ error: 'Could not fetch EC districts.' });
-    res.json(districts);
-  } catch (err) {
-    res.status(502).json({ error: err.message });
-  }
+    if (districts.length > 0) return res.json(districts);
+  } catch (_) {}
+
+  // Fall back to static data when tnreginet is unreachable.
+  const fallback = STATIC_EC_DISTRICTS[zone];
+  if (fallback) return res.json(fallback);
+  res.status(502).json({ error: 'Could not fetch EC districts.' });
 });
 
 router.get('/ec/sros', async (req, res) => {

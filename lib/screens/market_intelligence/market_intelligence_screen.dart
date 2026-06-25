@@ -2718,12 +2718,14 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
       return;
     }
 
+    bool anyLoaded = false;
     try {
       for (final zone in _ecZones) {
         try {
           final data = await ApiClient.getList(
               '/api/tnlands/ec/districts?zone=${zone.code}');
           final dists = _toOptions(data);
+          if (dists.isNotEmpty) anyLoaded = true;
           final matchDist = _matchOption(dists, district);
           if (matchDist != null) {
             setState(() { _selZone = zone; _ecDists = dists; _selEcDist = matchDist; });
@@ -2732,7 +2734,9 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
           }
         } catch (_) {}
       }
-      setState(() => _ecError = 'District "$district" not found in EC registry.');
+      setState(() => _ecError = anyLoaded
+          ? 'District "$district" not matched. Select zone/district/SRO manually below.'
+          : 'EC registry (tnreginet.gov.in) is unreachable from server. Select zone/district/SRO manually below.');
     } finally {
       setState(() => _autoFillingEc = false);
     }
