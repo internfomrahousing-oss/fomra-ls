@@ -29779,14 +29779,13 @@ XB:function XB(a,b){this.a=a
 this.b=b},
 ahA:function ahA(a,b){this.a=a
 this.b=b},
-JC:function JC(a,b,c,d,e){var _=this
+JC:function JC(a,b,c,d){var _=this
 _.c=a
 _.as=_.z=_.y=_.x=_.w=_.r=$
-_.at=b
-_.ay=c
+_.ay=b
 _.db=$
-_.go=d
-_.a=e},
+_.go=c
+_.a=d},
 Oq:function Oq(a,b,c){var _=this
 _.d=!1
 _.e=a
@@ -104038,7 +104037,7 @@ p.m(0,"x",B.d.k(r))
 q=b.b
 p.m(0,"y",B.d.k(q))
 p.m(0,"z",B.f.k(s))
-r=c.at[B.d.bb(r+q,4)]
+r=B.Tj[B.d.bb(r+q,3)]
 p.m(0,"s",r)
 r=c.db
 r===$&&A.a()
@@ -106161,7 +106160,7 @@ A.dT(3,"retries")
 q=t.N
 s=new A.aqp(r,s,A.q(q,q))
 r=$.b86()
-s=new A.JC("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",B.Tj,s,r,m)
+s=new A.JC("https://tile.openstreetmap.org/{z}/{x}/{y}.png",s,r,m)
 s.db=B.ZN
 s.x=1/0
 s.z=19
@@ -118880,7 +118879,7 @@ B.aeY=new A.n1("Market",B.Oz)
 B.aeZ=new A.n1("Legal",B.fd)
 B.af_=new A.n1("Tasks",B.tO)
 B.Ti=s([B.af0,B.aeY,B.aeZ,B.af_],A.al("G<n1>"))
-B.Tj=s(["a","b","c","d"],t.s)
+B.Tj=s(["a","b","c"],t.s)
 B.Tl=s([35,30,20,25,30,35,30,25,25],t.n)
 B.Tp=s(["click","scroll"],t.s)
 B.I_=new A.pi()
