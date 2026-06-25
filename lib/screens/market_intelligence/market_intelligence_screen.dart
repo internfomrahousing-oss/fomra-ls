@@ -2665,6 +2665,79 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
     }
   }
 
+  /// GPS-based EC auto-fill — detects device location if map pin not set,
+  /// then reverse-geocodes to district and auto-selects zone/district/SRO.
+  Future<void> _fetchEcByGps() async {
+    double? lat = widget.lat;
+    double? lon = widget.lon;
+    String? district = widget.district;
+
+    setState(() { _autoFillingEc = true; _ecError = null; });
+
+    if (lat == null || lon == null) {
+      try {
+        final svcOn = await Geolocator.isLocationServiceEnabled();
+        if (!svcOn) {
+          setState(() { _ecError = 'Location services disabled.'; _autoFillingEc = false; });
+          return;
+        }
+        var perm = await Geolocator.checkPermission();
+        if (perm == LocationPermission.denied) perm = await Geolocator.requestPermission();
+        if (perm == LocationPermission.denied || perm == LocationPermission.deniedForever) {
+          setState(() { _ecError = 'Location permission denied.'; _autoFillingEc = false; });
+          return;
+        }
+        final pos = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+        );
+        lat = pos.latitude;
+        lon = pos.longitude;
+      } catch (e) {
+        setState(() { _ecError = 'Location error: ${e.toString().replaceAll('Exception: ', '')}'; _autoFillingEc = false; });
+        return;
+      }
+    }
+
+    if (district == null) {
+      try {
+        final url = Uri.parse(
+            'https://nominatim.openstreetmap.org/reverse?lat=$lat&lon=$lon&format=json');
+        final res = await http.get(url,
+            headers: {'Accept-Language': 'en', 'User-Agent': 'FomraLS/1.0'});
+        if (res.statusCode == 200) {
+          final data = jsonDecode(res.body) as Map<String, dynamic>;
+          final addr = data['address'] as Map<String, dynamic>? ?? {};
+          district = (addr['county'] ?? addr['state_district'] ??
+                      addr['city'] ?? addr['town'])?.toString();
+        }
+      } catch (_) {}
+    }
+
+    if (district == null) {
+      setState(() { _ecError = 'Could not determine district from location.'; _autoFillingEc = false; });
+      return;
+    }
+
+    try {
+      for (final zone in _ecZones) {
+        try {
+          final data = await ApiClient.getList(
+              '/api/tnlands/ec/districts?zone=${zone.code}');
+          final dists = _toOptions(data);
+          final matchDist = _matchOption(dists, district);
+          if (matchDist != null) {
+            setState(() { _selZone = zone; _ecDists = dists; _selEcDist = matchDist; });
+            await _loadEcSros(matchDist, autoFirst: true);
+            return;
+          }
+        } catch (_) {}
+      }
+      setState(() => _ecError = 'District "$district" not found in EC registry.');
+    } finally {
+      setState(() => _autoFillingEc = false);
+    }
+  }
+
   Future<void> _loadEcDistricts(_Option zone) async {
     setState(() {
       _selZone = zone; _ecDists = []; _selEcDist = null;
@@ -2993,6 +3066,37 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
         ],
       ]),
       const SizedBox(height: 14),
+
+      // GPS auto-fill button
+      SizedBox(
+        width: double.infinity,
+        child: ElevatedButton.icon(
+          onPressed: (_autoFillingEc || _fetchingEc) ? null : _fetchEcByGps,
+          icon: _autoFillingEc
+              ? const SizedBox(width: 14, height: 14,
+                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+              : const Icon(Icons.gps_fixed, size: 16),
+          label: Text(_autoFillingEc ? 'Detecting...' : 'Auto-fill via GPS',
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF0D47A1),
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        ),
+      ),
+      const SizedBox(height: 8),
+      Row(children: [
+        const Expanded(child: Divider()),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          child: Text('or select manually',
+              style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+        ),
+        const Expanded(child: Divider()),
+      ]),
+      const SizedBox(height: 10),
 
       // Zone
       const _FieldLabel('Zone'),
