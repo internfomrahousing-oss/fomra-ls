@@ -2361,6 +2361,60 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
       _Option('37', 'Thoothukudi'), _Option('38', 'Virudhunagar'),
     ],
   };
+
+  // Keyed by district code. SRO codes are sequential placeholders;
+  // real codes are loaded from tnreginet when reachable.
+  static const _kStaticEcSros = <String, List<_Option>>{
+    '2': [ // Chennai
+      _Option('1', 'Adambakkam'), _Option('2', 'Ambattur'), _Option('3', 'Anna Nagar'),
+      _Option('4', 'Chromepet'), _Option('5', 'Egmore'), _Option('6', 'Guindy'),
+      _Option('7', 'Kodambakkam'), _Option('8', 'Kolathur'), _Option('9', 'Madhavaram'),
+      _Option('10', 'Madipakkam'), _Option('11', 'Mylapore'), _Option('12', 'Perambur'),
+      _Option('13', 'Poonamallee'), _Option('14', 'Porur'), _Option('15', 'Purasawalkam'),
+      _Option('16', 'Saidapet'), _Option('17', 'Sholinganallur'), _Option('18', 'T.Nagar'),
+      _Option('19', 'Thiruvottiyur'), _Option('20', 'Velachery'), _Option('21', 'Villivakkam'),
+    ],
+    '8': [ // Chengalpattu
+      _Option('1', 'Chengalpattu'), _Option('2', 'Chrompet'), _Option('3', 'Kancheepuram'),
+      _Option('4', 'Tambaram'), _Option('5', 'Vandalur'),
+    ],
+    '9': [ // Kancheepuram
+      _Option('1', 'Kancheepuram'), _Option('2', 'Sriperumbudur'), _Option('3', 'Uthiramerur'),
+    ],
+    '28': [ // Tiruvallur
+      _Option('1', 'Tiruvallur'), _Option('2', 'Avadi'), _Option('3', 'Ponneri'),
+      _Option('4', 'Gummidipoondi'), _Option('5', 'Poonamallee'),
+    ],
+    '30': [ // Vellore
+      _Option('1', 'Vellore'), _Option('2', 'Arakkonam'), _Option('3', 'Arcot'),
+      _Option('4', 'Gudiyatham'), _Option('5', 'Katpadi'),
+    ],
+    '4': [ // Coimbatore
+      _Option('1', 'Coimbatore North'), _Option('2', 'Coimbatore South'),
+      _Option('3', 'Pollachi'), _Option('4', 'Mettupalayam'), _Option('5', 'Valparai'),
+    ],
+    '16': [ // Madurai
+      _Option('1', 'Madurai North'), _Option('2', 'Madurai South'),
+      _Option('3', 'Melur'), _Option('4', 'Sholavandan'), _Option('5', 'Usilampatti'),
+    ],
+    '34': [ // Tiruchirappalli
+      _Option('1', 'Tiruchirappalli'), _Option('2', 'Lalgudi'), _Option('3', 'Musiri'),
+      _Option('4', 'Srirangam'), _Option('5', 'Thuraiyur'),
+    ],
+    '20': [ // Salem
+      _Option('1', 'Salem'), _Option('2', 'Attur'), _Option('3', 'Mettur'),
+      _Option('4', 'Omalur'), _Option('5', 'Rasipuram'),
+    ],
+    '10': [ // Erode
+      _Option('1', 'Erode'), _Option('2', 'Bhavani'), _Option('3', 'Gobichettipalayam'),
+      _Option('4', 'Sathyamangalam'), _Option('5', 'Perundurai'),
+    ],
+    '35': [ // Tirunelveli
+      _Option('1', 'Tirunelveli'), _Option('2', 'Palayamkottai'), _Option('3', 'Nanguneri'),
+      _Option('4', 'Sankarankovil'), _Option('5', 'Shencottah'),
+    ],
+  };
+
   bool   _autoFillingEc = false;
   _Option? _selZone;
   List<_Option> _ecDists = [];
@@ -2802,13 +2856,19 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
           '/api/tnlands/ec/sros?zone=${_selZone!.code}&dc=${district.code}');
       final loaded = _toOptions(data);
       setState(() {
-        _ecSros = loaded;
-        if (autoFirst && loaded.isNotEmpty) _selEcSro = loaded.first;
+        _ecSros = loaded.isNotEmpty ? loaded : (_kStaticEcSros[district.code] ?? []);
+        if (autoFirst && _ecSros.isNotEmpty) _selEcSro = _ecSros.first;
         _loadingEcSros = false;
       });
       if (autoFirst) _maybeAutoFetchEc();
     } catch (_) {
-      setState(() => _loadingEcSros = false);
+      final fallback = _kStaticEcSros[district.code] ?? [];
+      setState(() {
+        _ecSros = fallback;
+        if (autoFirst && fallback.isNotEmpty) _selEcSro = fallback.first;
+        _loadingEcSros = false;
+      });
+      if (autoFirst) _maybeAutoFetchEc();
     }
   }
 
