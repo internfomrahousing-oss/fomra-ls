@@ -9,10 +9,10 @@ class FomraBottomNav extends StatelessWidget {
   static const _items = [
     _NavItem('/home', Icons.home_outlined, Icons.home_rounded, 'Home',
         AppColors.primary),
-    _NavItem('/land-lead', Icons.add_location_alt_outlined,
-        Icons.add_location_alt, 'Land Lead', AppColors.primary),
-    _NavItem('/market-intelligence', Icons.insights_outlined,
-        Icons.insights_rounded, 'Market', AppColors.primary),
+    _NavItem('/land-lead', Icons.space_dashboard_outlined,
+        Icons.space_dashboard, 'Land Workspace', AppColors.primary),
+    _NavItem('/market-intelligence', Icons.assessment_outlined,
+        Icons.assessment, 'Reports', AppColors.primary),
   ];
 
   void _onTap(BuildContext context, _NavItem item) {
