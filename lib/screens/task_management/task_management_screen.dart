@@ -21,7 +21,6 @@ const _kTeam = [
 
 const _kModules = [
   'Land Lead',
-  'Site Verification',
   'Legal Verification',
   'Market Intelligence',
   'Documents',

@@ -469,7 +469,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
 
   _ValuationResult _computeValuation() {
     final infraScore = _infraScores['Overall Location'] ?? 50;
-    final benchmarkPrice = 5000.0;
+    const benchmarkPrice = 5000.0;
     final roadWidth = double.tryParse(_roadWidthCtrl.text) ?? 20;
     final landSize = double.tryParse(_landSizeCtrl.text) ?? 1000;
 
@@ -762,7 +762,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(price,
-                          style: TextStyle(
+                          style: const TextStyle(
                               fontSize: 11, fontWeight: FontWeight.w700, color: mbColor)),
                     ),
                   ],
@@ -1029,7 +1029,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
             )
           else ...[
             DropdownButtonFormField<String>(
-              value: _selectedLeadId,
+              initialValue: _selectedLeadId,
               decoration: _inputDec('Select a Land Lead'),
               hint: const Text('Select a Land Lead'),
               isExpanded: true,

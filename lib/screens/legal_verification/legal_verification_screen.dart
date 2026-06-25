@@ -820,7 +820,7 @@ class _LegalReviewTab extends StatelessWidget {
           )
         else
           DropdownButtonFormField<String>(
-            value: reviewLeadId,
+            initialValue: reviewLeadId,
             decoration: InputDecoration(
               hintText: 'Pick a lead to review',
               filled: true,
@@ -848,7 +848,7 @@ class _LegalReviewTab extends StatelessWidget {
 
         if (reviewLeadId == null) ...[
           const SizedBox(height: 24),
-          Center(
+          const Center(
             child: Text(
               'Select a lead above to fill in the legal review.',
               style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
