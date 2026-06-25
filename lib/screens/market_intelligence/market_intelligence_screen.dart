@@ -2334,6 +2334,9 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
   Map<String, String>?      _pattaFields;
   List<Map<String, String>> _pattaOwners = [];
   String? _pattaError;
+  bool   _showManualPatta = false;
+  bool   _showManualEc    = false;
+  Timer? _pattaDebounce;
 
   // â”€â”€ EC state â”€â”€
   final List<_Option> _ecZones = const [
@@ -2447,6 +2450,19 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
     _applySurveyNumber();
     _initDistricts();
     if (widget.district != null) _tryAutoEcFill();
+    _surveyCtrl.addListener(_onSurveyChanged);
+    _ecSurveyCtrl.addListener(_onEcSurveyChanged);
+  }
+
+  void _onSurveyChanged() {
+    _pattaDebounce?.cancel();
+    if (_surveyCtrl.text.trim().isEmpty) return;
+    _pattaDebounce = Timer(const Duration(milliseconds: 900), _fetchPattaBySurveyNo);
+  }
+
+  void _onEcSurveyChanged() {
+    _pattaDebounce?.cancel();
+    _pattaDebounce = Timer(const Duration(milliseconds: 900), _maybeAutoFetchEc);
   }
 
   /// Mirrors a lead's survey number / sub-division into the Patta + EC inputs.
@@ -2474,12 +2490,14 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
   }
 
   /// Auto-fetches EC once zone/district/SRO are resolved AND a survey number is
-  /// available (lead-based mode). No-op otherwise.
+  /// available (typed or from lead).
   void _maybeAutoFetchEc() {
-    final s = widget.surveyNumber?.trim() ?? '';
+    final s = _ecSurveyCtrl.text.trim().isNotEmpty
+        ? _ecSurveyCtrl.text.trim()
+        : (widget.surveyNumber?.trim() ?? '');
     if (s.isEmpty || _fetchingEc) return;
     if (_selZone == null || _selEcDist == null || _selEcSro == null) return;
-    _ecSurveyCtrl.text = s;
+    if (_ecSurveyCtrl.text != s) _ecSurveyCtrl.text = s;
     _searchEc();
   }
 
@@ -2521,6 +2539,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
 
   @override
   void dispose() {
+    _pattaDebounce?.cancel();
     _surveyCtrl.dispose(); _subDivCtrl.dispose();
     _ecSurveyCtrl.dispose(); _ecSubDivCtrl.dispose();
     _ecFromCtrl.dispose(); _ecToCtrl.dispose();
@@ -2981,87 +3000,28 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
           child: const Icon(Icons.article_outlined, color: color, size: 18),
         ),
         const SizedBox(width: 10),
-        const Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: const [
             Text('Patta / Chitta / FMB',
                 style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: color)),
-            Text('eservices.tn.gov.in', style: TextStyle(fontSize: 10, color: AppColors.textSecondary)),
+            Text('eservices.tn.gov.in',
+                style: TextStyle(fontSize: 10, color: AppColors.textSecondary)),
           ]),
         ),
-        if (_initingPatta)
+        if (_fetchingPatta)
           const SizedBox(width: 16, height: 16,
               child: CircularProgressIndicator(strokeWidth: 2, color: color)),
       ]),
       const SizedBox(height: 14),
 
-      // District
-      const _FieldLabel('District'),
-      _dropdown('Select District', _districts, _selDistrict, color,
-          loading: _initingPatta,
-          onChanged: (opt) => _loadTaluks(opt)),
-      const SizedBox(height: 10),
-
-      // Taluk
-      const _FieldLabel('Taluk'),
-      _dropdown('Select Taluk', _taluks, _selTaluk, color,
-          loading: _loadingTaluks,
-          hint: _selDistrict == null ? 'Select district first' : 'Select Taluk',
-          onChanged: (opt) => _loadVillages(opt)),
-      if (_talukError != null) ...[
-        const SizedBox(height: 4),
-        GestureDetector(
-          onTap: _selDistrict == null ? null : () => _loadTaluks(_selDistrict!),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: AppColors.error.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
-            ),
-            child: const Row(children: [
-              Icon(Icons.refresh, size: 14, color: AppColors.error),
-              SizedBox(width: 6),
-              Text('Failed to load taluks — tap to retry',
-                  style: TextStyle(fontSize: 11, color: AppColors.error)),
-            ]),
-          ),
-        ),
-      ],
-      const SizedBox(height: 10),
-
-      // Village
-      const _FieldLabel('Village'),
-      _dropdown('Select Village', _villages, _selVillage, color,
-          loading: _loadingVillages,
-          hint: _selTaluk == null ? 'Select taluk first' : 'Select Village',
-          onChanged: (opt) => setState(() => _selVillage = opt)),
-      if (_villageError != null) ...[
-        const SizedBox(height: 4),
-        GestureDetector(
-          onTap: _selTaluk == null ? null : () => _loadVillages(_selTaluk!),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: AppColors.error.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
-            ),
-            child: const Row(children: [
-              Icon(Icons.refresh, size: 14, color: AppColors.error),
-              SizedBox(width: 6),
-              Text('Failed to load villages — tap to retry',
-                  style: TextStyle(fontSize: 11, color: AppColors.error)),
-            ]),
-          ),
-        ),
-      ],
-      const SizedBox(height: 10),
-
-      // Survey No + Sub Div
+      // Survey No + Sub Div — typing auto-fetches after 900 ms pause
       Row(children: [
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const _FieldLabel('Survey No *'),
-          TextField(controller: _surveyCtrl, decoration: _inputDec('e.g. 123/2A')),
+          const _FieldLabel('Survey No'),
+          TextField(
+            controller: _surveyCtrl,
+            decoration: _inputDec(_fetchingPatta ? 'Searching…' : 'Type to auto-fetch'),
+          ),
         ])),
         const SizedBox(width: 10),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -3071,38 +3031,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
       ]),
       const SizedBox(height: 10),
 
-      // Fetch by Survey Number via TNGIS
-      SizedBox(
-        width: double.infinity,
-        child: ElevatedButton.icon(
-          onPressed: _fetchingPatta ? null : _fetchPattaBySurveyNo,
-          icon: _fetchingPatta
-              ? const SizedBox(width: 14, height: 14,
-                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-              : const Icon(Icons.search, size: 16),
-          label: Text(_fetchingPatta ? 'Fetching...' : 'Fetch by Survey No.',
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF2E7D32),
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          ),
-        ),
-      ),
-      const SizedBox(height: 8),
-      Row(children: [
-        const Expanded(child: Divider()),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10),
-          child: Text('or use GPS',
-              style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
-        ),
-        const Expanded(child: Divider()),
-      ]),
-      const SizedBox(height: 8),
-
-      // GPS / TNGIS button — always visible; detects location inline if needed
+      // GPS button
       SizedBox(
         width: double.infinity,
         child: ElevatedButton.icon(
@@ -3111,7 +3040,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
               ? const SizedBox(width: 14, height: 14,
                   child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
               : const Icon(Icons.gps_fixed, size: 16),
-          label: Text(_fetchingPatta ? 'Fetching...' : 'Fetch Patta via GPS (TNGIS)',
+          label: Text(_fetchingPatta ? 'Fetching…' : 'Fetch via GPS (TNGIS)',
               style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
           style: ElevatedButton.styleFrom(
             backgroundColor: const Color(0xFF0D47A1),
@@ -3122,40 +3051,116 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
         ),
       ),
       const SizedBox(height: 8),
-      Row(children: [
-        const Expanded(child: Divider()),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10),
-          child: Text('or enter manually',
-              style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
-        ),
-        const Expanded(child: Divider()),
-      ]),
-      const SizedBox(height: 8),
 
-      SizedBox(
-        width: double.infinity,
-        child: ElevatedButton.icon(
-          onPressed: (_fetchingPatta ||
-                  _selDistrict == null ||
-                  _selTaluk == null ||
-                  _selVillage == null)
-              ? null
-              : _fetchPatta,
-          icon: _fetchingPatta
-              ? const SizedBox(width: 14, height: 14,
-                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-              : const Icon(Icons.download_outlined, size: 16),
-          label: Text(_fetchingPatta ? 'Fetching...' : 'Fetch Patta',
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: color,
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      // Manual toggle — District / Taluk / Village
+      GestureDetector(
+        onTap: () => setState(() => _showManualPatta = !_showManualPatta),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
+          decoration: BoxDecoration(
+            border: Border.all(color: color.withValues(alpha: 0.35)),
+            borderRadius: BorderRadius.circular(10),
+            color: _showManualPatta ? color.withValues(alpha: 0.06) : Colors.transparent,
           ),
+          child: Row(children: [
+            Icon(Icons.tune, size: 15, color: color),
+            const SizedBox(width: 8),
+            Expanded(child: Text('Manual — District / Taluk / Village',
+                style: TextStyle(fontSize: 13, color: color, fontWeight: FontWeight.w600))),
+            Icon(_showManualPatta ? Icons.expand_less : Icons.expand_more,
+                size: 18, color: color),
+          ]),
         ),
       ),
+
+      if (_showManualPatta) ...[
+        const SizedBox(height: 12),
+
+        const _FieldLabel('District'),
+        _dropdown('Select District', _districts, _selDistrict, color,
+            loading: _initingPatta,
+            onChanged: (opt) => _loadTaluks(opt)),
+        const SizedBox(height: 10),
+
+        const _FieldLabel('Taluk'),
+        _dropdown('Select Taluk', _taluks, _selTaluk, color,
+            loading: _loadingTaluks,
+            hint: _selDistrict == null ? 'Select district first' : 'Select Taluk',
+            onChanged: (opt) => _loadVillages(opt)),
+        if (_talukError != null) ...[
+          const SizedBox(height: 4),
+          GestureDetector(
+            onTap: _selDistrict == null ? null : () => _loadTaluks(_selDistrict!),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: AppColors.error.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
+              ),
+              child: const Row(children: [
+                Icon(Icons.refresh, size: 14, color: AppColors.error),
+                SizedBox(width: 6),
+                Text('Failed to load taluks — tap to retry',
+                    style: TextStyle(fontSize: 11, color: AppColors.error)),
+              ]),
+            ),
+          ),
+        ],
+        const SizedBox(height: 10),
+
+        const _FieldLabel('Village'),
+        _dropdown('Select Village', _villages, _selVillage, color,
+            loading: _loadingVillages,
+            hint: _selTaluk == null ? 'Select taluk first' : 'Select Village',
+            onChanged: (opt) => setState(() => _selVillage = opt)),
+        if (_villageError != null) ...[
+          const SizedBox(height: 4),
+          GestureDetector(
+            onTap: _selTaluk == null ? null : () => _loadVillages(_selTaluk!),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: AppColors.error.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
+              ),
+              child: const Row(children: [
+                Icon(Icons.refresh, size: 14, color: AppColors.error),
+                SizedBox(width: 6),
+                Text('Failed to load villages — tap to retry',
+                    style: TextStyle(fontSize: 11, color: AppColors.error)),
+              ]),
+            ),
+          ),
+        ],
+        const SizedBox(height: 12),
+
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: (_fetchingPatta ||
+                    _selDistrict == null ||
+                    _selTaluk == null ||
+                    _selVillage == null)
+                ? null
+                : _fetchPatta,
+            icon: _fetchingPatta
+                ? const SizedBox(width: 14, height: 14,
+                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                : const Icon(Icons.download_outlined, size: 16),
+            label: Text(_fetchingPatta ? 'Fetching…' : 'Fetch Patta',
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: color,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+          ),
+        ),
+      ],
 
       if (_pattaError != null) ...[
         const SizedBox(height: 10),
@@ -3223,79 +3228,25 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
           child: const Icon(Icons.account_balance_outlined, color: color, size: 18),
         ),
         const SizedBox(width: 10),
-        const Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: const [
             Text('Encumbrance Certificate (EC)',
                 style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: color)),
-            Text('tnreginet.gov.in', style: TextStyle(fontSize: 10, color: AppColors.textSecondary)),
+            Text('tnreginet.gov.in',
+                style: TextStyle(fontSize: 10, color: AppColors.textSecondary)),
           ]),
         ),
-        if (_autoFillingEc)
+        if (_autoFillingEc) ...[
           const SizedBox(width: 16, height: 16,
               child: CircularProgressIndicator(strokeWidth: 2, color: color)),
-        if (_autoFillingEc) ...[
           const SizedBox(width: 6),
-          const Text('Auto-fillingâ€¦',
+          const Text('Auto-filling…',
               style: TextStyle(fontSize: 10, color: AppColors.textSecondary)),
         ],
       ]),
       const SizedBox(height: 14),
 
-      // GPS auto-fill button
-      SizedBox(
-        width: double.infinity,
-        child: ElevatedButton.icon(
-          onPressed: (_autoFillingEc || _fetchingEc) ? null : _fetchEcByGps,
-          icon: _autoFillingEc
-              ? const SizedBox(width: 14, height: 14,
-                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-              : const Icon(Icons.gps_fixed, size: 16),
-          label: Text(_autoFillingEc ? 'Detecting...' : 'Auto-fill via GPS',
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF0D47A1),
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          ),
-        ),
-      ),
-      const SizedBox(height: 8),
-      Row(children: [
-        const Expanded(child: Divider()),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10),
-          child: Text('or select manually',
-              style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
-        ),
-        const Expanded(child: Divider()),
-      ]),
-      const SizedBox(height: 10),
-
-      // Zone
-      const _FieldLabel('Zone'),
-      _dropdown('Select Zone', _ecZones, _selZone, color,
-          loading: _autoFillingEc,
-          onChanged: (opt) => _loadEcDistricts(opt)),
-      const SizedBox(height: 10),
-
-      // District
-      const _FieldLabel('District'),
-      _dropdown('Select District', _ecDists, _selEcDist, color,
-          loading: _loadingEcDists,
-          hint: _selZone == null ? 'Select zone first' : 'Select District',
-          onChanged: (opt) => _loadEcSros(opt)),
-      const SizedBox(height: 10),
-
-      // SRO
-      const _FieldLabel('Sub Registrar Office (SRO)'),
-      _dropdown('Select SRO', _ecSros, _selEcSro, color,
-          loading: _loadingEcSros,
-          hint: _selEcDist == null ? 'Select district first' : 'Select SRO',
-          onChanged: (opt) => setState(() => _selEcSro = opt)),
-      const SizedBox(height: 10),
-
-      // Survey + SubDiv
+      // Survey No + Sub Div (at top — typing auto-triggers search when fields are filled)
       Row(children: [
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           const _FieldLabel('Survey No *'),
@@ -3321,26 +3272,114 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
           TextField(controller: _ecToCtrl, decoration: _inputDec('DD/MM/YYYY')),
         ])),
       ]),
-      const SizedBox(height: 14),
+      const SizedBox(height: 10),
 
+      // GPS auto-fill button
       SizedBox(
         width: double.infinity,
         child: ElevatedButton.icon(
-          onPressed: _fetchingEc ? null : _searchEc,
-          icon: _fetchingEc
+          onPressed: (_autoFillingEc || _fetchingEc) ? null : _fetchEcByGps,
+          icon: _autoFillingEc
               ? const SizedBox(width: 14, height: 14,
                   child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-              : const Icon(Icons.search, size: 16),
-          label: Text(_fetchingEc ? 'Searching...' : 'Search EC',
+              : const Icon(Icons.gps_fixed, size: 16),
+          label: Text(_autoFillingEc ? 'Detecting…' : 'Auto-fill via GPS & Search',
               style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
           style: ElevatedButton.styleFrom(
-            backgroundColor: color,
+            backgroundColor: const Color(0xFF0D47A1),
             foregroundColor: Colors.white,
             padding: const EdgeInsets.symmetric(vertical: 12),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           ),
         ),
       ),
+      const SizedBox(height: 8),
+
+      // Manual toggle — Zone / District / SRO
+      GestureDetector(
+        onTap: () => setState(() => _showManualEc = !_showManualEc),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
+          decoration: BoxDecoration(
+            border: Border.all(color: color.withValues(alpha: 0.35)),
+            borderRadius: BorderRadius.circular(10),
+            color: _showManualEc ? color.withValues(alpha: 0.06) : Colors.transparent,
+          ),
+          child: Row(children: [
+            Icon(Icons.tune, size: 15, color: color),
+            const SizedBox(width: 8),
+            Expanded(child: Text('Manual — Zone / District / SRO',
+                style: TextStyle(fontSize: 13, color: color, fontWeight: FontWeight.w600))),
+            Icon(_showManualEc ? Icons.expand_less : Icons.expand_more,
+                size: 18, color: color),
+          ]),
+        ),
+      ),
+
+      if (_showManualEc) ...[
+        const SizedBox(height: 12),
+
+        const _FieldLabel('Zone'),
+        _dropdown('Select Zone', _ecZones, _selZone, color,
+            loading: _autoFillingEc,
+            onChanged: (opt) => _loadEcDistricts(opt)),
+        const SizedBox(height: 10),
+
+        const _FieldLabel('District'),
+        _dropdown('Select District', _ecDists, _selEcDist, color,
+            loading: _loadingEcDists,
+            hint: _selZone == null ? 'Select zone first' : 'Select District',
+            onChanged: (opt) => _loadEcSros(opt)),
+        const SizedBox(height: 10),
+
+        const _FieldLabel('Sub Registrar Office (SRO)'),
+        _dropdown('Select SRO', _ecSros, _selEcSro, color,
+            loading: _loadingEcSros,
+            hint: _selEcDist == null ? 'Select district first' : 'Select SRO',
+            onChanged: (opt) => setState(() => _selEcSro = opt)),
+        const SizedBox(height: 12),
+
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: _fetchingEc ? null : _searchEc,
+            icon: _fetchingEc
+                ? const SizedBox(width: 14, height: 14,
+                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                : const Icon(Icons.search, size: 16),
+            label: Text(_fetchingEc ? 'Searching…' : 'Search EC',
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: color,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+          ),
+        ),
+      ] else if (_selZone != null) ...[
+        // Zone/District/SRO already filled (e.g. via GPS) — show Search button
+        const SizedBox(height: 10),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: _fetchingEc ? null : _searchEc,
+            icon: _fetchingEc
+                ? const SizedBox(width: 14, height: 14,
+                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                : const Icon(Icons.search, size: 16),
+            label: Text(_fetchingEc ? 'Searching…' : 'Search EC',
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: color,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+          ),
+        ),
+      ],
 
       if (_ecError != null) ...[
         const SizedBox(height: 10),
