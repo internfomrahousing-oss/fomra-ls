@@ -1,6 +1,11 @@
 const express = require('express');
 const https   = require('https');
 const router  = express.Router();
+const {
+  buildInfrastructureQuery,
+  parseInfrastructureElements,
+  computeInfrastructureScores,
+} = require('../lib/overpassInfrastructure');
 
 const MIRRORS = [
   { hostname: 'overpass-api.de',          path: '/api/interpreter' },
@@ -73,6 +78,63 @@ router.post('/', async (req, res) => {
   }
 
   res.status(502).json({ error: lastErr });
+});
+
+async function runOverpassQuery(query) {
+  const body = `data=${encodeURIComponent(query)}`;
+  let lastErr = 'All Overpass mirrors failed';
+  for (const mirror of MIRRORS) {
+    try {
+      return await queryMirror(mirror, body);
+    } catch (err) {
+      lastErr = err.message;
+    }
+  }
+  const err = new Error(lastErr);
+  err.status = 502;
+  throw err;
+}
+
+// POST /api/poi/infrastructure
+// Body: { lat, lon, radiusKm } — Overpass POI + highway scoring
+router.post('/infrastructure', async (req, res) => {
+  const lat = parseFloat(req.body?.lat);
+  const lon = parseFloat(req.body?.lon);
+  const radiusKm = parseInt(req.body?.radiusKm, 10) || 2;
+
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+    return res.status(400).json({ error: 'lat and lon are required' });
+  }
+  if (![2, 5, 10].includes(radiusKm)) {
+    return res.status(400).json({ error: 'radiusKm must be 2, 5, or 10' });
+  }
+
+  try {
+    const radiusMeters = radiusKm * 1000;
+    const query = buildInfrastructureQuery(lat, lon, radiusMeters);
+    const data = await runOverpassQuery(query);
+    const elements = data.elements || [];
+
+    if (data.remark && elements.length === 0) {
+      return res.status(502).json({ error: String(data.remark) });
+    }
+
+    const { counts, places, roadCounts } = parseInfrastructureElements(elements, lat, lon);
+    const scores = computeInfrastructureScores(counts, roadCounts, radiusKm);
+
+    return res.json({
+      source:    'OpenStreetMap Overpass API',
+      lat,
+      lon,
+      radiusKm,
+      counts,
+      places,
+      roadCounts,
+      scores,
+    });
+  } catch (err) {
+    return res.status(err.status || 502).json({ error: err.message });
+  }
 });
 
 module.exports = router;

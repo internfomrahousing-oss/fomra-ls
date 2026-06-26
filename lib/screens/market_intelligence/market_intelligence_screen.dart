@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:fl_chart/fl_chart.dart';
 import '../../services/api_client.dart';
@@ -13,6 +14,9 @@ import '../../theme/app_theme.dart';
 import '../../widgets/app_drawer.dart';
 import '../../widgets/fomra_app_bar.dart';
 import '../../widgets/fomra_bottom_nav.dart';
+import '../../widgets/patta_document_preview.dart';
+import '../../widgets/patta_html_preview.dart';
+import '../../utils/tngis_parcel_picker.dart';
 import '../../services/app_store.dart';
 import '../../models/land_lead.dart';
 
@@ -81,6 +85,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
   String? _locationError;
   final MapController _mapController = MapController();
   bool _mapReady = false;
+  bool _mapFullScreen = false;
   LatLng? _tappedPoint;
 
   // Location â€“ Search
@@ -103,6 +108,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
   bool _collectingPois = false;
   String? _poiError;
   bool _poisCollected = false;
+  Map<String, double> _infraScoreMap = {};
 
   // Valuation inputs
   final _roadWidthCtrl = TextEditingController();
@@ -120,10 +126,17 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
   String _compFilter = 'All';   // All | Ongoing | Completed | Plot | Old
   int _oldYearsFilter = 5;       // 2 | 5 | 10
 
-  // EC & Patta â€“ location data passed to the section widget
+  // EC & Patta – location data passed to the section widget
   String? _detectedDistrict;
   String? _detectedTaluk;
   String? _detectedVillage;
+  String? _tngisSurvey;
+  String? _tngisSubDiv;
+  String? _tngisGiViewerUrl;
+  bool _tngisParcelLoading = false;
+  String? _tngisParcelError;
+  Map<String, String>? _tngisParcelPreview;
+  List<_TngisSubdivisionRow> _tngisSubdivisions = [];
 
   // Default center shown before GPS resolves
   static const _kDefaultCenter = LatLng(13.0827, 80.2707);
@@ -254,6 +267,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
             LatLng(pos.latitude, pos.longitude), _zoomForRadius(_selectedRadius));
       }
       _fetchLocationDetails(LatLng(pos.latitude, pos.longitude));
+      _collectPois();
     } catch (e) {
       setState(() =>
           _locationError = e.toString().replaceAll('Exception: ', ''));
@@ -312,15 +326,19 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
       _poisCollected = false;
       _poiCounts = {};
       _poiPlaces = {};
+      _infraScoreMap = {};
       _valuationResult = null;
+      _tngisSurvey = null;
+      _tngisSubDiv = null;
+      _tngisParcelPreview = null;
+      _tngisSubdivisions = [];
     });
     if (_mapReady) {
       _mapController.move(_searchedLocation!, _zoomForRadius(_selectedRadius));
     }
     _fetchLocationDetails(loc);
+    _collectPois();
   }
-
-  // â”€â”€ Map tap â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   void _handleMapTap(LatLng point) {
     setState(() {
@@ -329,10 +347,131 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
       _poisCollected = false;
       _poiCounts = {};
       _poiPlaces = {};
+      _infraScoreMap = {};
       _valuationResult = null;
+      _tngisParcelLoading = true;
+      _tngisParcelError = null;
     });
-    if (_mapReady) _mapController.move(point, _mapController.camera.zoom);
+    if (_mapReady) {
+      _mapController.move(point, _mapController.camera.zoom);
+    }
     _fetchLocationDetails(point);
+    _fetchTngisParcelDetails(point);
+    _collectPois();
+  }
+
+  /// Fetch survey no & sub-division from TNGIS for the tapped map point.
+  Future<void> _fetchTngisParcelDetails(LatLng loc) async {
+    setState(() {
+      _tngisParcelLoading = true;
+      _tngisParcelError = null;
+    });
+    try {
+      // Step 1: load nearby parcel polygons and hit-test (matches Tamil Nilam geometry).
+      TngisParcelPickResult? geoPick;
+      try {
+        final parcelGeo = await ApiClient.get(
+          '/api/tnlands/tngis/parcels?lat=${loc.latitude}&lon=${loc.longitude}&zoom=18&radius=500',
+          timeout: const Duration(seconds: 45),
+        );
+        geoPick = pickTngisParcelFromFeatures(
+          loc,
+          parcelGeo['features'] as List<dynamic>? ?? [],
+        );
+      } catch (_) {}
+
+      final params = <String, String>{
+        'lat': loc.latitude.toString(),
+        'lon': loc.longitude.toString(),
+      };
+      if (geoPick != null) {
+        params['surveyNo'] = geoPick.survey;
+        final sub = geoPick.subDivision?.trim();
+        if (sub != null && sub.isNotEmpty && sub != '-') {
+          params['subDiv'] = sub;
+        }
+      }
+
+      final query = params.entries
+          .map((e) => '${e.key}=${Uri.encodeComponent(e.value)}')
+          .join('&');
+      final result = await ApiClient.get(
+        '/api/tnlands/tngis/parcel?$query',
+        timeout: const Duration(seconds: 45),
+      );
+      final fields = (result['fields'] as Map<String, dynamic>? ?? {})
+          .map((k, v) => MapEntry(k, v.toString()));
+      final survey = (result['surveyNumber'] ?? fields['Survey Number'])?.toString();
+      final subDiv = (result['subDivision'] ?? fields['Sub Division'])?.toString();
+      setState(() {
+        _tngisGiViewerUrl = result['giViewerUrl'] as String?;
+        _tngisSurvey = survey?.isNotEmpty == true ? survey : null;
+        _tngisSubDiv = (subDiv != null && subDiv.isNotEmpty && subDiv != '-')
+            ? subDiv
+            : null;
+        _detectedDistrict = (result['district'] as String?)?.trim().isNotEmpty == true
+            ? result['district'] as String
+            : (fields['District']?.isNotEmpty == true ? fields['District'] : _detectedDistrict);
+        _detectedTaluk = (result['taluk'] as String?)?.trim().isNotEmpty == true
+            ? result['taluk'] as String
+            : (fields['Taluk']?.isNotEmpty == true ? fields['Taluk'] : _detectedTaluk);
+        _detectedVillage = (result['village'] as String?)?.trim().isNotEmpty == true
+            ? result['village'] as String
+            : (fields['Village']?.isNotEmpty == true ? fields['Village'] : _detectedVillage);
+        _tngisParcelPreview = fields.isNotEmpty ? fields : null;
+        _tngisParcelError = null;
+        _tngisSubdivisions = ((result['subdivisions'] as List<dynamic>? ?? [])
+            .map((e) => _TngisSubdivisionRow.fromJson(e as Map<String, dynamic>))
+            .where((r) => r.surveyNumber.isNotEmpty)
+            .toList());
+        if (_tngisSubdivisions.isEmpty && _tngisSurvey != null) {
+          final kide = result['kide']?.toString();
+          _tngisSubdivisions = [
+            _TngisSubdivisionRow(
+              surveyNumber: _tngisSurvey!,
+              subDivision: _tngisSubDiv,
+              kide: (kide != null && kide.isNotEmpty && kide != '0') ? kide : null,
+              fields: fields,
+              containsPoint: result['containsPoint'] == true,
+              fmbAvailable: result['fmbAvailable'] == true,
+            ),
+          ];
+        }
+      });
+    } on ApiException catch (e) {
+      setState(() {
+        _tngisParcelError = e.message;
+        _tngisSurvey = null;
+        _tngisSubDiv = null;
+        _tngisParcelPreview = null;
+        _tngisSubdivisions = [];
+      });
+    } catch (e) {
+      setState(() {
+        _tngisParcelError = e.toString().replaceAll('Exception: ', '');
+        _tngisParcelPreview = null;
+        _tngisSubdivisions = [];
+      });
+    } finally {
+      if (mounted) setState(() => _tngisParcelLoading = false);
+    }
+  }
+
+  Future<void> _openTngisGiViewer() async {
+    final loc = _activeLatLng;
+    final url = _tngisGiViewerUrl ??
+        (loc != null
+            ? 'https://tngis.tn.gov.in/apps/gi_viewer/map-viewer/index.html'
+                '?lat=${loc.latitude}&lon=${loc.longitude}'
+            : 'https://tngis.tn.gov.in/apps/gi_viewer/map-viewer/index.html');
+    final uri = Uri.parse(url);
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not open Tamil Nilam GI Viewer.')),
+        );
+      }
+    }
   }
 
   // â”€â”€ POI Collection via Overpass API â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -345,136 +484,68 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
       _poiError = null;
       _poiCounts = {};
       _poiPlaces = {};
+      _infraScoreMap = {};
       _poisCollected = false;
     });
 
-    final lat = loc.latitude;
-    final lon = loc.longitude;
-    final radius = _selectedRadius * 1000;
-
     try {
-      final parts = <String>[];
-      for (final cat in _kCategories) {
-        final area   = '(around:$radius,$lat,$lon)';
-        final isWay  = cat.tag == 'landuse';
-        final filter = '["${cat.tag}"="${cat.value}"]';
-        if (!isWay) {
-          parts.add('node$filter$area;');
-          parts.add('relation$filter$area;');
-        }
-        parts.add('way$filter$area;');
-      }
-      // Separate query for metro: railway=station + station=subway
-      parts.add('node["railway"="station"]["station"="subway"](around:$radius,$lat,$lon);');
-      parts.add('way["railway"="station"]["station"="subway"](around:$radius,$lat,$lon);');
-
-      final query = '[out:json][timeout:50];\n(\n${parts.join('\n')}\n);\nout tags center;';
-
-      // Route through backend proxy â€” avoids CORS issues on Vercel.
       final data = await ApiClient.post(
-        '/api/poi',
-        {'query': query},
+        '/api/poi/infrastructure',
+        {
+          'lat': loc.latitude,
+          'lon': loc.longitude,
+          'radiusKm': _selectedRadius,
+        },
         auth: false,
-      ).timeout(const Duration(seconds: 58));
+      ).timeout(const Duration(seconds: 60));
 
-      final elements = (data['elements'] as List?) ?? [];
-
-      if (data['remark'] != null && elements.isEmpty) {
-        throw Exception(data['remark'].toString());
-      }
+      final countsRaw = (data['counts'] as Map?)?.cast<String, dynamic>() ?? {};
+      final placesRaw = (data['places'] as Map?)?.cast<String, dynamic>() ?? {};
+      final scoresRaw = (data['scores'] as Map?)?.cast<String, dynamic>() ?? {};
 
       final counts = <String, int>{};
-      final places = <String, List<Map<String, dynamic>>>{};
       for (final cat in _kCategories) {
-        counts[cat.name] = 0;
-        places[cat.name] = [];
+        counts[cat.name] = (countsRaw[cat.name] as num?)?.toInt() ?? 0;
       }
 
-      for (final el in elements) {
-        final tags = (el['tags'] as Map?)?.cast<String, dynamic>() ?? {};
+      final places = <String, List<Map<String, dynamic>>>{};
+      for (final cat in _kCategories) {
+        final list = placesRaw[cat.name] as List<dynamic>? ?? [];
+        places[cat.name] = list.map((e) {
+          final m = (e as Map).cast<String, dynamic>();
+          return <String, dynamic>{
+            'name': m['name']?.toString() ?? 'Unnamed',
+            if (m['distance'] != null) 'distance': (m['distance'] as num).toDouble(),
+          };
+        }).toList();
+      }
 
-        // Determine which category this element belongs to
-        for (final cat in _kCategories) {
-          if (tags[cat.tag] != cat.value) continue;
-          if (cat.name == 'Metro Stations' && tags['station'] != 'subway') continue;
-          if (cat.name == 'Railway Stations' && tags['station'] == 'subway') continue;
-
-          counts[cat.name] = (counts[cat.name] ?? 0) + 1;
-          final name = (tags['name'] as String? ?? '').trim();
-
-          double? eLat, eLon;
-          if (el['lat'] != null) {
-            eLat = (el['lat'] as num).toDouble();
-            eLon  = (el['lon'] as num).toDouble();
-          } else if (el['center'] != null) {
-            final c = (el['center'] as Map).cast<String, dynamic>();
-            eLat = (c['lat'] as num).toDouble();
-            eLon  = (c['lon'] as num).toDouble();
-          }
-
-          places[cat.name]!.add({
-            'name': name.isEmpty ? 'Unnamed' : name,
-            if (eLat != null) 'distance':
-                Geolocator.distanceBetween(lat, lon, eLat, eLon!) / 1000,
-          });
-        }
+      final scores = <String, double>{};
+      for (final entry in scoresRaw.entries) {
+        scores[entry.key] = (entry.value as num).toDouble();
       }
 
       setState(() {
         _poiCounts = counts;
         _poiPlaces = places;
-        _poisCollected = true;
+        _infraScoreMap = scores;
+        _poisCollected = scores.isNotEmpty;
       });
+    } on ApiException catch (e) {
+      final hint = e.statusCode == 404
+          ? ' Restart the backend (npm start in backend/) and hard-refresh the page.'
+          : '';
+      setState(() => _poiError = 'Infrastructure fetch failed: ${e.message}.$hint');
     } catch (e) {
-      setState(() => _poiError = 'POI fetch failed: ${e.toString().replaceAll('Exception: ', '')}');
+      setState(() => _poiError =
+          'Infrastructure fetch failed: ${e.toString().replaceAll('Exception: ', '')}');
     } finally {
       setState(() => _collectingPois = false);
     }
   }
 
-  // â”€â”€ Infrastructure Score â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-  Map<String, double> get _infraScores {
-    if (!_poisCollected) return {};
-    final r = _selectedRadius;
-    final maxEdu = r == 2 ? 15 : r == 5 ? 30 : 60;
-    final maxHealth = r == 2 ? 5 : r == 5 ? 15 : 30;
-    final maxCommercial = r == 2 ? 10 : r == 5 ? 25 : 50;
-    final maxTransport = r == 2 ? 8 : r == 5 ? 20 : 40;
-
-    final edu = ((_poiCounts['Schools'] ?? 0) / maxEdu * 100).clamp(0, 100).toDouble();
-    final health = ((_poiCounts['Hospitals'] ?? 0) / maxHealth * 100).clamp(0, 100).toDouble();
-    final transport = (((_poiCounts['Railway Stations'] ?? 0) +
-                (_poiCounts['Metro Stations'] ?? 0) +
-                (_poiCounts['Bus Terminals'] ?? 0)) /
-            maxTransport * 100)
-        .clamp(0, 100)
-        .toDouble();
-    final commercial = (((_poiCounts['Malls'] ?? 0) +
-                (_poiCounts['Banks'] ?? 0) +
-                (_poiCounts['IT Parks'] ?? 0)) /
-            maxCommercial * 100)
-        .clamp(0, 100)
-        .toDouble();
-    final road = (((_poiCounts['Petrol Stations'] ?? 0) +
-                (_poiCounts['Govt. Offices'] ?? 0)) /
-            (r == 2 ? 6 : r == 5 ? 15 : 30) * 100)
-        .clamp(0, 100)
-        .toDouble();
-    final overall =
-        (edu * 0.25 + health * 0.25 + transport * 0.20 + commercial * 0.20 + road * 0.10)
-            .clamp(0, 100)
-            .toDouble();
-
-    return {
-      'Education': edu,
-      'Healthcare': health,
-      'Road Connectivity': road,
-      'Commercial': commercial,
-      'Transport': transport,
-      'Overall Location': overall,
-    };
-  }
+  Map<String, double> get _infraScores =>
+      _poisCollected ? _infraScoreMap : {};
 
   // â”€â”€ AI Valuation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -937,10 +1008,12 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
       district: _detectedDistrict,
       taluk: _detectedTaluk,
       village: _detectedVillage,
-      surveyNumber: surveyNo,
-      subDivision: subDiv,
+      surveyNumber: surveyNo ?? _tngisSurvey,
+      subDivision: subDiv ?? _tngisSubDiv,
       lat: loc?.latitude,
       lon: loc?.longitude,
+      tngisGiViewerUrl: _tngisGiViewerUrl,
+      tngisSubdivisions: _tngisSubdivisions,
     );
   }
 
@@ -1029,13 +1102,25 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
           ],
         ),
       );
-    if (widget.isTab) return Scaffold(body: body);
+    if (widget.isTab) {
+      return Scaffold(body: _wrapWithFullScreenMap(body));
+    }
     return Scaffold(
       appBar: const FomraAppBar(moduleName: 'Market Intelligence'),
       drawer: const AppDrawer(currentRoute: '/market-intelligence'),
       bottomNavigationBar:
           const FomraBottomNav(currentRoute: '/market-intelligence'),
-      body: body,
+      body: _wrapWithFullScreenMap(body),
+    );
+  }
+
+  Widget _wrapWithFullScreenMap(Widget body) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        body,
+        if (_mapFullScreen) Positioned.fill(child: _buildFullScreenMapOverlay()),
+      ],
     );
   }
 
@@ -1356,11 +1441,192 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
         ),
       );
 
+  Widget _buildMapOverlayButton(IconData icon, VoidCallback onTap) => Material(
+        color: Colors.white,
+        elevation: 3,
+        shadowColor: Colors.black26,
+        borderRadius: BorderRadius.circular(8),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(8),
+          child: Padding(
+            padding: const EdgeInsets.all(8),
+            child: Icon(icon, size: 20, color: AppColors.primary),
+          ),
+        ),
+      );
+
+  Widget _buildMapStack({bool showMaximize = false, bool showMinimize = false}) {
+    final activeLoc = _activeLatLng;
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: FlutterMap(
+            mapController: _mapController,
+            options: MapOptions(
+              initialCenter: activeLoc ?? _kDefaultCenter,
+              initialZoom: _zoomForRadius(_selectedRadius),
+              onMapReady: () => setState(() => _mapReady = true),
+              onTap: (_, point) => _handleMapTap(point),
+            ),
+            children: [
+              TileLayer(
+                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                userAgentPackageName: 'in.fomrahousing.fomrals',
+              ),
+              CircleLayer(circles: [
+                if (activeLoc != null)
+                  CircleMarker(
+                    point: activeLoc,
+                    radius: _selectedRadius * 1000.0,
+                    useRadiusInMeter: true,
+                    color: AppColors.primary.withValues(alpha: 0.1),
+                    borderColor: AppColors.primary,
+                    borderStrokeWidth: 2,
+                  ),
+              ]),
+              MarkerLayer(markers: [
+                if (activeLoc != null)
+                  Marker(
+                    point: activeLoc,
+                    width: 40,
+                    height: 48,
+                    child: Icon(Icons.location_on,
+                        color: _searchMode
+                            ? const Color(0xFF1565C0)
+                            : const Color(0xFFE53935),
+                        size: 40),
+                  ),
+                if (_tappedPoint != null)
+                  Marker(
+                    point: _tappedPoint!,
+                    width: 36,
+                    height: 44,
+                    child: const Icon(Icons.location_searching,
+                        color: Color(0xFF6A1B9A), size: 32),
+                  ),
+              ]),
+            ],
+          ),
+        ),
+        if (_fetchingLocation || _searchingLocation)
+          Container(
+            color: Colors.black26,
+            child: const Center(
+              child: CircularProgressIndicator(
+                  color: Colors.white, strokeWidth: 2.5),
+            ),
+          ),
+        if (activeLoc == null && !_fetchingLocation && !_searchingLocation)
+          Positioned(
+            bottom: 8,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.black54,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Text(
+                  'Tap to set location',
+                  style: TextStyle(color: Colors.white, fontSize: 12),
+                ),
+              ),
+            ),
+          ),
+        if (showMaximize)
+          Positioned(
+            top: 8,
+            right: 8,
+            child: _buildMapOverlayButton(
+              Icons.fullscreen,
+              () => setState(() => _mapFullScreen = true),
+            ),
+          ),
+        if (showMinimize)
+          Positioned(
+            top: 8,
+            right: 8,
+            child: _buildMapOverlayButton(
+              Icons.fullscreen_exit,
+              () => setState(() => _mapFullScreen = false),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildMapFullscreenPlaceholder() {
+    return Container(
+      color: const Color(0xFFE8EAF6),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.map_outlined, size: 36, color: AppColors.primary),
+          const SizedBox(height: 8),
+          const Text(
+            'Map expanded to full screen',
+            style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary),
+          ),
+          const SizedBox(height: 8),
+          TextButton.icon(
+            onPressed: () => setState(() => _mapFullScreen = false),
+            icon: const Icon(Icons.fullscreen_exit, size: 18),
+            label: const Text('Exit full screen'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFullScreenMapOverlay() {
+    final activeLoc = _activeLatLng;
+    return Material(
+      color: Colors.black,
+      child: SafeArea(
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: _buildMapStack(showMinimize: true),
+            ),
+            if (activeLoc != null)
+              Positioned(
+                left: 12,
+                right: 12,
+                bottom: 12,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.black54,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    '${activeLoc.latitude.toStringAsFixed(5)}° N, '
+                    '${activeLoc.longitude.toStringAsFixed(5)}° E · '
+                    'Tap plot for TNGIS survey',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Colors.white, fontSize: 12),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   // â”€â”€ Section: Map Visualization â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   Widget _buildMapSection() {
     final activeLoc = _activeLatLng;
     return _SectionCard(
-      title: 'Location Visualization',
+      title: 'Map Visualization',
       icon: Icons.map_outlined,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1369,97 +1635,90 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
             borderRadius: BorderRadius.circular(14),
             child: SizedBox(
               height: 260,
-              child: Stack(
-                children: [
-                  FlutterMap(
-                    mapController: _mapController,
-                    options: MapOptions(
-                      initialCenter: activeLoc ?? _kDefaultCenter,
-                      initialZoom: _zoomForRadius(_selectedRadius),
-                      onMapReady: () => setState(() => _mapReady = true),
-                      onTap: (_, point) => _handleMapTap(point),
-                    ),
-                    children: [
-                      TileLayer(
-                        urlTemplate:
-                            'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                        userAgentPackageName: 'in.fomrahousing.fomrals',
-                      ),
-                      CircleLayer(circles: [
-                        if (activeLoc != null)
-                          CircleMarker(
-                            point: activeLoc,
-                            radius: _selectedRadius * 1000.0,
-                            useRadiusInMeter: true,
-                            color: AppColors.primary.withValues(alpha: 0.1),
-                            borderColor: AppColors.primary,
-                            borderStrokeWidth: 2,
-                          ),
-                      ]),
-                      MarkerLayer(markers: [
-                        if (activeLoc != null)
-                          Marker(
-                            point: activeLoc,
-                            width: 40,
-                            height: 48,
-                            child: Icon(Icons.location_on,
-                                color: _searchMode
-                                    ? const Color(0xFF1565C0)
-                                    : const Color(0xFFE53935),
-                                size: 40),
-                          ),
-                        if (_tappedPoint != null)
-                          Marker(
-                            point: _tappedPoint!,
-                            width: 36,
-                            height: 44,
-                            child: const Icon(Icons.location_searching,
-                                color: Color(0xFF6A1B9A), size: 32),
-                          ),
-                      ]),
-                    ],
-                  ),
-                  if (_fetchingLocation || _searchingLocation)
-                    Container(
-                      color: Colors.black26,
-                      child: const Center(
-                        child: CircularProgressIndicator(
-                            color: Colors.white, strokeWidth: 2.5),
-                      ),
-                    ),
-                  if (activeLoc == null && !_fetchingLocation && !_searchingLocation)
-                    Positioned(
-                      bottom: 8,
-                      left: 0,
-                      right: 0,
-                      child: Center(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: Colors.black54,
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: const Text(
-                            'Tap to set location',
-                            style: TextStyle(color: Colors.white, fontSize: 12),
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
+              child: _mapFullScreen
+                  ? _buildMapFullscreenPlaceholder()
+                  : _buildMapStack(showMaximize: true),
             ),
           ),
           const SizedBox(height: 10),
 
           if (activeLoc != null) ...[
             Text(
-              'ðŸ“ ${activeLoc.latitude.toStringAsFixed(5)}Â° N, ${activeLoc.longitude.toStringAsFixed(5)}Â° E',
+              '📍 ${activeLoc.latitude.toStringAsFixed(5)}° N, ${activeLoc.longitude.toStringAsFixed(5)}° E',
               textAlign: TextAlign.center,
               style: const TextStyle(
                   fontSize: 12, color: AppColors.textSecondary),
             ),
+            const SizedBox(height: 4),
+            const Text(
+              'Tap directly on the land plot — survey & subdivision are read from TNGIS.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+            ),
+            if (_tngisParcelLoading) ...[
+              const SizedBox(height: 8),
+              const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  SizedBox(width: 8),
+                  Text('Reading parcel from TNGIS…',
+                      style: TextStyle(
+                          fontSize: 11, color: AppColors.textSecondary)),
+                ],
+              ),
+            ],
+            if (_tngisParcelPreview != null && !_tngisParcelLoading) ...[
+              const SizedBox(height: 8),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE3F2FD),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFF90CAF9)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Tamil Nilam parcel (TNGIS)',
+                        style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF1565C0))),
+                    const SizedBox(height: 6),
+                    if (_tngisSurvey != null)
+                      _buildInfoRow('Survey Number:', _tngisSurvey!),
+                    if (_tngisSubDiv != null &&
+                        _tngisSubDiv!.isNotEmpty &&
+                        _tngisSubDiv != '-')
+                      _buildInfoRow('Sub Division:', _tngisSubDiv!),
+                    if (_tngisSubdivisions.length > 1) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        '${_tngisSubdivisions.length} subdivisions found for this survey',
+                        style: const TextStyle(
+                            fontSize: 10, color: AppColors.textSecondary),
+                      ),
+                    ],
+                    if (_detectedVillage != null)
+                      Text('Village: $_detectedVillage',
+                          style: const TextStyle(
+                              fontSize: 11, color: AppColors.textSecondary)),
+                  ],
+                ),
+              ),
+            ],
+            if (_tngisParcelError != null && !_tngisParcelLoading) ...[
+              const SizedBox(height: 6),
+              Text(_tngisParcelError!,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 11, color: Colors.orange.shade800)),
+            ],
             const SizedBox(height: 10),
           ],
           if (_locationError != null) ...[
@@ -1467,7 +1726,6 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
             const SizedBox(height: 10),
           ],
 
-        // â”€â”€ Radius selector â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         Row(children: [
           const Text('Zoom:',
               style: TextStyle(
@@ -1495,7 +1753,6 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
         ]),
         const SizedBox(height: 12),
 
-        // â”€â”€ Detect location button â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
@@ -1549,16 +1806,20 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
               return Padding(
                 padding: const EdgeInsets.only(right: 8),
                 child: GestureDetector(
-                  onTap: () => setState(() {
-                    _selectedRadius = km;
-                    _poisCollected = false;
-                    _poiCounts = {};
-                    _poiPlaces = {};
-                    if (_activeLatLng != null && _mapReady) {
-                      _mapController.move(
-                          _activeLatLng!, _zoomForRadius(km));
-                    }
-                  }),
+                  onTap: () {
+                    setState(() {
+                      _selectedRadius = km;
+                      _poisCollected = false;
+                      _poiCounts = {};
+                      _poiPlaces = {};
+                      _infraScoreMap = {};
+                      if (_activeLatLng != null && _mapReady) {
+                        _mapController.move(
+                            _activeLatLng!, _zoomForRadius(km));
+                      }
+                    });
+                    if (_activeLatLng != null) _collectPois();
+                  },
                   child: Container(
                     padding: const EdgeInsets.symmetric(
                         horizontal: 12, vertical: 6),
@@ -1599,8 +1860,8 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                           color: Colors.white, strokeWidth: 2))
                   : const Icon(Icons.radar, size: 18),
               label: Text(_collectingPois
-                  ? 'Collecting...'
-                  : 'Collect Nearby Places'),
+                  ? 'Loading from Overpass…'
+                  : 'Refresh Infrastructure Score'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF00838F),
                 padding: const EdgeInsets.symmetric(vertical: 12),
@@ -1610,9 +1871,17 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
           if (_activeLatLng == null && !_collectingPois) ...[
             const SizedBox(height: 10),
             const Text(
-              'Set your location first to collect nearby places.',
+              'Set your location on the map to score nearby infrastructure via OpenStreetMap.',
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+            ),
+          ],
+          if (_poisCollected) ...[
+            const SizedBox(height: 8),
+            const Text(
+              'Scores from OpenStreetMap Overpass API (schools, hospitals, transport, roads).',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 10, color: AppColors.textSecondary, height: 1.3),
             ),
           ],
           if (_poiError != null) ...[
@@ -2392,6 +2661,76 @@ class _Option {
   int get hashCode => code.hashCode;
 }
 
+class _EcPeriod {
+  final String id;
+  final String label;
+  final String fromDate;
+  final String toDate;
+  const _EcPeriod(this.id, this.label, this.fromDate, this.toDate);
+
+  factory _EcPeriod.fromJson(Map<String, dynamic> j) => _EcPeriod(
+        j['id'] as String,
+        j['label'] as String,
+        j['fromDate'] as String,
+        j['toDate'] as String,
+      );
+}
+
+class _EcEntry {
+  final String id;
+  final String label;
+  const _EcEntry(this.id, this.label);
+}
+
+class _TngisSubdivisionRow {
+  final String surveyNumber;
+  final String? subDivision;
+  final String? kide;
+  final Map<String, String> fields;
+  final bool containsPoint;
+  final bool fmbAvailable;
+
+  const _TngisSubdivisionRow({
+    required this.surveyNumber,
+    this.subDivision,
+    this.kide,
+    this.fields = const {},
+    this.containsPoint = false,
+    this.fmbAvailable = false,
+  });
+
+  factory _TngisSubdivisionRow.fromJson(Map<String, dynamic> j) {
+    final fields = (j['fields'] as Map<String, dynamic>? ?? {})
+        .map((k, v) => MapEntry(k.toString(), v?.toString() ?? ''));
+    final kideRaw = j['kide']?.toString() ?? fields['Kide'];
+    return _TngisSubdivisionRow(
+      surveyNumber:
+          j['surveyNumber']?.toString() ?? fields['Survey Number'] ?? '',
+      subDivision: j['subDivision']?.toString(),
+      kide: (kideRaw != null && kideRaw.trim().isNotEmpty) ? kideRaw.trim() : null,
+      fields: fields,
+      containsPoint: j['containsPoint'] == true,
+      fmbAvailable: j['fmbAvailable'] == true,
+    );
+  }
+
+  String get key => '$surveyNumber|${subDivision ?? ''}';
+
+  String get subLabel {
+    final s = subDivision?.trim();
+    if (s == null || s.isEmpty || s == '-') return '—';
+    return s;
+  }
+}
+
+class _SubdivDocBundle {
+  Map<String, dynamic>? documents;
+  Uint8List? fmbPdf;
+  bool loadingPatta = false;
+  bool loadingFmb = false;
+  String? fmbError;
+}
+
 // â”€â”€ EC & Patta: main section widget â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _GovtDocsSection extends StatefulWidget {
@@ -2402,6 +2741,8 @@ class _GovtDocsSection extends StatefulWidget {
   final String? subDivision;
   final double? lat; // active map location — enables the TNGIS patta fallback
   final double? lon;
+  final String? tngisGiViewerUrl;
+  final List<_TngisSubdivisionRow> tngisSubdivisions;
   const _GovtDocsSection({
     this.district,
     this.taluk,
@@ -2410,6 +2751,8 @@ class _GovtDocsSection extends StatefulWidget {
     this.subDivision,
     this.lat,
     this.lon,
+    this.tngisGiViewerUrl,
+    this.tngisSubdivisions = const [],
   });
 
   @override
@@ -2437,13 +2780,19 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
   String? _pattaError;
   String? _pattaSource;
   Map<String, dynamic>? _pattaDocuments;
+  final Map<String, _SubdivDocBundle> _subdivBundles = {};
+  Uint8List? _fmbPdfBytes;
+  String? _fmbLoadError;
+  bool _loadingFmb = false;
   bool   _showManualPatta = false;
   bool   _showManualEc    = false;
   Timer? _pattaDebounce;
 
   // â”€â”€ EC state â”€â”€
-  final List<_Option> _ecZones = const [
-    _Option('1', 'North'), _Option('2', 'South'), _Option('3', 'Central'),
+  List<_Option> _ecZones = [
+    _Option('1', 'Chennai'),
+    _Option('2', 'Coimbatore'),
+    _Option('4', 'Madurai'),
   ];
 
   static const _kStaticEcDistricts = <String, List<_Option>>{
@@ -2541,7 +2890,22 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
   final _ecToCtrl     = TextEditingController();
   bool   _fetchingEc   = false;
   List<Map<String, String>> _ecResults = [];
+  List<Map<String, String>> _ecAllRecords = [];
+  List<_EcEntry> _ecEntries = [];
+  String? _selEcEntryId;
+  String? _ecDocumentHtml;
+  Uint8List? _ecPdfBytes;
+  String? _ecPdfFileName;
+  String? _ecSource;
+  Map<String, String> _ecMeta = {};
+  List<_EcPeriod> _ecPeriods = [];
+  _EcPeriod? _selEcPeriod;
+  bool _loadingEcPeriods = false;
   String? _ecError;
+  String? _ecCaptchaSession;
+  String? _ecCaptchaImage;
+  bool _loadingEcCaptcha = false;
+  final _ecCaptchaCtrl = TextEditingController();
 
   @override
   void initState() {
@@ -2552,7 +2916,13 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
         '${now.day.toString().padLeft(2, '0')}/${now.month.toString().padLeft(2, '0')}/${now.year}';
     _applySurveyNumber();
     _initDistricts();
+    _loadEcPeriods();
+    _loadEcZones();
+    _loadEcCaptcha();
     if (widget.district != null) _tryAutoEcFill();
+    else if (widget.lat != null && widget.lon != null) {
+      Future.microtask(() => _resolveEcFromServer());
+    }
     _surveyCtrl.addListener(_onSurveyChanged);
     _ecSurveyCtrl.addListener(_onEcSurveyChanged);
   }
@@ -2618,6 +2988,12 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
 
     if (surveyChanged) _applySurveyNumber();
 
+    final coordsChanged = oldWidget.lat != widget.lat || oldWidget.lon != widget.lon;
+    if (coordsChanged && surveyChanged) {
+      // Parent pushed new TNGIS survey/sub-div from map tap.
+      _tryAutoEcFill();
+    }
+
     if (locationChanged && widget.district != null) {
       final match = _matchOption(_districts, widget.district);
       if (match != null && match.code != _selDistrict?.code) {
@@ -2638,6 +3014,131 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
       _maybeAutoFetchPatta();
       _maybeAutoFetchEc();
     }
+
+    if (oldWidget.tngisSubdivisions != widget.tngisSubdivisions &&
+        widget.tngisSubdivisions.isNotEmpty) {
+      _syncSubdivisions(autoFetch: true);
+    }
+  }
+
+  void _syncSubdivisions({bool autoFetch = false}) {
+    final keys = widget.tngisSubdivisions.map((r) => r.key).toSet();
+    _subdivBundles.removeWhere((k, _) => !keys.contains(k));
+    for (final row in widget.tngisSubdivisions) {
+      _subdivBundles.putIfAbsent(row.key, () => _SubdivDocBundle());
+      if (autoFetch && row.containsPoint) {
+        _fetchPattaForSubdivision(row);
+      }
+    }
+  }
+
+  Future<void> _fetchPattaForSubdivision(_TngisSubdivisionRow row) async {
+    final bundle = _subdivBundles[row.key] ??= _SubdivDocBundle();
+    if (bundle.loadingPatta) return;
+    setState(() => bundle.loadingPatta = true);
+    try {
+      final parts = <String>[];
+      if (widget.lat != null && widget.lon != null) {
+        parts.add('lat=${widget.lat}');
+        parts.add('lon=${widget.lon}');
+      }
+      parts.add('surveyNo=${Uri.encodeComponent(row.surveyNumber)}');
+      final sub = row.subDivision?.trim();
+      if (sub != null && sub.isNotEmpty && sub != '-') {
+        parts.add('subDiv=${Uri.encodeComponent(sub)}');
+      }
+      final result = await ApiClient.get(
+        '/api/tnlands/patta?${parts.join('&')}',
+        timeout: const Duration(seconds: 120),
+      );
+      bundle.documents = result['documents'] as Map<String, dynamic>?;
+      if (row.containsPoint) _applyPattaResult(result);
+      if (bundle.documents?['fmb'] != null) {
+        unawaited(_fetchFmbForSubdivision(row));
+      }
+    } on ApiException catch (e) {
+      if (row.containsPoint) setState(() => _pattaError = e.message);
+    } catch (e) {
+      if (row.containsPoint) {
+        setState(() => _pattaError = e.toString().replaceAll('Exception: ', ''));
+      }
+    } finally {
+      if (mounted) setState(() => bundle.loadingPatta = false);
+    }
+  }
+
+  bool _isRealSubdivision(_TngisSubdivisionRow row) {
+    final sub = row.subDivision?.trim();
+    if (sub == null || sub.isEmpty || sub == '-') return false;
+    return sub != row.surveyNumber.trim();
+  }
+
+  Future<void> _fetchFmbForSubdivision(_TngisSubdivisionRow row) async {
+    final bundle = _subdivBundles[row.key] ??= _SubdivDocBundle();
+    if (bundle.loadingFmb) return;
+    setState(() {
+      bundle.loadingFmb = true;
+      bundle.fmbError = null;
+    });
+    try {
+      final fmbMeta = bundle.documents?['fmb'] as Map<String, dynamic>?;
+      final rel = fmbMeta?['downloadUrl'] as String?;
+      if (rel != null && rel.isNotEmpty) {
+        try {
+          final bytes = await ApiClient.getBytes(rel);
+          bundle.fmbPdf = Uint8List.fromList(bytes);
+          if (row.containsPoint) {
+            setState(() {
+              _fmbPdfBytes = bundle.fmbPdf;
+              _fmbLoadError = null;
+            });
+          }
+          return;
+        } on ApiException {
+          // downloadUrl stale — rebuild request from parcel fields below
+        }
+      }
+
+      final parts = <String>[
+        'surveyNo=${Uri.encodeComponent(row.surveyNumber)}',
+      ];
+      final sub = row.subDivision?.trim();
+      if (_isRealSubdivision(row)) {
+        parts.add('subDiv=${Uri.encodeComponent(sub!)}');
+      }
+      final kide = row.kide;
+      if (kide != null && kide.isNotEmpty && kide != '0') {
+        parts.add('plotno=${Uri.encodeComponent(kide)}');
+      } else if (_isRealSubdivision(row)) {
+        parts.add('plotno=${Uri.encodeComponent('${row.surveyNumber}/$sub')}');
+      }
+      final dc = row.fields['District Code'];
+      final tc = row.fields['Taluk Code'];
+      final vc = row.fields['Village Code'];
+      if (dc != null && dc.isNotEmpty) parts.add('dc=${Uri.encodeComponent(dc)}');
+      if (tc != null && tc.isNotEmpty) parts.add('tc=${Uri.encodeComponent(tc)}');
+      if (vc != null && vc.isNotEmpty) parts.add('vc=${Uri.encodeComponent(vc)}');
+      if (widget.lat != null && widget.lon != null) {
+        parts.add('lat=${widget.lat}');
+        parts.add('lon=${widget.lon}');
+      }
+      final bytes = await ApiClient.getBytes('/api/tnlands/fmb?${parts.join('&')}');
+      bundle.fmbPdf = Uint8List.fromList(bytes);
+      if (row.containsPoint) {
+        setState(() {
+          _fmbPdfBytes = bundle.fmbPdf;
+          _fmbLoadError = null;
+        });
+      }
+    } on ApiException catch (e) {
+      bundle.fmbError = e.message;
+      if (row.containsPoint) setState(() => _fmbLoadError = e.message);
+    } catch (e) {
+      bundle.fmbError = e.toString().replaceAll('Exception: ', '');
+      if (row.containsPoint) setState(() => _fmbLoadError = bundle.fmbError);
+    } finally {
+      if (mounted) setState(() => bundle.loadingFmb = false);
+    }
   }
 
   @override
@@ -2646,6 +3147,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
     _surveyCtrl.dispose(); _subDivCtrl.dispose();
     _ecSurveyCtrl.dispose(); _ecSubDivCtrl.dispose();
     _ecFromCtrl.dispose(); _ecToCtrl.dispose();
+    _ecCaptchaCtrl.dispose();
     super.dispose();
   }
 
@@ -2677,7 +3179,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
 
   // â”€â”€ Patta methods â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-  void _applyPattaResult(Map<String, dynamic> result) {
+  void _applyPattaResult(Map<String, dynamic> result, {String? requestedSurvey}) {
     final fields = (result['fields'] as Map<String, dynamic>? ?? {})
         .map((k, v) => MapEntry(k, v.toString()));
     final owners = (result['owners'] as List<dynamic>? ?? []).map((o) {
@@ -2685,12 +3187,17 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
     }).toList();
 
     final surveyNo = fields['Survey Number'];
-    if (surveyNo != null && surveyNo.isNotEmpty && _surveyCtrl.text.isEmpty) {
-      _surveyCtrl.text = surveyNo;
+    final reqSurvey = requestedSurvey?.trim();
+    if (surveyNo != null && surveyNo.isNotEmpty) {
+      if (reqSurvey == null || reqSurvey.isEmpty || surveyNo == reqSurvey) {
+        _surveyCtrl.text = surveyNo;
+        _ecSurveyCtrl.text = surveyNo;
+      }
     }
     final subDiv = fields['Sub Division'];
-    if (subDiv != null && subDiv.isNotEmpty && subDiv != '-' && _subDivCtrl.text.isEmpty) {
+    if (subDiv != null && subDiv.isNotEmpty && subDiv != '-') {
       _subDivCtrl.text = subDiv;
+      _ecSubDivCtrl.text = subDiv;
     }
 
     setState(() {
@@ -2698,62 +3205,115 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
       _pattaFields = fields.isEmpty ? null : fields;
       _pattaOwners = owners;
       _pattaDocuments = result['documents'] as Map<String, dynamic>?;
-      if (fields.isEmpty && owners.isEmpty) {
-        _pattaError = (result['error'] as String?) ??
+      _fmbPdfBytes = null;
+      _fmbLoadError = null;
+      final patta = _pattaDocuments?['patta'] as Map<String, dynamic>?;
+      if (patta != null && patta['official'] == true) {
+        final docFields = patta['fields'] as Map<String, dynamic>?;
+        if (docFields != null && docFields.isNotEmpty) {
+          _pattaFields = docFields.map((k, v) => MapEntry(k.toString(), v.toString()));
+        }
+        final docOwners = (patta['owners'] as List<dynamic>? ?? []).map((o) {
+          return (o as Map<String, dynamic>).map((k, v) => MapEntry(k, v.toString()));
+        }).toList();
+        if (docOwners.isNotEmpty) _pattaOwners = docOwners;
+      }
+      final pattaErr = patta?['error'] as String?;
+      final hasPattaHtml = patta != null
+          && patta['available'] == true
+          && (patta['html'] as String?)?.isNotEmpty == true;
+      if (fields.isEmpty && owners.isEmpty && !hasPattaHtml
+          && (patta == null || patta['available'] != true)) {
+        _pattaError = pattaErr ?? (result['error'] as String?) ??
             'No patta parcel found at this location in TNGIS.';
+      } else {
+        _pattaError = hasPattaHtml ? null : (pattaErr ?? _pattaError);
       }
     });
+    _loadFmbPdfIfNeeded();
+    final dist = fields['District'];
+    if (dist != null && dist.isNotEmpty) {
+      Future.microtask(() => _resolveEcFromServer(
+        district: dist,
+        taluk: fields['Taluk'],
+        village: fields['Village'],
+      ));
+    }
   }
 
-  String? _pattaFmbDownloadUrl() {
-    final docs = _pattaDocuments;
-    final fmb = docs?['fmb'] as Map<String, dynamic>?;
-    if (fmb != null && fmb['available'] == true) {
-      final fields = _pattaFields;
-      final dc = fields?['District Code'];
-      final tc = fields?['Taluk Code'];
-      final vc = fields?['Village Code'];
-      final survey = fields?['Survey Number'];
-      if (dc != null && tc != null && vc != null && survey != null) {
-        return '${ApiClient.baseUrl}/api/tnlands/fmb'
-            '?dc=${Uri.encodeComponent(dc)}'
-            '&tc=${Uri.encodeComponent(tc)}'
-            '&vc=${Uri.encodeComponent(vc)}'
-            '&surveyNo=${Uri.encodeComponent(survey)}';
+  String? _fmbFetchPath() {
+    final fmb = _pattaDocuments?['fmb'] as Map<String, dynamic>?;
+    if (fmb == null) return null;
+
+    final rel = fmb['downloadUrl'] as String?;
+    if (rel != null && rel.isNotEmpty) return rel;
+
+    if (fmb['available'] != true) return null;
+
+    final fields = _pattaFields;
+    final dc = fields?['District Code'];
+    final tc = fields?['Taluk Code'];
+    final vc = fields?['Village Code'];
+    final survey = fields?['Survey Number'];
+    if (dc != null && tc != null && vc != null && survey != null) {
+      var path = '/api/tnlands/fmb'
+          '?dc=${Uri.encodeComponent(dc)}'
+          '&tc=${Uri.encodeComponent(tc)}'
+          '&vc=${Uri.encodeComponent(vc)}'
+          '&surveyNo=${Uri.encodeComponent(survey)}';
+      final sub = fields?['Sub Division'] ?? _subDivCtrl.text.trim();
+      if (sub.isNotEmpty && sub != '-') {
+        path += '&subDiv=${Uri.encodeComponent(sub)}';
       }
-      if (widget.lat != null && widget.lon != null) {
-        return '${ApiClient.baseUrl}/api/tnlands/fmb'
-            '?lat=${widget.lat}&lon=${widget.lon}';
+      final plotno = fmb['plotno'] as String?;
+      if (plotno != null && plotno.isNotEmpty) {
+        path += '&plotno=${Uri.encodeComponent(plotno)}';
       }
+      return path;
+    }
+    if (widget.lat != null && widget.lon != null) {
+      var path = '/api/tnlands/fmb?lat=${widget.lat}&lon=${widget.lon}';
+      final survey = _surveyCtrl.text.trim();
+      final sub = _subDivCtrl.text.trim();
+      if (survey.isNotEmpty) path += '&surveyNo=${Uri.encodeComponent(survey)}';
+      if (sub.isNotEmpty && sub != '-') path += '&subDiv=${Uri.encodeComponent(sub)}';
+      final plotno = fmb['plotno'] as String?;
+      if (plotno != null && plotno.isNotEmpty) {
+        path += '&plotno=${Uri.encodeComponent(plotno)}';
+      }
+      return path;
     }
     return null;
   }
 
-  Future<void> _openExternalUrl(String url) async {
-    final uri = Uri.parse(url);
-    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not open link in browser')),
-        );
-      }
-    }
-  }
+  Future<void> _loadFmbPdfIfNeeded() async {
+    final path = _fmbFetchPath();
+    if (path == null) return;
 
-  Future<void> _viewFmbSketch() async {
-    final url = _pattaFmbDownloadUrl();
-    if (url == null) {
-      setState(() => _pattaError = 'FMB sketch is not available for this parcel.');
-      return;
+    setState(() {
+      _loadingFmb = true;
+      _fmbLoadError = null;
+    });
+    try {
+      final bytes = await ApiClient.getBytes(path);
+      if (!mounted) return;
+      setState(() {
+        _fmbPdfBytes = Uint8List.fromList(bytes);
+        _loadingFmb = false;
+      });
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _fmbLoadError = e.message;
+        _loadingFmb = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _fmbLoadError = e.toString().replaceAll('Exception: ', '');
+        _loadingFmb = false;
+      });
     }
-    await _openExternalUrl(url);
-  }
-
-  Future<void> _openEservicesChitta() async {
-    final portal = _pattaDocuments?['eservicesPortal'] as Map<String, dynamic>?;
-    final url = portal?['url'] as String? ??
-        'https://eservices.tn.gov.in/eservicesnew/land/chittaNewRuralTamil.html?lan=ta';
-    await _openExternalUrl(url);
   }
 
   /// Fetch patta from TNGIS for the active map location (or device GPS).
@@ -2768,6 +3328,8 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
       _pattaError = null;
       _pattaSource = null;
       _pattaDocuments = null;
+      _fmbPdfBytes = null;
+      _fmbLoadError = null;
     });
 
     if (lat == null || lon == null) {
@@ -2819,13 +3381,16 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
       if (subDiv.isNotEmpty) {
         params += '&subDiv=${Uri.encodeComponent(subDiv)}';
       }
-      final result = await ApiClient.get('/api/tnlands/patta?$params')
-          .timeout(const Duration(seconds: 60));
-      _applyPattaResult(result);
+      final result = await ApiClient.get(
+        '/api/tnlands/patta?$params',
+        timeout: const Duration(seconds: 180),
+      );
+      _applyPattaResult(result, requestedSurvey: surveyNo);
     } on ApiException catch (e) {
       setState(() => _pattaError = e.message);
     } on TimeoutException {
-      setState(() => _pattaError = 'TNGIS request timed out. Try again.');
+      setState(() => _pattaError =
+          'Government servers are slow (can take 1–2 min). Try again.');
     } catch (e) {
       setState(() =>
           _pattaError = e.toString().replaceAll('Exception: ', ''));
@@ -2925,6 +3490,8 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
       _pattaError = null;
       _pattaSource = null;
       _pattaDocuments = null;
+      _fmbPdfBytes = null;
+      _fmbLoadError = null;
     });
     try {
       final subDiv = _subDivCtrl.text.trim();
@@ -2933,11 +3500,16 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
       if (widget.lat != null && widget.lon != null) {
         params += '&lat=${widget.lat}&lon=${widget.lon}';
       }
-      final result = await ApiClient.get('/api/tnlands/patta?$params')
-          .timeout(const Duration(seconds: 60));
-      _applyPattaResult(result);
+      final result = await ApiClient.get(
+        '/api/tnlands/patta?$params',
+        timeout: const Duration(seconds: 180),
+      );
+      _applyPattaResult(result, requestedSurvey: surveyNo);
     } on ApiException catch (e) {
       setState(() => _pattaError = e.message);
+    } on TimeoutException {
+      setState(() => _pattaError =
+          'Government servers are slow (can take 1–2 min). Try again.');
     } catch (e) {
       setState(() => _pattaError = e.toString().replaceAll('Exception: ', ''));
     } finally {
@@ -2955,6 +3527,8 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
       _pattaError = null;
       _pattaSource = null;
       _pattaDocuments = null;
+      _fmbPdfBytes = null;
+      _fmbLoadError = null;
     });
     try {
       var params = 'dc=${_selDistrict!.code}'
@@ -2965,11 +3539,16 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
       if (widget.lat != null && widget.lon != null) {
         params += '&lat=${widget.lat}&lon=${widget.lon}';
       }
-      final result = await ApiClient.get('/api/tnlands/patta?$params')
-          .timeout(const Duration(seconds: 60));
+      final result = await ApiClient.get(
+        '/api/tnlands/patta?$params',
+        timeout: const Duration(seconds: 180),
+      );
       _applyPattaResult(result);
     } on ApiException catch (e) {
       setState(() => _pattaError = e.message);
+    } on TimeoutException {
+      setState(() => _pattaError =
+          'Government servers are slow (can take 1–2 min). Try again.');
     } catch (e) {
       setState(() => _pattaError = e.toString().replaceAll('Exception: ', ''));
     } finally {
@@ -2979,106 +3558,389 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
 
   // â”€â”€ EC methods â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-  Future<void> _tryAutoEcFill() async {
-    if (widget.district == null) return;
-    setState(() => _autoFillingEc = true);
+  Future<void> _loadEcZones() async {
     try {
-      for (final zone in _ecZones) {
-        try {
-          final data = await ApiClient.getList(
-              '/api/tnlands/ec/districts?zone=${zone.code}');
-          final dists = _toOptions(data);
-          final matchDist = _matchOption(dists, widget.district);
-          if (matchDist != null) {
-            setState(() {
-              _selZone = zone; _ecDists = dists; _selEcDist = matchDist;
-            });
-            await _loadEcSros(matchDist, autoFirst: true);
-            break;
-          }
-        } catch (_) {
-          // try next zone
+      final data = await ApiClient.getList('/api/tnlands/ec/zones');
+      final loaded = _toOptions(data);
+      if (loaded.isNotEmpty) setState(() => _ecZones = loaded);
+    } catch (_) {}
+  }
+
+  Future<void> _loadEcCaptcha() async {
+    setState(() => _loadingEcCaptcha = true);
+    try {
+      final result = await ApiClient.get('/api/tnlands/ec/captcha');
+      setState(() {
+        _ecCaptchaSession = result['sessionId'] as String?;
+        _ecCaptchaImage = result['captchaImage'] as String?;
+        _ecCaptchaCtrl.clear();
+      });
+    } catch (e) {
+      setState(() => _ecError = 'Could not load EC captcha. Tap refresh to retry.');
+    } finally {
+      setState(() => _loadingEcCaptcha = false);
+    }
+  }
+
+  // ── EC methods ─────────────────────────────────────────────────────────────
+
+  Future<void> _loadEcPeriods() async {
+    setState(() => _loadingEcPeriods = true);
+    try {
+      final data = await ApiClient.getList('/api/tnlands/ec/periods');
+      final loaded = data.map((d) => _EcPeriod.fromJson(d as Map<String, dynamic>)).toList();
+      setState(() {
+        _ecPeriods = loaded;
+        _selEcPeriod ??= loaded.isNotEmpty ? loaded.first : null;
+      });
+    } catch (_) {
+      final now = DateTime.now();
+      final y = now.year;
+      setState(() {
+        _ecPeriods = [
+          _EcPeriod('$y', '$y', '01/01/$y', '31/12/$y'),
+          const _EcPeriod('full', 'Full period (2000–today)', '01/01/2000', ''),
+        ];
+        if (_ecPeriods.last.toDate.isEmpty) {
+          final t = '${now.day.toString().padLeft(2, '0')}/${now.month.toString().padLeft(2, '0')}/$y';
+          _ecPeriods = [
+            _EcPeriod('$y', '$y ($t)', '01/01/$y', '31/12/$y'),
+            _EcPeriod('full', 'Full period', '01/01/2000', t),
+          ];
         }
+        _selEcPeriod ??= _ecPeriods.first;
+      });
+    } finally {
+      setState(() => _loadingEcPeriods = false);
+    }
+  }
+
+  void _applyEcSearchResult(Map<String, dynamic> result) {
+    final records = (result['records'] as List<dynamic>? ?? []).map((r) {
+      return (r as Map<String, dynamic>).map((k, v) => MapEntry(k, v.toString()));
+    }).toList();
+    final entries = (result['entries'] as List<dynamic>? ?? []).map((e) {
+      final m = e as Map<String, dynamic>;
+      return _EcEntry(m['id'] as String, m['label'] as String);
+    }).toList();
+    final doc = result['document'] as Map<String, dynamic>?;
+    final meta = (result['meta'] as Map<String, dynamic>? ?? {})
+        .map((k, v) => MapEntry(k, v.toString()));
+    final pdfB64 = doc?['pdfBase64'] as String?;
+    Uint8List? pdfBytes;
+    if (pdfB64 != null && pdfB64.isNotEmpty) {
+      try {
+        pdfBytes = Uint8List.fromList(base64.decode(pdfB64));
+      } catch (_) {}
+    }
+
+    setState(() {
+      _ecSource = result['source'] as String?;
+      _ecAllRecords = records;
+      _ecResults = records;
+      _ecEntries = entries;
+      _selEcEntryId = entries.length == 1 ? entries.first.id : 'all';
+      _ecMeta = meta;
+      _ecDocumentHtml = doc?['html'] as String?;
+      _ecPdfBytes = pdfBytes;
+      _ecPdfFileName = doc?['pdfFileName'] as String?;
+      final msg = result['message'] as String?;
+      final hasPdf = pdfBytes != null && pdfBytes.isNotEmpty;
+      final hasHtml = (_ecDocumentHtml?.length ?? 0) > 200;
+      _ecError = (records.isEmpty && !hasPdf && !hasHtml)
+          ? (msg ?? 'No EC records for this period.')
+          : null;
+    });
+    _refreshEcEntryPreview();
+  }
+
+  String _buildEcHtmlForRecords(List<Map<String, String>> records) {
+    if (records.isEmpty) return '<p>No records</p>';
+    final headers = records.first.keys.toList();
+    final esc = (String s) => s
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;');
+    final metaRows = _ecMeta.entries
+        .map((e) => '<tr><th>${esc(e.key)}</th><td>${esc(e.value)}</td></tr>')
+        .join();
+    final headerRow = headers.map((h) => '<th>${esc(h)}</th>').join();
+    final bodyRows = records.map((r) {
+      return '<tr>${headers.map((h) => '<td>${esc(r[h] ?? '')}</td>').join()}</tr>';
+    }).join();
+    return '''<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+      body{font-family:Georgia,serif;margin:20px;color:#111}
+      h1{font-size:18px;color:#C62828}
+      table{border-collapse:collapse;width:100%;margin:12px 0;font-size:12px}
+      th,td{border:1px solid #ccc;padding:6px 8px;text-align:left}
+      th{background:#ffebee}
+    </style></head><body>
+    <h1>Encumbrance Certificate (EC)</h1>
+    <p style="font-size:11px;color:#555">Source: tnreginet.gov.in</p>
+    <table>$metaRows</table>
+    <table><thead><tr>$headerRow</tr></thead><tbody>$bodyRows</tbody></table>
+    </body></html>''';
+  }
+
+  void _refreshEcEntryPreview() {
+    if (_ecAllRecords.isEmpty) return;
+    List<Map<String, String>> show = _ecAllRecords;
+    if (_selEcEntryId != null && _selEcEntryId != 'all') {
+      final idx = int.tryParse(_selEcEntryId!);
+      if (idx != null && idx >= 0 && idx < _ecAllRecords.length) {
+        show = [_ecAllRecords[idx]];
       }
+    }
+    setState(() => _ecDocumentHtml = _buildEcHtmlForRecords(show));
+  }
+
+  Future<bool> _resolveEcFromServer({
+    String? district,
+    String? taluk,
+    String? village,
+  }) async {
+    setState(() { _autoFillingEc = true; _ecError = null; });
+
+    var params = '';
+    if (widget.lat != null && widget.lon != null) {
+      params = 'lat=${widget.lat}&lon=${widget.lon}';
+    }
+    final dist = district ?? widget.district ?? _pattaFields?['District'];
+    final tk = taluk ?? widget.taluk ?? _pattaFields?['Taluk'];
+    final vill = village ?? widget.village ?? _pattaFields?['Village'];
+    if (dist != null && dist.isNotEmpty) {
+      params += '${params.isEmpty ? '' : '&'}district=${Uri.encodeComponent(dist)}';
+    }
+    if (tk != null && tk.isNotEmpty) {
+      params += '&taluk=${Uri.encodeComponent(tk)}';
+    }
+    if (vill != null && vill.isNotEmpty) {
+      params += '&village=${Uri.encodeComponent(vill)}';
+    }
+
+    if (params.isEmpty) {
+      setState(() {
+        _autoFillingEc = false;
+        _ecError = 'Set a map location first (tap the map).';
+      });
+      return false;
+    }
+
+    try {
+      final result = await ApiClient.get(
+        '/api/tnlands/ec/resolve?$params',
+        timeout: const Duration(seconds: 45),
+      );
+      final zone = result['zone'] as Map<String, dynamic>?;
+      final distObj = result['district'] as Map<String, dynamic>?;
+      final sros = (result['sros'] as List<dynamic>? ?? [])
+          .map((s) => _Option(s['code'] as String, s['name'] as String))
+          .toList();
+      final suggested = result['suggestedSro'] as Map<String, dynamic>?;
+
+      if (zone == null || distObj == null || sros.isEmpty) {
+        setState(() {
+          _ecError = 'Could not load SRO list for this district.';
+          _showManualEc = true;
+        });
+        return false;
+      }
+
+      setState(() {
+        _selZone = _Option(zone['code'] as String, zone['name'] as String);
+        _selEcDist = _Option(distObj['code'] as String, distObj['name'] as String);
+        _ecDists = [_selEcDist!];
+        _ecSros = sros;
+        _selEcSro = suggested != null
+            ? _Option(suggested['code'] as String, suggested['name'] as String)
+            : sros.first;
+        _ecError = null;
+      });
+      return true;
+    } on ApiException catch (e) {
+      setState(() {
+        _ecError = e.message;
+        _showManualEc = true;
+      });
+      return false;
+    } catch (e) {
+      setState(() {
+        _ecError = e.toString().replaceAll('Exception: ', '');
+        _showManualEc = true;
+      });
+      return false;
     } finally {
       setState(() => _autoFillingEc = false);
     }
   }
 
-  /// GPS-based EC auto-fill — detects device location if map pin not set,
-  /// then reverse-geocodes to district and auto-selects zone/district/SRO.
-  Future<void> _fetchEcByGps() async {
-    double? lat = widget.lat;
-    double? lon = widget.lon;
-    String? district = widget.district;
+  Future<void> _fetchEcForLocation() async {
+    if (_selEcPeriod == null) {
+      setState(() => _ecError = 'Select an EC period first.');
+      return;
+    }
+    if (_ecCaptchaSession == null || _ecCaptchaCtrl.text.trim().isEmpty) {
+      setState(() => _ecError = 'Enter the captcha code from the image below.');
+      if (_ecCaptchaImage == null) await _loadEcCaptcha();
+      return;
+    }
 
-    setState(() { _autoFillingEc = true; _ecError = null; });
+    setState(() {
+      _fetchingEc = true;
+      _ecError = null;
+      _ecDocumentHtml = null;
+      _ecPdfBytes = null;
+      _ecPdfFileName = null;
+      _ecAllRecords = [];
+      _ecEntries = [];
+      _ecResults = [];
+    });
 
-    if (lat == null || lon == null) {
-      try {
-        final svcOn = await Geolocator.isLocationServiceEnabled();
-        if (!svcOn) {
-          setState(() { _ecError = 'Location services disabled.'; _autoFillingEc = false; });
-          return;
-        }
-        var perm = await Geolocator.checkPermission();
-        if (perm == LocationPermission.denied) perm = await Geolocator.requestPermission();
-        if (perm == LocationPermission.denied || perm == LocationPermission.deniedForever) {
-          setState(() { _ecError = 'Location permission denied.'; _autoFillingEc = false; });
-          return;
-        }
-        final pos = await Geolocator.getCurrentPosition(
-          locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
-        );
-        lat = pos.latitude;
-        lon = pos.longitude;
-      } catch (e) {
-        setState(() { _ecError = 'Location error: ${e.toString().replaceAll('Exception: ', '')}'; _autoFillingEc = false; });
+    if (_ecSurveyCtrl.text.trim().isEmpty) {
+      final fromPatta = _pattaFields?['Survey Number'];
+      if (fromPatta != null && fromPatta.isNotEmpty) {
+        _ecSurveyCtrl.text = fromPatta;
+      } else if (widget.surveyNumber != null && widget.surveyNumber!.isNotEmpty) {
+        _ecSurveyCtrl.text = widget.surveyNumber!;
+      }
+    }
+
+    if (_selZone == null || _selEcDist == null || _selEcSro == null) {
+      final ok = await _resolveEcFromServer();
+      if (!ok) {
+        setState(() => _fetchingEc = false);
         return;
       }
     }
 
-    if (district == null) {
-      try {
-        final url = Uri.parse(
-            'https://nominatim.openstreetmap.org/reverse?lat=$lat&lon=$lon&format=json');
-        final res = await http.get(url,
-            headers: {'Accept-Language': 'en', 'User-Agent': 'FomraLS/1.0'});
-        if (res.statusCode == 200) {
-          final data = jsonDecode(res.body) as Map<String, dynamic>;
-          final addr = data['address'] as Map<String, dynamic>? ?? {};
-          district = (addr['county'] ?? addr['state_district'] ??
-                      addr['city'] ?? addr['town'])?.toString();
-        }
-      } catch (_) {}
-    }
-
-    if (district == null) {
-      setState(() { _ecError = 'Could not determine district from location.'; _autoFillingEc = false; });
+    if (_selZone == null || _selEcDist == null || _selEcSro == null) {
+      setState(() {
+        _ecError = 'Could not resolve Zone/District/SRO. Use manual selection below.';
+        _showManualEc = true;
+        _fetchingEc = false;
+      });
       return;
     }
 
+    await _searchEcWithPeriod(_selEcPeriod!);
+  }
+
+  Future<void> _searchEcWithPeriod(_EcPeriod period, {bool tryAlternateSros = true}) async {
+    _ecFromCtrl.text = period.fromDate;
+    _ecToCtrl.text = period.toDate;
+    if (_selZone == null || _selEcDist == null || _selEcSro == null ||
+        _ecSurveyCtrl.text.trim().isEmpty) {
+      setState(() {
+        _ecError = 'Survey number and SRO are required. Fetch patta first or enter survey no.';
+        _fetchingEc = false;
+      });
+      return;
+    }
+    setState(() { _fetchingEc = true; _ecError = null; });
     try {
-      for (final zone in _ecZones) {
-        List<_Option> dists = [];
-        try {
-          final data = await ApiClient.getList(
-              '/api/tnlands/ec/districts?zone=${zone.code}');
-          dists = _toOptions(data);
-        } catch (_) {}
-        if (dists.isEmpty) dists = _kStaticEcDistricts[zone.code] ?? [];
-        final matchDist = _matchOption(dists, district);
-        if (matchDist != null) {
-          setState(() { _selZone = zone; _ecDists = dists; _selEcDist = matchDist; });
-          await _loadEcSros(matchDist, autoFirst: true);
-          return;
+      if (_ecCaptchaSession == null || _ecCaptchaCtrl.text.trim().isEmpty) {
+        setState(() {
+          _ecError = 'Enter the captcha code from the image below.';
+          _fetchingEc = false;
+        });
+        return;
+      }
+      var params = 'zone=${_selZone!.code}'
+          '&dc=${_selEcDist!.code}'
+          '&sro=${Uri.encodeComponent(_selEcSro!.code)}'
+          '&surveyNo=${Uri.encodeComponent(_ecSurveyCtrl.text.trim())}'
+          '&subDiv=${Uri.encodeComponent(_ecSubDivCtrl.text.trim())}'
+          '&fromDate=${Uri.encodeComponent(period.fromDate)}'
+          '&toDate=${Uri.encodeComponent(period.toDate)}'
+          '&districtName=${Uri.encodeComponent(_selEcDist!.name)}'
+          '&sroName=${Uri.encodeComponent(_selEcSro!.name)}'
+          '&ecSession=${Uri.encodeComponent(_ecCaptchaSession!)}'
+          '&captcha=${Uri.encodeComponent(_ecCaptchaCtrl.text.trim())}';
+      if (widget.village != null && widget.village!.isNotEmpty) {
+        params += '&villageName=${Uri.encodeComponent(widget.village!)}';
+      } else if (_pattaFields?['Village'] != null) {
+        params += '&villageName=${Uri.encodeComponent(_pattaFields!['Village']!)}';
+      }
+      final result = await ApiClient.get(
+        '/api/tnlands/ec/search?$params',
+        timeout: const Duration(seconds: 90),
+      );
+      final count = result['count'] as int? ?? 0;
+      final doc = result['document'] as Map<String, dynamic>?;
+      final hasPdf = (doc?['pdfBase64'] as String?)?.isNotEmpty == true;
+      if (tryAlternateSros &&
+          count == 0 &&
+          !hasPdf &&
+          _ecSros.length > 1) {
+        final startIdx = _ecSros.indexWhere((s) => s.code == _selEcSro?.code);
+        for (var i = 0; i < _ecSros.length && i < 10; i++) {
+          if (i == startIdx) continue;
+          final altSro = _ecSros[i];
+          setState(() => _selEcSro = altSro);
+          var altParams = 'zone=${_selZone!.code}'
+              '&dc=${_selEcDist!.code}'
+              '&sro=${Uri.encodeComponent(altSro.code)}'
+              '&surveyNo=${Uri.encodeComponent(_ecSurveyCtrl.text.trim())}'
+              '&subDiv=${Uri.encodeComponent(_ecSubDivCtrl.text.trim())}'
+              '&fromDate=${Uri.encodeComponent(period.fromDate)}'
+              '&toDate=${Uri.encodeComponent(period.toDate)}'
+              '&districtName=${Uri.encodeComponent(_selEcDist!.name)}'
+              '&sroName=${Uri.encodeComponent(altSro.name)}'
+              '&ecSession=${Uri.encodeComponent(_ecCaptchaSession!)}'
+              '&captcha=${Uri.encodeComponent(_ecCaptchaCtrl.text.trim())}';
+          if (widget.village != null && widget.village!.isNotEmpty) {
+            altParams += '&villageName=${Uri.encodeComponent(widget.village!)}';
+          } else if (_pattaFields?['Village'] != null) {
+            altParams += '&villageName=${Uri.encodeComponent(_pattaFields!['Village']!)}';
+          }
+          try {
+            final altResult = await ApiClient.get(
+              '/api/tnlands/ec/search?$altParams',
+              timeout: const Duration(seconds: 90),
+            );
+            final altCount = altResult['count'] as int? ?? 0;
+            final altDoc = altResult['document'] as Map<String, dynamic>?;
+            if (altCount > 0 || (altDoc?['pdfBase64'] as String?)?.isNotEmpty == true) {
+              _applyEcSearchResult(altResult);
+              await _loadEcCaptcha();
+              return;
+            }
+          } on ApiException catch (_) {}
         }
       }
-      setState(() => _ecError =
-          'District "$district" not matched. Select zone/district/SRO manually below.');
+      _applyEcSearchResult(result);
+      await _loadEcCaptcha();
+    } on ApiException catch (e) {
+      if (tryAlternateSros &&
+          e.statusCode == 404 &&
+          _ecSros.length > 1) {
+        final startIdx = _ecSros.indexWhere((s) => s.code == _selEcSro?.code);
+        for (var i = 0; i < _ecSros.length && i < 10; i++) {
+          if (i == startIdx) continue;
+          setState(() => _selEcSro = _ecSros[i]);
+          try {
+            await _searchEcWithPeriod(period, tryAlternateSros: false);
+            return;
+          } on ApiException catch (_) {}
+        }
+      }
+      setState(() => _ecError = e.message);
+      if (e.statusCode == 400) await _loadEcCaptcha();
+    } catch (e) {
+      setState(() => _ecError = e.toString().replaceAll('Exception: ', ''));
     } finally {
-      setState(() => _autoFillingEc = false);
+      setState(() => _fetchingEc = false);
     }
+  }
+
+  Future<void> _tryAutoEcFill() async {
+    if (widget.district == null && widget.lat == null) return;
+    await _resolveEcFromServer();
+  }
+
+  /// GPS-based EC auto-fill — uses map pin + resolve API.
+  Future<void> _fetchEcByGps() async {
+    await _resolveEcFromServer();
   }
 
   Future<void> _loadEcDistricts(_Option zone) async {
@@ -3131,6 +3993,10 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
   }
 
   Future<void> _searchEc() async {
+    if (_selEcPeriod != null) {
+      await _searchEcWithPeriod(_selEcPeriod!);
+      return;
+    }
     if (_selZone == null || _selEcDist == null || _selEcSro == null ||
         _ecSurveyCtrl.text.trim().isEmpty ||
         _ecFromCtrl.text.trim().isEmpty || _ecToCtrl.text.trim().isEmpty) {
@@ -3139,24 +4005,33 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
     }
     setState(() { _fetchingEc = true; _ecResults = []; _ecError = null; });
     try {
+      if (_ecCaptchaSession == null || _ecCaptchaCtrl.text.trim().isEmpty) {
+        setState(() {
+          _ecError = 'Enter the captcha code from the image below.';
+          _fetchingEc = false;
+        });
+        return;
+      }
       final params = 'zone=${_selZone!.code}'
           '&dc=${_selEcDist!.code}'
-          '&sro=${_selEcSro!.code}'
+          '&sro=${Uri.encodeComponent(_selEcSro!.code)}'
           '&surveyNo=${Uri.encodeComponent(_ecSurveyCtrl.text.trim())}'
           '&subDiv=${Uri.encodeComponent(_ecSubDivCtrl.text.trim())}'
           '&fromDate=${Uri.encodeComponent(_ecFromCtrl.text.trim())}'
-          '&toDate=${Uri.encodeComponent(_ecToCtrl.text.trim())}';
-      final result = await ApiClient.get('/api/tnlands/ec/search?$params');
-      final records = (result['records'] as List<dynamic>? ?? []).map((r) {
-        return (r as Map<String, dynamic>).map((k, v) => MapEntry(k, v.toString()));
-      }).toList();
-      if (records.isEmpty) {
-        setState(() => _ecError = 'No EC records found. Try a wider date range.');
-      } else {
-        setState(() => _ecResults = records);
-      }
+          '&toDate=${Uri.encodeComponent(_ecToCtrl.text.trim())}'
+          '&districtName=${Uri.encodeComponent(_selEcDist!.name)}'
+          '&sroName=${Uri.encodeComponent(_selEcSro!.name)}'
+          '&ecSession=${Uri.encodeComponent(_ecCaptchaSession!)}'
+          '&captcha=${Uri.encodeComponent(_ecCaptchaCtrl.text.trim())}';
+      final result = await ApiClient.get(
+        '/api/tnlands/ec/search?$params',
+        timeout: const Duration(seconds: 90),
+      );
+      _applyEcSearchResult(result);
+      await _loadEcCaptcha();
     } on ApiException catch (e) {
       setState(() => _ecError = e.message);
+      if (e.statusCode == 400) await _loadEcCaptcha();
     } catch (e) {
       setState(() => _ecError = e.toString().replaceAll('Exception: ', ''));
     } finally {
@@ -3200,7 +4075,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text('Patta / Chitta / FMB',
                 style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: color)),
-            Text('TNGIS · tngis.tn.gov.in',
+            Text('Tamil Nilam GI Viewer · tngis.tn.gov.in',
                 style: TextStyle(fontSize: 10, color: AppColors.textSecondary)),
           ]),
         ),
@@ -3239,7 +4114,9 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
                   child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
               : const Icon(Icons.map_outlined, size: 16),
           label: Text(
-            _fetchingPatta ? 'Fetching from TNGIS…' : 'Fetch Patta & FMB for this Location',
+            _fetchingPatta
+                ? 'Fetching from TNGIS… (may take 1–2 min)'
+                : 'Fetch Patta & FMB for Selected Sub-Division',
             style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
           ),
           style: ElevatedButton.styleFrom(
@@ -3394,11 +4271,176 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
         const SizedBox(height: 10),
         _ErrorBanner(_pattaError!),
       ],
-      if (_pattaFields != null || _pattaOwners.isNotEmpty) ...[
+      if (widget.tngisSubdivisions.isNotEmpty) ...[
+        const SizedBox(height: 14),
+        const Text('Subdivisions (separate Patta & FMB per sub)',
+            style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textSecondary)),
+        const SizedBox(height: 8),
+        ...widget.tngisSubdivisions.map(
+          (row) => Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: _buildSubdivisionCard(row, color),
+          ),
+        ),
+      ] else if (_pattaFields != null ||
+          _pattaOwners.isNotEmpty ||
+          _pattaDocuments != null) ...[
         const SizedBox(height: 14),
         _buildPattaResult(),
       ],
     ]);
+  }
+
+  Widget _buildSubdivisionCard(_TngisSubdivisionRow row, Color color) {
+    final bundle = _subdivBundles[row.key] ??= _SubdivDocBundle();
+    final patta = bundle.documents?['patta'] as Map<String, dynamic>?;
+    final fmb = bundle.documents?['fmb'] as Map<String, dynamic>?;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: row.containsPoint
+              ? const Color(0xFF1565C0).withValues(alpha: 0.45)
+              : color.withValues(alpha: 0.25),
+          width: row.containsPoint ? 2 : 1,
+        ),
+      ),
+      padding: const EdgeInsets.all(12),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        if (row.containsPoint)
+          const Padding(
+            padding: EdgeInsets.only(bottom: 6),
+            child: Text('Selected plot',
+                style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF1565C0))),
+          ),
+        _kv('Survey Number', row.surveyNumber),
+        _kv('Sub Division', row.subLabel),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: bundle.loadingPatta
+                    ? null
+                    : () => _fetchPattaForSubdivision(row),
+                icon: bundle.loadingPatta
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.article_outlined, size: 16),
+                label: Text(bundle.loadingPatta ? 'Loading…' : 'Load Patta'),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: bundle.loadingFmb
+                    ? null
+                    : () => _fetchFmbForSubdivision(row),
+                icon: bundle.loadingFmb
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.picture_as_pdf_outlined, size: 16),
+                label: Text(bundle.loadingFmb ? 'Loading…' : 'Load FMB'),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1B5E20).withValues(alpha: 0.05),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: const Color(0xFF1B5E20).withValues(alpha: 0.25)),
+          ),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('Patta / Chitta',
+                style: TextStyle(
+                    fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF1B5E20))),
+            const SizedBox(height: 6),
+            if (bundle.loadingPatta)
+              const Center(
+                  child: Padding(
+                padding: EdgeInsets.all(12),
+                child: SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(strokeWidth: 2)),
+              ))
+            else if (patta != null && patta['available'] == true && (patta['html'] as String?)?.isNotEmpty == true)
+              PattaHtmlPreview(
+                key: ValueKey('patta-${row.key}-${(patta['html'] as String).hashCode}'),
+                html: patta['html'] as String,
+                title: 'Survey ${row.surveyNumber} · Sub ${row.subLabel}',
+              )
+            else if (patta?['error'] != null)
+              Text(patta!['error'].toString(),
+                  style: TextStyle(fontSize: 11, color: Colors.orange.shade900))
+            else
+              Text(
+                'Tap Load Patta for this subdivision.',
+                style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+              ),
+          ]),
+        ),
+        const SizedBox(height: 10),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: const Color(0xFFC62828).withValues(alpha: 0.04),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: const Color(0xFFC62828).withValues(alpha: 0.25)),
+          ),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('FMB Sketch',
+                style: TextStyle(
+                    fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFFC62828))),
+            const SizedBox(height: 6),
+            if (bundle.loadingFmb)
+              const Center(
+                  child: Padding(
+                padding: EdgeInsets.all(12),
+                child: SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(strokeWidth: 2)),
+              ))
+            else if (bundle.fmbPdf != null)
+              PattaDocumentPreview(
+                pdfBytes: bundle.fmbPdf,
+                fileName: 'FMB Survey ${row.surveyNumber} Sub ${row.subLabel}.pdf',
+              )
+            else if (bundle.fmbError != null)
+              Text(bundle.fmbError!,
+                  style: TextStyle(fontSize: 11, color: Colors.orange.shade900))
+            else if (fmb?['error'] != null)
+              Text(fmb!['error'].toString(),
+                  style: TextStyle(fontSize: 11, color: Colors.orange.shade900))
+            else
+              Text(
+                row.fmbAvailable
+                    ? 'Tap Load FMB for this subdivision.'
+                    : 'Tap Load FMB to check CollabLand for a digitized sketch.',
+                style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+              ),
+          ]),
+        ),
+      ]),
+    );
   }
 
   Widget _buildPattaResult() {
@@ -3457,70 +4499,103 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
 
   List<Widget> _buildPattaDocumentActions(Color color) {
     final docs = _pattaDocuments!;
+    final patta = docs['patta'] as Map<String, dynamic>?;
     final fmb = docs['fmb'] as Map<String, dynamic>?;
-    final portal = docs['eservicesPortal'] as Map<String, dynamic>?;
     final widgets = <Widget>[];
 
-    if (fmb != null) {
-      final available = fmb['available'] == true;
-      final fmbUrl = available ? _pattaFmbDownloadUrl() : null;
-      widgets.add(
-        SizedBox(
-          width: double.infinity,
-          child: ElevatedButton.icon(
-            onPressed: available && fmbUrl != null ? _viewFmbSketch : null,
-            icon: const Icon(Icons.picture_as_pdf_outlined, size: 16),
-            label: Text(
-              available ? 'View / Download FMB Sketch (PDF)' : 'FMB sketch not digitized',
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-            ),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: color,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 11),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
-            ),
-          ),
-        ),
-      );
-      if (!available && fmb['error'] != null) {
-        widgets.addAll([
-          const SizedBox(height: 4),
-          Text(fmb['error'].toString(),
-              style: TextStyle(fontSize: 10, color: Colors.orange.shade800)),
-        ]);
-      } else if (fmb['giscode'] != null) {
-        widgets.addAll([
-          const SizedBox(height: 4),
-          Text('CollabLand · ${fmb['giscode']}',
-              style: const TextStyle(fontSize: 10, color: AppColors.textSecondary)),
-        ]);
+    if (patta != null) {
+      final available = patta['available'] == true;
+      final html = patta['html'] as String?;
+      final pattaChildren = <Widget>[
+        const Text('Patta / Chitta',
+            style: TextStyle(
+                fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF1B5E20))),
+        const SizedBox(height: 6),
+      ];
+      if (available && html != null && html.isNotEmpty) {
+        pattaChildren.add(PattaHtmlPreview(
+          key: ValueKey('patta-${html.hashCode}'),
+          html: html,
+          title: 'Patta / Chitta (TNGIS)',
+        ));
+        if (patta['note'] != null) {
+          pattaChildren.add(const SizedBox(height: 4));
+          pattaChildren.add(Text(patta['note'].toString(),
+              style: const TextStyle(fontSize: 10, color: AppColors.textSecondary)));
+        }
+      } else if (patta['error'] != null) {
+        pattaChildren.add(Text(patta['error'].toString(),
+            style: TextStyle(fontSize: 11, color: Colors.orange.shade900)));
       }
+      widgets.add(Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1B5E20).withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: const Color(0xFF1B5E20).withValues(alpha: 0.25)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: pattaChildren,
+        ),
+      ));
+      widgets.add(const SizedBox(height: 12));
     }
 
-    if (portal != null) {
-      widgets.addAll([
-        const SizedBox(height: 8),
-        SizedBox(
-          width: double.infinity,
-          child: OutlinedButton.icon(
-            onPressed: _openEservicesChitta,
-            icon: const Icon(Icons.open_in_browser, size: 16),
-            label: const Text('Open Chitta / Patta on eservices.tn.gov.in',
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: color,
-              padding: const EdgeInsets.symmetric(vertical: 10),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
+    if (fmb != null) {
+      final hasProbe = fmb['downloadUrl'] != null;
+      final confirmedAvailable = fmb['available'] == true;
+      final fmbChildren = <Widget>[
+        const Text('FMB Sketch',
+            style: TextStyle(
+                fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFFC62828))),
+        const SizedBox(height: 6),
+      ];
+      if (_loadingFmb) {
+        fmbChildren.add(const Padding(
+          padding: EdgeInsets.symmetric(vertical: 16),
+          child: Center(
+            child: SizedBox(
+              width: 28,
+              height: 28,
+              child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFC62828)),
             ),
           ),
+        ));
+      } else if (_fmbPdfBytes != null) {
+        fmbChildren.add(PattaDocumentPreview(
+          pdfBytes: _fmbPdfBytes,
+          fileName: (fmb['fileName'] as String?) ?? 'FMB Sketch.pdf',
+        ));
+      } else if (_fmbLoadError != null) {
+        fmbChildren.add(Text(_fmbLoadError!,
+            style: TextStyle(fontSize: 11, color: Colors.orange.shade900)));
+      } else if (hasProbe) {
+        fmbChildren.add(OutlinedButton.icon(
+          onPressed: _loadingFmb ? null : _loadFmbPdfIfNeeded,
+          icon: const Icon(Icons.picture_as_pdf_outlined, size: 16),
+          label: const Text('Load FMB sketch PDF'),
+        ));
+      } else if (!confirmedAvailable) {
+        fmbChildren.add(Text(
+          fmb['error']?.toString() ?? 'FMB not digitized for this subdivision.',
+          style: TextStyle(fontSize: 11, color: Colors.orange.shade900),
+        ));
+      }
+      widgets.add(Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: const Color(0xFFC62828).withValues(alpha: 0.04),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: const Color(0xFFC62828).withValues(alpha: 0.25)),
         ),
-        if (portal['hint'] != null) ...[
-          const SizedBox(height: 4),
-          Text(portal['hint'].toString(),
-              style: const TextStyle(fontSize: 10, color: AppColors.textSecondary)),
-        ],
-      ]);
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: fmbChildren,
+        ),
+      ));
     }
 
     return widgets;
@@ -3573,35 +4648,110 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
       ]),
       const SizedBox(height: 10),
 
-      // Date range
-      Row(children: [
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const _FieldLabel('From Date *'),
-          TextField(controller: _ecFromCtrl, decoration: _inputDec('DD/MM/YYYY')),
-        ])),
-        const SizedBox(width: 10),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const _FieldLabel('To Date *'),
-          TextField(controller: _ecToCtrl, decoration: _inputDec('DD/MM/YYYY')),
-        ])),
+      const _FieldLabel('EC Period'),
+      _ecPeriodDropdown(color),
+      const SizedBox(height: 10),
+
+      const _FieldLabel('Captcha (tnreginet) *'),
+      Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        if (_ecCaptchaImage != null)
+          ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: Image.network(
+              _ecCaptchaImage!,
+              width: 140,
+              height: 44,
+              fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) => Container(
+                width: 140, height: 44,
+                color: Colors.grey.shade200,
+                alignment: Alignment.center,
+                child: const Text('Captcha', style: TextStyle(fontSize: 10)),
+              ),
+            ),
+          )
+        else
+          Container(
+            width: 140, height: 44,
+            decoration: BoxDecoration(
+              color: Colors.grey.shade200,
+              borderRadius: BorderRadius.circular(6),
+            ),
+            alignment: Alignment.center,
+            child: _loadingEcCaptcha
+                ? const SizedBox(width: 16, height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2))
+                : const Text('No captcha', style: TextStyle(fontSize: 10)),
+          ),
+        const SizedBox(width: 8),
+        IconButton(
+          onPressed: _loadingEcCaptcha ? null : _loadEcCaptcha,
+          icon: const Icon(Icons.refresh, size: 20),
+          tooltip: 'Refresh captcha',
+        ),
+        Expanded(
+          child: TextField(
+            controller: _ecCaptchaCtrl,
+            decoration: _inputDec('Enter code'),
+            textCapitalization: TextCapitalization.characters,
+          ),
+        ),
       ]),
       const SizedBox(height: 10),
 
-      // GPS auto-fill button
       SizedBox(
         width: double.infinity,
         child: ElevatedButton.icon(
-          onPressed: (_autoFillingEc || _fetchingEc) ? null : _fetchEcByGps,
-          icon: _autoFillingEc
-              ? const SizedBox(width: 14, height: 14,
+          onPressed: (_fetchingEc || _autoFillingEc) ? null : _fetchEcForLocation,
+          icon: _fetchingEc
+              ? const SizedBox(
+                  width: 14, height: 14,
                   child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-              : const Icon(Icons.gps_fixed, size: 16),
-          label: Text(_autoFillingEc ? 'Detecting…' : 'Auto-fill via GPS & Search',
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+              : const Icon(Icons.map_outlined, size: 16),
+          label: Text(
+            _fetchingEc ? 'Fetching EC from tnreginet…' : 'Fetch EC for this Location',
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+          ),
           style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF0D47A1),
+            backgroundColor: color,
             foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(vertical: 12),
+            padding: const EdgeInsets.symmetric(vertical: 13),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        ),
+      ),
+      if (widget.lat == null || widget.lon == null) ...[
+        const SizedBox(height: 6),
+        Text(
+          'Tip: tap the map to set a location, then fetch EC (survey from patta helps).',
+          style: TextStyle(fontSize: 11, color: Colors.orange.shade800),
+        ),
+      ] else ...[
+        const SizedBox(height: 6),
+        Text(
+          'Map pin: ${widget.lat!.toStringAsFixed(5)}, ${widget.lon!.toStringAsFixed(5)}',
+          style: const TextStyle(fontSize: 10, color: AppColors.textSecondary),
+        ),
+        if (_selZone != null && _selEcDist != null && _selEcSro != null) ...[
+          const SizedBox(height: 4),
+          Text(
+            'Resolved: ${_selZone!.name} · ${_selEcDist!.name} · ${_selEcSro!.name}',
+            style: TextStyle(fontSize: 10, color: Colors.green.shade800),
+          ),
+        ],
+      ],
+      const SizedBox(height: 8),
+
+      SizedBox(
+        width: double.infinity,
+        child: OutlinedButton.icon(
+          onPressed: (_autoFillingEc || _fetchingEc) ? null : _fetchEcByGps,
+          icon: const Icon(Icons.gps_fixed, size: 16),
+          label: Text(_autoFillingEc ? 'Detecting…' : 'Auto-fill Zone / District / SRO',
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: const Color(0xFF0D47A1),
+            padding: const EdgeInsets.symmetric(vertical: 10),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           ),
         ),
@@ -3651,6 +4801,18 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
             loading: _loadingEcSros,
             hint: _selEcDist == null ? 'Select district first' : 'Select SRO',
             onChanged: (opt) => setState(() => _selEcSro = opt)),
+        const SizedBox(height: 10),
+        Row(children: [
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const _FieldLabel('From Date'),
+            TextField(controller: _ecFromCtrl, decoration: _inputDec('DD/MM/YYYY')),
+          ])),
+          const SizedBox(width: 10),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const _FieldLabel('To Date'),
+            TextField(controller: _ecToCtrl, decoration: _inputDec('DD/MM/YYYY')),
+          ])),
+        ]),
         const SizedBox(height: 12),
 
         SizedBox(
@@ -3698,11 +4860,57 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
         const SizedBox(height: 10),
         _ErrorBanner(_ecError!),
       ],
-      if (_ecResults.isNotEmpty) ...[
+      if (_ecDocumentHtml != null || _ecResults.isNotEmpty || _ecPdfBytes != null) ...[
         const SizedBox(height: 14),
         _buildEcResults(),
       ],
     ]);
+  }
+
+  Widget _ecPeriodDropdown(Color color) {
+    if (_loadingEcPeriods) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 12),
+        child: Row(children: [
+          SizedBox(width: 14, height: 14,
+              child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFC62828))),
+          SizedBox(width: 10),
+          Text('Loading periods…', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+        ]),
+      );
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withValues(alpha: 0.35)),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<_EcPeriod>(
+          value: _selEcPeriod,
+          isExpanded: true,
+          hint: const Text('Select year / period',
+              style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+          items: _ecPeriods
+              .map((p) => DropdownMenuItem(
+                    value: p,
+                    child: Text(p.label, style: const TextStyle(fontSize: 12)),
+                  ))
+              .toList(),
+          onChanged: _ecPeriods.isEmpty
+              ? null
+              : (p) {
+                  if (p == null) return;
+                  setState(() => _selEcPeriod = p);
+                  if (_selZone != null && _ecSurveyCtrl.text.trim().isNotEmpty) {
+                    _searchEcWithPeriod(p);
+                  }
+                },
+          icon: Icon(Icons.keyboard_arrow_down, size: 18, color: color),
+        ),
+      ),
+    );
   }
 
   Widget _buildEcResults() {
@@ -3711,31 +4919,69 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
       Row(children: [
         const Icon(Icons.check_circle_outline, color: color, size: 16),
         const SizedBox(width: 6),
-        Text('${_ecResults.length} EC Record${_ecResults.length == 1 ? '' : 's'} Found',
-            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: color)),
-      ]),
-      const SizedBox(height: 10),
-      ..._ecResults.asMap().entries.map((entry) {
-        final rec = entry.value;
-        return Container(
-          margin: const EdgeInsets.only(bottom: 10),
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.04),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: color.withValues(alpha: 0.18)),
+        Expanded(
+          child: Text(
+            '${_ecAllRecords.length} EC record${_ecAllRecords.length == 1 ? '' : 's'} · ${_selEcPeriod?.label ?? 'selected period'}',
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: color),
           ),
-          padding: const EdgeInsets.all(10),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('Record ${entry.key + 1}',
-                style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: color.withValues(alpha: 0.7))),
-            const SizedBox(height: 6),
-            ...rec.entries.map((e) => _kv(e.key, e.value)),
-          ]),
-        );
-      }),
+        ),
+      ]),
+      if (_ecSource != null) ...[
+        const SizedBox(height: 4),
+        Text('Source: $_ecSource',
+            style: const TextStyle(fontSize: 10, color: AppColors.textSecondary)),
+      ],
+      if (_ecEntries.length > 1) ...[
+        const SizedBox(height: 10),
+        const Text('View by registration date',
+            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.textSecondary)),
+        const SizedBox(height: 6),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: color.withValues(alpha: 0.25)),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: _selEcEntryId ?? 'all',
+              isExpanded: true,
+              items: [
+                const DropdownMenuItem(
+                  value: 'all',
+                  child: Text('All records in period', style: TextStyle(fontSize: 12)),
+                ),
+                ..._ecEntries.map((e) => DropdownMenuItem(
+                      value: e.id,
+                      child: Text(e.label, style: const TextStyle(fontSize: 12)),
+                    )),
+              ],
+              onChanged: (id) {
+                if (id == null) return;
+                setState(() => _selEcEntryId = id);
+                _refreshEcEntryPreview();
+              },
+            ),
+          ),
+        ),
+      ],
+      if (_ecPdfBytes != null) ...[
+        const SizedBox(height: 10),
+        PattaDocumentPreview(
+          key: ValueKey('ec-pdf-${_ecPdfBytes!.length}'),
+          pdfBytes: _ecPdfBytes,
+          fileName: _ecPdfFileName ?? 'Encumbrance Certificate.pdf',
+        ),
+      ],
+      if (_ecDocumentHtml != null && _ecPdfBytes == null) ...[
+        const SizedBox(height: 10),
+        PattaHtmlPreview(
+          key: ValueKey('ec-html-${_ecDocumentHtml!.hashCode}'),
+          html: _ecDocumentHtml!,
+          title: 'Encumbrance Certificate (EC)',
+        ),
+      ],
     ]);
   }
 

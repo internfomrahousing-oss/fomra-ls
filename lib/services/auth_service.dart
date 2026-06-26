@@ -35,48 +35,15 @@ class AuthService {
     );
   }
 
-  bool get isLoggedIn => _portal != null;
+  bool get isLoggedIn => _client.auth.currentUser != null;
 
-  Future<LoginPortal?> restorePortal() async {
-    final prefs = await SharedPreferences.getInstance();
-    final v = prefs.getString(_portalKey);
-    if (v == LoginPortal.management.name) {
-      _portal = LoginPortal.management;
-      return _portal;
-    }
-    if (v == LoginPortal.employee.name) {
-      _portal = LoginPortal.employee;
-      return _portal;
-    }
-    return null;
-  }
+  Future<bool> checkSession() async => _client.auth.currentUser != null;
 
   static const _fallbackEmail = 'info@fomrahousing.in';
   static const _fallbackPassword = 'Fomra@2024';
 
-  Future<LoginPortal> loginAutoDetect(String email, String password) async {
+  Future<void> login(String email, String password) async {
     await _authenticate(email, password);
-    final role =
-        _client.auth.currentUser?.userMetadata?['role'] as String? ?? 'agent';
-    final portal = (role == 'management' || role == 'admin')
-        ? LoginPortal.management
-        : LoginPortal.employee;
-    _portal = portal;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_portalKey, portal.name);
-    return portal;
-  }
-
-  Future<bool> loginWithPortal(
-    String email,
-    String password,
-    LoginPortal portal,
-  ) async {
-    await _authenticate(email, password);
-    _portal = portal;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_portalKey, portal.name);
-    return true;
   }
 
   Future<void> _authenticate(String email, String password) async {

@@ -11,6 +11,8 @@
  *   GET /api/tnlands/districts             — TN districts (live from Patta page, static fallback)
  *   GET /api/tnlands/taluks?dc=            — taluks for a district code
  *   GET /api/tnlands/villages?dc=&tc=      — villages for a taluk code
+ *   GET /api/tnlands/tngis/parcels          — Cadastral polygons near map center (for overlay)
+ *   GET /api/tnlands/tngis/parcel          — Survey/subdivision from TNGIS (Tamil Nilam GI Viewer)
  *   GET /api/tnlands/patta                 — Patta/Chitta extract (+ FMB document when TNGIS hit)
    GET /api/tnlands/fmb                   — FMB sketch PDF (CollabLand-TN)
  *   GET /api/tnlands/ec/zones              — EC zones (static)
@@ -106,12 +108,16 @@ function fetchRaw(urlStr, opts = {}, _depth = 0) {
 
       const chunks = [];
       res.on('data',  c => chunks.push(c));
-      res.on('end',   () => resolve({
-        status:  res.statusCode,
-        headers: res.headers,
-        body:    Buffer.concat(chunks).toString('utf8'),
-        cookies: mergedCookies,
-      }));
+      res.on('end',   () => {
+        const buf = Buffer.concat(chunks);
+        const isBinary = /image\//i.test(res.headers['content-type'] || '');
+        resolve({
+          status:  res.statusCode,
+          headers: res.headers,
+          body:    isBinary ? buf : buf.toString('utf8'),
+          cookies: mergedCookies,
+        });
+      });
       res.on('error', reject);
     });
 
@@ -296,6 +302,76 @@ const PATTA_CACHE_TTL = 10 * 60 * 1000; // 10 min
 // Cache stores { html, cookies, time } so session stays valid across requests
 let _pattaPageCache = null;
 
+const OTP_SESSION_TTL = 15 * 60 * 1000;
+/** @type {Map<string, { cookies, ajaxRno, chkrno, otpGenDate, mobile, time }>} */
+const _otpSessions = new Map();
+
+function otpMobileKey(mobile) {
+  return String(mobile || '').replace(/\D/g, '').slice(-10);
+}
+
+function getOtpSession(mobile) {
+  const key = otpMobileKey(mobile);
+  if (key.length !== 10) return null;
+  const sess = _otpSessions.get(key);
+  if (!sess) return null;
+  if (Date.now() - sess.time > OTP_SESSION_TTL) {
+    _otpSessions.delete(key);
+    return null;
+  }
+  return sess;
+}
+
+function parseOtpSendResult(json = {}) {
+  const code = String(json.statusCode ?? '');
+  if (code === 'lim_exce' || code === 'limit_exe') {
+    return { ok: false, error: 'Maximum OTP attempts for this number. Wait 30 minutes and retry.' };
+  }
+  if (code === 'mobno_fal') {
+    return { ok: false, error: 'Invalid mobile number. Use a valid 10-digit Indian mobile.' };
+  }
+  if (code === 'true' && json.updatedate_ts) {
+    return {
+      ok:         true,
+      otpGenDate: json.updatedate_ts,
+      newToken:   json.new_tk || '',
+    };
+  }
+  if (code === 'false') {
+    return {
+      ok:    false,
+      error: 'Government OTP SMS service is unavailable right now. Try again in a few minutes.',
+    };
+  }
+  return { ok: false, error: 'Unexpected OTP response from government server.' };
+}
+
+async function requestEservicesOtp(mobile, pageCtx) {
+  const payload = JSON.stringify({
+    mobileno: mobile,
+    actionid: 'AC01',
+    lan:      'ta',
+    TOKEN:    pageCtx.ajaxRno || '',
+  });
+  const res = await fetchRaw(`${PATTA_BASE}${PATTA_AJAX_PATH}?page=otpgeneratenew`, {
+    method:      'POST',
+    body:        payload,
+    contentType: 'application/json; charset=utf-8',
+    cookies:     pageCtx.cookies,
+    headers: {
+      Referer:            `${PATTA_BASE}${PATTA_PATH}?lan=ta`,
+      Origin:             PATTA_BASE,
+      'X-Requested-With': 'XMLHttpRequest',
+      Accept:             'application/json,*/*',
+    },
+  });
+  let json;
+  try { json = JSON.parse(res.body); } catch (_) {
+    throw new Error('OTP service returned invalid response');
+  }
+  return { res, json };
+}
+
 async function getPattaPage() {
   const now = Date.now();
   if (_pattaPageCache && (now - _pattaPageCache.time) < PATTA_CACHE_TTL) {
@@ -394,8 +470,39 @@ function parsePattaResult(html) {
     }
   }
 
+  if (Object.keys(fields).length === 0 && owners.length === 0) {
+    // eservices sometimes returns printable div layouts instead of tables
+    const labelPat = /<(?:th|td|label|span)[^>]*>\s*([^<:]{2,60})\s*:?\s*<\/(?:th|td|label|span)>\s*<(?:td|span|div)[^>]*>([^<]+)</gi;
+    let lm;
+    while ((lm = labelPat.exec(html)) !== null) {
+      const k = lm[1].replace(/&nbsp;/g, ' ').trim();
+      const v = lm[2].replace(/&nbsp;/g, ' ').trim();
+      if (k && v && !/select|otp|mobile|captcha/i.test(k)) fields[k] = v;
+    }
+  }
+
   if (Object.keys(fields).length === 0 && owners.length === 0) return null;
   return { fields, owners };
+}
+
+function parseEservicesChittaError(html) {
+  const t = String(html || '');
+  if (/invalid\s*otp|otp\s*expired|wrong\s*otp|தவறான\s*ஒரு\s*முறை|காலாவதி|OTP\s*பொருந்தவில்லை/i.test(t)) {
+    return 'Invalid or expired OTP. Tap Send OTP again and enter the new code within 2 minutes.';
+  }
+  if (/no\s*record|பதிவு\s*இல்லை|விவரங்கள்\s*இல்லை|ஏதேனும்\s*பிழை/i.test(t)) {
+    return 'No patta record found on eservices for this survey.';
+  }
+  return null;
+}
+
+function normalizeChittaHtml(body) {
+  if (!body || body.length < 120) return null;
+  const t = body.trim();
+  if (!t.startsWith('<')) return null;
+  if (eservicesResponseNeedsOtp(t)) return null;
+  if (parseEservicesChittaError(t)) return null;
+  return t;
 }
 
 // ── TNGIS (Tamil Nadu GIS) cadastral source ─────────────────────────────────────
@@ -415,14 +522,264 @@ function parsePattaResult(html) {
 //     tax_hect, is_fmb, district_code/taluk_code/village_code.
 
 const TNGIS_WFS = 'https://tngis.tn.gov.in/tngismaps/wfs';
+const TNGIS_GI_VIEWER_URL =
+  'https://tngis.tn.gov.in/apps/gi_viewer/map-viewer/index.html';
 const TNGIS_CADASTRAL_LAYER = 'cadastral_analysis:view_cadastral';
+const TNGIS_FMB_LAYER         = 'cadastral_analysis:view_fmb';
 
-function tngisWfsUrl(cqlFilter, count = 25) {
+function tngisGiViewerUrl(lat, lon) {
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return TNGIS_GI_VIEWER_URL;
+  return `${TNGIS_GI_VIEWER_URL}?lat=${lat}&lon=${lon}`;
+}
+
+function ringAreaDegrees(ring) {
+  if (!ring?.length) return Infinity;
+  let area = 0;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    area += (ring[j][0] + ring[i][0]) * (ring[j][1] - ring[i][1]);
+  }
+  return Math.abs(area / 2);
+}
+
+function featureAreaDegrees(feature) {
+  const rings = featureRings(feature?.geometry);
+  if (!rings.length) return Infinity;
+  return Math.min(...rings.map(ringAreaDegrees));
+}
+
+// Prefer the smallest containing parcel — matches Tamil Nilam plot pick on overlap.
+function pickBestContainingFeature(features, lat, lon) {
+  const containing = (features || []).filter((f) => featureContainsPoint(f, lat, lon));
+  if (!containing.length) return null;
+  if (containing.length === 1) return containing[0];
+  let best = containing[0];
+  let bestArea = featureAreaDegrees(best);
+  for (let i = 1; i < containing.length; i++) {
+    const a = featureAreaDegrees(containing[i]);
+    if (a < bestArea) {
+      bestArea = a;
+      best = containing[i];
+    }
+  }
+  return best;
+}
+
+function pointToSegmentDistMeters(pxLon, pxLat, axLon, axLat, bxLon, bxLat) {
+  const cosLat = Math.cos(pxLat * Math.PI / 180);
+  const mx = (bxLon - axLon) * cosLat * 111320;
+  const my = (bxLat - axLat) * 110540;
+  const lx = (pxLon - axLon) * cosLat * 111320;
+  const ly = (pxLat - axLat) * 110540;
+  const len2 = mx * mx + my * my;
+  if (len2 === 0) return Math.hypot(lx, ly);
+  let t = (lx * mx + ly * my) / len2;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(lx - t * mx, ly - t * my);
+}
+
+function minDistanceToRingMeters(lat, lon, ring) {
+  if (!ring?.length) return Infinity;
+  let closed = ring.length;
+  if (closed > 3
+      && ring[0][0] === ring[closed - 1][0]
+      && ring[0][1] === ring[closed - 1][1]) {
+    closed -= 1;
+  }
+  let min = Infinity;
+  for (let i = 0; i < closed; i++) {
+    const j = (i + 1) % closed;
+    const d = pointToSegmentDistMeters(
+      lon, lat, ring[i][0], ring[i][1], ring[j][0], ring[j][1],
+    );
+    if (d < min) min = d;
+  }
+  return min;
+}
+
+function featureMinBoundaryDistanceMeters(feature, lat, lon) {
+  const rings = featureRings(feature?.geometry);
+  if (!rings.length) return Infinity;
+  return Math.min(...rings.map((r) => minDistanceToRingMeters(lat, lon, r)));
+}
+
+// When tap is just outside a plot (OSM map), pick the nearest parcel boundary.
+function pickNearestBoundaryFeature(features, lat, lon, maxMeters) {
+  let best = null;
+  let bestD = Infinity;
+  for (const f of features || []) {
+    if (featureContainsPoint(f, lat, lon)) {
+      const area = featureAreaDegrees(f);
+      if (!best || area < featureAreaDegrees(best)) {
+        best = f;
+        bestD = 0;
+      }
+      continue;
+    }
+    const d = featureMinBoundaryDistanceMeters(f, lat, lon);
+    if (d < bestD) {
+      bestD = d;
+      best = f;
+    }
+  }
+  if (!best || bestD > maxMeters) return null;
+  return best;
+}
+
+function normalizeSurveyNo(value) {
+  return String(value ?? '').trim();
+}
+
+function surveyNumberMatches(a, b) {
+  return normalizeSurveyNo(a) === normalizeSurveyNo(b);
+}
+
+function filterFeaturesBySurvey(features, surveyNo, subDiv) {
+  const surveyFilter = normalizeSurveyNo(surveyNo);
+  if (!surveyFilter) return features || [];
+  const subFilter = subDiv && normalizeSurveyNo(subDiv) !== '' && normalizeSurveyNo(subDiv) !== '-'
+    ? normalizeSurveyNo(subDiv)
+    : null;
+  return (features || []).filter((f) => {
+    const p = f.properties || {};
+    if (!surveyNumberMatches(p.survey_number, surveyFilter)) return false;
+    if (subFilter && normalizeSurveyNo(p.sub_division) !== subFilter) return false;
+    return true;
+  });
+}
+
+async function lookupTngisParcelAtPoint({ lat, lon, surveyNo, subDiv }) {
+  const surveyFilter = normalizeSurveyNo(surveyNo);
+  const subFilter = subDiv && normalizeSurveyNo(subDiv) !== '' && normalizeSurveyNo(subDiv) !== '-'
+    ? normalizeSurveyNo(subDiv)
+    : null;
+
+  if (surveyFilter) {
+    const radii = [120, 300, 800, 2000, 5000, 10000];
+    for (const radiusMeters of radii) {
+      const features = await fetchTngisLayerFeatures({
+        layer:        TNGIS_CADASTRAL_LAYER,
+        surveyNo:       surveyFilter,
+        subDiv:         subFilter,
+        lat,
+        lon,
+        radiusMeters,
+        count:        120,
+      });
+      const pool = filterFeaturesBySurvey(features, surveyFilter, subFilter);
+      if (!pool.length) continue;
+
+      const best = pickBestContainingFeature(pool, lat, lon)
+        || pickNearestBoundaryFeature(pool, lat, lon, 150)
+        || pool[0];
+      if (best) return tngisHitFromFeature(best, pool, lat, lon);
+    }
+    // Explicit survey requested — never return a different survey number.
+    return null;
+  }
+
+  const radii = [120, 250, 450, 800, 1200, 2000, 3500, 5000];
+  let lastFeatures = [];
+  for (const radiusMeters of radii) {
+    const features = await fetchTngisParcelsNear(lat, lon, radiusMeters, 500);
+    if (!features.length) continue;
+    lastFeatures = features;
+
+    const containing = features.filter((f) => featureContainsPoint(f, lat, lon));
+    if (containing.length) {
+      const best = pickBestContainingFeature(containing, lat, lon);
+      return tngisHitFromFeature(best, features, lat, lon);
+    }
+  }
+
+  if (lastFeatures.length) {
+    const best = pickNearestBoundaryFeature(lastFeatures, lat, lon, 200);
+    if (best) return tngisHitFromFeature(best, lastFeatures, lat, lon);
+  }
+  return null;
+}
+
+async function listTngisSubdivisionsAtPoint({ lat, lon, surveyNo }) {
+  const radii = [200, 400, 800, 1500, 2500];
+  let features = [];
+  for (const radiusMeters of radii) {
+    features = await fetchTngisParcelsNear(lat, lon, radiusMeters, 500);
+    if (features.length >= 2) break;
+  }
+  if (!features.length) return [];
+
+  const surveyFilter = surveyNo ? normalizeSurveyNo(surveyNo) : null;
+  const seen = new Map();
+  for (const f of features) {
+    const p = f.properties || {};
+    const survey = normalizeSurveyNo(p.survey_number);
+    if (!survey) continue;
+    if (surveyFilter && !surveyNumberMatches(survey, surveyFilter)) continue;
+    const subRaw = String(p.sub_division ?? '').trim();
+    const sub = subRaw && subRaw !== '-' ? subRaw : null;
+    const key = `${survey}|${sub ?? ''}`;
+    if (seen.has(key)) continue;
+    seen.set(key, {
+      surveyNumber:  survey,
+      subDivision:   sub,
+      kide:          p.kide != null ? String(p.kide).trim() : null,
+      fields:        tngisFeatureToFields(p),
+      fmbAvailable:  p.is_fmb === 1 || p.is_fmb === '1'
+          || (p.kide && String(p.kide).trim() !== '0' && String(p.kide).includes('/')),
+      containsPoint: featureContainsPoint(f, lat, lon),
+    });
+  }
+
+  const items = [...seen.values()];
+  items.sort((a, b) => {
+    if (a.containsPoint !== b.containsPoint) return a.containsPoint ? -1 : 1;
+    const sa = a.subDivision ?? '';
+    const sb = b.subDivision ?? '';
+    return sa.localeCompare(sb, undefined, { numeric: true });
+  });
+  return items;
+}
+
+function tngisHitFromFeature(primaryFeature, allFeatures, lat, lon) {
+  const props = primaryFeature.properties || {};
+  const primary = tngisFeatureToFields(props);
+  const owners = (allFeatures || [])
+    .filter((f) => f !== primaryFeature)
+    .slice(0, 12)
+    .map((f) => {
+      const p = f.properties || {};
+      const row = {};
+      if (p.survey_number) row['Survey No'] = String(p.survey_number);
+      if (p.sub_division && String(p.sub_division).trim() !== '-') {
+        row['Sub Div'] = String(p.sub_division);
+      }
+      if (p.type_cate) row['Classification'] = String(p.type_cate);
+      if (p.ext_ares !== null && p.ext_ares !== undefined) {
+        row['Extent (Ares)'] = String(p.ext_ares);
+      }
+      return row;
+    })
+    .filter((r) => Object.keys(r).length > 0);
+
+  if (Object.keys(primary).length === 0 && owners.length === 0) return null;
+  return {
+    fields:     primary,
+    owners,
+    tngisProps: props,
+    geometry:   primaryFeature.geometry || null,
+    pickMeta:   {
+      lat,
+      lon,
+      containsPoint: featureContainsPoint(primaryFeature, lat, lon),
+    },
+  };
+}
+
+function tngisLayerWfsUrl(layer, cqlFilter, count = 25) {
   const params = new URLSearchParams({
     service:      'WFS',
     version:      '2.0.0',
     request:      'GetFeature',
-    typeNames:    TNGIS_CADASTRAL_LAYER,
+    typeNames:    layer,
     outputFormat: 'application/json',
     count:        String(count),
     cql_filter:   cqlFilter,
@@ -430,9 +787,277 @@ function tngisWfsUrl(cqlFilter, count = 25) {
   return `${TNGIS_WFS}?${params.toString()}`;
 }
 
+function tngisWfsUrl(cqlFilter, count = 25) {
+  return tngisLayerWfsUrl(TNGIS_CADASTRAL_LAYER, cqlFilter, count);
+}
+
+function buildTngisCql({ surveyNo, subDiv, lat, lon, radiusMeters }) {
+  const hasPoint = Number.isFinite(lat) && Number.isFinite(lon);
+  const clauses = [];
+  if (surveyNo) clauses.push(`survey_number='${cqlStr(surveyNo)}'`);
+  if (subDiv)   clauses.push(`sub_division='${cqlStr(subDiv)}'`);
+  if (hasPoint) {
+    clauses.push(`DWITHIN(the_geom, POINT(${lat} ${lon}), ${radiusMeters}, meters)`);
+  }
+  return clauses.length > 0 ? clauses.join(' AND ') : null;
+}
+
+function buildFmbLookupCql({
+  surveyNo, subDiv, districtCode, talukCode, villageCode, lat, lon, radiusMeters,
+}) {
+  const clauses = [];
+  const survey = normalizeSurveyNo(surveyNo);
+  if (survey) clauses.push(`survey_number='${cqlStr(survey)}'`);
+  const sub = subDiv && normalizeSurveyNo(subDiv) !== '' && normalizeSurveyNo(subDiv) !== '-'
+    ? normalizeSurveyNo(subDiv)
+    : null;
+  if (sub) clauses.push(`sub_division='${cqlStr(sub)}'`);
+  if (districtCode != null && String(districtCode).trim() !== '') {
+    const dc = String(districtCode).trim();
+    clauses.push(/^\d+$/.test(dc) ? `district_code=${dc}` : `district_code='${cqlStr(dc)}'`);
+  }
+  if (talukCode != null && String(talukCode).trim() !== '') {
+    const tc = String(talukCode).trim();
+    clauses.push(/^\d+$/.test(tc) ? `taluk_code=${tc}` : `taluk_code='${cqlStr(tc)}'`);
+  }
+  if (villageCode != null && String(villageCode).trim() !== '') {
+    clauses.push(`village_code='${cqlStr(String(villageCode).trim())}'`);
+  }
+  if (Number.isFinite(lat) && Number.isFinite(lon) && radiusMeters) {
+    clauses.push(`DWITHIN(the_geom, POINT(${lat} ${lon}), ${radiusMeters}, meters)`);
+  }
+  return clauses.length > 0 ? clauses.join(' AND ') : null;
+}
+
+async function queryTngisCadastralFeatures(cql, count = 25) {
+  if (!cql) return [];
+  const url = tngisLayerWfsUrl(TNGIS_CADASTRAL_LAYER, cql, count);
+  const res = await fetchRaw(url, {
+    headers: { Accept: 'application/json', Referer: 'https://tngis.tn.gov.in/' },
+  });
+  if (res.status !== 200) return [];
+  try {
+    const data = JSON.parse(res.body);
+    return Array.isArray(data.features) ? data.features : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+/** Resolve TNGIS props (incl. kide) for a specific survey/sub — not the map-tap parcel. */
+async function fetchTngisParcelPropsForFmb(opts = {}) {
+  const survey = normalizeSurveyNo(opts.surveyNo);
+  if (!survey) return null;
+  const sub = opts.subDiv && normalizeSurveyNo(opts.subDiv) !== '' && normalizeSurveyNo(opts.subDiv) !== '-'
+    ? normalizeSurveyNo(opts.subDiv)
+    : null;
+  const lat = opts.lat;
+  const lon = opts.lon;
+  const base = {
+    surveyNo:     survey,
+    subDiv:       sub,
+    districtCode: opts.districtCode,
+    talukCode:    opts.talukCode,
+    villageCode:  opts.villageCode,
+  };
+
+  const pickFrom = (features) => {
+    const pool = filterFeaturesBySurvey(features, survey, sub);
+    if (!pool.length) return null;
+    if (Number.isFinite(lat) && Number.isFinite(lon)) {
+      const best = pickBestContainingFeature(pool, lat, lon)
+        || pickNearestBoundaryFeature(pool, lat, lon, 300)
+        || pool[0];
+      return best?.properties || null;
+    }
+    return pool[0]?.properties || null;
+  };
+
+  if (sub) {
+    const cql = buildFmbLookupCql(base);
+    const hit = pickFrom(await queryTngisCadastralFeatures(cql, 50));
+    if (hit) return hit;
+  }
+
+  if (Number.isFinite(lat) && Number.isFinite(lon)) {
+    for (const r of [120, 500, 2000, 10000, 25000]) {
+      const cql = buildFmbLookupCql({ ...base, lat, lon, radiusMeters: r });
+      const hit = pickFrom(await queryTngisCadastralFeatures(cql, 50));
+      if (hit) return hit;
+    }
+  }
+
+  const cql = buildFmbLookupCql({
+    ...base,
+    lat,
+    lon,
+    radiusMeters: Number.isFinite(lat) ? 5000 : undefined,
+  });
+  if (cql) return pickFrom(await queryTngisCadastralFeatures(cql, 25));
+  return null;
+}
+
+async function fetchTngisLayerFeatures({ layer, surveyNo, subDiv, lat, lon, radiusMeters = 5000, count = 5 }) {
+  const cql = buildTngisCql({ surveyNo, subDiv, lat, lon, radiusMeters });
+  if (!cql) return [];
+
+  const url = tngisLayerWfsUrl(layer, cql, count);
+  const res = await fetchRaw(url, {
+    headers: { Accept: 'application/json', Referer: 'https://tngis.tn.gov.in/' },
+  });
+  if (res.status !== 200) throw new Error(`TNGIS WFS returned HTTP ${res.status}`);
+
+  let data;
+  try { data = JSON.parse(res.body); } catch (_) { return []; }
+  return Array.isArray(data.features) ? data.features : [];
+}
+
+// The view_fmb layer lists parcels that have digitized FMB sketches — prefer it
+// for document download when the cadastral pin lands on a nearby but different row.
+async function fetchTngisFmbProps({ surveyNo, subDiv, lat, lon, districtCode, talukCode, villageCode }) {
+  const survey = normalizeSurveyNo(surveyNo);
+  if (survey) {
+    const hit = await fetchTngisParcelPropsForFmb({
+      surveyNo: survey,
+      subDiv,
+      districtCode,
+      talukCode,
+      villageCode,
+      lat,
+      lon,
+    });
+    if (hit) return hit;
+  }
+
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+
+  const subFilter = subDiv && String(subDiv).trim() !== '' && String(subDiv).trim() !== '-'
+    ? String(subDiv).trim()
+    : null;
+
+  const radii = surveyNo ? [500, 2000, 5000, 10000] : [100, 500, 2000, 5000, 10000];
+  for (const r of radii) {
+    const features = await fetchTngisLayerFeatures({
+      layer: TNGIS_FMB_LAYER,
+      surveyNo,
+      subDiv: subFilter,
+      lat,
+      lon,
+      radiusMeters: r,
+      count:        surveyNo ? 25 : 5,
+    });
+    if (features.length === 0) continue;
+
+    const pool = subFilter
+      ? features.filter((f) => normalizeSurveyNo(f.properties?.sub_division) === subFilter)
+      : features;
+    const candidates = pool.length ? pool : features;
+
+    const withFmb = candidates.find((f) => {
+      const p = f.properties || {};
+      return p.is_fmb === 1 || p.is_fmb === '1';
+    });
+    return (withFmb || candidates[0]).properties || null;
+  }
+  return null;
+}
+
 // Escape single quotes for CQL string literals.
 function cqlStr(v) {
   return String(v).replace(/'/g, "''");
+}
+
+function haversineMeters(lat1, lon1, lat2, lon2) {
+  const R = 6371000;
+  const p = Math.PI / 180;
+  const a = 0.5 - Math.cos((lat2 - lat1) * p) / 2
+    + Math.cos(lat1 * p) * Math.cos(lat2 * p) * (1 - Math.cos((lon2 - lon1) * p)) / 2;
+  return 2 * R * Math.asin(Math.sqrt(Math.max(0, a)));
+}
+
+function ringCentroidLonLat(ring) {
+  if (!ring?.length) return null;
+  let closed = ring.length;
+  if (ring.length > 3
+      && ring[0][0] === ring[ring.length - 1][0]
+      && ring[0][1] === ring[ring.length - 1][1]) {
+    closed -= 1;
+  }
+  let sx = 0;
+  let sy = 0;
+  for (let i = 0; i < closed; i++) {
+    sx += ring[i][0];
+    sy += ring[i][1];
+  }
+  return { lon: sx / closed, lat: sy / closed };
+}
+
+function pointInRing(lon, lat, ring) {
+  if (!ring?.length) return false;
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = ring[i][0];
+    const yi = ring[i][1];
+    const xj = ring[j][0];
+    const yj = ring[j][1];
+    const denom = (yj - yi) || 1e-15;
+    const intersect = ((yi > lat) !== (yj > lat))
+      && (lon < ((xj - xi) * (lat - yi)) / denom + xi);
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+function featureRings(geometry) {
+  if (!geometry) return [];
+  if (geometry.type === 'Polygon') return [geometry.coordinates[0]];
+  if (geometry.type === 'MultiPolygon') {
+    return geometry.coordinates.map((p) => p[0]).filter(Boolean);
+  }
+  return [];
+}
+
+function featureContainsPoint(feature, lat, lon) {
+  for (const ring of featureRings(feature.geometry)) {
+    if (pointInRing(lon, lat, ring)) return true;
+  }
+  return false;
+}
+
+function pickNearestTngisFeature(features, lat, lon) {
+  if (!features?.length) return null;
+  const containing = features.filter((f) => featureContainsPoint(f, lat, lon));
+  const pool = containing.length > 0 ? containing : features;
+  let best = null;
+  let bestD = Infinity;
+  for (const f of pool) {
+    const rings = featureRings(f.geometry);
+    const ring = rings[0];
+    if (!ring) continue;
+    const c = ringCentroidLonLat(ring);
+    if (!c) continue;
+    const d = haversineMeters(lat, lon, c.lat, c.lon);
+    if (d < bestD) {
+      bestD = d;
+      best = f;
+    }
+  }
+  if (!best) return null;
+  return {
+    feature: best,
+    distanceMeters: bestD,
+    containsPoint: featureContainsPoint(best, lat, lon),
+  };
+}
+
+async function fetchTngisParcelsNear(lat, lon, radiusMeters, count = 150) {
+  return fetchTngisLayerFeatures({
+    layer:        TNGIS_CADASTRAL_LAYER,
+    lat,
+    lon,
+    radiusMeters,
+    count,
+  });
 }
 
 // Map a TNGIS cadastral feature's attributes to the same { fields } shape the
@@ -475,17 +1100,21 @@ function tngisFeatureToFields(props) {
 // (owners is always [] — the public cadastral layer carries no owner names)
 // or null if nothing is found.
 async function fetchTngisPatta({ surveyNo, subDiv, lat, lon, radiusMeters = 5000 }) {
-  const hasPoint = Number.isFinite(lat) && Number.isFinite(lon);
-  const clauses = [];
-  if (surveyNo) clauses.push(`survey_number='${cqlStr(surveyNo)}'`);
-  if (subDiv)   clauses.push(`sub_division='${cqlStr(subDiv)}'`);
-  if (hasPoint) {
-    // Axis order is LAT/LON for this GeoServer.
-    clauses.push(`DWITHIN(the_geom, POINT(${lat} ${lon}), ${radiusMeters}, meters)`);
+  if (Number.isFinite(lat) && Number.isFinite(lon)) {
+    const hit = await lookupTngisParcelAtPoint({
+      lat,
+      lon,
+      surveyNo: surveyNo || undefined,
+      subDiv:   subDiv   || undefined,
+    });
+    if (hit) return hit;
+    if (!surveyNo) return null;
   }
-  if (clauses.length === 0) return null;
 
-  const url = tngisWfsUrl(clauses.join(' AND '), surveyNo ? 25 : 5);
+  const cql = buildTngisCql({ surveyNo, subDiv, lat, lon, radiusMeters });
+  if (!cql) return null;
+
+  const url = tngisWfsUrl(cql, surveyNo ? 50 : 200);
   const res = await fetchRaw(url, {
     headers: { Accept: 'application/json', Referer: 'https://tngis.tn.gov.in/' },
   });
@@ -496,26 +1125,22 @@ async function fetchTngisPatta({ surveyNo, subDiv, lat, lon, radiusMeters = 5000
   const features = Array.isArray(data.features) ? data.features : [];
   if (features.length === 0) return null;
 
-  // Prefer the parcel closest to the point when several share a survey number:
-  // GeoServer returns nearest-ish first for DWITHIN, so take the first feature
-  // for the primary fields and list the rest as additional matching parcels.
-  const primary = tngisFeatureToFields(features[0].properties || {});
-  const owners = features.slice(1, 10).map(f => {
-    const p = f.properties || {};
-    const row = {};
-    if (p.survey_number) row['Survey No'] = String(p.survey_number);
-    if (p.sub_division && String(p.sub_division).trim() !== '-') {
-      row['Sub Div'] = String(p.sub_division);
-    }
-    if (p.type_cate) row['Classification'] = String(p.type_cate);
-    if (p.ext_ares !== null && p.ext_ares !== undefined) {
-      row['Extent (Ares)'] = String(p.ext_ares);
-    }
-    return row;
-  }).filter(r => Object.keys(r).length > 0);
+  let pool = features;
+  const subFilter = subDiv && normalizeSurveyNo(subDiv) !== '' && normalizeSurveyNo(subDiv) !== '-'
+    ? normalizeSurveyNo(subDiv)
+    : null;
+  if (surveyNo) {
+    const matched = filterFeaturesBySurvey(features, surveyNo, subFilter);
+    if (matched.length) pool = matched;
+  } else if (subFilter) {
+    const matched = features.filter(
+      (f) => normalizeSurveyNo(f.properties?.sub_division) === subFilter,
+    );
+    if (matched.length) pool = matched;
+  }
 
-  if (Object.keys(primary).length === 0 && owners.length === 0) return null;
-  return { fields: primary, owners, tngisProps: features[0].properties || {} };
+  const primaryFeature = pool[0];
+  return tngisHitFromFeature(primaryFeature, pool, lat, lon);
 }
 
 // ── CollabLand FMB (official digitized sketch PDF) ───────────────────────────
@@ -534,8 +1159,12 @@ function padLandCode(value, width) {
 }
 
 function buildCollablandGiscode({ districtCode, talukCode, villageCode, surveyNo }) {
+  // giscode is a fixed-width concatenation with no delimiters, so every field
+  // must be zero-padded to its exact width: S + district(2) + taluk(2) +
+  // village(3) + survey. An unpadded taluk shifts the village/survey boundaries
+  // and makes CollabLand return a different parcel's sketch.
   const dc     = padLandCode(districtCode, 2);
-  const tc     = String(talukCode ?? '').trim();
+  const tc     = padLandCode(talukCode, 2);
   const vc     = padLandCode(villageCode, 3);
   const survey = String(surveyNo ?? '').trim();
   if (!dc || !tc || !vc || !survey) return null;
@@ -553,20 +1182,122 @@ function giscodeFromTngisProps(props = {}) {
 
 function eservicesCodesFromTngisProps(props = {}) {
   const dc = padLandCode(props.district_code, 3);
-  const tc = padLandCode(props.taluk_code, 3);
+  const tcRaw = String(props.taluk_code ?? '').trim();
   const vc = padLandCode(props.village_code, 3);
-  if (!dc || !tc || !vc) return null;
+  if (!dc || !tcRaw || !vc) return null;
+  // eservices taluk combo values look like "10/Y" (code + rural/natham flag).
+  const tc = `${padLandCode(tcRaw, 2)}/Y`;
   return { dc, tc, vc };
 }
 
-async function fetchCollablandFmbPdf({ districtCode, talukCode, villageCode, surveyNo }) {
-  const giscode = buildCollablandGiscode({ districtCode, talukCode, villageCode, surveyNo });
-  if (!giscode) return null;
+function giscodeCandidates(props = {}) {
+  const out = [];
+  const add = (dc, tc, vc, survey) => {
+    const g = buildCollablandGiscode({
+      districtCode: dc, talukCode: tc, villageCode: vc, surveyNo: survey,
+    });
+    if (g) out.push(g);
+  };
 
+  add(props.district_code, props.taluk_code, props.village_code, props.survey_number);
+
+  return [...new Set(out)];
+}
+
+/** CollabLand plotno — TNGIS kide like "103/1A1" selects subdivision FMB, not parent survey. */
+function fmbPlotnoFromProps(props = {}) {
+  const explicit = String(props.plotno ?? '').trim();
+  if (explicit) return explicit;
+
+  const survey = normalizeSurveyNo(props.survey_number);
+  const requestedSub = props.sub_division != null
+      && normalizeSurveyNo(props.sub_division) !== ''
+      && normalizeSurveyNo(props.sub_division) !== '-'
+    ? normalizeSurveyNo(props.sub_division)
+    : null;
+
+  // TNGIS often echoes survey as sub (e.g. 330/330) — that is not a real subdivision.
+  const effectiveSub = requestedSub && requestedSub !== survey ? requestedSub : null;
+
+  const kide = String(props.kide ?? '').trim();
+  if (kide && kide !== '0' && kide.includes('/')) {
+    if (!effectiveSub) return kide;
+    const kideSurvey = normalizeSurveyNo(kide.split('/')[0]);
+    const kideSub = kide.split('/').slice(1).join('/');
+    if (kideSub === effectiveSub && (!survey || kideSurvey === survey)) return kide;
+    if (survey) return `${survey}/${effectiveSub}`;
+    return kide;
+  }
+
+  if (!survey || !effectiveSub) return '';
+  return `${survey}/${effectiveSub}`;
+}
+
+function fmbFileName(props = {}) {
+  const plotno = fmbPlotnoFromProps(props);
+  const survey = String(props.survey_number ?? 'sketch').trim();
+  if (plotno) return `FMB-${plotno.replace(/\//g, '-')}.pdf`;
+  return `FMB-${survey}.pdf`;
+}
+
+function fmbDownloadQuery(props = {}) {
+  const dc = String(props.district_code ?? '').trim();
+  const tc = String(props.taluk_code ?? '').trim();
+  const vc = String(props.village_code ?? '').trim();
+  const survey = String(props.survey_number ?? '').trim();
+  if (!dc || !tc || !vc || !survey) return null;
+  let q = `dc=${encodeURIComponent(dc)}&tc=${encodeURIComponent(tc)}`
+      + `&vc=${encodeURIComponent(vc)}&surveyNo=${encodeURIComponent(survey)}`;
+  const sub = String(props.sub_division ?? '').trim();
+  if (sub && sub !== '-' && sub !== survey) {
+    q += `&subDiv=${encodeURIComponent(sub)}`;
+  }
+  const plotno = fmbPlotnoFromProps(props);
+  if (plotno) q += `&plotno=${encodeURIComponent(plotno)}`;
+  return q;
+}
+
+function withTimeout(promise, ms, label = 'Request') {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+    }),
+  ]);
+}
+
+/** FMB metadata for /patta — PDF is streamed separately via GET /fmb. */
+function buildFmbDocumentMeta(props = {}) {
+  const giscode = giscodeFromTngisProps(props);
+  const q = fmbDownloadQuery(props);
+  if (!q) {
+    return {
+      type:      'fmb',
+      source:    'collabland-tn.gov.in',
+      giscode:   giscode || null,
+      available: false,
+      error:     'Parcel codes missing — tap directly on the land plot on the map.',
+    };
+  }
+  return {
+    type:        'fmb',
+    source:      'collabland-tn.gov.in',
+    giscode,
+    mimeType:    'application/pdf',
+    fileName:    fmbFileName(props),
+    downloadUrl: `/api/tnlands/fmb?${q}`,
+    plotno:      fmbPlotnoFromProps(props) || null,
+    note:        fmbPlotnoFromProps(props)
+        ? 'Sub-division FMB sketch (CollabLand plotno from TNGIS kide).'
+        : 'Survey-level FMB sketch — specify sub-division for parcel sketch.',
+  };
+}
+
+async function fetchCollablandFmbByGiscode(giscode, surveyNo, plotno = '') {
   const body = encodeForm({
     state:  '33',
     giscode,
-    plotno: '',
+    plotno: plotno || '',
     scale:  '0',
     width:  '1200',
     height: '1200',
@@ -590,10 +1321,10 @@ async function fetchCollablandFmbPdf({ districtCode, talukCode, villageCode, sur
 
   if (!data.success) {
     return {
-      type:    'fmb',
-      source:  'collabland-tn.gov.in',
+      type:      'fmb',
+      source:    'collabland-tn.gov.in',
       giscode,
-      error:   data.message || 'Digitized FMB sketch not available for this parcel',
+      error:     data.message || 'Digitized FMB sketch not available for this parcel',
       available: false,
     };
   }
@@ -602,60 +1333,195 @@ async function fetchCollablandFmbPdf({ districtCode, talukCode, villageCode, sur
   const byteLen   = Buffer.from(pdfBase64, 'base64').length;
   if (byteLen < 100) {
     return {
-      type:    'fmb',
-      source:  'collabland-tn.gov.in',
+      type:      'fmb',
+      source:    'collabland-tn.gov.in',
       giscode,
-      error:   'FMB PDF response was empty',
+      error:     'FMB PDF response was empty',
       available: false,
     };
   }
 
   return {
-    type:        'fmb',
-    source:      'collabland-tn.gov.in',
+    type:       'fmb',
+    source:     'collabland-tn.gov.in',
     giscode,
-    mimeType:    'application/pdf',
-    fileName:    `FMB-${surveyNo}.pdf`,
+    mimeType:   'application/pdf',
+    fileName:   `FMB-${surveyNo || 'sketch'}.pdf`,
     pdfBase64,
-    byteLength:  byteLen,
-    available:   true,
+    byteLength: byteLen,
+    available:  true,
   };
 }
 
-async function fetchPattaDocuments(tngisProps) {
+async function fetchCollablandFmbPdf(props = {}) {
+  const candidates = giscodeCandidates(props);
+  if (candidates.length === 0) return null;
+
+  const plotno = fmbPlotnoFromProps(props);
+  let last = null;
+
+  for (const giscode of candidates) {
+    if (plotno) {
+      const subHit = await fetchCollablandFmbByGiscode(giscode, props.survey_number, plotno);
+      if (subHit.available) {
+        subHit.fileName = fmbFileName(props);
+        const q = fmbDownloadQuery(props);
+        if (q) subHit.downloadUrl = `/api/tnlands/fmb?${q}`;
+        return subHit;
+      }
+      last = subHit;
+      // Sub-division sketch missing — fall back to survey-level FMB.
+      const parentHit = await fetchCollablandFmbByGiscode(giscode, props.survey_number, '');
+      if (parentHit.available) {
+        parentHit.fileName = fmbFileName({ ...props, sub_division: null, kide: null, plotno: '' });
+        const q = fmbDownloadQuery({ ...props, sub_division: null, kide: null, plotno: '' });
+        if (q) parentHit.downloadUrl = `/api/tnlands/fmb?${q}`;
+        return parentHit;
+      }
+      last = parentHit;
+      continue;
+    }
+
+    const parentHit = await fetchCollablandFmbByGiscode(giscode, props.survey_number, '');
+    if (parentHit.available) {
+      parentHit.fileName = fmbFileName(props);
+      const q = fmbDownloadQuery(props);
+      if (q) parentHit.downloadUrl = `/api/tnlands/fmb?${q}`;
+      return parentHit;
+    }
+    last = parentHit;
+  }
+  return last;
+}
+
+// ── Patta / Chitta document (eservices + TNGIS fallback) ─────────────────────
+
+function escHtml(s) {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function wrapPattaPrintHtml(title, source, bodyHtml) {
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escHtml(title)}</title>
+<style>
+  body{font-family:Georgia,serif;margin:24px;color:#111}
+  h1{font-size:18px;color:#1B5E20;margin:0 0 4px}
+  .sub{font-size:11px;color:#555;margin-bottom:16px}
+  table{border-collapse:collapse;width:100%;margin:12px 0}
+  th,td{border:1px solid #ccc;padding:8px 10px;text-align:left;font-size:13px}
+  th{background:#e8f5e9;width:38%;font-weight:600}
+  .owners{margin-top:16px}
+  .foot{margin-top:20px;font-size:10px;color:#666;border-top:1px solid #ddd;padding-top:10px}
+</style></head><body>
+<h1>${escHtml(title)}</h1>
+<p class="sub">Source: ${escHtml(source)} · Generated ${new Date().toLocaleString('en-IN')}</p>
+${bodyHtml}
+<p class="foot">This is an electronic copy for reference. For legal purposes, obtain a certified copy from the Tahsildar office.</p>
+</body></html>`;
+}
+
+function parsedToPattaBody({ fields, owners }) {
+  const fieldRows = Object.entries(fields || {})
+    .map(([k, v]) => `<tr><th>${escHtml(k)}</th><td>${escHtml(v)}</td></tr>`)
+    .join('');
+  let ownersHtml = '';
+  if (owners && owners.length > 0) {
+    const blocks = owners.map((o) => {
+      const rows = Object.entries(o)
+        .map(([k, v]) => `<tr><th>${escHtml(k)}</th><td>${escHtml(v)}</td></tr>`)
+        .join('');
+      return `<table>${rows}</table>`;
+    }).join('');
+    ownersHtml = `<div class="owners"><h2 style="font-size:14px">Owners</h2>${blocks}</div>`;
+  }
+  return `<table>${fieldRows}</table>${ownersHtml}`;
+}
+
+function buildTngisPattaDocument(fields, props = {}) {
+  const survey = fields['Survey Number'] || props.survey_number || '';
+  const body = parsedToPattaBody({ fields, owners: [] });
+  const extra = props.kide ? `<p><strong>Kide:</strong> ${escHtml(props.kide)}</p>` : '';
+  const html = wrapPattaPrintHtml(
+    'Patta / Chitta — Cadastral Record',
+    'TNGIS (tngis.tn.gov.in)',
+    body + extra
+  );
+  return {
+    type:      'patta',
+    source:    'TNGIS (tngis.tn.gov.in)',
+    available: true,
+    official:  false,
+    html,
+    fileName:  `Patta-${survey || 'record'}.html`,
+    note:      'Cadastral record from TNGIS (tngis.tn.gov.in).',
+  };
+}
+
+async function fetchPattaChittaDocument(docProps, codes, ctx = {}) {
+  const fields = tngisFeatureToFields(docProps);
+  return buildTngisPattaDocument(fields, docProps);
+}
+
+async function fetchPattaDocuments(tngisProps, ctx = {}) {
   const documents = {};
   const codes     = eservicesCodesFromTngisProps(tngisProps);
 
-  if (codes) {
-    documents.eservicesPortal = {
-      type:   'chitta',
-      source: 'eservices.tn.gov.in',
-      url:    `${PATTA_BASE}/eservicesnew/land/chittaNewRuralTamil.html?lan=ta`,
-      hint:   'Official Chitta/Patta extract requires OTP on the government portal.',
-      codes,
-      surveyNo: tngisProps.survey_number,
-      subDiv:   tngisProps.sub_division,
-      pattaNo:  tngisProps.patta_no,
-    };
+  let docProps = { ...tngisProps };
+  const ctxSurvey = normalizeSurveyNo(ctx.surveyNo) || normalizeSurveyNo(docProps.survey_number);
+  const ctxSub = ctx.subDiv && normalizeSurveyNo(ctx.subDiv) !== '' && normalizeSurveyNo(ctx.subDiv) !== '-'
+    ? normalizeSurveyNo(ctx.subDiv)
+    : null;
+  if (ctxSub) docProps = { ...docProps, sub_division: ctxSub };
+
+  const needsSubProps = ctxSub || !docProps.kide
+      || (ctxSub && normalizeSurveyNo(docProps.sub_division) !== ctxSub);
+  if (needsSubProps && ctxSurvey) {
+    try {
+      const subProps = await fetchTngisParcelPropsForFmb({
+        surveyNo:     ctxSurvey,
+        subDiv:       ctxSub || docProps.sub_division,
+        districtCode: docProps.district_code,
+        talukCode:    docProps.taluk_code,
+        villageCode:  docProps.village_code,
+        lat:          ctx.lat,
+        lon:          ctx.lon,
+      });
+      if (subProps) {
+        docProps = {
+          ...docProps,
+          ...subProps,
+          survey_number: ctxSurvey,
+          sub_division:  ctxSub || subProps.sub_division,
+        };
+      }
+    } catch (_) {}
+  } else if (!docProps.district_code && Number.isFinite(ctx.lat) && Number.isFinite(ctx.lon)) {
+    try {
+      const fmbProps = await fetchTngisFmbProps({
+        surveyNo: ctxSurvey,
+        subDiv:   ctxSub,
+        lat:      ctx.lat,
+        lon:      ctx.lon,
+      });
+      if (fmbProps) docProps = { ...docProps, ...fmbProps };
+    } catch (_) {}
   }
 
   try {
-    const fmb = await fetchCollablandFmbPdf({
-      districtCode: tngisProps.district_code,
-      talukCode:    tngisProps.taluk_code,
-      villageCode:  tngisProps.village_code,
-      surveyNo:     tngisProps.survey_number,
-    });
-    if (fmb) documents.fmb = fmb;
+    documents.patta = await fetchPattaChittaDocument(docProps, codes, ctx);
   } catch (err) {
-    documents.fmb = {
-      type:      'fmb',
-      source:    'collabland-tn.gov.in',
-      giscode:   giscodeFromTngisProps(tngisProps),
-      error:     err.message,
+    documents.patta = {
+      type:      'patta',
       available: false,
+      error:     err.message,
     };
   }
+
+  // FMB PDF is fetched separately via GET /fmb — only return metadata here.
+  documents.fmb = buildFmbDocumentMeta(docProps);
 
   return documents;
 }
@@ -705,13 +1571,176 @@ router.get('/villages', async (req, res) => {
   res.json([]);
 });
 
+// Cadastral polygons for map overlay (Tamil Nilam style parcel boundaries).
+router.get('/tngis/parcels', async (req, res) => {
+  const latN = parseFloat(req.query.lat);
+  const lonN = parseFloat(req.query.lon);
+  const hasExplicitRadius = req.query.radius != null && String(req.query.radius).trim() !== '';
+  const radiusMeters = hasExplicitRadius ? parseFloat(req.query.radius) : 600;
+  const zoom = parseFloat(req.query.zoom);
+
+  if (!Number.isFinite(latN) || !Number.isFinite(lonN)) {
+    return res.status(400).json({ error: 'lat and lon required' });
+  }
+
+  let radius = Number.isFinite(radiusMeters) ? radiusMeters : 600;
+  if (!hasExplicitRadius && Number.isFinite(zoom)) {
+    if (zoom >= 18) radius = 280;
+    else if (zoom >= 17) radius = 700;
+    else if (zoom >= 16) radius = 1200;
+    else if (zoom >= 15) radius = 2200;
+    else radius = 4000;
+  }
+
+  try {
+    const radii = [...new Set([
+      radius,
+      Math.round(radius * 1.6),
+      1500,
+      2500,
+      4000,
+      6000,
+    ])].sort((a, b) => a - b);
+
+    let features = [];
+    let usedRadius = radius;
+    for (const r of radii) {
+      features = await fetchTngisParcelsNear(latN, lonN, r, 300);
+      usedRadius = r;
+      if (features.length >= 8 || r >= 4000) break;
+    }
+
+    return res.json({
+      source:       'TNGIS Tamil Nilam GI Viewer',
+      giViewerUrl:  tngisGiViewerUrl(latN, lonN),
+      radiusMeters: usedRadius,
+      count:        features.length,
+      type:         'FeatureCollection',
+      features,
+    });
+  } catch (err) {
+    return res.status(502).json({ error: err.message });
+  }
+});
+
+// All subdivisions for a survey near a map point (each sub has its own patta/FMB).
+router.get('/tngis/subdivisions', async (req, res) => {
+  const latN = parseFloat(req.query.lat);
+  const lonN = parseFloat(req.query.lon);
+  const { surveyNo } = req.query;
+
+  if (!Number.isFinite(latN) || !Number.isFinite(lonN)) {
+    return res.status(400).json({ error: 'lat and lon required' });
+  }
+
+  try {
+    const subdivisions = await listTngisSubdivisionsAtPoint({
+      lat: latN,
+      lon: lonN,
+      surveyNo: surveyNo || undefined,
+    });
+    return res.json({
+      source: 'TNGIS Tamil Nilam GI Viewer',
+      count:  subdivisions.length,
+      subdivisions,
+    });
+  } catch (err) {
+    return res.status(502).json({ error: err.message });
+  }
+});
+
+// Parcel at map pin — same cadastral layer as Tamil Nilam GI Viewer (no captcha).
+router.get('/tngis/parcel', async (req, res) => {
+  const latN = parseFloat(req.query.lat);
+  const lonN = parseFloat(req.query.lon);
+  const { surveyNo, subDiv } = req.query;
+
+  if (!Number.isFinite(latN) || !Number.isFinite(lonN)) {
+    return res.status(400).json({
+      error: 'lat and lon required (decimal degrees, same as GI Viewer Go To).',
+      giViewerUrl: TNGIS_GI_VIEWER_URL,
+    });
+  }
+
+  try {
+    const hit = await lookupTngisParcelAtPoint({
+      lat: latN,
+      lon: lonN,
+      surveyNo,
+      subDiv,
+    });
+    const giViewerUrl = tngisGiViewerUrl(latN, lonN);
+
+    if (!hit) {
+      return res.status(404).json({
+        error:       surveyNo
+            ? `Survey ${surveyNo} not found at this map point in TNGIS.`
+            : 'No cadastral parcel at this map point in TNGIS.',
+        hint:        surveyNo
+            ? 'Tap directly on the correct survey plot, or clear the survey filter and tap again.'
+            : 'Zoom in and tap directly on the land plot (not the road).',
+        giViewerUrl,
+        source:      'TNGIS Tamil Nilam GI Viewer',
+      });
+    }
+
+    const props = hit.tngisProps || {};
+    const survey = hit.fields['Survey Number'] || props.survey_number || null;
+    if (surveyNo && survey && !surveyNumberMatches(survey, surveyNo)) {
+      return res.status(404).json({
+        error:       `TNGIS returned survey ${survey} but survey ${surveyNo} was requested.`,
+        hint:        'Tap directly on the correct land plot for this survey number.',
+        giViewerUrl,
+        source:      'TNGIS Tamil Nilam GI Viewer',
+      });
+    }
+
+    const subdivisions = await listTngisSubdivisionsAtPoint({
+      lat: latN,
+      lon: lonN,
+      surveyNo: survey || surveyNo,
+    });
+    return res.json({
+      source:       'TNGIS Tamil Nilam GI Viewer',
+      giViewerUrl,
+      fields:       hit.fields,
+      owners:       hit.owners,
+      surveyNumber: survey,
+      subDivision:  hit.fields['Sub Division'] || props.sub_division || null,
+      kide:         props.kide != null ? String(props.kide).trim() : null,
+      district:     hit.fields.District || props.district_name || null,
+      taluk:        hit.fields.Taluk || props.taluk_name || null,
+      village:      hit.fields.Village || props.village_name || null,
+      pattaNumber:  hit.fields['Patta Number'] || props.patta_no || null,
+      fmbAvailable: props.is_fmb === 1 || props.is_fmb === '1'
+          || (props.kide && String(props.kide).trim() !== '0' && String(props.kide).includes('/')),
+      containsPoint: hit.pickMeta?.containsPoint ?? false,
+      distanceMeters: hit.pickMeta?.containsPoint ? 0 : undefined,
+      subdivisions,
+    });
+  } catch (err) {
+    return res.status(502).json({
+      error:       err.message,
+      giViewerUrl: tngisGiViewerUrl(latN, lonN),
+    });
+  }
+});
+
 router.get('/patta', async (req, res) => {
   const { dc, tc, vc, surveyNo, subDiv, pattaNo, ownerName, viewOpt, landtype,
-          lat, lon } = req.query;
+          lat, lon, mobile, otp } = req.query;
 
   const latN = parseFloat(lat);
   const lonN = parseFloat(lon);
   const hasGps = Number.isFinite(latN) && Number.isFinite(lonN);
+  const docCtx = {
+    lat:      hasGps ? latN : undefined,
+    lon:      hasGps ? lonN : undefined,
+    surveyNo,
+    subDiv,
+    mobile:   mobile || '',
+    otp:      otp || '',
+  };
 
   const tryTngis = async () => {
     const radii = hasGps
@@ -735,10 +1764,17 @@ router.get('/patta', async (req, res) => {
     try {
       const tngis = await tryTngis();
       if (tngis) {
+        const gotSurvey = tngis.fields?.['Survey Number'] || tngis.tngisProps?.survey_number;
+        if (surveyNo && gotSurvey && !surveyNumberMatches(gotSurvey, surveyNo)) {
+          return res.status(404).json({
+            error: `Survey ${surveyNo} not found at this location (nearest parcel is survey ${gotSurvey}).`,
+            hint:  'Tap directly on the correct survey plot on the map, then fetch again.',
+          });
+        }
         const { tngisProps, ...payload } = tngis;
         let documents = {};
         if (tngisProps && Object.keys(tngisProps).length > 0) {
-          documents = await fetchPattaDocuments(tngisProps);
+          documents = await fetchPattaDocuments(tngisProps, docCtx);
         }
         return res.json({
           source: 'TNGIS (tngis.tn.gov.in)',
@@ -757,11 +1793,13 @@ router.get('/patta', async (req, res) => {
   if (!canTryEservices) {
     if (hasGps || surveyNo) {
       return res.status(422).json({
-        error: hasGps
-            ? 'No parcel found at this map location in TNGIS.'
-            : `No record found for survey number "${surveyNo}" in TNGIS.`,
+        error: surveyNo
+            ? `Survey ${surveyNo} not found at this map location in TNGIS.`
+            : (hasGps
+                ? 'No parcel found at this map location in TNGIS.'
+                : `No record found for survey number "${surveyNo}" in TNGIS.`),
         hint:  hasGps
-            ? 'Tap directly on the land parcel on the map, then try again. Urban areas may need a wider pin placement.'
+            ? 'Tap directly on the land parcel for the correct survey number, then try again.'
             : 'Set a map location for this survey number, or use manual District/Taluk/Village.',
       });
     }
@@ -827,7 +1865,7 @@ router.get('/patta', async (req, res) => {
       const { tngisProps, ...payload } = tngis;
       let documents = {};
       if (tngisProps && Object.keys(tngisProps).length > 0) {
-        documents = await fetchPattaDocuments(tngisProps);
+        documents = await fetchPattaDocuments(tngisProps, docCtx);
       }
       return res.json({ source: 'TNGIS (tngis.tn.gov.in)', ...payload, documents });
     }
@@ -843,7 +1881,7 @@ router.get('/patta', async (req, res) => {
       const { tngisProps, ...payload } = tngis;
       let documents = {};
       if (tngisProps && Object.keys(tngisProps).length > 0) {
-        documents = await fetchPattaDocuments(tngisProps);
+        documents = await fetchPattaDocuments(tngisProps, docCtx);
       }
       return res.json({ source: 'TNGIS (tngis.tn.gov.in)', ...payload, documents });
     }
@@ -853,23 +1891,48 @@ router.get('/patta', async (req, res) => {
 
 // Stream FMB PDF (CollabLand) — use after TNGIS lookup or with explicit codes.
 router.get('/fmb', async (req, res) => {
-  const { dc, tc, vc, surveyNo, lat, lon } = req.query;
+  const { dc, tc, vc, surveyNo, subDiv, lat, lon, plotno } = req.query;
   let districtCode = dc;
   let talukCode    = tc;
   let villageCode  = vc;
-  let survey       = surveyNo;
+  const surveyReq  = normalizeSurveyNo(surveyNo);
+  let survey       = surveyReq;
+  const subReq     = subDiv && normalizeSurveyNo(subDiv) !== '' && normalizeSurveyNo(subDiv) !== '-'
+    ? normalizeSurveyNo(subDiv)
+    : null;
+  let tngisProps   = null;
 
   const latN = parseFloat(lat);
   const lonN = parseFloat(lon);
-  if ((!districtCode || !talukCode || !villageCode || !survey) &&
+
+  if (surveyReq) {
+    try {
+      tngisProps = await fetchTngisParcelPropsForFmb({
+        surveyNo:     surveyReq,
+        subDiv:       subReq,
+        districtCode: districtCode || undefined,
+        talukCode:    talukCode || undefined,
+        villageCode:  villageCode || undefined,
+        lat:          Number.isFinite(latN) ? latN : undefined,
+        lon:          Number.isFinite(lonN) ? lonN : undefined,
+      });
+      if (tngisProps) {
+        districtCode = districtCode || tngisProps.district_code;
+        talukCode    = talukCode    || tngisProps.taluk_code;
+        villageCode  = villageCode  || tngisProps.village_code;
+        survey       = surveyReq;
+      }
+    } catch (_) {}
+  } else if ((!districtCode || !talukCode || !villageCode || !survey) &&
       Number.isFinite(latN) && Number.isFinite(lonN)) {
     try {
-      const hit = await fetchTngisPatta({ lat: latN, lon: lonN, radiusMeters: 5000 });
+      const hit = await lookupTngisParcelAtPoint({ lat: latN, lon: lonN });
       if (hit?.tngisProps) {
-        districtCode = hit.tngisProps.district_code;
-        talukCode    = hit.tngisProps.taluk_code;
-        villageCode  = hit.tngisProps.village_code;
-        survey       = hit.tngisProps.survey_number;
+        tngisProps = hit.tngisProps;
+        districtCode = tngisProps.district_code;
+        talukCode    = tngisProps.taluk_code;
+        villageCode  = tngisProps.village_code;
+        survey       = tngisProps.survey_number;
       }
     } catch (_) {}
   }
@@ -880,9 +1943,22 @@ router.get('/fmb', async (req, res) => {
     });
   }
 
+  if (surveyReq && tngisProps?.survey_number
+      && !surveyNumberMatches(tngisProps.survey_number, surveyReq)) {
+    return res.status(404).json({
+      error: `Survey ${surveyReq} not found for FMB lookup.`,
+    });
+  }
+
   try {
     const fmb = await fetchCollablandFmbPdf({
-      districtCode, talukCode, villageCode, surveyNo: survey,
+      district_code: districtCode,
+      taluk_code:    talukCode,
+      village_code:  villageCode,
+      survey_number: surveyReq || survey,
+      sub_division:  subReq || tngisProps?.sub_division,
+      kide:          tngisProps?.kide,
+      plotno,
     });
     if (!fmb?.available || !fmb.pdfBase64) {
       return res.status(404).json({
@@ -922,14 +1998,17 @@ const EC_CTRL = {
   search:   'searchDocYearWise',
 };
 
-const EC_ZONES = [
+const EC_ZONES_LEGACY = [
   { code: '1', name: 'North' },
   { code: '2', name: 'South' },
   { code: '3', name: 'Central' },
 ];
 
-// Static EC district data keyed by zone code.
-// District codes match tnreginet.gov.in's combo values (verified from the portal).
+// Live tnreginet uses registration zones (Chennai, Coimbatore, …) — loaded from portal.
+const EC_SESSION_TTL_MS = 5 * 60 * 1000;
+const _ecSessions = new Map(); // sessionId → { cookies, csrf, time }
+
+// Static fallback when portal is unreachable (subset).
 const STATIC_EC_DISTRICTS = {
   '1': [
     { code: '2',  name: 'Chennai' },
@@ -977,6 +2056,342 @@ const STATIC_EC_DISTRICTS = {
   ],
 };
 
+// Fallback SRO lists when tnreginet combo API is unreachable.
+const STATIC_EC_SROS = {
+  '2':  [ // Chennai
+    { code: '1', name: 'Adambakkam' }, { code: '5', name: 'Egmore' },
+    { code: '6', name: 'Guindy' }, { code: '11', name: 'Mylapore' },
+    { code: '15', name: 'Purasawalkam' }, { code: '17', name: 'Sholinganallur' },
+    { code: '18', name: 'T.Nagar' }, { code: '20', name: 'Velachery' },
+  ],
+  '8':  [{ code: '4', name: 'Tambaram' }, { code: '1', name: 'Chengalpattu' }],
+  '28': [{ code: '1', name: 'Tiruvallur' }, { code: '2', name: 'Avadi' }],
+  '16': [{ code: '1', name: 'Madurai North' }, { code: '2', name: 'Madurai South' }],
+  '4':  [{ code: '1', name: 'Coimbatore North' }, { code: '2', name: 'Coimbatore South' }],
+};
+
+/** Map coordinates → tnreginet zone + sub-district (registration office grouping). */
+const TN_COORD_HINTS = [
+  { zone: '1', dc: '20001', label: 'South Chennai', latMin: 12.85, latMax: 13.04, lonMin: 80.15, lonMax: 80.35 },
+  { zone: '1', dc: '20003', label: 'Central Chennai', latMin: 13.04, latMax: 13.12, lonMin: 80.20, lonMax: 80.32 },
+  { zone: '1', dc: '20002', label: 'North Chennai', latMin: 13.08, latMax: 13.28, lonMin: 80.10, lonMax: 80.22 },
+  { zone: '1', dc: '50003', label: 'Tiruvallur', latMin: 13.05, latMax: 13.45, lonMin: 79.85, lonMax: 80.12 },
+  { zone: '15', dc: null, label: 'Chengalpattu', latMin: 12.55, latMax: 12.95, lonMin: 79.95, lonMax: 80.35 },
+  { zone: '2', dc: null, label: 'Coimbatore', latMin: 10.85, latMax: 11.25, lonMin: 76.85, lonMax: 77.15 },
+  { zone: '4', dc: null, label: 'Madurai', latMin: 9.80, latMax: 10.15, lonMin: 77.95, lonMax: 78.30 },
+  { zone: '5', dc: null, label: 'Salem', latMin: 11.55, latMax: 11.75, lonMin: 78.05, lonMax: 78.30 },
+  { zone: '6', dc: null, label: 'Tiruchirappalli', latMin: 10.70, latMax: 10.90, lonMin: 78.60, lonMax: 78.80 },
+  { zone: '7', dc: null, label: 'Thanjavur', latMin: 10.65, latMax: 10.90, lonMin: 79.05, lonMax: 79.30 },
+  { zone: '8', dc: null, label: 'Tirunelveli', latMin: 8.55, latMax: 8.85, lonMin: 77.55, lonMax: 77.80 },
+];
+
+function normalizeDistrictName(name) {
+  return String(name ?? '')
+    .replace(/\s+district$/i, '')
+    .replace(/\s+corporation$/i, '')
+    .trim()
+    .toLowerCase();
+}
+
+function matchEcDistrict(districts, query) {
+  if (!query || !districts?.length) return null;
+  const q = normalizeDistrictName(query);
+  for (const d of districts) {
+    if (normalizeDistrictName(d.name) === q) return d;
+  }
+  for (const d of districts) {
+    const n = normalizeDistrictName(d.name);
+    if (n.includes(q) || q.includes(n)) return d;
+  }
+  const tokens = q.split(/[\s\-,/]+/).filter((t) => t.length > 2);
+  for (const d of districts) {
+    const n = normalizeDistrictName(d.name);
+    if (tokens.some((t) => n.includes(t))) return d;
+  }
+  return null;
+}
+
+function coordDistrictHint(lat, lon) {
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  for (const h of TN_COORD_HINTS) {
+    if (lat >= h.latMin && lat <= h.latMax && lon >= h.lonMin && lon <= h.lonMax) {
+      return h;
+    }
+  }
+  return null;
+}
+
+function pruneEcSessions() {
+  const now = Date.now();
+  for (const [id, s] of _ecSessions) {
+    if (now - s.time > EC_SESSION_TTL_MS) _ecSessions.delete(id);
+  }
+}
+
+function getEcSession(sessionId) {
+  pruneEcSessions();
+  const s = _ecSessions.get(sessionId);
+  if (!s) return null;
+  if (Date.now() - s.time > EC_SESSION_TTL_MS) {
+    _ecSessions.delete(sessionId);
+    return null;
+  }
+  return s;
+}
+
+function touchEcSession(sessionId, { cookies, csrf, html } = {}) {
+  const s = getEcSession(sessionId);
+  if (!s) return null;
+  if (cookies) s.cookies = cookies;
+  if (csrf) s.csrf = csrf;
+  if (html) s.html = html;
+  s.time = Date.now();
+  _ecSessions.set(sessionId, s);
+  return s;
+}
+
+async function createEcSession() {
+  pruneEcSessions();
+  const home = await fetchRaw(EC_HOME_URL, { headers: { Referer: EC_HOME_URL } });
+  if (home.status !== 200) throw new Error(`EC home page returned HTTP ${home.status}`);
+  const homeCsrf = (home.body.match(/name="_csrf" content="([^"]+)"/i) ||
+                    home.body.match(/var\s+csrf\s*=\s*'([^']+)'/i) || [])[1] || '';
+  const pageRes = await fetchRaw(`${EC_URL}&_csrf=${homeCsrf}`, {
+    cookies: home.cookies,
+    headers: { Referer: EC_HOME_URL, 'X-Requested-With': 'XMLHttpRequest' },
+  });
+  if (pageRes.status !== 200) throw new Error(`EC page returned HTTP ${pageRes.status}`);
+  const csrf = (pageRes.body.match(/var\s+csrf\s*=\s*'([^']+)'/i) ||
+                pageRes.body.match(/name="_csrf" content="([^"]+)"/i) || [])[1] || homeCsrf;
+  let cookies = mergeCookies(home.cookies, pageRes.cookies);
+  const capRes = await fetchRaw(`${EC_BASE}/portal/SimpleCaptcha?${Date.now()}`, {
+    cookies,
+    headers: { Referer: EC_URL, Accept: 'image/png,*/*' },
+  });
+  if (capRes.status !== 200) throw new Error('Could not load EC captcha image.');
+  // Captcha image is bound to session cookies set by SimpleCaptcha — must keep them.
+  cookies = mergeCookies(cookies, capRes.cookies);
+  const captchaPng = Buffer.isBuffer(capRes.body) ? capRes.body : Buffer.from(capRes.body);
+  const id = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  const session = { id, cookies, csrf, captchaPng, html: pageRes.body, time: Date.now() };
+  _ecSessions.set(id, session);
+  return session;
+}
+
+async function loadEcZonesFromPage() {
+  try {
+    const pageCtx = await getEcPage();
+    const zones = parseJsonOrSelectOptions(pageCtx.html, 'cmb_Zone');
+    if (zones.length > 0) return zones;
+  } catch (_) {}
+  return [];
+}
+
+async function loadEcDistrictsForZone(zoneCode) {
+  try {
+    const pageCtx = await getEcPage();
+    const ctx = await ecAjax(pageCtx, 'loadDistrictCombo', zoneCode);
+    const districts = parseJsonOrSelectOptions(ctx.html, 'cmb_District');
+    if (districts.length > 0) return districts;
+  } catch (_) {}
+  return STATIC_EC_DISTRICTS[zoneCode] || [];
+}
+
+function pickEcVillage(villages, hint) {
+  if (!villages?.length) return null;
+  if (!hint) return villages[0];
+  const q = String(hint).toLowerCase();
+  for (const v of villages) {
+    const n = v.name.toLowerCase();
+    if (n === q || n.includes(q) || q.includes(n)) return v;
+  }
+  const tokens = q.split(/[\s\-,/]+/).filter((t) => t.length > 2);
+  for (const v of villages) {
+    const n = v.name.toLowerCase();
+    if (tokens.some((t) => n.includes(t))) return v;
+  }
+  return villages[0];
+}
+
+async function checkEcPortalCaptcha(ctx, captcha) {
+  const url = `${EC_BASE}/portal/webHP?requestType=ApplicationRH&actionVal=checkCaptcha&queryType=Select&screenId=114&captcha_val=${encodeURIComponent(captcha)}`;
+  const res = await fetchRaw(url, {
+    method:  'POST',
+    body:    `_csrf=${encodeURIComponent(ctx.csrf)}`,
+    cookies: ctx.cookies,
+    headers: {
+      Referer:            EC_URL,
+      'Content-Type':     'application/x-www-form-urlencoded; charset=UTF-8',
+      'X-Requested-With': 'XMLHttpRequest',
+    },
+  });
+  if (res.status !== 200) return false;
+  const parts = String(res.body || '').split('#');
+  const flag  = (parts[2] || '').trim().toLowerCase();
+  if (flag === 'true') return true;
+  if (flag === 'false') return false;
+  return !/false|invalid|தவறு/i.test(String(res.body || ''));
+}
+
+function extractEcHiddenFields(html) {
+  const pick = (name) => {
+    const m = html.match(new RegExp(`(?:id|name)=["']${name}["'][^>]*value=["']([^"']*)["']`, 'i'))
+           || html.match(new RegExp(`(?:id|name)=["']${name}["'][^>]*value=\\s*["']\\s*([^"']+)`, 'i'));
+    return m ? m[1].trim() : '';
+  };
+  return {
+    jsonString:         pick('jsonString'),
+    templateIds:        pick('templateIds'),
+    appTransId:         pick('appTransId') || '0',
+    previewFlagFrmCnfg: pick('previewFlagFrmCnfg') || 'true',
+    countNoRecords:     pick('countNoRecords'),
+  };
+}
+
+function extractEcJsonStringFromHtml(html) {
+  const hidden = extractEcHiddenFields(html);
+  if (hidden.jsonString && hidden.jsonString.length > 4) return hidden.jsonString;
+
+  const ids = [];
+  const chkPat = /name=["'][^"']*chk[^"']*["'][^>]*value=["']([^"']+)["'][^>]*checked/gi;
+  let m;
+  while ((m = chkPat.exec(html)) !== null) ids.push(m[1]);
+
+  if (ids.length === 0) {
+    const valPat = /name=["'][^"']*chk[^"']*["'][^>]*value=["']([^"']+)["']/gi;
+    while ((m = valPat.exec(html)) !== null) ids.push(m[1]);
+  }
+  if (ids.length > 0) return ids.join('#');
+  return '';
+}
+
+function extractEcDisplayHtml(rawHtml) {
+  if (!rawHtml || rawHtml.length < 200) return null;
+  const prop = rawHtml.match(/<div[^>]*id=["']divPropertyList["'][^>]*>([\s\S]*?)<\/div>/i);
+  if (prop && prop[1].trim().length > 80) {
+    return wrapPattaPrintHtml('Encumbrance Certificate (EC)', 'tnreginet.gov.in', prop[1]);
+  }
+  const tables = [];
+  const tablePat = /<table[^>]*class=["'][^"']*its[^"']*["'][^>]*>[\s\S]*?<\/table>/gi;
+  let t;
+  while ((t = tablePat.exec(rawHtml)) !== null) {
+    if (!/captcha|menu|logout/i.test(t[0]) && t[0].length > 120) tables.push(t[0]);
+  }
+  if (tables.length > 0) {
+    return wrapPattaPrintHtml(
+      'Encumbrance Certificate (EC)',
+      'tnreginet.gov.in',
+      tables.join('<hr/>'),
+    );
+  }
+  return null;
+}
+
+async function fetchEcPreviewPdf(ctx, { jsonString, templateIds, appTransId, fromDate, toDate }) {
+  if (!jsonString || jsonString.length < 4) return null;
+  const tableString = '8400001~A4~NA~1~1~2.5~2.5~29.7~21.0~LandScape~cm~null~2.5';
+  const encJson = encodeURIComponent(String(jsonString).replace(/#/g, '$%$'));
+  const url =
+    `${EC_BASE}/portal/webHP?requestType=ApplicationRH&actionVal=previewECWisePdf&screenId=8400001` +
+    `&appTransId=${encodeURIComponent(appTransId || '0')}` +
+    `&docCreateAppId=8400001&tmpltMstID=8400003&previewFlagFrmCnfg=true` +
+    `&templateIds=${encodeURIComponent(templateIds || '')}` +
+    `&tableString=${encodeURIComponent(tableString)}` +
+    `&txt_PeriodStartDt=${encodeURIComponent(fromDate)}` +
+    `&txt_PeriodEndDt=${encodeURIComponent(toDate)}` +
+    `&jsonString=${encJson}`;
+
+  const res = await fetchRaw(url, {
+    cookies: ctx.cookies,
+    headers: { Referer: EC_URL, Accept: 'application/pdf,*/*' },
+  });
+  if (res.status !== 200) return null;
+  const buf = Buffer.isBuffer(res.body) ? res.body : Buffer.from(String(res.body), 'binary');
+  if (buf.length > 100 && buf.slice(0, 5).toString() === '%PDF-') return buf;
+  return null;
+}
+
+async function ecGetVillageDetails(ctx, { villageCode, sro, surveyNo, subDiv, fromDate, toDate, isRevenueVillage = false }) {
+  const surveyParam = isRevenueVillage ? (surveyNo || '') : '0';
+  const subDivParam = isRevenueVillage ? (subDiv || '') : '0';
+  const url = `${EC_BASE}/portal/webHP?requestType=ApplicationRH&actionVal=getVillageDetails&screenId=8400001&villageList=${encodeURIComponent(villageCode)}&sroId=${encodeURIComponent(sro)}&usrStartDt=${encodeURIComponent(fromDate)}&usrEndDt=${encodeURIComponent(toDate)}&isRevenueVillage=${isRevenueVillage}&surveyNumber=${encodeURIComponent(surveyParam)}&subDivisionNumber=${encodeURIComponent(subDivParam)}&_csrf=${encodeURIComponent(ctx.csrf)}`;
+  const res = await fetchRaw(url, {
+    method:  'POST',
+    cookies: ctx.cookies,
+    headers: { Referer: EC_URL, 'X-Requested-With': 'XMLHttpRequest' },
+  });
+  return { body: res.body, cookies: mergeCookies(ctx.cookies, res.cookies) };
+}
+
+function ecVillageDetailsOk(html) {
+  if (ecPortalIsErrorPage(html)) return false;
+  if (!html || html.length < 2) return false;
+  const parts = String(html).split('<#>');
+  const count = (parts[1] || '').trim();
+  if (count.length > 0) {
+    return html.includes('கிராமத்திற்கான தரவு கிடைக்கும் காலம்');
+  }
+  return true;
+}
+
+function ecSearchLooksLikeForm(html) {
+  return html.includes('btn_SearchDoc') && html.includes('captchaDivId');
+}
+
+function ecPortalIsErrorPage(html) {
+  if (!html || typeof html !== 'string' || html.length < 200) return false;
+  if (/<title>\s*Error Page\s*<\/title>/i.test(html)) return true;
+  if (/உங்கள் அமர்வு காலாவதியாகி/.test(html)) return true;
+  if (/மன்னிக்கவும்!?\s*தவறு ஏற்பட்டுள்ளது/.test(html)) return true;
+  return false;
+}
+
+function ecPortalErrorMessage(html) {
+  if (/உங்கள் அமர்வு காலாவதியாகி/.test(html)) {
+    return 'EC session expired. Refresh the captcha and try again.';
+  }
+  if (/சரியான காப்புக் குறியீட்டினை|incCaptcha|தயவுசெய்து குறியீட்டு/i.test(html)) {
+    return 'Incorrect captcha. Refresh the image, enter the new code, and try again.';
+  }
+  if (ecPortalIsErrorPage(html)) {
+    return 'TN registration portal rejected the request. Refresh captcha and try again.';
+  }
+  return null;
+}
+
+function ecSearchHasNoRecords(html) {
+  const hidden = extractEcHiddenFields(html);
+  if (hidden.countNoRecords === '0') return true;
+  return /தேடுதல் காலத்தில் எந்த ஆவணங்களும் பதிவு செய்யப்படவில்லை/.test(html)
+      || /divNothingFound[^>]*style="[^"]*display:\s*block/i.test(html);
+}
+
+function matchEcSro(sros, talukOrArea) {
+  if (!talukOrArea || !sros?.length) return null;
+  const q = String(talukOrArea).toLowerCase();
+  for (const s of sros) {
+    const n = s.name.toLowerCase();
+    if (n === q || n.includes(q) || q.includes(n)) return s;
+  }
+  const tokens = q.split(/[\s\-,/]+/).filter((t) => t.length > 3);
+  for (const s of sros) {
+    const n = s.name.toLowerCase();
+    if (tokens.some((t) => n.includes(t))) return s;
+  }
+  return null;
+}
+
+async function loadEcSrosForDistrict(zoneCode, districtCode) {
+  try {
+    const pageCtx   = await getEcPage();
+    const afterZone = await ecAjax(pageCtx, 'loadDistrictCombo', zoneCode);
+    const afterDist = await ecAjax(afterZone, 'loadSroCombo', districtCode);
+    const sros = parseJsonOrSelectOptions(afterDist.html, 'cmb_SroName');
+    if (sros.length > 0) return sros;
+  } catch (_) {}
+  return STATIC_EC_SROS[districtCode] || [];
+}
+
 let _ecPageCache = null; // { html, cookies, time }
 
 async function getEcPage() {
@@ -1016,7 +2431,13 @@ async function ecAjax(pageCtx, actionVal, comboValue) {
     },
   });
 
-  return { html: res.body, cookies: mergeCookies(pageCtx.cookies, res.cookies), csrf };
+  const newCsrf = (res.body.match(/var\s+csrf\s*=\s*'([^']+)'/i) ||
+                   res.body.match(/name="_csrf" content="([^"]+)"/i) || [])[1];
+  return {
+    html: res.body,
+    cookies: mergeCookies(pageCtx.cookies, res.cookies),
+    csrf: newCsrf || pageCtx.csrf,
+  };
 }
 
 function parseEcResults(html) {
@@ -1063,9 +2484,349 @@ function parseEcResults(html) {
   return results;
 }
 
+function formatEcDate(d) {
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
+  return `${day}/${month}/${year}`;
+}
+
+function buildEcPeriodPresets() {
+  const now = new Date();
+  const presets = [];
+  for (let y = now.getFullYear(); y >= now.getFullYear() - 9; y--) {
+    presets.push({
+      id:       String(y),
+      label:    `${y} (01/01/${y} – 31/12/${y})`,
+      fromDate: `01/01/${y}`,
+      toDate:   `31/12/${y}`,
+    });
+  }
+  presets.push({
+    id:       'full',
+    label:    `Full period (01/01/2000 – ${formatEcDate(now)})`,
+    fromDate: '01/01/2000',
+    toDate:   formatEcDate(now),
+  });
+  return presets;
+}
+
+function ecRecordLabel(record, index) {
+  const dateKey = Object.keys(record).find((k) => /date/i.test(k));
+  const dateVal = dateKey ? record[dateKey] : '';
+  const docKey = Object.keys(record).find((k) => /doc|deed|number|no/i.test(k) && !/date/i.test(k));
+  const docVal = docKey ? record[docKey] : '';
+  const typeVal = record['Nature of Document'] || record['Document Type'] || record['Type'] || '';
+  const parts = [dateVal, typeVal, docVal].filter(Boolean);
+  return parts.length > 0 ? parts.join(' · ') : `Entry ${index + 1}`;
+}
+
+function ecEntriesFromRecords(records = []) {
+  return records.map((record, index) => ({
+    id:    String(index),
+    label: ecRecordLabel(record, index),
+    date:  Object.entries(record).find(([k]) => /date/i.test(k))?.[1] || '',
+  }));
+}
+
+function buildEcDocumentHtml(records, meta = {}) {
+  if (!records || records.length === 0) {
+    return wrapPattaPrintHtml(
+      'Encumbrance Certificate (EC)',
+      'tnreginet.gov.in',
+      '<p>No encumbrance records found for the selected period.</p>',
+    );
+  }
+
+  const metaRows = Object.entries(meta)
+    .filter(([, v]) => v != null && String(v).trim() !== '')
+    .map(([k, v]) => `<tr><th>${escHtml(k)}</th><td>${escHtml(v)}</td></tr>`)
+    .join('');
+
+  const headers = Object.keys(records[0]);
+  const headerRow = headers.map((h) => `<th>${escHtml(h)}</th>`).join('');
+  const bodyRows = records.map((r) =>
+    `<tr>${headers.map((h) => `<td>${escHtml(r[h] || '')}</td>`).join('')}</tr>`,
+  ).join('');
+
+  const body = `
+    <table>${metaRows}</table>
+    <p class="sub">${records.length} registration record(s) in this period.</p>
+    <div style="overflow-x:auto">
+      <table>
+        <thead><tr>${headerRow}</tr></thead>
+        <tbody>${bodyRows}</tbody>
+      </table>
+    </div>`;
+
+  return wrapPattaPrintHtml('Encumbrance Certificate (EC)', 'tnreginet.gov.in', body);
+}
+
+async function searchEcPortal(query) {
+  const {
+    zone, dc, sro, surveyNo, subDiv, fromDate, toDate, village, villageName, captcha, ecSession,
+  } = query;
+
+  if (!captcha || !ecSession) {
+    const err = new Error('Captcha required. Load captcha and enter the code shown on the image.');
+    err.captchaRequired = true;
+    throw err;
+  }
+
+  const sess = getEcSession(ecSession);
+  if (!sess) {
+    const err = new Error('EC session expired. Refresh the captcha and try again.');
+    err.captchaRequired = true;
+    throw err;
+  }
+
+  let ctx = { cookies: sess.cookies, csrf: sess.csrf, html: sess.html };
+
+  ctx = await ecAjax(ctx, 'loadDistrictCombo', zone);
+  ctx = await ecAjax(ctx, 'loadSroCombo', dc);
+  ctx = await ecAjax(ctx, 'loadVillageCombo', sro);
+  touchEcSession(ecSession, ctx);
+
+  const villages = parseJsonOrSelectOptions(ctx.html, 'cmb_Village');
+  const vill = village
+    ? villages.find((v) => v.code === village) || { code: village, name: villageName || village }
+    : pickEcVillage(villages, villageName);
+  if (!vill?.code) {
+    throw new Error('Could not load registration village for this SRO. Try another SRO manually.');
+  }
+
+  const villRes = await ecGetVillageDetails(ctx, {
+    villageCode: vill.code,
+    sro,
+    surveyNo,
+    subDiv,
+    fromDate,
+    toDate,
+    isRevenueVillage: false,
+  });
+  ctx.cookies = mergeCookies(ctx.cookies, villRes.cookies);
+  touchEcSession(ecSession, ctx);
+
+  if (!ecVillageDetailsOk(villRes.body)) {
+    console.warn('[EC] getVillageDetails failed:', String(villRes.body).slice(0, 400));
+    const msg = ecPortalErrorMessage(villRes.body);
+    const err = new Error(msg || 'Could not validate village for this SRO. Try another SRO.');
+    err.captchaRequired = /captcha|குறியீட்டு/i.test(String(msg || ''));
+    throw err;
+  }
+
+  const formParams = encodeForm({
+    requestType:              'ApplicationRH',
+    actionVal:                'searchDocYearWise',
+    screenId:                 '8400001',
+    divId:                    'searchComponentSection',
+    isPlotFlatWise:           'false',
+    isRevenueVillage:         'false',
+    formId:                   'EncumbranceCertificateForm',
+    validVillage:             '1',
+    loggedInGuest:            'false',
+    isECValid:                'N',
+    multiVillageLimitEC:      '3',
+    [EC_CTRL.zone]:           zone,
+    [EC_CTRL.district]:       dc,
+    [EC_CTRL.sro]:            sro,
+    [EC_CTRL.village]:        vill.code,
+    [EC_CTRL.surveyNo]:       surveyNo,
+    [EC_CTRL.subDiv]:         subDiv || '',
+    [EC_CTRL.fromDate]:       fromDate,
+    [EC_CTRL.toDate]:         toDate,
+    [EC_CTRL.captcha]:        captcha,
+    [EC_CTRL.captchaVal]:     encodeURIComponent(captcha),
+    txt_convExtent:           '1',
+    multi_SurveyNo:           surveyNo,
+    multi_SubDivisionNo:      subDiv || '',
+    multi_cmb_Village:        vill.code,
+    hdnCmnDDMMYYlert:         '',
+    hdnCmnDateAlert:          '',
+    hdn_year:                 '',
+    SpecialCharAndSpaceAlert: '',
+  });
+
+  const searchUrl =
+    `${EC_BASE}/portal/webHP?requestType=ApplicationRH&actionVal=searchDocYearWise&screenId=8400001` +
+    `&divId=searchComponentSection&isPlotFlatWise=false&isRevenueVillage=false` +
+    `&villageList=${encodeURIComponent(vill.code)}` +
+    `&surveyNumber=${encodeURIComponent(surveyNo)}` +
+    `&subDivisionNumber=${encodeURIComponent(subDiv || '')}` +
+    `&usrStartDt=${encodeURIComponent(fromDate)}` +
+    `&usrEndDt=${encodeURIComponent(toDate)}` +
+    `&_csrf=${encodeURIComponent(ctx.csrf)}&${formParams}`;
+
+  const result = await fetchRaw(searchUrl, {
+    cookies: ctx.cookies,
+    headers: {
+      Referer: EC_URL,
+      'X-Requested-With': 'XMLHttpRequest',
+    },
+  });
+  ctx.cookies = mergeCookies(ctx.cookies, result.cookies);
+  touchEcSession(ecSession, ctx);
+
+  if (result.status !== 200) {
+    throw new Error(`EC portal returned HTTP ${result.status}`);
+  }
+
+  if (ecPortalIsErrorPage(result.body)) {
+    console.warn('[EC] search error page:', String(result.body).slice(0, 400));
+    const msg = ecPortalErrorMessage(result.body);
+    const err = new Error(msg || 'EC portal error. Refresh captcha and try again.');
+    err.captchaRequired = true;
+    throw err;
+  }
+
+  if (ecSearchHasNoRecords(result.body)) {
+    return { records: [], rawHtml: result.body, noRecords: true, village: vill };
+  }
+
+  if (/சரியான காப்புக் குறியீட்டினை|incCaptcha|தயவுசெய்து குறியீட்டு/i.test(result.body)
+      && ecSearchLooksLikeForm(result.body)) {
+    const err = new Error('Incorrect captcha. Refresh the image, enter the new code, and try again.');
+    err.captchaRequired = true;
+    throw err;
+  }
+
+  if (ecSearchLooksLikeForm(result.body)) {
+    const err = new Error('EC search was rejected by tnreginet. Check captcha, SRO, and survey number.');
+    err.captchaRequired = /incCaptcha|குறியீட்டு/i.test(result.body);
+    throw err;
+  }
+
+  const records = parseEcResults(result.body);
+  const hidden  = extractEcHiddenFields(result.body);
+  const jsonStr = extractEcJsonStringFromHtml(result.body) || hidden.jsonString;
+  const portalHtml = extractEcDisplayHtml(result.body);
+
+  if (records.length === 0 && !jsonStr && !portalHtml) {
+    if (ecSearchHasNoRecords(result.body)) {
+      return { records: [], rawHtml: result.body, noRecords: true, village: vill };
+    }
+    const err = new Error('Could not read EC results from tnreginet. Refresh captcha and try again.');
+    err.captchaRequired = true;
+    throw err;
+  }
+
+  let pdfBuf = null;
+  if (jsonStr) {
+    pdfBuf = await fetchEcPreviewPdf(ctx, {
+      jsonString: jsonStr,
+      templateIds: hidden.templateIds,
+      appTransId:  hidden.appTransId,
+      fromDate,
+      toDate,
+    });
+  }
+  return {
+    records,
+    rawHtml: result.body,
+    village: vill,
+    pdfBuf,
+    portalHtml,
+    jsonString: jsonStr,
+  };
+}
+
 // ── EC Routes ─────────────────────────────────────────────────────────────────
 
-router.get('/ec/zones', (req, res) => res.json(EC_ZONES));
+router.get('/ec/zones', async (req, res) => {
+  try {
+    const zones = await loadEcZonesFromPage();
+    if (zones.length > 0) return res.json(zones);
+  } catch (_) {}
+  res.json(EC_ZONES_LEGACY);
+});
+
+router.get('/ec/captcha', async (req, res) => {
+  try {
+    const session = await createEcSession();
+    res.json({
+      sessionId:    session.id,
+      captchaImage: `data:image/png;base64,${session.captchaPng.toString('base64')}`,
+      expiresIn:    EC_SESSION_TTL_MS / 1000,
+      source:       'tnreginet.gov.in',
+    });
+  } catch (err) {
+    res.status(502).json({ error: err.message });
+  }
+});
+
+router.get('/ec/periods', (req, res) => {
+  res.json(buildEcPeriodPresets());
+});
+
+router.get('/ec/resolve', async (req, res) => {
+  const { lat, lon, district, taluk, village } = req.query;
+  const latN = parseFloat(lat);
+  const lonN = parseFloat(lon);
+
+  const coordHint = coordDistrictHint(latN, lonN);
+  let districtName = district;
+  if (!districtName && coordHint) districtName = coordHint.label;
+
+  if (!districtName && !coordHint) {
+    return res.status(400).json({
+      error: 'Could not resolve district from map location.',
+      hint:  'Tap the map on your parcel or fetch patta first.',
+    });
+  }
+
+  try {
+    const liveZones = await loadEcZonesFromPage();
+    const zonesToTry = [];
+    const seen = new Set();
+    const pushZone = (z) => {
+      if (!z || seen.has(z.code)) return;
+      seen.add(z.code);
+      zonesToTry.push(z);
+    };
+    if (coordHint) {
+      pushZone(liveZones.find((z) => z.code === coordHint.zone));
+    }
+    for (const z of liveZones) pushZone(z);
+    for (const z of EC_ZONES_LEGACY) pushZone(z);
+
+    for (const zone of zonesToTry) {
+      const districts = await loadEcDistrictsForZone(zone.code);
+      if (!districts.length) continue;
+
+      let dist = null;
+      if (coordHint && coordHint.zone === zone.code && coordHint.dc) {
+        dist = districts.find((d) => d.code === coordHint.dc);
+      }
+      if (!dist && districtName) {
+        dist = matchEcDistrict(districts, districtName);
+      }
+      if (!dist && coordHint && coordHint.zone === zone.code) {
+        dist = districts[0];
+      }
+      if (!dist) continue;
+
+      const sros = await loadEcSrosForDistrict(zone.code, dist.code);
+      const areaHint = [taluk, village, districtName].filter(Boolean).join(' ');
+      const suggestedSro = matchEcSro(sros, areaHint) || sros[0] || null;
+
+      return res.json({
+        source:       'tnreginet.gov.in',
+        zone:         { code: zone.code, name: zone.name },
+        district:     dist,
+        sros,
+        suggestedSro,
+        resolvedFrom: coordHint ? 'coordinates' : 'district-name',
+      });
+    }
+
+    return res.status(404).json({
+      error: `District "${districtName || 'unknown'}" not found in EC registry.`,
+      hint:  'Use Manual — Zone / District / SRO below.',
+    });
+  } catch (err) {
+    return res.status(502).json({ error: err.message });
+  }
+});
 
 router.get('/ec/districts', async (req, res) => {
   const { zone } = req.query;
@@ -1101,65 +2862,117 @@ router.get('/ec/sros', async (req, res) => {
 });
 
 router.get('/ec/search', async (req, res) => {
-  const { zone, dc, sro, surveyNo, subDiv, fromDate, toDate } = req.query;
+  const { zone, dc, sro, surveyNo, subDiv, fromDate, toDate, captcha, ecSession, villageName } = req.query;
   if (!zone || !dc || !sro || !surveyNo || !fromDate || !toDate) {
     return res.status(400).json({
       error: 'zone, dc, sro, surveyNo, fromDate, toDate required (dates: DD/MM/YYYY)',
     });
   }
+  if (!captcha || !ecSession) {
+    return res.status(400).json({
+      error:       'Captcha required for EC search.',
+      hint:        'Load the captcha image, enter the code, then fetch EC.',
+      captchaRequired: true,
+    });
+  }
 
   try {
-    const pageCtx = await getEcPage();
-    const csrf    = pageCtx.csrf || (pageCtx.html.match(/var\s+csrf\s*=\s*'([^']+)'/i) || [])[1] || '';
+    let searchResult = await searchEcPortal(req.query);
+    let usedSro = req.query.sro;
+    let usedSroName = req.query.sroName || sro;
 
-    const body = encodeForm({
-      requestType:              'ApplicationRH',
-      actionVal:                'searchDocYearWise',
-      screenId:                 '8400001',
-      divId:                    'searchComponentSection',
-      isPlotFlatWise:           'false',
-      _csrf:                    csrf,
-      authToken:                (pageCtx.html.match(/id="authToken"[^>]*value="([^"]*)"/i) || [])[1] || '',
-      formId:                   'EncumbranceCertificateForm',
-      [EC_CTRL.zone]:           zone,
-      [EC_CTRL.district]:       dc,
-      [EC_CTRL.sro]:            sro,
-      [EC_CTRL.village]:        req.query.village || '',
-      [EC_CTRL.surveyNo]:       surveyNo,
-      [EC_CTRL.subDiv]:         subDiv || '',
-      [EC_CTRL.fromDate]:       fromDate,
-      [EC_CTRL.toDate]:         toDate,
-      [EC_CTRL.captcha]:        req.query.captcha || '',
-      [EC_CTRL.captchaVal]:     req.query.captcha || '',
-      [EC_CTRL.search]:         'Search',
-    });
+    const hasEcData = (r) =>
+      (r.records?.length > 0) ||
+      (r.pdfBuf?.length > 0) ||
+      (r.portalHtml && r.portalHtml.length > 200);
 
-    const result = await fetchRaw(EC_BASE + '/portal/webHP?requestType=ApplicationRH&actionVal=searchDocYearWise&screenId=8400001&divId=searchComponentSection&isPlotFlatWise=false&_csrf=' + csrf, {
-      method:  'POST',
-      body,
-      cookies: pageCtx.cookies,
-      headers: {
-        Referer: EC_URL,
-        Origin:  EC_BASE,
-        'X-Requested-With': 'XMLHttpRequest',
-      },
-    });
-
-    if (result.status !== 200) {
-      return res.status(502).json({ error: `EC portal returned HTTP ${result.status}` });
+    if (!hasEcData(searchResult) && searchResult.noRecords) {
+      try {
+        const sros = await loadEcSrosForDistrict(zone, dc);
+        const startIdx = sros.findIndex((s) => s.code === sro);
+        for (let i = 0; i < sros.length && i < 8; i++) {
+          if (i === startIdx) continue;
+          const alt = sros[i];
+          try {
+            const altResult = await searchEcPortal({
+              ...req.query,
+              sro: alt.code,
+              sroName: alt.name,
+            });
+            if (hasEcData(altResult)) {
+              searchResult = altResult;
+              usedSro = alt.code;
+              usedSroName = alt.name;
+              break;
+            }
+            if (altResult.noRecords) searchResult = altResult;
+          } catch (altErr) {
+            if (altErr.captchaRequired) throw altErr;
+          }
+        }
+      } catch (_) {}
     }
 
-    const records = parseEcResults(result.body);
-    if (records.length === 0) {
-      return res.status(404).json({
-        error: 'No EC records found for the given parameters.',
-        hint:  'Try a wider date range or verify the survey number and SRO.',
+    const { records, noRecords, village, pdfBuf, portalHtml } = searchResult;
+
+    const zoneName = (await loadEcZonesFromPage()).find((z) => z.code === zone)?.name || zone;
+    const meta = {
+      Zone:           zoneName,
+      District:       req.query.districtName || dc,
+      SRO:            usedSroName || usedSro,
+      Village:        village?.name || villageName || '-',
+      'Survey No':    surveyNo,
+      'Sub Division': subDiv || '-',
+      Period:         `${fromDate} to ${toDate}`,
+    };
+
+    const html = portalHtml || buildEcDocumentHtml(records, meta);
+    const fileStem = `EC-${surveyNo}-${fromDate.replace(/\//g, '-')}`;
+    const document = {
+      type:      'ec',
+      source:    'tnreginet.gov.in',
+      available: true,
+      html,
+      fileName:  `${fileStem}.html`,
+    };
+    if (pdfBuf && pdfBuf.length > 0) {
+      document.pdfBase64 = pdfBuf.toString('base64');
+      document.pdfFileName = `${fileStem}.pdf`;
+      document.mimeType = 'application/pdf';
+    }
+
+    const hasDocument = (pdfBuf && pdfBuf.length > 0) || (portalHtml && portalHtml.length > 200);
+
+    if ((noRecords || records.length === 0) && !hasDocument) {
+      return res.json({
+        source:   'tnreginet.gov.in',
+        count:    0,
+        records:  [],
+        entries:  [],
+        document,
+        meta,
+        message: 'No encumbrance records found for this survey/period.',
+        hint:    'Try another SRO from the list or verify the survey number.',
       });
     }
 
-    res.json({ source: 'tnreginet.gov.in', count: records.length, records });
+    res.json({
+      source:   'tnreginet.gov.in',
+      count:    records.length,
+      records,
+      entries:  ecEntriesFromRecords(records),
+      document,
+      meta,
+    });
   } catch (err) {
-    res.status(502).json({ error: err.message });
+    const status = err.captchaRequired ? 400 : 502;
+    res.status(status).json({
+      error: err.message,
+      captchaRequired: Boolean(err.captchaRequired),
+      hint: err.captchaRequired
+        ? 'Tap refresh captcha, enter the code, and try again.'
+        : 'Verify SRO and survey number; try manual SRO selection.',
+    });
   }
 });
 

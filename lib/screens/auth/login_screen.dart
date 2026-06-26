@@ -33,15 +33,12 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
-      final portal = await AuthService.instance.loginAutoDetect(
+      await AuthService.instance.login(
         _emailCtrl.text.trim(),
         _passwordCtrl.text,
       );
       if (!mounted) return;
-      Navigator.pushReplacementNamed(
-        context,
-        AuthService.instance.routeForPortal(portal),
-      );
+      Navigator.pushReplacementNamed(context, '/home');
     } catch (e) {
       if (!mounted) return;
       setState(() {

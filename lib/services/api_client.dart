@@ -69,11 +69,16 @@ class ApiClient {
     return jsonDecode(res.body) as List<dynamic>;
   }
 
-  static Future<Map<String, dynamic>> get(String path) async {
-    final res = await http.get(
-      Uri.parse('$_baseUrl$path'),
-      headers: await _headers(),
-    );
+  static Future<Map<String, dynamic>> get(
+    String path, {
+    Duration timeout = const Duration(seconds: 60),
+  }) async {
+    final res = await http
+        .get(
+          Uri.parse('$_baseUrl$path'),
+          headers: await _headers(),
+        )
+        .timeout(timeout);
     return _decode(res);
   }
 
@@ -83,6 +88,28 @@ class ApiClient {
       headers: await _headers(),
     );
     return _decodeList(res);
+  }
+
+  /// Raw bytes (e.g. government PDF from /api/tnlands/fmb).
+  static Future<List<int>> getBytes(String path, {bool auth = false}) async {
+    final res = await http
+        .get(
+          Uri.parse('$_baseUrl$path'),
+          headers: await _headers(auth: auth),
+        )
+        .timeout(const Duration(seconds: 120));
+    if (res.statusCode >= 400) {
+      try {
+        final body = jsonDecode(res.body);
+        throw ApiException(
+          statusCode: res.statusCode,
+          message: (body is Map ? body['error'] as String? : null) ?? 'Request failed',
+        );
+      } catch (_) {
+        throw ApiException(statusCode: res.statusCode, message: 'Request failed');
+      }
+    }
+    return res.bodyBytes;
   }
 
   static Future<Map<String, dynamic>> post(String path, Map<String, dynamic> body,
