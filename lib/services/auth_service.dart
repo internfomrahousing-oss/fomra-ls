@@ -1,12 +1,24 @@
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/user.dart';
-import 'api_client.dart'; // for ApiException
+import 'api_client.dart';
+
+enum LoginPortal { employee, management }
 
 class AuthService {
   static final AuthService instance = AuthService._();
   AuthService._();
 
+  static const _portalKey = 'login_portal';
+
   static SupabaseClient get _client => Supabase.instance.client;
+
+  LoginPortal? _portal;
+
+  LoginPortal? get loginPortal => _portal;
+
+  bool get isManagement => _portal == LoginPortal.management;
+  bool get isEmployee => _portal == LoginPortal.employee;
 
   AppUser? get currentUser {
     final u = _client.auth.currentUser;
@@ -23,38 +35,70 @@ class AuthService {
     );
   }
 
-  bool get isLoggedIn => _client.auth.currentSession != null;
+  bool get isLoggedIn => _portal != null;
 
-  /// Restores an existing Supabase session (persisted automatically by SDK).
-  Future<bool> restoreSession() async {
-    return _client.auth.currentSession != null;
+  Future<LoginPortal?> restorePortal() async {
+    final prefs = await SharedPreferences.getInstance();
+    final v = prefs.getString(_portalKey);
+    if (v == LoginPortal.management.name) {
+      _portal = LoginPortal.management;
+      return _portal;
+    }
+    if (v == LoginPortal.employee.name) {
+      _portal = LoginPortal.employee;
+      return _portal;
+    }
+    return null;
   }
 
-  // Fallback credentials used when Supabase is unreachable or no user created yet
-  static const _fallbackEmail    = 'info@fomrahousing.in';
+  static const _fallbackEmail = 'info@fomrahousing.in';
   static const _fallbackPassword = 'Fomra@2024';
 
-  /// Throws [ApiException] on failure so existing UI error handling works.
-  Future<bool> login(String email, String password) async {
-    // Try Supabase first
+  Future<LoginPortal> loginAutoDetect(String email, String password) async {
+    await _authenticate(email, password);
+    final role =
+        _client.auth.currentUser?.userMetadata?['role'] as String? ?? 'agent';
+    final portal = (role == 'management' || role == 'admin')
+        ? LoginPortal.management
+        : LoginPortal.employee;
+    _portal = portal;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_portalKey, portal.name);
+    return portal;
+  }
+
+  Future<bool> loginWithPortal(
+    String email,
+    String password,
+    LoginPortal portal,
+  ) async {
+    await _authenticate(email, password);
+    _portal = portal;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_portalKey, portal.name);
+    return true;
+  }
+
+  Future<void> _authenticate(String email, String password) async {
     try {
       await _client.auth.signInWithPassword(email: email, password: password);
-      return true;
+      return;
     } on AuthException catch (e) {
-      // If Supabase rejects but local fallback matches, allow entry
       if (email.trim().toLowerCase() == _fallbackEmail &&
           password == _fallbackPassword) {
-        return true;
+        return;
       }
       throw ApiException(statusCode: 401, message: e.message);
     } catch (e) {
-      // Network error / Supabase unreachable — try fallback
       if (email.trim().toLowerCase() == _fallbackEmail &&
           password == _fallbackPassword) {
-        return true;
+        return;
       }
+      if (e is ApiException) rethrow;
       throw const ApiException(
-          statusCode: 500, message: 'Connection error. Check your internet.');
+        statusCode: 500,
+        message: 'Connection error. Check your internet.',
+      );
     }
   }
 
@@ -69,7 +113,11 @@ class AuthService {
       await _client.auth.signUp(
         email: email,
         password: password,
-        data: {'full_name': fullName, if (phone != null) 'phone': phone, 'role': role},
+        data: {
+          'full_name': fullName,
+          if (phone != null) 'phone': phone,
+          'role': role,
+        },
       );
       return true;
     } on AuthException catch (e) {
@@ -78,6 +126,16 @@ class AuthService {
   }
 
   Future<void> logout() async {
-    await _client.auth.signOut();
+    try {
+      await _client.auth.signOut();
+    } catch (_) {}
+    _portal = null;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_portalKey);
   }
+
+  String routeForPortal(LoginPortal portal) => switch (portal) {
+        LoginPortal.management => '/management-portal',
+        LoginPortal.employee => '/employee-portal',
+      };
 }
