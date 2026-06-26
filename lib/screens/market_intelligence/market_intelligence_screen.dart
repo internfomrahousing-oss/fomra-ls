@@ -110,11 +110,12 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
   String _developmentPotential = 'Medium';
   _ValuationResult? _valuationResult;
 
-  // Competitor Projects (MagicBricks or TNRERA fallback)
+  // Competitor Projects (MagicBricks, 99acres, Housing.com)
   List<Map<String, dynamic>> _mbListings = [];
   bool _fetchingMb = false;
   String? _mbError;
-  String _mbSource = 'MagicBricks';
+  String? _mbPartialWarning;
+  String _mbSource = 'Property Portals';
   String _compFilter = 'All';   // All | Ongoing | Completed | Plot | Old
   int _oldYearsFilter = 5;       // 2 | 5 | 10
 
@@ -130,7 +131,15 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
   void initState() {
     super.initState();
     AppStore.instance.addListener(_onStoreUpdate);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _detectLocation());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _detectLocation();
+      // Auto-load competitor projects so user doesn't have to hunt for the button
+      Future.delayed(const Duration(milliseconds: 800), () {
+        if (mounted && !_fetchingMb && _mbListings.isEmpty) {
+          _fetchMagicBricksProjects();
+        }
+      });
+    });
   }
 
   @override
@@ -468,9 +477,22 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
 
   // â”€â”€ AI Valuation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
+  double _competitorBenchmarkPrice() {
+    final priced = _mbListings
+        .map((e) => (e['pricePerSqft'] as num?)?.toDouble() ?? 0)
+        .where((p) => p > 0)
+        .toList()
+      ..sort();
+    if (priced.isEmpty) return 5000.0;
+    final mid = priced.length ~/ 2;
+    return priced.length.isOdd
+        ? priced[mid]
+        : (priced[mid - 1] + priced[mid]) / 2;
+  }
+
   _ValuationResult _computeValuation() {
     final infraScore = _infraScores['Overall Location'] ?? 50;
-    const benchmarkPrice = 5000.0;
+    final benchmarkPrice = _competitorBenchmarkPrice();
     final roadWidth = double.tryParse(_roadWidthCtrl.text) ?? 20;
     final landSize = double.tryParse(_landSizeCtrl.text) ?? 1000;
 
@@ -541,20 +563,55 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
         .replaceAll(RegExp(r'\s*[Dd]istrict\s*$'), '')
         .replaceAll(RegExp(r'\s*[Dd]t\s*$'), '')
         .trim();
+    final cityParam = city.isEmpty ? 'Chennai' : city;
+    final params = 'city=${Uri.encodeComponent(cityParam)}';
 
     setState(() {
       _fetchingMb = true;
       _mbError = null;
+      _mbPartialWarning = null;
       _mbListings = [];
     });
 
     try {
-      final result = await ApiClient.get(
-          '/api/magicbricks?city=${Uri.encodeComponent(city)}');
-      final listings = (result['listings'] as List<dynamic>?) ?? [];
+      Map<String, dynamic>? result;
+      for (final path in ['/api/magicbricks?$params', '/api/competitors?$params']) {
+        try {
+          result = await ApiClient.get(path)
+              .timeout(const Duration(seconds: 120));
+          final count = (result['listings'] as List?)?.length ?? 0;
+          if (count > 0) break;
+        } catch (_) {
+          result = null;
+        }
+      }
+
+      if (result == null) {
+        throw const ApiException(
+          statusCode: 0,
+          message: 'Could not load competitor projects. Start the backend: cd backend && npm start',
+        );
+      }
+
+      final raw = (result['listings'] as List<dynamic>?) ?? [];
+      final listings = raw
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+
+      if (listings.isEmpty) {
+        throw ApiException(
+          statusCode: 502,
+          message: (result['error'] as String?) ??
+              'No competitor projects found for $cityParam.',
+        );
+      }
+
       setState(() {
-        _mbListings = listings.cast<Map<String, dynamic>>();
-        _mbSource = (result['source'] as String?) ?? 'Projects';
+        _mbListings = listings;
+        _mbSource = (result!['source'] as String?) ?? 'MagicBricks';
+        _mbPartialWarning = result['partial'] is List
+            ? (result['partial'] as List).join('; ')
+            : result['partial'] as String?;
         _fetchingMb = false;
       });
     } on ApiException catch (e) {
@@ -562,9 +619,14 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
         _mbError = e.message;
         _fetchingMb = false;
       });
-    } catch (_) {
+    } on TimeoutException {
       setState(() {
-        _mbError = 'Could not reach the server. Check your connection and try again.';
+        _mbError = 'Request timed out. Prices take ~1 min to load — try again.';
+        _fetchingMb = false;
+      });
+    } catch (e) {
+      setState(() {
+        _mbError = 'Could not reach the server at localhost:3000. Run: cd backend && npm start';
         _fetchingMb = false;
       });
     }
@@ -602,10 +664,14 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
     String fmtPrice(Map<String, dynamic> item) {
       final ppsf = (item['pricePerSqft'] as num?)?.toDouble() ?? 0;
       final total = (item['priceRupees'] as num?)?.toDouble() ?? 0;
-      if (ppsf > 0) return 'â‚¹${ppsf.toInt()}/sqft';
-      if (total >= 1e7) return 'â‚¹${(total / 1e7).toStringAsFixed(2)} Cr';
-      if (total > 0) return 'â‚¹${(total / 1e5).toStringAsFixed(2)} L';
-      return '';
+      final parts = <String>[];
+      if (ppsf > 0) parts.add('₹${ppsf.toInt()}/sqft');
+      if (total >= 1e7) {
+        parts.add('₹${(total / 1e7).toStringAsFixed(2)} Cr');
+      } else if (total > 0) {
+        parts.add('₹${(total / 1e5).toStringAsFixed(2)} L');
+      }
+      return parts.join(' · ');
     }
 
     Widget chip(String label, Color color) => Container(
@@ -625,11 +691,14 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
         Row(children: [
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Source: $_mbSource',
+              Text('Sources: $_mbSource',
                   style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
               const SizedBox(height: 2),
-              Text('Area: ${city.isEmpty ? 'Chennai' : city}',
-                  style: const TextStyle(fontSize: 12, color: AppColors.textPrimary)),
+              Text(
+                'Area: ${city.isEmpty ? 'Chennai' : city}'
+                '${_activeLatLng != null ? ' · ${_selectedRadius}km radius' : ''}',
+                style: const TextStyle(fontSize: 12, color: AppColors.textPrimary),
+              ),
             ]),
           ),
           ElevatedButton.icon(
@@ -640,7 +709,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                     child: CircularProgressIndicator(
                         color: Colors.white, strokeWidth: 2))
                 : const Icon(Icons.travel_explore, size: 16),
-            label: Text(_fetchingMb ? 'Fetching...' : 'Fetch Projects',
+            label: Text(_fetchingMb ? 'Loading prices (~1 min)...' : 'Fetch Projects',
                 style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
             style: ElevatedButton.styleFrom(
               backgroundColor: mbColor,
@@ -648,6 +717,28 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
             ),
           ),
         ]),
+
+        if (_mbPartialWarning != null && _mbPartialWarning!.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFFBEB),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xFFFCD34D)),
+            ),
+            child: Row(children: [
+              const Icon(Icons.info_outline, color: Color(0xFFD97706), size: 16),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Some sources unavailable: $_mbPartialWarning',
+                  style: const TextStyle(fontSize: 11, color: Color(0xFFB45309)),
+                ),
+              ),
+            ]),
+          ),
+        ],
 
         if (_mbError != null) ...[
           const SizedBox(height: 10),
@@ -728,8 +819,9 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
             final poss      = item['possession']  as String? ?? '';
             final rera      = item['reraNo']      as String? ?? '';
             final developer = item['developer']   as String? ?? '';
+            final source    = item['source']      as String? ?? '';
             final price     = fmtPrice(item);
-            final isTnrera  = _mbSource == 'TNRERA';
+            final isTnrera  = source == 'TNRERA';
             return Container(
               margin: const EdgeInsets.only(bottom: 8),
               padding: const EdgeInsets.all(12),
@@ -791,9 +883,10 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                   ]),
                 ],
                 if (bhk.isNotEmpty || (poss.isNotEmpty && poss != 'N/A') ||
-                    rera.isNotEmpty) ...[
+                    rera.isNotEmpty || source.isNotEmpty) ...[
                   const SizedBox(height: 6),
                   Wrap(spacing: 6, runSpacing: 4, children: [
+                    if (source.isNotEmpty) chip(source, const Color(0xFF6A1B9A)),
                     if (bhk.isNotEmpty) chip(bhk, const Color(0xFF1565C0)),
                     if (poss.isNotEmpty && poss != 'N/A')
                       chip(poss, AppColors.success),
@@ -811,7 +904,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                   color: mbColor.withValues(alpha: 0.3)),
               const SizedBox(height: 8),
               const Text(
-                'Tap "Fetch Projects" to load\ncompetitor projects for this area.',
+                'Tap "Fetch Projects" to load\ncompetitor projects with prices\nfrom MagicBricks, 99acres & Housing.com.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                     fontSize: 12, color: AppColors.textSecondary, height: 1.4),
@@ -1780,8 +1873,15 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
           ]),
           const SizedBox(height: 12),
           // Market price reference
-          const _AutoChip('Market Reference',
-              '₹5000/sqft  (default — fetch competitor data to refine)'),
+          _AutoChip('Market Reference', () {
+            final bench = _competitorBenchmarkPrice();
+            final fromCompetitors = _mbListings.any(
+              (e) => ((e['pricePerSqft'] as num?)?.toDouble() ?? 0) > 0,
+            );
+            return fromCompetitors
+                ? '₹${bench.toInt()}/sqft  (median from competitor data)'
+                : '₹5000/sqft  (default — fetch competitor data to refine)';
+          }()),
           const SizedBox(height: 12),
           // Row 3: Location Category + Development Potential
           Row(children: [
@@ -3000,8 +3100,8 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
           child: const Icon(Icons.article_outlined, color: color, size: 18),
         ),
         const SizedBox(width: 10),
-        Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: const [
+        const Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text('Patta / Chitta / FMB',
                 style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: color)),
             Text('eservices.tn.gov.in',
@@ -3064,9 +3164,9 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
             color: _showManualPatta ? color.withValues(alpha: 0.06) : Colors.transparent,
           ),
           child: Row(children: [
-            Icon(Icons.tune, size: 15, color: color),
+            const Icon(Icons.tune, size: 15, color: color),
             const SizedBox(width: 8),
-            Expanded(child: Text('Manual — District / Taluk / Village',
+            const Expanded(child: Text('Manual — District / Taluk / Village',
                 style: TextStyle(fontSize: 13, color: color, fontWeight: FontWeight.w600))),
             Icon(_showManualPatta ? Icons.expand_less : Icons.expand_more,
                 size: 18, color: color),
@@ -3228,8 +3328,8 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
           child: const Icon(Icons.account_balance_outlined, color: color, size: 18),
         ),
         const SizedBox(width: 10),
-        Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: const [
+        const Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text('Encumbrance Certificate (EC)',
                 style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: color)),
             Text('tnreginet.gov.in',
@@ -3307,9 +3407,9 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
             color: _showManualEc ? color.withValues(alpha: 0.06) : Colors.transparent,
           ),
           child: Row(children: [
-            Icon(Icons.tune, size: 15, color: color),
+            const Icon(Icons.tune, size: 15, color: color),
             const SizedBox(width: 8),
-            Expanded(child: Text('Manual — Zone / District / SRO',
+            const Expanded(child: Text('Manual — Zone / District / SRO',
                 style: TextStyle(fontSize: 13, color: color, fontWeight: FontWeight.w600))),
             Icon(_showManualEc ? Icons.expand_less : Icons.expand_more,
                 size: 18, color: color),

@@ -4,10 +4,18 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiClient {
-  // On web: use the same origin as the page (backend serves the Flutter files).
-  // On native: fall back to localhost for local development.
-  static String get _baseUrl =>
-      kIsWeb ? Uri.base.origin : 'http://localhost:3000';
+  // Web production: same origin. Local dev: always hit the API on :3000.
+  static String get _baseUrl {
+    if (kIsWeb) {
+      final origin = Uri.base.origin;
+      final host = Uri.base.host;
+      if (host == 'localhost' || host == '127.0.0.1') {
+        return 'http://localhost:3000';
+      }
+      return origin;
+    }
+    return 'http://localhost:3000';
+  }
 
   static const String _tokenKey = 'auth_token';
 
