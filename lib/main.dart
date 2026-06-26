@@ -79,12 +79,10 @@ class _StartupScreenState extends State<_StartupScreen> {
         const Duration(seconds: 12),
         onTimeout: () => throw 'Connection timed out.\nCheck your internet and try again.',
       );
-      final portal = await AuthService.instance.restorePortal();
+      final hasSession = await AuthService.instance.checkSession();
       if (!mounted) return;
-      if (portal != null) {
-        Navigator.of(context).pushReplacementNamed(
-          AuthService.instance.routeForPortal(portal),
-        );
+      if (hasSession) {
+        Navigator.of(context).pushReplacementNamed('/home');
         return;
       }
     } catch (e) {

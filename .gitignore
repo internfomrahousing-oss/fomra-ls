@@ -49,3 +49,6 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 .vercel
+
+# Backend debug scripts & captured artifacts (sessions, captchas, html dumps)
+backend/scripts/
