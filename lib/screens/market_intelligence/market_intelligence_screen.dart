@@ -8,6 +8,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_drawer.dart';
 import '../../widgets/fomra_app_bar.dart';
@@ -2435,6 +2436,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
   List<Map<String, String>> _pattaOwners = [];
   String? _pattaError;
   String? _pattaSource;
+  Map<String, dynamic>? _pattaDocuments;
   bool   _showManualPatta = false;
   bool   _showManualEc    = false;
   Timer? _pattaDebounce;
@@ -2695,11 +2697,63 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
       _pattaSource = result['source'] as String?;
       _pattaFields = fields.isEmpty ? null : fields;
       _pattaOwners = owners;
+      _pattaDocuments = result['documents'] as Map<String, dynamic>?;
       if (fields.isEmpty && owners.isEmpty) {
         _pattaError = (result['error'] as String?) ??
             'No patta parcel found at this location in TNGIS.';
       }
     });
+  }
+
+  String? _pattaFmbDownloadUrl() {
+    final docs = _pattaDocuments;
+    final fmb = docs?['fmb'] as Map<String, dynamic>?;
+    if (fmb != null && fmb['available'] == true) {
+      final fields = _pattaFields;
+      final dc = fields?['District Code'];
+      final tc = fields?['Taluk Code'];
+      final vc = fields?['Village Code'];
+      final survey = fields?['Survey Number'];
+      if (dc != null && tc != null && vc != null && survey != null) {
+        return '${ApiClient.baseUrl}/api/tnlands/fmb'
+            '?dc=${Uri.encodeComponent(dc)}'
+            '&tc=${Uri.encodeComponent(tc)}'
+            '&vc=${Uri.encodeComponent(vc)}'
+            '&surveyNo=${Uri.encodeComponent(survey)}';
+      }
+      if (widget.lat != null && widget.lon != null) {
+        return '${ApiClient.baseUrl}/api/tnlands/fmb'
+            '?lat=${widget.lat}&lon=${widget.lon}';
+      }
+    }
+    return null;
+  }
+
+  Future<void> _openExternalUrl(String url) async {
+    final uri = Uri.parse(url);
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not open link in browser')),
+        );
+      }
+    }
+  }
+
+  Future<void> _viewFmbSketch() async {
+    final url = _pattaFmbDownloadUrl();
+    if (url == null) {
+      setState(() => _pattaError = 'FMB sketch is not available for this parcel.');
+      return;
+    }
+    await _openExternalUrl(url);
+  }
+
+  Future<void> _openEservicesChitta() async {
+    final portal = _pattaDocuments?['eservicesPortal'] as Map<String, dynamic>?;
+    final url = portal?['url'] as String? ??
+        'https://eservices.tn.gov.in/eservicesnew/land/chittaNewRuralTamil.html?lan=ta';
+    await _openExternalUrl(url);
   }
 
   /// Fetch patta from TNGIS for the active map location (or device GPS).
@@ -2713,6 +2767,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
       _pattaOwners = [];
       _pattaError = null;
       _pattaSource = null;
+      _pattaDocuments = null;
     });
 
     if (lat == null || lon == null) {
@@ -2869,6 +2924,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
       _pattaOwners = [];
       _pattaError = null;
       _pattaSource = null;
+      _pattaDocuments = null;
     });
     try {
       final subDiv = _subDivCtrl.text.trim();
@@ -2898,6 +2954,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
       _pattaOwners = [];
       _pattaError = null;
       _pattaSource = null;
+      _pattaDocuments = null;
     });
     try {
       var params = 'dc=${_selDistrict!.code}'
@@ -3182,7 +3239,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
                   child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
               : const Icon(Icons.map_outlined, size: 16),
           label: Text(
-            _fetchingPatta ? 'Fetching from TNGIS…' : 'Fetch Patta for this Location',
+            _fetchingPatta ? 'Fetching from TNGIS…' : 'Fetch Patta & FMB for this Location',
             style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
           ),
           style: ElevatedButton.styleFrom(
@@ -3385,8 +3442,88 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
                 ),
               )),
         ],
+        if (_pattaDocuments != null) ...[
+          const SizedBox(height: 12),
+          const Divider(height: 1),
+          const SizedBox(height: 10),
+          const Text('Official Documents',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: color)),
+          const SizedBox(height: 8),
+          ..._buildPattaDocumentActions(color),
+        ],
       ]),
     );
+  }
+
+  List<Widget> _buildPattaDocumentActions(Color color) {
+    final docs = _pattaDocuments!;
+    final fmb = docs['fmb'] as Map<String, dynamic>?;
+    final portal = docs['eservicesPortal'] as Map<String, dynamic>?;
+    final widgets = <Widget>[];
+
+    if (fmb != null) {
+      final available = fmb['available'] == true;
+      final fmbUrl = available ? _pattaFmbDownloadUrl() : null;
+      widgets.add(
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: available && fmbUrl != null ? _viewFmbSketch : null,
+            icon: const Icon(Icons.picture_as_pdf_outlined, size: 16),
+            label: Text(
+              available ? 'View / Download FMB Sketch (PDF)' : 'FMB sketch not digitized',
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: color,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 11),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
+            ),
+          ),
+        ),
+      );
+      if (!available && fmb['error'] != null) {
+        widgets.addAll([
+          const SizedBox(height: 4),
+          Text(fmb['error'].toString(),
+              style: TextStyle(fontSize: 10, color: Colors.orange.shade800)),
+        ]);
+      } else if (fmb['giscode'] != null) {
+        widgets.addAll([
+          const SizedBox(height: 4),
+          Text('CollabLand · ${fmb['giscode']}',
+              style: const TextStyle(fontSize: 10, color: AppColors.textSecondary)),
+        ]);
+      }
+    }
+
+    if (portal != null) {
+      widgets.addAll([
+        const SizedBox(height: 8),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: _openEservicesChitta,
+            icon: const Icon(Icons.open_in_browser, size: 16),
+            label: const Text('Open Chitta / Patta on eservices.tn.gov.in',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: color,
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
+            ),
+          ),
+        ),
+        if (portal['hint'] != null) ...[
+          const SizedBox(height: 4),
+          Text(portal['hint'].toString(),
+              style: const TextStyle(fontSize: 10, color: AppColors.textSecondary)),
+        ],
+      ]);
+    }
+
+    return widgets;
   }
 
   // â”€â”€ EC UI â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€

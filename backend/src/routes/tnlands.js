@@ -11,7 +11,8 @@
  *   GET /api/tnlands/districts             — TN districts (live from Patta page, static fallback)
  *   GET /api/tnlands/taluks?dc=            — taluks for a district code
  *   GET /api/tnlands/villages?dc=&tc=      — villages for a taluk code
- *   GET /api/tnlands/patta                 — Patta/Chitta extract
+ *   GET /api/tnlands/patta                 — Patta/Chitta extract (+ FMB document when TNGIS hit)
+   GET /api/tnlands/fmb                   — FMB sketch PDF (CollabLand-TN)
  *   GET /api/tnlands/ec/zones              — EC zones (static)
  *   GET /api/tnlands/ec/districts?zone=    — EC districts for a zone
  *   GET /api/tnlands/ec/sros?zone=&dc=     — SROs for a district
@@ -514,7 +515,149 @@ async function fetchTngisPatta({ surveyNo, subDiv, lat, lon, radiusMeters = 5000
   }).filter(r => Object.keys(r).length > 0);
 
   if (Object.keys(primary).length === 0 && owners.length === 0) return null;
-  return { fields: primary, owners };
+  return { fields: primary, owners, tngisProps: features[0].properties || {} };
+}
+
+// ── CollabLand FMB (official digitized sketch PDF) ───────────────────────────
+//
+// Tamil Nadu Survey Dept publishes digitized FMB sketches via CollabLand-TN.
+// giscode format (verified): S + 2-digit district + taluk + 3-digit village + survey
+//   e.g. district=2, taluk=11, village=010, survey=217 → S0211010217
+
+const COLLABLAND_FMB_URL =
+  'https://collabland-tn.gov.in/rest/Collabland/FMBMapServicePDF';
+
+function padLandCode(value, width) {
+  const s = String(value ?? '').trim();
+  if (!s) return '';
+  return s.padStart(width, '0');
+}
+
+function buildCollablandGiscode({ districtCode, talukCode, villageCode, surveyNo }) {
+  const dc     = padLandCode(districtCode, 2);
+  const tc     = String(talukCode ?? '').trim();
+  const vc     = padLandCode(villageCode, 3);
+  const survey = String(surveyNo ?? '').trim();
+  if (!dc || !tc || !vc || !survey) return null;
+  return `S${dc}${tc}${vc}${survey}`;
+}
+
+function giscodeFromTngisProps(props = {}) {
+  return buildCollablandGiscode({
+    districtCode: props.district_code,
+    talukCode:    props.taluk_code,
+    villageCode:  props.village_code,
+    surveyNo:     props.survey_number,
+  });
+}
+
+function eservicesCodesFromTngisProps(props = {}) {
+  const dc = padLandCode(props.district_code, 3);
+  const tc = padLandCode(props.taluk_code, 3);
+  const vc = padLandCode(props.village_code, 3);
+  if (!dc || !tc || !vc) return null;
+  return { dc, tc, vc };
+}
+
+async function fetchCollablandFmbPdf({ districtCode, talukCode, villageCode, surveyNo }) {
+  const giscode = buildCollablandGiscode({ districtCode, talukCode, villageCode, surveyNo });
+  if (!giscode) return null;
+
+  const body = encodeForm({
+    state:  '33',
+    giscode,
+    plotno: '',
+    scale:  '0',
+    width:  '1200',
+    height: '1200',
+  });
+
+  const res = await fetchRaw(COLLABLAND_FMB_URL, {
+    method:      'POST',
+    body,
+    contentType: 'application/x-www-form-urlencoded',
+    headers:     { Referer: 'https://eservices.tn.gov.in/', Origin: 'https://eservices.tn.gov.in' },
+  });
+
+  if (res.status !== 200) {
+    throw new Error(`CollabLand FMB returned HTTP ${res.status}`);
+  }
+
+  let data;
+  try { data = JSON.parse(res.body); } catch (_) {
+    throw new Error('CollabLand FMB returned invalid JSON');
+  }
+
+  if (!data.success) {
+    return {
+      type:    'fmb',
+      source:  'collabland-tn.gov.in',
+      giscode,
+      error:   data.message || 'Digitized FMB sketch not available for this parcel',
+      available: false,
+    };
+  }
+
+  const pdfBase64 = String(data.success);
+  const byteLen   = Buffer.from(pdfBase64, 'base64').length;
+  if (byteLen < 100) {
+    return {
+      type:    'fmb',
+      source:  'collabland-tn.gov.in',
+      giscode,
+      error:   'FMB PDF response was empty',
+      available: false,
+    };
+  }
+
+  return {
+    type:        'fmb',
+    source:      'collabland-tn.gov.in',
+    giscode,
+    mimeType:    'application/pdf',
+    fileName:    `FMB-${surveyNo}.pdf`,
+    pdfBase64,
+    byteLength:  byteLen,
+    available:   true,
+  };
+}
+
+async function fetchPattaDocuments(tngisProps) {
+  const documents = {};
+  const codes     = eservicesCodesFromTngisProps(tngisProps);
+
+  if (codes) {
+    documents.eservicesPortal = {
+      type:   'chitta',
+      source: 'eservices.tn.gov.in',
+      url:    `${PATTA_BASE}/eservicesnew/land/chittaNewRuralTamil.html?lan=ta`,
+      hint:   'Official Chitta/Patta extract requires OTP on the government portal.',
+      codes,
+      surveyNo: tngisProps.survey_number,
+      subDiv:   tngisProps.sub_division,
+      pattaNo:  tngisProps.patta_no,
+    };
+  }
+
+  try {
+    const fmb = await fetchCollablandFmbPdf({
+      districtCode: tngisProps.district_code,
+      talukCode:    tngisProps.taluk_code,
+      villageCode:  tngisProps.village_code,
+      surveyNo:     tngisProps.survey_number,
+    });
+    if (fmb) documents.fmb = fmb;
+  } catch (err) {
+    documents.fmb = {
+      type:      'fmb',
+      source:    'collabland-tn.gov.in',
+      giscode:   giscodeFromTngisProps(tngisProps),
+      error:     err.message,
+      available: false,
+    };
+  }
+
+  return documents;
 }
 
 // ── Patta Routes ──────────────────────────────────────────────────────────────
@@ -592,7 +735,16 @@ router.get('/patta', async (req, res) => {
     try {
       const tngis = await tryTngis();
       if (tngis) {
-        return res.json({ source: 'TNGIS (tngis.tn.gov.in)', ...tngis });
+        const { tngisProps, ...payload } = tngis;
+        let documents = {};
+        if (tngisProps && Object.keys(tngisProps).length > 0) {
+          documents = await fetchPattaDocuments(tngisProps);
+        }
+        return res.json({
+          source: 'TNGIS (tngis.tn.gov.in)',
+          ...payload,
+          documents,
+        });
       }
     } catch (err) {
       if (!dc || !tc || !vc) {
@@ -658,13 +810,26 @@ router.get('/patta', async (req, res) => {
 
     const parsed = result.status === 200 ? parsePattaResult(result.body) : null;
     if (parsed) {
-      return res.json({ source: 'eservices.tn.gov.in', ...parsed });
+      const documents = {
+        chittaHtml: {
+          type:     'chitta',
+          source:   'eservices.tn.gov.in',
+          html:     result.body,
+          available: true,
+        },
+      };
+      return res.json({ source: 'eservices.tn.gov.in', ...parsed, documents });
     }
 
     // eservices returned nothing usable — try TNGIS.
     const tngis = await tngisFallback().catch(() => null);
     if (tngis) {
-      return res.json({ source: 'TNGIS (tngis.tn.gov.in)', ...tngis });
+      const { tngisProps, ...payload } = tngis;
+      let documents = {};
+      if (tngisProps && Object.keys(tngisProps).length > 0) {
+        documents = await fetchPattaDocuments(tngisProps);
+      }
+      return res.json({ source: 'TNGIS (tngis.tn.gov.in)', ...payload, documents });
     }
 
     return res.status(422).json({
@@ -675,9 +840,65 @@ router.get('/patta', async (req, res) => {
     // eservices threw (timeout / blocked) — try TNGIS before giving up.
     const tngis = await tngisFallback().catch(() => null);
     if (tngis) {
-      return res.json({ source: 'TNGIS (tngis.tn.gov.in)', ...tngis });
+      const { tngisProps, ...payload } = tngis;
+      let documents = {};
+      if (tngisProps && Object.keys(tngisProps).length > 0) {
+        documents = await fetchPattaDocuments(tngisProps);
+      }
+      return res.json({ source: 'TNGIS (tngis.tn.gov.in)', ...payload, documents });
     }
     res.status(502).json({ error: err.message });
+  }
+});
+
+// Stream FMB PDF (CollabLand) — use after TNGIS lookup or with explicit codes.
+router.get('/fmb', async (req, res) => {
+  const { dc, tc, vc, surveyNo, lat, lon } = req.query;
+  let districtCode = dc;
+  let talukCode    = tc;
+  let villageCode  = vc;
+  let survey       = surveyNo;
+
+  const latN = parseFloat(lat);
+  const lonN = parseFloat(lon);
+  if ((!districtCode || !talukCode || !villageCode || !survey) &&
+      Number.isFinite(latN) && Number.isFinite(lonN)) {
+    try {
+      const hit = await fetchTngisPatta({ lat: latN, lon: lonN, radiusMeters: 5000 });
+      if (hit?.tngisProps) {
+        districtCode = hit.tngisProps.district_code;
+        talukCode    = hit.tngisProps.taluk_code;
+        villageCode  = hit.tngisProps.village_code;
+        survey       = hit.tngisProps.survey_number;
+      }
+    } catch (_) {}
+  }
+
+  if (!districtCode || !talukCode || !villageCode || !survey) {
+    return res.status(400).json({
+      error: 'Provide dc, tc, vc, surveyNo or lat/lon with a TNGIS parcel hit.',
+    });
+  }
+
+  try {
+    const fmb = await fetchCollablandFmbPdf({
+      districtCode, talukCode, villageCode, surveyNo: survey,
+    });
+    if (!fmb?.available || !fmb.pdfBase64) {
+      return res.status(404).json({
+        error: fmb?.error || 'FMB sketch not available for this parcel',
+        giscode: fmb?.giscode || buildCollablandGiscode({
+          districtCode, talukCode, villageCode, surveyNo: survey,
+        }),
+      });
+    }
+    const pdf = Buffer.from(fmb.pdfBase64, 'base64');
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${fmb.fileName || 'FMB.pdf'}"`);
+    res.setHeader('Content-Length', pdf.length);
+    return res.send(pdf);
+  } catch (err) {
+    return res.status(502).json({ error: err.message });
   }
 });
 

@@ -4,6 +4,8 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiClient {
+  static String get baseUrl => _baseUrl;
+
   // Web production: same origin. Local dev: always hit the API on :3000.
   static String get _baseUrl {
     if (kIsWeb) {
