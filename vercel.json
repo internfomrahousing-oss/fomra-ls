@@ -1,15 +1,19 @@
 {
   "outputDirectory": "build/web",
-  "buildCommand": "",
+  "buildCommand": "node scripts/vercel-build.js",
   "installCommand": "npm install",
   "functions": {
-    "api/poi.js":         { "maxDuration": 60 },
+    "api/health.js": { "maxDuration": 10 },
+    "api/poi.js": { "maxDuration": 60 },
+    "api/poi/infrastructure.js": { "maxDuration": 60 },
+    "api/poi/[...slug].js": { "maxDuration": 60 },
     "api/magicbricks.js": { "maxDuration": 60 },
-    "api/tnrera.js":      { "maxDuration": 30 },
-    "api/tnlands.js":          { "maxDuration": 60 },
+    "api/tnrera.js": { "maxDuration": 30 },
+    "api/tnrera/[...slug].js": { "maxDuration": 30 },
+    "api/tnlands.js": { "maxDuration": 60 },
     "api/tnlands/[...slug].js": { "maxDuration": 60 },
-    "api/99acres.js":     { "maxDuration": 60 },
-    "api/housing.js":     { "maxDuration": 60 },
+    "api/99acres.js": { "maxDuration": 60 },
+    "api/housing.js": { "maxDuration": 60 },
     "api/competitors.js": { "maxDuration": 60 }
   },
   "headers": [
@@ -17,18 +21,19 @@
       "source": "/flutter_service_worker.js",
       "headers": [
         { "key": "Cache-Control", "value": "no-store, no-cache, must-revalidate" },
-        { "key": "Pragma",        "value": "no-cache" }
+        { "key": "Pragma", "value": "no-cache" }
       ]
     },
     {
       "source": "/index.html",
       "headers": [
         { "key": "Cache-Control", "value": "no-store, no-cache, must-revalidate" },
-        { "key": "Pragma",        "value": "no-cache" }
+        { "key": "Pragma", "value": "no-cache" }
       ]
     }
   ],
   "rewrites": [
-    { "source": "/((?!api/).*)", "destination": "/index.html" }
+    { "source": "/health", "destination": "/api/health" },
+    { "source": "/((?!api/)(?!health$).*)", "destination": "/index.html" }
   ]
 }
