@@ -1,8 +1,16 @@
 import 'package:flutter/material.dart';
+import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_drawer.dart';
 import '../../widgets/fomra_app_bar.dart';
 import '../../widgets/fomra_bottom_nav.dart';
+
+// ── Portal modes ──────────────────────────────────────────────────────────────
+
+enum TaskPortalMode { full, employee, management }
+
+/// Shared in-memory task list (management adds, employees view).
+final List<Task> sharedTasks = [];
 
 // ── Enums ─────────────────────────────────────────────────────────────────────
 
@@ -140,7 +148,12 @@ String _slaLabel(TaskPriority p) => switch (p) {
 
 class TaskManagementScreen extends StatefulWidget {
   final bool isTab;
-  const TaskManagementScreen({super.key, this.isTab = false});
+  final TaskPortalMode portalMode;
+  const TaskManagementScreen({
+    super.key,
+    this.isTab = false,
+    this.portalMode = TaskPortalMode.full,
+  });
 
   @override
   State<TaskManagementScreen> createState() => _TaskManagementScreenState();
@@ -149,8 +162,9 @@ class TaskManagementScreen extends StatefulWidget {
 class _TaskManagementScreenState extends State<TaskManagementScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  final List<Task> _tasks = [];
   final List<TaskNotification> _notifications = [];
+
+  List<Task> get _tasks => sharedTasks;
 
   @override
   void initState() {
@@ -279,8 +293,162 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
         ]),
       );
 
+  void _logout() {
+    AuthService.instance.logout();
+    Navigator.pushNamedAndRemoveUntil(context, '/login', (_) => false);
+  }
+
+  PreferredSizeWidget _portalAppBar(String title) => AppBar(
+        backgroundColor: AppColors.primaryDark,
+        foregroundColor: Colors.white,
+        title: Text(title,
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout),
+            tooltip: 'Sign Out',
+            onPressed: _logout,
+          ),
+        ],
+      );
+
+  Widget _buildEmployeePortal() {
+    _refreshStatuses();
+    final tasks = _tasks;
+    return Scaffold(
+      appBar: _portalAppBar('My Tasks'),
+      body: tasks.isEmpty
+          ? const Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.task_alt, size: 48, color: Color(0xFFBDBDBD)),
+                  SizedBox(height: 12),
+                  Text('No tasks yet',
+                      style: TextStyle(
+                          fontSize: 15, fontWeight: FontWeight.w600)),
+                  SizedBox(height: 4),
+                  Text('Tasks assigned by management will appear here',
+                      style: TextStyle(
+                          fontSize: 12, color: AppColors.textSecondary)),
+                ],
+              ),
+            )
+          : ListView.builder(
+              padding: const EdgeInsets.all(12),
+              itemCount: tasks.length,
+              itemBuilder: (_, i) {
+                final task = tasks[i];
+                return _TaskCard(
+                  task: task,
+                  onTap: () => _showTaskDetail(task),
+                  onStatusChange: (t, s) => setState(() {
+                    t.status = s;
+                    if (s == TaskStatus.done) t.completedAt = DateTime.now();
+                  }),
+                );
+              },
+            ),
+    );
+  }
+
+  Widget _buildManagementPortal() {
+    _refreshStatuses();
+    return Scaffold(
+      appBar: _portalAppBar('Management · Tasks'),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _openAddTask,
+        icon: const Icon(Icons.add_task),
+        label: const Text('Add Task'),
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
+      ),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: Material(
+              color: AppColors.primary.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(12),
+              child: InkWell(
+                onTap: _openAddTask,
+                borderRadius: BorderRadius.circular(12),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.add_task,
+                          color: Colors.white, size: 24),
+                    ),
+                    const SizedBox(width: 14),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Add New Task',
+                              style: TextStyle(
+                                  fontSize: 15, fontWeight: FontWeight.w700)),
+                          SizedBox(height: 2),
+                          Text('Assign work to employees',
+                              style: TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.textSecondary)),
+                        ],
+                      ),
+                    ),
+                    const Icon(Icons.chevron_right,
+                        color: AppColors.textSecondary),
+                  ]),
+                ),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Text(
+              'Created tasks (${_tasks.length})',
+              style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textSecondary),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Expanded(
+            child: _tasks.isEmpty
+                ? const Center(
+                    child: Text('No tasks created yet',
+                        style: TextStyle(color: AppColors.textSecondary)))
+                : ListView.builder(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    itemCount: _tasks.length,
+                    itemBuilder: (_, i) => _TaskCard(
+                      task: _tasks[i],
+                      onTap: () => _showTaskDetail(_tasks[i]),
+                      onStatusChange: (_, __) {},
+                    ),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (widget.portalMode == TaskPortalMode.employee) {
+      return _buildEmployeePortal();
+    }
+    if (widget.portalMode == TaskPortalMode.management) {
+      return _buildManagementPortal();
+    }
+
     _refreshStatuses();
 
     final taskTabBar = TabBar(
