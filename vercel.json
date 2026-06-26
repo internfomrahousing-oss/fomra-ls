@@ -5,6 +5,7 @@
   "functions": {
     "api/health.js": { "maxDuration": 10 },
     "api/poi.js": { "maxDuration": 60 },
+    "api/poi/infrastructure.js": { "maxDuration": 60 },
     "api/poi/[...slug].js": { "maxDuration": 60 },
     "api/magicbricks.js": { "maxDuration": 60 },
     "api/tnrera.js": { "maxDuration": 30 },
