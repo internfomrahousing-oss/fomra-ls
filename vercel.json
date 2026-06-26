@@ -2,6 +2,7 @@
   "outputDirectory": "build/web",
   "buildCommand": "node scripts/vercel-build.js",
   "installCommand": "npm install",
+  "regions": ["bom1"],
   "functions": {
     "api/health.js": { "maxDuration": 10 },
     "api/poi.js": { "maxDuration": 60 },
