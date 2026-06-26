@@ -1889,34 +1889,6 @@ router.get('/patta', async (req, res) => {
   }
 });
 
-// TEMP diagnostic — times each upstream independently so we can see which one
-// fails from Vercel's egress (TNGIS spatial vs TNGIS attribute vs CollabLand).
-router.get('/diag', async (_req, res) => {
-  const out = {};
-  const time = async (label, fn) => {
-    const t0 = Date.now();
-    try { out[label] = { ok: true, ms: Date.now() - t0, ...(await fn()) }; }
-    catch (e) { out[label] = { ok: false, ms: Date.now() - t0, err: String(e && e.message || e) }; }
-  };
-  // 1. TNGIS spatial (known to work)
-  await time('tngis_spatial', async () => {
-    const f = await fetchTngisParcelsNear(12.68249, 80.0217, 300, 5);
-    return { count: f.length };
-  });
-  // 2. TNGIS attribute-only (FMB-by-codes path)
-  await time('tngis_attribute', async () => {
-    const cql = "survey_number='217' AND district_code=2 AND taluk_code=11";
-    const f = await queryTngisCadastralFeatures(cql, 5);
-    return { count: f.length };
-  });
-  // 3. CollabLand with a known-good giscode (returns a real PDF from a normal IP)
-  await time('collabland', async () => {
-    const hit = await fetchCollablandFmbByGiscode('S0211010217', '217', '');
-    return { available: !!hit.available, bytes: hit.byteLength || 0, msg: hit.error || null };
-  });
-  res.json({ region: process.env.VERCEL_REGION || 'local', ...out });
-});
-
 // Stream FMB PDF (CollabLand) — use after TNGIS lookup or with explicit codes.
 router.get('/fmb', async (req, res) => {
   const { dc, tc, vc, surveyNo, subDiv, lat, lon, plotno } = req.query;
