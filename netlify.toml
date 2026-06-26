@@ -40,6 +40,24 @@
   status = 200
   force = true
 
+[[redirects]]
+  from = "/api/99acres"
+  to = "/.netlify/functions/99acres"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/housing"
+  to = "/.netlify/functions/housing"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/competitors"
+  to = "/.netlify/functions/competitors"
+  status = 200
+  force = true
+
 # ── Flutter SPA fallback (must be last) ───────────────────────────────────────
 [[redirects]]
   from = "/*"

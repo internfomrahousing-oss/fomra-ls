@@ -9,7 +9,8 @@
     "api/tnlands.js":          { "maxDuration": 60 },
     "api/tnlands/[...slug].js": { "maxDuration": 60 },
     "api/99acres.js":     { "maxDuration": 60 },
-    "api/housing.js":     { "maxDuration": 60 }
+    "api/housing.js":     { "maxDuration": 60 },
+    "api/competitors.js": { "maxDuration": 60 }
   },
   "headers": [
     {

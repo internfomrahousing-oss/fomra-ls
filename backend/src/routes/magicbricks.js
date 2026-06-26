@@ -202,6 +202,98 @@ function extractEmbedded(html) {
   return [];
 }
 
+// ── LD+JSON ItemList + detail-page prices (works when API endpoints are blocked) ─
+
+function extractLdJsonItems(html) {
+  const blocks = html.match(/<script type="application\/ld\+json">\s*([\s\S]*?)\s*<\/script>/gi) || [];
+  const items = [];
+  for (const block of blocks) {
+    const m = block.match(/<script[^>]*>([\s\S]*?)<\/script>/i);
+    if (!m) continue;
+    try {
+      const data = JSON.parse(m[1]);
+      if (data['@type'] === 'ItemList' && Array.isArray(data.itemListElement)) {
+        for (const el of data.itemListElement) {
+          if (el.url && el.name) items.push({ url: el.url, name: el.name });
+        }
+      }
+    } catch (_) {}
+  }
+  return items;
+}
+
+function parseFromMbDetailUrl(url, name) {
+  const path = (url.split('?')[0] || '').split('/').pop() || '';
+  const bhkM  = path.match(/(\d+)-BHK/i);
+  const areaM = path.match(/(\d+)-Sq-ft/i);
+  const locM  = path.match(/FOR-Sale-(.+?)-in-/i);
+  const locality = locM ? locM[1].replace(/-/g, ' ').trim() : '';
+  const cleanName = name
+    .replace(/^\d+\s*BHK\s+Flat\s+for\s+Sale\s+in\s*/i, '')
+    .replace(/,\s*Chennai.*$/i, '')
+    .trim();
+  return {
+    bhkType:     bhkM ? `${bhkM[1]} BHK` : '',
+    area:        areaM ? parseInt(areaM[1], 10) : 0,
+    locality,
+    projectName: cleanName || locality || name,
+  };
+}
+
+async function fetchDetailPrice(url) {
+  try {
+    const r = await fetchRaw(url, MINIMAL_HEADERS, 15000);
+    if (r.status !== 200) return 0;
+    const m = r.body.match(/"price"\s*:\s*"?(\d+)"?/);
+    return m ? parseInt(m[1], 10) : 0;
+  } catch {
+    return 0;
+  }
+}
+
+async function fetchLdJsonListings(city, mbPropType) {
+  const pageUrl =
+    `https://www.magicbricks.com/property-for-sale/residential-real-estate` +
+    `?proptype=${mbPropType}&cityName=${encodeURIComponent(city)}`;
+  const r = await fetchRaw(pageUrl, MINIMAL_HEADERS, 25000);
+  if (r.status !== 200) return [];
+
+  const ldItems = extractLdJsonItems(r.body).slice(0, 12);
+  if (!ldItems.length) return [];
+
+  const results = [];
+  const BATCH = 4;
+  for (let i = 0; i < ldItems.length; i += BATCH) {
+    const batch  = ldItems.slice(i, i + BATCH);
+    const prices = await Promise.all(batch.map((item) => fetchDetailPrice(item.url)));
+    batch.forEach((item, idx) => {
+      const parsed = parseFromMbDetailUrl(item.url, item.name);
+      const price  = prices[idx];
+      const ppsf   = price > 0 && parsed.area > 0 ? Math.round(price / parsed.area) : 0;
+      const nameKey = (parsed.projectName || parsed.locality || 'item')
+        .replace(/[^a-zA-Z0-9]/g, '_').slice(0, 30);
+      results.push({
+        id:             `mb_ld_${nameKey}_${i + idx}`,
+        projectName:    parsed.projectName,
+        locality:       parsed.locality,
+        bhkType:        parsed.bhkType,
+        priceRupees:    price,
+        pricePerSqft:   ppsf,
+        area:           parsed.area,
+        status:         'Available',
+        possession:     'N/A',
+        completionYear: null,
+        reraNo:         '',
+        projectType:    'Building',
+        registeredYear: null,
+        lat:            null,
+        lng:            null,
+      });
+    });
+  }
+  return results.filter((l) => l.priceRupees > 0);
+}
+
 // ── TNRERA HTML table parser (fallback source) ────────────────────────────────
 
 // City aliases for TNRERA address text matching
@@ -413,6 +505,18 @@ router.get('/', async (req, res) => {
     } catch (e) { errors.push(`Desktop(6): ${e.message}`); }
   }
 
+  // ── Strategy 7: LD+JSON listing page + detail-page prices ───────────────
+  if (!skipMb && listings.length === 0) {
+    try {
+      const ldListings = await fetchLdJsonListings(city, mbPropType);
+      if (ldListings.length > 0) {
+        listings = ldListings;
+      } else {
+        errors.push('LdJson(7): no priced listings');
+      }
+    } catch (e) { errors.push(`LdJson(7): ${e.message}`); }
+  }
+
   // ── Fallback: TNRERA (all years in parallel — safe within Netlify 10s) ──
   let source = 'MagicBricks';
   if (listings.length === 0) {
@@ -514,9 +618,9 @@ router.get('/', async (req, res) => {
     });
   }
 
-  // ── Radius filter ─────────────────────────────────────────────────────────
+  // ── Radius filter (keep city-wide results if filter would remove everything) ─
   if (hasRadius) {
-    listings = listings.filter(l => {
+    const filtered = listings.filter(l => {
       if (!l.lat) return true;
       const dLat = (l.lat - userLat) * Math.PI / 180;
       const dLon = (l.lng - userLng) * Math.PI / 180;
@@ -525,6 +629,7 @@ router.get('/', async (req, res) => {
         Math.sin(dLon / 2) ** 2;
       return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)) <= radius;
     });
+    if (filtered.length > 0) listings = filtered;
   }
 
   res.json({ source, city, count: listings.length, listings });
