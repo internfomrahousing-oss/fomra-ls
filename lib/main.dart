@@ -4,9 +4,12 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'services/supabase_config.dart';
 import 'theme/app_theme.dart';
 import 'screens/auth/login_screen.dart';
+import 'screens/auth/portal_login_screen.dart';
 import 'screens/home/home_screen.dart';
 import 'screens/land_lead/land_workspace_screen.dart';
 import 'screens/dashboard/dashboard_screen.dart';
+import 'screens/task_management/task_management_screen.dart';
+import 'services/auth_service.dart';
 
 void main() {
   runZonedGuarded(() async {
@@ -30,7 +33,13 @@ class FomraLSApp extends StatelessWidget {
       home: const _StartupScreen(),
       routes: {
         '/login':               (_) => const LoginScreen(),
+        '/employee-login':      (_) => const PortalLoginScreen(portal: LoginPortal.employee),
+        '/management-login':    (_) => const PortalLoginScreen(portal: LoginPortal.management),
         '/home':                (_) => const HomeScreen(),
+        '/employee-portal':     (_) => const TaskManagementScreen(
+                                    portalMode: TaskPortalMode.employee),
+        '/management-portal':   (_) => const TaskManagementScreen(
+                                    portalMode: TaskPortalMode.management),
         '/land-lead':           (_) => const LandWorkspaceScreen(initialTab: 0),
         '/market-intelligence': (_) => const LandWorkspaceScreen(initialTab: 1),
         '/legal-verification':  (_) => const LandWorkspaceScreen(initialTab: 2),
@@ -73,6 +82,14 @@ class _StartupScreenState extends State<_StartupScreen> {
         const Duration(seconds: 12),
         onTimeout: () => throw 'Connection timed out.\nCheck your internet and try again.',
       );
+      final portal = await AuthService.instance.restorePortal();
+      if (!mounted) return;
+      if (portal != null) {
+        Navigator.of(context).pushReplacementNamed(
+          AuthService.instance.routeForPortal(portal),
+        );
+        return;
+      }
     } catch (e) {
       error = e.toString();
     }
