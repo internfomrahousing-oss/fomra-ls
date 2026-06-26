@@ -4,7 +4,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'services/supabase_config.dart';
 import 'theme/app_theme.dart';
 import 'screens/auth/login_screen.dart';
-import 'screens/auth/portal_login_screen.dart';
 import 'screens/home/home_screen.dart';
 import 'screens/land_lead/land_workspace_screen.dart';
 import 'screens/dashboard/dashboard_screen.dart';
@@ -33,8 +32,6 @@ class FomraLSApp extends StatelessWidget {
       home: const _StartupScreen(),
       routes: {
         '/login':               (_) => const LoginScreen(),
-        '/employee-login':      (_) => const PortalLoginScreen(portal: LoginPortal.employee),
-        '/management-login':    (_) => const PortalLoginScreen(portal: LoginPortal.management),
         '/home':                (_) => const HomeScreen(),
         '/employee-portal':     (_) => const TaskManagementScreen(
                                     portalMode: TaskPortalMode.employee),

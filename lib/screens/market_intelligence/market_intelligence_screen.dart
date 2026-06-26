@@ -1535,7 +1535,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
   }
 
   Widget _buildPoiSection() => _SectionCard(
-        title: 'POI Discovery',
+        title: 'Infrastructure Score',
         icon: Icons.place_outlined,
         child: Column(children: [
           Row(children: [
@@ -2434,6 +2434,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
   Map<String, String>?      _pattaFields;
   List<Map<String, String>> _pattaOwners = [];
   String? _pattaError;
+  String? _pattaSource;
   bool   _showManualPatta = false;
   bool   _showManualEc    = false;
   Timer? _pattaDebounce;
@@ -2674,6 +2675,110 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
 
   // â”€â”€ Patta methods â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
+  void _applyPattaResult(Map<String, dynamic> result) {
+    final fields = (result['fields'] as Map<String, dynamic>? ?? {})
+        .map((k, v) => MapEntry(k, v.toString()));
+    final owners = (result['owners'] as List<dynamic>? ?? []).map((o) {
+      return (o as Map<String, dynamic>).map((k, v) => MapEntry(k, v.toString()));
+    }).toList();
+
+    final surveyNo = fields['Survey Number'];
+    if (surveyNo != null && surveyNo.isNotEmpty && _surveyCtrl.text.isEmpty) {
+      _surveyCtrl.text = surveyNo;
+    }
+    final subDiv = fields['Sub Division'];
+    if (subDiv != null && subDiv.isNotEmpty && subDiv != '-' && _subDivCtrl.text.isEmpty) {
+      _subDivCtrl.text = subDiv;
+    }
+
+    setState(() {
+      _pattaSource = result['source'] as String?;
+      _pattaFields = fields.isEmpty ? null : fields;
+      _pattaOwners = owners;
+      if (fields.isEmpty && owners.isEmpty) {
+        _pattaError = (result['error'] as String?) ??
+            'No patta parcel found at this location in TNGIS.';
+      }
+    });
+  }
+
+  /// Fetch patta from TNGIS for the active map location (or device GPS).
+  Future<void> _fetchPattaForLocation({bool useDeviceGps = false}) async {
+    double? lat = useDeviceGps ? null : widget.lat;
+    double? lon = useDeviceGps ? null : widget.lon;
+
+    setState(() {
+      _fetchingPatta = true;
+      _pattaFields = null;
+      _pattaOwners = [];
+      _pattaError = null;
+      _pattaSource = null;
+    });
+
+    if (lat == null || lon == null) {
+      try {
+        final svcOn = await Geolocator.isLocationServiceEnabled();
+        if (!svcOn) {
+          setState(() {
+            _pattaError =
+                'Tap the map to set a location, or enable GPS on your device.';
+            _fetchingPatta = false;
+          });
+          return;
+        }
+        var perm = await Geolocator.checkPermission();
+        if (perm == LocationPermission.denied) {
+          perm = await Geolocator.requestPermission();
+        }
+        if (perm == LocationPermission.denied ||
+            perm == LocationPermission.deniedForever) {
+          setState(() {
+            _pattaError = 'Tap the map to set a location, or allow GPS permission.';
+            _fetchingPatta = false;
+          });
+          return;
+        }
+        final pos = await Geolocator.getCurrentPosition(
+          locationSettings:
+              const LocationSettings(accuracy: LocationAccuracy.high),
+        );
+        lat = pos.latitude;
+        lon = pos.longitude;
+      } catch (e) {
+        setState(() {
+          _pattaError =
+              'Set a location on the map (tap the map), then tap Fetch Patta.';
+          _fetchingPatta = false;
+        });
+        return;
+      }
+    }
+
+    try {
+      var params = 'lat=$lat&lon=$lon';
+      final surveyNo = _surveyCtrl.text.trim();
+      final subDiv = _subDivCtrl.text.trim();
+      if (surveyNo.isNotEmpty) {
+        params += '&surveyNo=${Uri.encodeComponent(surveyNo)}';
+      }
+      if (subDiv.isNotEmpty) {
+        params += '&subDiv=${Uri.encodeComponent(subDiv)}';
+      }
+      final result = await ApiClient.get('/api/tnlands/patta?$params')
+          .timeout(const Duration(seconds: 60));
+      _applyPattaResult(result);
+    } on ApiException catch (e) {
+      setState(() => _pattaError = e.message);
+    } on TimeoutException {
+      setState(() => _pattaError = 'TNGIS request timed out. Try again.');
+    } catch (e) {
+      setState(() =>
+          _pattaError = e.toString().replaceAll('Exception: ', ''));
+    } finally {
+      setState(() => _fetchingPatta = false);
+    }
+  }
+
   Future<void> _initDistricts() async {
     setState(() => _initingPatta = true);
     try {
@@ -2753,70 +2858,18 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
     }
   }
 
-  /// GPS-only TNGIS lookup — detects device location if map pin not set.
-  Future<void> _fetchPattaByGps() async {
-    double? lat = widget.lat;
-    double? lon = widget.lon;
-
-    setState(() { _fetchingPatta = true; _pattaFields = null; _pattaOwners = []; _pattaError = null; });
-
-    if (lat == null || lon == null) {
-      try {
-        final svcOn = await Geolocator.isLocationServiceEnabled();
-        if (!svcOn) {
-          setState(() { _pattaError = 'Location services are disabled. Enable GPS and try again.'; _fetchingPatta = false; });
-          return;
-        }
-        var perm = await Geolocator.checkPermission();
-        if (perm == LocationPermission.denied) perm = await Geolocator.requestPermission();
-        if (perm == LocationPermission.denied || perm == LocationPermission.deniedForever) {
-          setState(() { _pattaError = 'Location permission denied.'; _fetchingPatta = false; });
-          return;
-        }
-        final pos = await Geolocator.getCurrentPosition(
-          locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
-        );
-        lat = pos.latitude;
-        lon = pos.longitude;
-      } catch (e) {
-        setState(() { _pattaError = 'Could not get location: ${e.toString().replaceAll('Exception: ', '')}'; _fetchingPatta = false; });
-        return;
-      }
-    }
-
-    try {
-      final result = await ApiClient.get('/api/tnlands/patta?lat=$lat&lon=$lon');
-      final fields = (result['fields'] as Map<String, dynamic>? ?? {})
-          .map((k, v) => MapEntry(k, v.toString()));
-      final owners = (result['owners'] as List<dynamic>? ?? []).map((o) {
-        return (o as Map<String, dynamic>).map((k, v) => MapEntry(k, v.toString()));
-      }).toList();
-      final surveyNo = fields['Survey Number'];
-      if (surveyNo != null && surveyNo.isNotEmpty && _surveyCtrl.text.isEmpty) {
-        _surveyCtrl.text = surveyNo;
-      }
-      final subDiv = fields['Sub Division'];
-      if (subDiv != null && subDiv.isNotEmpty && subDiv != '-' && _subDivCtrl.text.isEmpty) {
-        _subDivCtrl.text = subDiv;
-      }
-      setState(() { _pattaFields = fields; _pattaOwners = owners; });
-    } on ApiException catch (e) {
-      setState(() => _pattaError = e.message);
-    } catch (e) {
-      setState(() => _pattaError = e.toString().replaceAll('Exception: ', ''));
-    } finally {
-      setState(() => _fetchingPatta = false);
-    }
-  }
-
-  /// TNGIS lookup by survey number alone — no district/taluk/village needed.
+  /// TNGIS lookup by survey number — uses map location when available.
   Future<void> _fetchPattaBySurveyNo() async {
     final surveyNo = _surveyCtrl.text.trim();
-    if (surveyNo.isEmpty) {
-      setState(() => _pattaError = 'Enter a survey number first.');
-      return;
-    }
-    setState(() { _fetchingPatta = true; _pattaFields = null; _pattaOwners = []; _pattaError = null; });
+    if (surveyNo.isEmpty) return;
+
+    setState(() {
+      _fetchingPatta = true;
+      _pattaFields = null;
+      _pattaOwners = [];
+      _pattaError = null;
+      _pattaSource = null;
+    });
     try {
       final subDiv = _subDivCtrl.text.trim();
       var params = 'surveyNo=${Uri.encodeComponent(surveyNo)}';
@@ -2824,19 +2877,9 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
       if (widget.lat != null && widget.lon != null) {
         params += '&lat=${widget.lat}&lon=${widget.lon}';
       }
-      final result = await ApiClient.get('/api/tnlands/patta?$params');
-      final fields = (result['fields'] as Map<String, dynamic>? ?? {})
-          .map((k, v) => MapEntry(k, v.toString()));
-      final owners = (result['owners'] as List<dynamic>? ?? []).map((o) {
-        return (o as Map<String, dynamic>).map((k, v) => MapEntry(k, v.toString()));
-      }).toList();
-      setState(() {
-        _pattaFields = fields.isEmpty ? null : fields;
-        _pattaOwners = owners;
-        if (fields.isEmpty && owners.isEmpty) {
-          _pattaError = 'No record found for survey number "$surveyNo" in TNGIS.';
-        }
-      });
+      final result = await ApiClient.get('/api/tnlands/patta?$params')
+          .timeout(const Duration(seconds: 60));
+      _applyPattaResult(result);
     } on ApiException catch (e) {
       setState(() => _pattaError = e.message);
     } catch (e) {
@@ -2850,8 +2893,11 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
     if (_selDistrict == null || _selTaluk == null ||
         _selVillage == null || _surveyCtrl.text.trim().isEmpty) { return; }
     setState(() {
-      _fetchingPatta = true; _pattaFields = null;
-      _pattaOwners = []; _pattaError = null;
+      _fetchingPatta = true;
+      _pattaFields = null;
+      _pattaOwners = [];
+      _pattaError = null;
+      _pattaSource = null;
     });
     try {
       var params = 'dc=${_selDistrict!.code}'
@@ -2859,19 +2905,12 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
           '&vc=${_selVillage!.code}'
           '&surveyNo=${Uri.encodeComponent(_surveyCtrl.text.trim())}'
           '&subDiv=${Uri.encodeComponent(_subDivCtrl.text.trim())}';
-      // Pass the active map location so the backend can fall back to the TNGIS
-      // cadastral layer (queried by survey number near this point) when the
-      // eservices portal is unavailable.
       if (widget.lat != null && widget.lon != null) {
         params += '&lat=${widget.lat}&lon=${widget.lon}';
       }
-      final result = await ApiClient.get('/api/tnlands/patta?$params');
-      final fields = (result['fields'] as Map<String, dynamic>? ?? {})
-          .map((k, v) => MapEntry(k, v.toString()));
-      final owners = (result['owners'] as List<dynamic>? ?? []).map((o) {
-        return (o as Map<String, dynamic>).map((k, v) => MapEntry(k, v.toString()));
-      }).toList();
-      setState(() { _pattaFields = fields; _pattaOwners = owners; });
+      final result = await ApiClient.get('/api/tnlands/patta?$params')
+          .timeout(const Duration(seconds: 60));
+      _applyPattaResult(result);
     } on ApiException catch (e) {
       setState(() => _pattaError = e.message);
     } catch (e) {
@@ -3104,7 +3143,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text('Patta / Chitta / FMB',
                 style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: color)),
-            Text('eservices.tn.gov.in',
+            Text('TNGIS · tngis.tn.gov.in',
                 style: TextStyle(fontSize: 10, color: AppColors.textSecondary)),
           ]),
         ),
@@ -3131,21 +3170,53 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
       ]),
       const SizedBox(height: 10),
 
-      // GPS button
+      // Primary: fetch patta for map location via TNGIS
       SizedBox(
         width: double.infinity,
         child: ElevatedButton.icon(
-          onPressed: _fetchingPatta ? null : _fetchPattaByGps,
+          onPressed: _fetchingPatta ? null : () => _fetchPattaForLocation(),
           icon: _fetchingPatta
-              ? const SizedBox(width: 14, height: 14,
+              ? const SizedBox(
+                  width: 14,
+                  height: 14,
                   child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-              : const Icon(Icons.gps_fixed, size: 16),
-          label: Text(_fetchingPatta ? 'Fetching…' : 'Fetch via GPS (TNGIS)',
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+              : const Icon(Icons.map_outlined, size: 16),
+          label: Text(
+            _fetchingPatta ? 'Fetching from TNGIS…' : 'Fetch Patta for this Location',
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+          ),
           style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF0D47A1),
+            backgroundColor: color,
             foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(vertical: 12),
+            padding: const EdgeInsets.symmetric(vertical: 13),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        ),
+      ),
+      if (widget.lat == null || widget.lon == null) ...[
+        const SizedBox(height: 6),
+        Text(
+          'Tip: tap the map above to set a location, then fetch patta.',
+          style: TextStyle(fontSize: 11, color: Colors.orange.shade800),
+        ),
+      ] else ...[
+        const SizedBox(height: 6),
+        Text(
+          'Using map pin: ${widget.lat!.toStringAsFixed(5)}, ${widget.lon!.toStringAsFixed(5)}',
+          style: const TextStyle(fontSize: 10, color: AppColors.textSecondary),
+        ),
+      ],
+      const SizedBox(height: 8),
+      SizedBox(
+        width: double.infinity,
+        child: OutlinedButton.icon(
+          onPressed: _fetchingPatta ? null : () => _fetchPattaForLocation(useDeviceGps: true),
+          icon: const Icon(Icons.gps_fixed, size: 16),
+          label: const Text('Or use device GPS',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: const Color(0xFF0D47A1),
+            padding: const EdgeInsets.symmetric(vertical: 10),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           ),
         ),
@@ -3289,6 +3360,11 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
           Text('Patta Details',
               style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: color)),
         ]),
+        if (_pattaSource != null) ...[
+          const SizedBox(height: 4),
+          Text('Source: $_pattaSource',
+              style: const TextStyle(fontSize: 10, color: AppColors.textSecondary)),
+        ],
         const SizedBox(height: 10),
         if (_pattaFields != null)
           ...(_pattaFields!.entries.map((e) => _kv(e.key, e.value))),

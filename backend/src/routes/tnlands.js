@@ -446,6 +446,12 @@ function tngisFeatureToFields(props) {
   };
   put('Survey Number',     props.survey_number);
   put('Sub Division',      props.sub_division);
+  put('District Code',     props.district_code);
+  put('Taluk Code',        props.taluk_code);
+  put('Village Code',      props.village_code);
+  put('District',          props.district_name || props.district);
+  put('Taluk',             props.taluk_name || props.taluk);
+  put('Village',           props.village_name || props.village);
   if (props.patta_no !== null && props.patta_no !== undefined &&
       Number(props.patta_no) > 0) {
     put('Patta Number', props.patta_no);
@@ -564,35 +570,58 @@ router.get('/patta', async (req, res) => {
   const lonN = parseFloat(lon);
   const hasGps = Number.isFinite(latN) && Number.isFinite(lonN);
 
-  // GPS-only mode: no district/taluk/village — query TNGIS directly by location.
-  // A small radius (500 m) finds the parcel the pin lands on; TNGIS returns
-  // survey_number, patta_no, extent, land classification etc. for that parcel.
-  if (hasGps && (!dc || !tc || !vc) && !surveyNo && !pattaNo && !ownerName) {
-    try {
-      const tngis = await fetchTngisPatta({ lat: latN, lon: lonN, radiusMeters: 500 });
-      if (tngis) return res.json({ source: 'TNGIS (tngis.tn.gov.in)', ...tngis });
-      // Widen the search before giving up
-      const tngisWide = await fetchTngisPatta({ lat: latN, lon: lonN, radiusMeters: 2000 });
-      if (tngisWide) return res.json({ source: 'TNGIS (tngis.tn.gov.in)', ...tngisWide });
-      return res.status(422).json({
-        error: 'No parcel found at this GPS location in TNGIS.',
-        hint:  'Tap directly on the plot boundary on the map, or enter the survey number manually.',
+  const tryTngis = async () => {
+    const radii = hasGps
+        ? (surveyNo ? [500, 2000, 5000, 10000] : [100, 500, 2000, 5000, 10000])
+        : [null];
+    for (const r of radii) {
+      const hit = await fetchTngisPatta({
+        surveyNo: surveyNo || undefined,
+        subDiv:   subDiv   || undefined,
+        lat:      hasGps ? latN : undefined,
+        lon:      hasGps ? lonN : undefined,
+        radiusMeters: r || 5000,
       });
+      if (hit) return hit;
+    }
+    return null;
+  };
+
+  // ── 1. TNGIS (tngis.tn.gov.in) — public cadastral / patta parcel data ─────
+  if (hasGps || surveyNo) {
+    try {
+      const tngis = await tryTngis();
+      if (tngis) {
+        return res.json({ source: 'TNGIS (tngis.tn.gov.in)', ...tngis });
+      }
     } catch (err) {
-      return res.status(502).json({ error: err.message });
+      if (!dc || !tc || !vc) {
+        return res.status(502).json({ error: `TNGIS lookup failed: ${err.message}` });
+      }
     }
   }
 
-  if (!dc || !tc || !vc || (!surveyNo && !pattaNo && !ownerName)) {
-    return res.status(400).json({ error: 'dc, tc, vc and a patta identifier are required (or set the map location for GPS lookup)' });
+  const canTryEservices = dc && tc && vc && (surveyNo || pattaNo || ownerName);
+  if (!canTryEservices) {
+    if (hasGps || surveyNo) {
+      return res.status(422).json({
+        error: hasGps
+            ? 'No parcel found at this map location in TNGIS.'
+            : `No record found for survey number "${surveyNo}" in TNGIS.`,
+        hint:  hasGps
+            ? 'Tap directly on the land parcel on the map, then try again. Urban areas may need a wider pin placement.'
+            : 'Set a map location for this survey number, or use manual District/Taluk/Village.',
+      });
+    }
+    return res.status(400).json({
+      error: 'Set a map location and tap Fetch Patta, or provide district/taluk/village + survey number.',
+    });
   }
 
-  // TNGIS fallback: query the public GeoServer cadastral layer by survey number
-  // constrained to the map location. Used when the eservices portal fails or
-  // returns nothing (it blocks Vercel IPs / requires OTP for some queries).
+  // ── 2. eservices.tn.gov.in (official Chitta extract) ────────────────────
   const tngisFallback = async () => {
-    if (!surveyNo) return null;
-    return fetchTngisPatta({ surveyNo, subDiv, lat: latN, lon: lonN });
+    if (!surveyNo && !hasGps) return null;
+    return tryTngis();
   };
 
   try {
