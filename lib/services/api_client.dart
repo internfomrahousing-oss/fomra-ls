@@ -9,12 +9,11 @@ class ApiClient {
   // Web production: same origin. Local dev: always hit the API on :3000.
   static String get _baseUrl {
     if (kIsWeb) {
-      final origin = Uri.base.origin;
       final host = Uri.base.host;
       if (host == 'localhost' || host == '127.0.0.1') {
         return 'http://localhost:3000';
       }
-      return origin;
+      return Uri.base.origin;
     }
     return 'http://localhost:3000';
   }
@@ -92,24 +91,68 @@ class ApiClient {
 
   /// Raw bytes (e.g. government PDF from /api/tnlands/fmb).
   static Future<List<int>> getBytes(String path, {bool auth = false}) async {
-    final res = await http
-        .get(
-          Uri.parse('$_baseUrl$path'),
-          headers: await _headers(auth: auth),
-        )
-        .timeout(const Duration(seconds: 120));
+    // Do not send Content-Type on GET — triggers CORS preflight in the browser.
+    final headers = <String, String>{'Accept': 'application/pdf,application/octet-stream,*/*'};
+    if (auth) {
+      final token = await getToken();
+      if (token != null) headers['Authorization'] = 'Bearer $token';
+    }
+    final uri = Uri.parse('$_baseUrl$path');
+    http.Response res;
+    try {
+      res = await http.get(uri, headers: headers).timeout(const Duration(seconds: 120));
+    } catch (e) {
+      throw ApiException(
+        statusCode: 0,
+        message: 'Could not reach server at ${uri.host}. '
+            'Start backend: cd backend && npm start',
+      );
+    }
     if (res.statusCode >= 400) {
+      String message = 'Request failed (HTTP ${res.statusCode})';
       try {
         final body = jsonDecode(res.body);
-        throw ApiException(
-          statusCode: res.statusCode,
-          message: (body is Map ? body['error'] as String? : null) ?? 'Request failed',
-        );
+        if (body is Map && body['error'] != null) {
+          message = body['error'].toString();
+        }
       } catch (_) {
-        throw ApiException(statusCode: res.statusCode, message: 'Request failed');
+        if (res.body.isNotEmpty && res.body.length < 500) {
+          message = res.body;
+        }
+      }
+      throw ApiException(statusCode: res.statusCode, message: message);
+    }
+    final bytes = res.bodyBytes;
+    if (bytes.length < 100) {
+      throw ApiException(
+        statusCode: res.statusCode,
+        message: 'Empty document response from server',
+      );
+    }
+    // Reject JSON error payloads returned with HTTP 200.
+    if (bytes.length >= 2 && bytes[0] == 0x7b) {
+      try {
+        final body = jsonDecode(String.fromCharCodes(bytes));
+        if (body is Map && body['error'] != null) {
+          throw ApiException(
+            statusCode: res.statusCode,
+            message: body['error'].toString(),
+          );
+        }
+      } catch (e) {
+        if (e is ApiException) rethrow;
       }
     }
-    return res.bodyBytes;
+    if (bytes.length >= 4) {
+      final head = String.fromCharCodes(bytes.sublist(0, 4));
+      if (head != '%PDF') {
+        throw ApiException(
+          statusCode: res.statusCode,
+          message: 'Server did not return a PDF (got ${head.replaceAll(RegExp(r'[^\x20-\x7E]'), '?')})',
+        );
+      }
+    }
+    return bytes;
   }
 
   static Future<Map<String, dynamic>> post(String path, Map<String, dynamic> body,

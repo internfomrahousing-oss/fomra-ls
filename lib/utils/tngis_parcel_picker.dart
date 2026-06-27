@@ -25,7 +25,7 @@ TngisParcelPickResult? pickTngisParcelFromFeatures(
         .map((k, v) => MapEntry(k.toString(), v?.toString() ?? ''));
     final survey = props['survey_number'] ?? '';
     if (survey.isEmpty) continue;
-    final sub = props['sub_division'];
+    final sub = _subFromProps(props);
     final rings = _ringsFromGeometry(raw['geometry'] as Map<String, dynamic>?);
     for (final ring in rings) {
       if (!_pointInRing(tap.longitude, tap.latitude, ring)) continue;
@@ -116,4 +116,21 @@ bool _pointInRing(double lon, double lat, List<LatLng> ring) {
     if (intersect) inside = !inside;
   }
   return inside;
+}
+
+String? _subFromProps(Map<String, String> props) {
+  final survey = props['survey_number']?.trim() ?? '';
+  final subRaw = props['sub_division']?.trim();
+  if (subRaw != null && subRaw.isNotEmpty && subRaw != '-' && subRaw != survey) {
+    return subRaw;
+  }
+  final kide = props['kide']?.trim();
+  if (kide == null || kide.isEmpty || kide == '0' || !kide.contains('/')) return null;
+  final parts = kide.split('/');
+  if (parts.length < 2) return null;
+  final kideSub = parts.sublist(1).join('/').trim();
+  if (kideSub.isEmpty || kideSub == '-' || kideSub == survey) return null;
+  final kideSurvey = parts[0].trim();
+  if (survey.isNotEmpty && kideSurvey.isNotEmpty && kideSurvey != survey) return null;
+  return kideSub;
 }

@@ -13,8 +13,9 @@
  *   GET /api/tnlands/villages?dc=&tc=      — villages for a taluk code
  *   GET /api/tnlands/tngis/parcels          — Cadastral polygons near map center (for overlay)
  *   GET /api/tnlands/tngis/parcel          — Survey/subdivision from TNGIS (Tamil Nilam GI Viewer)
- *   GET /api/tnlands/patta                 — Patta/Chitta extract (+ FMB document when TNGIS hit)
-   GET /api/tnlands/fmb                   — FMB sketch PDF (CollabLand-TN)
+ *   GET /api/tnlands/patta                 — Patta/Chitta via TNGIS Tamil Nilam (+ FMB metadata)
+ *   GET /api/tnlands/fmb                   — FMB sketch PDF (TNGIS sketch_fmb, govt seal)
+ *   GET /api/tnlands/tngis/ec              — Encumbrance Certificate PDF (TNGIS GI Viewer)
  *   GET /api/tnlands/ec/zones              — EC zones (static)
  *   GET /api/tnlands/ec/districts?zone=    — EC districts for a zone
  *   GET /api/tnlands/ec/sros?zone=&dc=     — SROs for a district
@@ -25,6 +26,16 @@ const express = require('express');
 const https   = require('https');
 const http    = require('http');
 const router  = express.Router();
+const {
+  fetchGiLandDetails,
+  fetchGiGuidelineValue,
+  fetchGiCropDetails,
+  fetchGiAregOwnership,
+  fetchGiPattaCopy,
+  fetchGiFmbSketch,
+  fetchGiEncumbranceCertificate,
+  mergeGiParcelCodes,
+} = require('../lib/tngisGiViewerApi');
 
 // ── Cookie helpers ─────────────────────────────────────────────────────────────
 
@@ -633,6 +644,23 @@ function surveyNumberMatches(a, b) {
   return normalizeSurveyNo(a) === normalizeSurveyNo(b);
 }
 
+/** Real sub-division — TNGIS often stores it in kide (e.g. 394/15C) not sub_division. */
+function resolveTngisSubDivision(props = {}) {
+  const survey = normalizeSurveyNo(props.survey_number);
+  const subRaw = String(props.sub_division ?? '').trim();
+  if (subRaw && subRaw !== '-' && !surveyNumberMatches(subRaw, survey)) {
+    return subRaw;
+  }
+  const kide = String(props.kide ?? '').trim();
+  if (!kide || kide === '0' || !kide.includes('/')) return null;
+  const parts = kide.split('/');
+  const kideSurvey = normalizeSurveyNo(parts[0]);
+  const kideSub = parts.slice(1).join('/').trim();
+  if (!kideSub || kideSub === '-' || surveyNumberMatches(kideSub, survey)) return null;
+  if (survey && kideSurvey && !surveyNumberMatches(kideSurvey, survey)) return null;
+  return kideSub;
+}
+
 function filterFeaturesBySurvey(features, surveyNo, subDiv) {
   const surveyFilter = normalizeSurveyNo(surveyNo);
   if (!surveyFilter) return features || [];
@@ -642,38 +670,74 @@ function filterFeaturesBySurvey(features, surveyNo, subDiv) {
   return (features || []).filter((f) => {
     const p = f.properties || {};
     if (!surveyNumberMatches(p.survey_number, surveyFilter)) return false;
-    if (subFilter && normalizeSurveyNo(p.sub_division) !== subFilter) return false;
+    if (subFilter) {
+      const featureSub = resolveTngisSubDivision(p)
+        || normalizeSurveyNo(p.sub_division);
+      if (normalizeSurveyNo(featureSub).toUpperCase() !== normalizeSurveyNo(subFilter).toUpperCase()) {
+        return false;
+      }
+    }
     return true;
   });
 }
 
+function normalizeSubDivFilter(subDiv, surveyNo) {
+  const survey = normalizeSurveyNo(surveyNo);
+  const sub = normalizeSurveyNo(subDiv);
+  if (!sub || sub === '-') return null;
+  if (survey && surveyNumberMatches(sub, survey)) return null;
+  return sub;
+}
+
+function buildFeaturePool(features, surveyFilter, subFilter, lat, lon) {
+  if (!features?.length) return [];
+  let pool = surveyFilter
+    ? filterFeaturesBySurvey(features, surveyFilter, subFilter)
+    : [...features];
+  if (!pool.length && surveyFilter && subFilter) {
+    pool = filterFeaturesBySurvey(features, surveyFilter, null);
+  }
+  const containing = pool.filter((f) => featureContainsPoint(f, lat, lon));
+  if (containing.length) return containing;
+  return pool;
+}
+
+function pickBestFromFeaturePool(pool, lat, lon) {
+  if (!pool?.length) return null;
+  return pickBestContainingFeature(pool, lat, lon)
+    || pickNearestBoundaryFeature(pool, lat, lon, 200)
+    || pool[0];
+}
+
+/** FMB sub at tap — prefer containing polygon; fall back to nearest boundary within ~120 m. */
+function pickBestFmbFeatureAtPoint(features, lat, lon, maxNearestMeters = 120) {
+  if (!features?.length) return null;
+  const containing = features.filter((f) => featureContainsPoint(f, lat, lon));
+  const bestContaining = pickBestContainingFeature(containing, lat, lon);
+  if (bestContaining) return bestContaining;
+  return pickNearestBoundaryFeature(features, lat, lon, maxNearestMeters);
+}
+
 async function lookupTngisParcelAtPoint({ lat, lon, surveyNo, subDiv }) {
   const surveyFilter = normalizeSurveyNo(surveyNo);
-  const subFilter = subDiv && normalizeSurveyNo(subDiv) !== '' && normalizeSurveyNo(subDiv) !== '-'
-    ? normalizeSurveyNo(subDiv)
-    : null;
+  const subFilter = normalizeSubDivFilter(subDiv, surveyFilter);
 
   if (surveyFilter) {
-    const radii = [120, 300, 800, 2000, 5000, 10000];
+    const radii = [120, 300, 800, 2000, 5000, 10000, 25000];
     for (const radiusMeters of radii) {
       const features = await fetchTngisLayerFeatures({
         layer:        TNGIS_CADASTRAL_LAYER,
         surveyNo:       surveyFilter,
-        subDiv:         subFilter,
         lat,
         lon,
         radiusMeters,
-        count:        120,
+        count:        150,
       });
-      const pool = filterFeaturesBySurvey(features, surveyFilter, subFilter);
-      if (!pool.length) continue;
-
-      const best = pickBestContainingFeature(pool, lat, lon)
-        || pickNearestBoundaryFeature(pool, lat, lon, 150)
-        || pool[0];
+      const pool = buildFeaturePool(features, surveyFilter, subFilter, lat, lon);
+      const best = pickBestFromFeaturePool(pool, lat, lon);
       if (best) return tngisHitFromFeature(best, pool, lat, lon);
     }
-    // Explicit survey requested — never return a different survey number.
+    // Survey requested but not found in WFS — do not return a different survey.
     return null;
   }
 
@@ -684,39 +748,48 @@ async function lookupTngisParcelAtPoint({ lat, lon, surveyNo, subDiv }) {
     if (!features.length) continue;
     lastFeatures = features;
 
-    const containing = features.filter((f) => featureContainsPoint(f, lat, lon));
-    if (containing.length) {
-      const best = pickBestContainingFeature(containing, lat, lon);
+    const pool = buildFeaturePool(features, null, null, lat, lon);
+    const best = pickBestFromFeaturePool(pool, lat, lon);
+    if (best && featureContainsPoint(best, lat, lon)) {
       return tngisHitFromFeature(best, features, lat, lon);
     }
   }
 
   if (lastFeatures.length) {
-    const best = pickNearestBoundaryFeature(lastFeatures, lat, lon, 200);
+    const best = pickNearestBoundaryFeature(lastFeatures, lat, lon, 250);
     if (best) return tngisHitFromFeature(best, lastFeatures, lat, lon);
   }
   return null;
 }
 
 async function listTngisSubdivisionsAtPoint({ lat, lon, surveyNo }) {
-  const radii = [200, 400, 800, 1500, 2500];
+  const surveyFilter = surveyNo ? normalizeSurveyNo(surveyNo) : null;
+  const radii = [300, 800, 1500, 3000, 6000, 10000];
+  const seenIds = new Set();
   let features = [];
   for (const radiusMeters of radii) {
-    features = await fetchTngisParcelsNear(lat, lon, radiusMeters, 500);
-    if (features.length >= 2) break;
+    const batch = await fetchTngisParcelsNear(lat, lon, radiusMeters, 400);
+    for (const f of batch) {
+      const p = f.properties || {};
+      const id = f.id || `${p.survey_number}|${p.kide}|${p.sub_division}`;
+      if (seenIds.has(id)) continue;
+      seenIds.add(id);
+      features.push(f);
+    }
+    if (surveyFilter) {
+      const matched = features.filter((f) => surveyNumberMatches(f.properties?.survey_number, surveyFilter));
+      if (matched.length >= 3) break;
+    } else if (features.length >= 15) break;
   }
   if (!features.length) return [];
-
-  const surveyFilter = surveyNo ? normalizeSurveyNo(surveyNo) : null;
   const seen = new Map();
   for (const f of features) {
     const p = f.properties || {};
     const survey = normalizeSurveyNo(p.survey_number);
     if (!survey) continue;
     if (surveyFilter && !surveyNumberMatches(survey, surveyFilter)) continue;
-    const subRaw = String(p.sub_division ?? '').trim();
-    const sub = subRaw && subRaw !== '-' ? subRaw : null;
-    const key = `${survey}|${sub ?? ''}`;
+    const sub = resolveTngisSubDivision(p);
+    const key = `${survey}|${sub ?? ''}|${String(p.kide ?? '').trim()}`;
     if (seen.has(key)) continue;
     seen.set(key, {
       surveyNumber:  survey,
@@ -730,13 +803,64 @@ async function listTngisSubdivisionsAtPoint({ lat, lon, surveyNo }) {
   }
 
   const items = [...seen.values()];
-  items.sort((a, b) => {
+
+  // Cadastral WFS often lists parent survey only (kide=483); FMB subs live in view_fmb.
+  const anchor = items.find((i) => i.containsPoint) || items[0];
+  const dc = anchor?.fields?.['District Code'] || null;
+  const tc = anchor?.fields?.['Taluk Code'] || null;
+  const vc = anchor?.fields?.['Village Code'] || null;
+  if (surveyFilter && dc && tc && vc && Number.isFinite(lat) && Number.isFinite(lon)) {
+    for (const radiusMeters of [500, 2000, 5000, 10000]) {
+      const cql = buildFmbLookupCql({
+        surveyNo:     surveyFilter,
+        districtCode: dc,
+        talukCode:    tc,
+        villageCode:  vc,
+        lat,
+        lon,
+        radiusMeters,
+      });
+      const fmbFeatures = await queryTngisLayerFeatures(TNGIS_FMB_LAYER, cql, 50);
+      for (const f of fmbFeatures) {
+        const p = f.properties || {};
+        if (!surveyNumberMatches(p.survey_number, surveyFilter)) continue;
+        const sub = resolveTngisSubDivision(p);
+        const key = `${surveyFilter}|${sub ?? ''}|${String(p.kide ?? '').trim()}`;
+        const containsPoint = featureContainsPoint(f, lat, lon);
+        if (seen.has(key)) {
+          const prev = seen.get(key);
+          if (containsPoint) prev.containsPoint = true;
+          prev.fmbAvailable = true;
+          if (sub && !prev.subDivision) prev.subDivision = sub;
+          continue;
+        }
+        seen.set(key, {
+          surveyNumber:  surveyFilter,
+          subDivision:   sub,
+          kide:          p.kide != null ? String(p.kide).trim() : null,
+          fields:        tngisFeatureToFields(p),
+          fmbAvailable:  true,
+          containsPoint,
+        });
+      }
+      if ([...seen.values()].some((i) => i.subDivision && i.containsPoint)) break;
+    }
+  }
+
+  const merged = [...seen.values()];
+  const fmbAtPoint = merged.filter((i) => i.subDivision && i.containsPoint);
+  if (fmbAtPoint.length) {
+    for (const item of merged) {
+      if (!item.subDivision) item.containsPoint = false;
+    }
+  }
+  merged.sort((a, b) => {
     if (a.containsPoint !== b.containsPoint) return a.containsPoint ? -1 : 1;
     const sa = a.subDivision ?? '';
     const sb = b.subDivision ?? '';
     return sa.localeCompare(sb, undefined, { numeric: true });
   });
-  return items;
+  return merged;
 }
 
 function tngisHitFromFeature(primaryFeature, allFeatures, lat, lon) {
@@ -795,7 +919,8 @@ function buildTngisCql({ surveyNo, subDiv, lat, lon, radiusMeters }) {
   const hasPoint = Number.isFinite(lat) && Number.isFinite(lon);
   const clauses = [];
   if (surveyNo) clauses.push(`survey_number='${cqlStr(surveyNo)}'`);
-  if (subDiv)   clauses.push(`sub_division='${cqlStr(subDiv)}'`);
+  // sub_division omitted from CQL — many parcels store sub only in kide (e.g. 394/15C).
+  // Callers filter by resolveTngisSubDivision() in memory.
   if (hasPoint) {
     clauses.push(`DWITHIN(the_geom, POINT(${lat} ${lon}), ${radiusMeters}, meters)`);
   }
@@ -808,10 +933,7 @@ function buildFmbLookupCql({
   const clauses = [];
   const survey = normalizeSurveyNo(surveyNo);
   if (survey) clauses.push(`survey_number='${cqlStr(survey)}'`);
-  const sub = subDiv && normalizeSurveyNo(subDiv) !== '' && normalizeSurveyNo(subDiv) !== '-'
-    ? normalizeSurveyNo(subDiv)
-    : null;
-  if (sub) clauses.push(`sub_division='${cqlStr(sub)}'`);
+  // sub filtered in memory via resolveTngisSubDivision (kide field).
   if (districtCode != null && String(districtCode).trim() !== '') {
     const dc = String(districtCode).trim();
     clauses.push(/^\d+$/.test(dc) ? `district_code=${dc}` : `district_code='${cqlStr(dc)}'`);
@@ -829,9 +951,9 @@ function buildFmbLookupCql({
   return clauses.length > 0 ? clauses.join(' AND ') : null;
 }
 
-async function queryTngisCadastralFeatures(cql, count = 25) {
+async function queryTngisLayerFeatures(layer, cql, count = 25) {
   if (!cql) return [];
-  const url = tngisLayerWfsUrl(TNGIS_CADASTRAL_LAYER, cql, count);
+  const url = tngisLayerWfsUrl(layer, cql, count);
   const res = await fetchRaw(url, {
     headers: { Accept: 'application/json', Referer: 'https://tngis.tn.gov.in/' },
   });
@@ -844,13 +966,64 @@ async function queryTngisCadastralFeatures(cql, count = 25) {
   }
 }
 
+async function queryTngisCadastralFeatures(cql, count = 25) {
+  return queryTngisLayerFeatures(TNGIS_CADASTRAL_LAYER, cql, count);
+}
+
+/** Pick FMB sub-division at map point — cadastral layer often has kide without /sub. */
+async function resolveFmbSubAtPoint({
+  lat, lon, surveyNo, subDiv, districtCode, talukCode, villageCode,
+}) {
+  const survey = normalizeSurveyNo(surveyNo);
+  if (!survey || !Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  const subFilter = normalizeSubDivFilter(subDiv, survey);
+  const radii = [120, 300, 500, 2000, 5000, 10000];
+  for (const radiusMeters of radii) {
+    const cql = buildFmbLookupCql({
+      surveyNo: survey,
+      districtCode,
+      talukCode,
+      villageCode,
+      lat,
+      lon,
+      radiusMeters,
+    });
+    const features = await queryTngisLayerFeatures(TNGIS_FMB_LAYER, cql, 50);
+    if (!features.length) continue;
+    let pool = surveyFilterPool(features, survey, subFilter);
+    const best = pickBestFmbFeatureAtPoint(pool, lat, lon);
+    if (!best) continue;
+    const props = best.properties || {};
+    const sub = resolveTngisSubDivision(props);
+    if (!sub) continue;
+    return {
+      tngisProps: props,
+      subDivision: sub,
+      kide: props.kide != null ? String(props.kide).trim() : null,
+      containsPoint: featureContainsPoint(best, lat, lon),
+    };
+  }
+  return null;
+}
+
+function surveyFilterPool(features, survey, subFilter) {
+  if (!survey) return features || [];
+  let pool = (features || []).filter((f) => surveyNumberMatches(f.properties?.survey_number, survey));
+  if (subFilter) {
+    pool = pool.filter((f) => {
+      const p = f.properties || {};
+      const featSub = resolveTngisSubDivision(p) || normalizeSurveyNo(p.sub_division);
+      return normalizeSurveyNo(featSub).toUpperCase() === normalizeSurveyNo(subFilter).toUpperCase();
+    });
+  }
+  return pool;
+}
+
 /** Resolve TNGIS props (incl. kide) for a specific survey/sub — not the map-tap parcel. */
 async function fetchTngisParcelPropsForFmb(opts = {}) {
   const survey = normalizeSurveyNo(opts.surveyNo);
   if (!survey) return null;
-  const sub = opts.subDiv && normalizeSurveyNo(opts.subDiv) !== '' && normalizeSurveyNo(opts.subDiv) !== '-'
-    ? normalizeSurveyNo(opts.subDiv)
-    : null;
+  const sub = normalizeSubDivFilter(opts.subDiv, survey);
   const lat = opts.lat;
   const lon = opts.lon;
   const base = {
@@ -862,15 +1035,9 @@ async function fetchTngisParcelPropsForFmb(opts = {}) {
   };
 
   const pickFrom = (features) => {
-    const pool = filterFeaturesBySurvey(features, survey, sub);
-    if (!pool.length) return null;
-    if (Number.isFinite(lat) && Number.isFinite(lon)) {
-      const best = pickBestContainingFeature(pool, lat, lon)
-        || pickNearestBoundaryFeature(pool, lat, lon, 300)
-        || pool[0];
-      return best?.properties || null;
-    }
-    return pool[0]?.properties || null;
+    const pool = buildFeaturePool(features, survey, sub, lat, lon);
+    const best = pickBestFromFeaturePool(pool, lat, lon);
+    return best?.properties || null;
   };
 
   if (sub) {
@@ -944,20 +1111,24 @@ async function fetchTngisFmbProps({ surveyNo, subDiv, lat, lon, districtCode, ta
       lat,
       lon,
       radiusMeters: r,
-      count:        surveyNo ? 25 : 5,
+      count:        surveyNo ? 50 : 5,
     });
     if (features.length === 0) continue;
 
     const pool = subFilter
-      ? features.filter((f) => normalizeSurveyNo(f.properties?.sub_division) === subFilter)
-      : features;
+      ? features.filter((f) => {
+          const p = f.properties || {};
+          if (survey && !surveyNumberMatches(p.survey_number, survey)) return false;
+          const featSub = resolveTngisSubDivision(p) || normalizeSurveyNo(p.sub_division);
+          return featSub === subFilter;
+        })
+      : features.filter((f) => {
+          if (!survey) return true;
+          return surveyNumberMatches(f.properties?.survey_number, survey);
+        });
     const candidates = pool.length ? pool : features;
-
-    const withFmb = candidates.find((f) => {
-      const p = f.properties || {};
-      return p.is_fmb === 1 || p.is_fmb === '1';
-    });
-    return (withFmb || candidates[0]).properties || null;
+    const best = pickBestFmbFeatureAtPoint(candidates, lat, lon);
+    if (best?.properties) return best.properties;
   }
   return null;
 }
@@ -1071,7 +1242,8 @@ function tngisFeatureToFields(props) {
     }
   };
   put('Survey Number',     props.survey_number);
-  put('Sub Division',      props.sub_division);
+  put('Sub Division',      resolveTngisSubDivision(props));
+  put('Kide',              props.kide);
   put('District Code',     props.district_code);
   put('Taluk Code',        props.taluk_code);
   put('Village Code',      props.village_code);
@@ -1240,20 +1412,23 @@ function fmbFileName(props = {}) {
   return `FMB-${survey}.pdf`;
 }
 
-function fmbDownloadQuery(props = {}) {
-  const dc = String(props.district_code ?? '').trim();
-  const tc = String(props.taluk_code ?? '').trim();
-  const vc = String(props.village_code ?? '').trim();
-  const survey = String(props.survey_number ?? '').trim();
+function fmbDownloadQuery(props = {}, ctx = {}) {
+  const dc = String(props.district_code ?? ctx.districtCode ?? '').trim();
+  const tc = String(props.taluk_code ?? ctx.talukCode ?? '').trim();
+  const vc = String(props.village_code ?? ctx.villageCode ?? '').trim();
+  const survey = String(props.survey_number ?? ctx.surveyNumber ?? '').trim();
   if (!dc || !tc || !vc || !survey) return null;
   let q = `dc=${encodeURIComponent(dc)}&tc=${encodeURIComponent(tc)}`
       + `&vc=${encodeURIComponent(vc)}&surveyNo=${encodeURIComponent(survey)}`;
-  const sub = String(props.sub_division ?? '').trim();
-  if (sub && sub !== '-' && sub !== survey) {
+  const sub = ctx.subDivision || resolveTngisSubDivision(props);
+  if (sub) {
     q += `&subDiv=${encodeURIComponent(sub)}`;
   }
-  const plotno = fmbPlotnoFromProps(props);
-  if (plotno) q += `&plotno=${encodeURIComponent(plotno)}`;
+  const lat = ctx.lat;
+  const lon = ctx.lon;
+  if (Number.isFinite(lat) && Number.isFinite(lon)) {
+    q += `&lat=${lat}&lon=${lon}`;
+  }
   return q;
 }
 
@@ -1266,31 +1441,154 @@ function withTimeout(promise, ms, label = 'Request') {
   ]);
 }
 
-/** FMB metadata for /patta — PDF is streamed separately via GET /fmb. */
-function buildFmbDocumentMeta(props = {}) {
-  const giscode = giscodeFromTngisProps(props);
-  const q = fmbDownloadQuery(props);
-  if (!q) {
+/** FMB metadata for /patta — PDF streamed via GET /fmb (TNGIS sketch_fmb). */
+function buildFmbDocumentMeta(props = {}, codes = {}, ctx = {}) {
+  const q = fmbDownloadQuery(props, {
+    districtCode: codes.districtCode,
+    talukCode:    codes.talukCode,
+    villageCode:  codes.villageCode,
+    surveyNumber: codes.surveyNumber,
+    subDivision:  codes.subDivision,
+    lat:          ctx.lat,
+    lon:          ctx.lon,
+  });
+  if (!q && !codes.surveyNumber) {
     return {
       type:      'fmb',
-      source:    'collabland-tn.gov.in',
-      giscode:   giscode || null,
+      source:    'TNGIS GI Viewer (sketch_fmb)',
       available: false,
       error:     'Parcel codes missing — tap directly on the land plot on the map.',
     };
   }
   return {
     type:        'fmb',
-    source:      'collabland-tn.gov.in',
-    giscode,
+    source:      'TNGIS GI Viewer (sketch_fmb)',
     mimeType:    'application/pdf',
     fileName:    fmbFileName(props),
-    downloadUrl: `/api/tnlands/fmb?${q}`,
-    plotno:      fmbPlotnoFromProps(props) || null,
-    note:        fmbPlotnoFromProps(props)
-        ? 'Sub-division FMB sketch (CollabLand plotno from TNGIS kide).'
-        : 'Survey-level FMB sketch — specify sub-division for parcel sketch.',
+    downloadUrl: q ? `/api/tnlands/fmb?${q}` : null,
+    available:   true,
+    note:        'Official FMB sketch from TNGIS Tamil Nilam GI Viewer.',
   };
+}
+
+function aregToPattaHtml(areg, codes) {
+  const land = areg.landDetail || {};
+  const owners = areg.ownershipDetails || [];
+  const rows = Object.entries(land)
+    .filter(([, v]) => v != null && String(v).trim() !== '')
+    .map(([k, v]) => `<tr><th>${escHtml(k)}</th><td>${escHtml(v)}</td></tr>`)
+    .join('');
+  let ownersHtml = '';
+  if (Array.isArray(owners) && owners.length) {
+    ownersHtml = owners.map((o) => {
+      const orows = Object.entries(o || {})
+        .map(([k, v]) => `<tr><th>${escHtml(k)}</th><td>${escHtml(v)}</td></tr>`)
+        .join('');
+      return `<table>${orows}</table>`;
+    }).join('');
+  }
+  const body = `<table>${rows}</table>${ownersHtml ? `<div class="owners"><h2>Ownership</h2>${ownersHtml}</div>` : ''}`;
+  return wrapPattaPrintHtml(
+    'Patta / Chitta — Tamil Nilam',
+    areg.source || 'TNGIS Tamil Nilam',
+    body,
+  );
+}
+
+async function fetchTngisGiDocuments(tngisProps, ctx = {}) {
+  const documents = {};
+  let giLand = null;
+  if (Number.isFinite(ctx.lat) && Number.isFinite(ctx.lon)) {
+    try {
+      giLand = await fetchGiLandDetails(ctx.lat, ctx.lon);
+      if (!giLand.ok) giLand = null;
+    } catch (_) {}
+  }
+  const codes = mergeGiParcelCodes(giLand, tngisProps, ctx);
+
+  // ── Patta: Tamil Nilam AREG + NIC pattacopy ──
+  try {
+    const areg = await fetchGiAregOwnership(codes);
+    if (areg.ok) {
+      const pattaNo = areg.landDetail?.pattaNo
+        || areg.landDetail?.patta_number
+        || areg.landDetail?.patta_no;
+      if (pattaNo) {
+        const copy = await fetchGiPattaCopy({ ...codes, pattaNumber: pattaNo });
+        if (copy.ok) {
+          documents.patta = {
+            type:       'patta',
+            source:     copy.source,
+            available:  true,
+            official:   true,
+            pdfBase64:  copy.pdfBase64,
+            mimeType:   'application/pdf',
+            fileName:   copy.fileName,
+            landDetail: areg.landDetail,
+            ownership:  areg.ownershipDetails,
+          };
+        } else {
+          documents.patta = {
+            type:       'patta',
+            source:     areg.source,
+            available:  true,
+            official:   false,
+            html:       aregToPattaHtml(areg, codes),
+            fileName:   `Patta-Survey-${codes.surveyNumber || 'record'}.html`,
+            error:      copy.error,
+            landDetail: areg.landDetail,
+            ownership:  areg.ownershipDetails,
+          };
+        }
+      } else {
+        documents.patta = {
+          type:       'patta',
+          source:     areg.source,
+          available:  true,
+          official:   false,
+          html:       aregToPattaHtml(areg, codes),
+          fileName:   `Patta-Survey-${codes.surveyNumber || 'record'}.html`,
+          landDetail: areg.landDetail,
+          ownership:  areg.ownershipDetails,
+        };
+      }
+    } else {
+      documents.patta = {
+        type:      'patta',
+        source:    'TNGIS Tamil Nilam',
+        available: false,
+        error:     areg.error,
+      };
+    }
+  } catch (err) {
+    documents.patta = {
+      type:      'patta',
+      source:    'TNGIS Tamil Nilam',
+      available: false,
+      error:     err.message,
+    };
+  }
+
+  // FMB sub from view_fmb geometry beats giLand/cadastral (parent kide has no /sub).
+  if (Number.isFinite(ctx.lat) && Number.isFinite(ctx.lon) && codes.surveyNumber && !ctx.subDiv) {
+    try {
+      const fmbHit = await resolveFmbSubAtPoint({
+        lat:          ctx.lat,
+        lon:          ctx.lon,
+        surveyNo:     codes.surveyNumber,
+        districtCode: codes.districtCode,
+        talukCode:    codes.talukCode,
+        villageCode:  codes.villageCode,
+      });
+      if (fmbHit?.subDivision) {
+        codes.subDivision = fmbHit.subDivision;
+        codes.isFmb = true;
+      }
+    } catch (_) {}
+  }
+
+  documents.fmb = buildFmbDocumentMeta(tngisProps, codes, ctx);
+  return documents;
 }
 
 async function fetchCollablandFmbByGiscode(giscode, surveyNo, plotno = '') {
@@ -1466,64 +1764,7 @@ async function fetchPattaChittaDocument(docProps, codes, ctx = {}) {
 }
 
 async function fetchPattaDocuments(tngisProps, ctx = {}) {
-  const documents = {};
-  const codes     = eservicesCodesFromTngisProps(tngisProps);
-
-  let docProps = { ...tngisProps };
-  const ctxSurvey = normalizeSurveyNo(ctx.surveyNo) || normalizeSurveyNo(docProps.survey_number);
-  const ctxSub = ctx.subDiv && normalizeSurveyNo(ctx.subDiv) !== '' && normalizeSurveyNo(ctx.subDiv) !== '-'
-    ? normalizeSurveyNo(ctx.subDiv)
-    : null;
-  if (ctxSub) docProps = { ...docProps, sub_division: ctxSub };
-
-  const needsSubProps = ctxSub || !docProps.kide
-      || (ctxSub && normalizeSurveyNo(docProps.sub_division) !== ctxSub);
-  if (needsSubProps && ctxSurvey) {
-    try {
-      const subProps = await fetchTngisParcelPropsForFmb({
-        surveyNo:     ctxSurvey,
-        subDiv:       ctxSub || docProps.sub_division,
-        districtCode: docProps.district_code,
-        talukCode:    docProps.taluk_code,
-        villageCode:  docProps.village_code,
-        lat:          ctx.lat,
-        lon:          ctx.lon,
-      });
-      if (subProps) {
-        docProps = {
-          ...docProps,
-          ...subProps,
-          survey_number: ctxSurvey,
-          sub_division:  ctxSub || subProps.sub_division,
-        };
-      }
-    } catch (_) {}
-  } else if (!docProps.district_code && Number.isFinite(ctx.lat) && Number.isFinite(ctx.lon)) {
-    try {
-      const fmbProps = await fetchTngisFmbProps({
-        surveyNo: ctxSurvey,
-        subDiv:   ctxSub,
-        lat:      ctx.lat,
-        lon:      ctx.lon,
-      });
-      if (fmbProps) docProps = { ...docProps, ...fmbProps };
-    } catch (_) {}
-  }
-
-  try {
-    documents.patta = await fetchPattaChittaDocument(docProps, codes, ctx);
-  } catch (err) {
-    documents.patta = {
-      type:      'patta',
-      available: false,
-      error:     err.message,
-    };
-  }
-
-  // FMB PDF is fetched separately via GET /fmb — only return metadata here.
-  documents.fmb = buildFmbDocumentMeta(docProps);
-
-  return documents;
+  return fetchTngisGiDocuments(tngisProps, ctx);
 }
 
 // ── Patta Routes ──────────────────────────────────────────────────────────────
@@ -1663,12 +1904,29 @@ router.get('/tngis/parcel', async (req, res) => {
   }
 
   try {
-    const hit = await lookupTngisParcelAtPoint({
+    let hit = await lookupTngisParcelAtPoint({
       lat: latN,
       lon: lonN,
       surveyNo,
       subDiv,
     });
+    // Sub filter can be too strict (kide-only subs) — retry without sub, then lat/lon only.
+    if (!hit && subDiv) {
+      hit = await lookupTngisParcelAtPoint({
+        lat: latN,
+        lon: lonN,
+        surveyNo,
+        subDiv: null,
+      });
+    }
+    if (!hit && surveyNo) {
+      hit = await lookupTngisParcelAtPoint({
+        lat: latN,
+        lon: lonN,
+        surveyNo: null,
+        subDiv: null,
+      });
+    }
     const giViewerUrl = tngisGiViewerUrl(latN, lonN);
 
     if (!hit) {
@@ -1700,29 +1958,157 @@ router.get('/tngis/parcel', async (req, res) => {
       lon: lonN,
       surveyNo: survey || surveyNo,
     });
+
+    let giLand = null;
+    try {
+      giLand = await fetchGiLandDetails(latN, lonN);
+    } catch (_) {}
+
+    const surveyVal = giLand?.ok && giLand.surveyNumber
+      ? giLand.surveyNumber
+      : survey;
+
+    // Sub at map tap — view_fmb polygon is authoritative (cadastral kide is often parent-only).
+    let subDivVal = null;
+    let kideVal = props.kide != null ? String(props.kide).trim() : null;
+    const containingSub = subdivisions.find((s) => s.containsPoint && s.subDivision);
+    if (containingSub?.subDivision) {
+      subDivVal = containingSub.subDivision;
+      if (containingSub.kide) kideVal = containingSub.kide;
+    } else {
+      try {
+        const fmbHit = await resolveFmbSubAtPoint({
+          lat:          latN,
+          lon:          lonN,
+          surveyNo:     surveyVal,
+          districtCode: props.district_code,
+          talukCode:    props.taluk_code,
+          villageCode:  props.village_code,
+        });
+        if (fmbHit?.subDivision) {
+          subDivVal = fmbHit.subDivision;
+          if (fmbHit.kide) kideVal = fmbHit.kide;
+        }
+      } catch (_) {}
+    }
+
+    if (!subDivVal) {
+      if (giLand?.ok && giLand.subDivision) {
+        const giSub = String(giLand.subDivision).trim();
+        if (giSub && giSub !== '-' && !surveyNumberMatches(giSub, surveyVal)) {
+          subDivVal = giSub;
+        }
+      }
+      subDivVal = subDivVal
+        || resolveTngisSubDivision(props)
+        || normalizeSubDivFilter(req.query.subDiv, surveyVal)
+        || (hit.fields['Sub Division'] && !surveyNumberMatches(hit.fields['Sub Division'], surveyVal)
+            ? hit.fields['Sub Division']
+            : null);
+    }
+
+    if (subDivVal) hit.fields['Sub Division'] = subDivVal;
+    if (kideVal) hit.fields['Kide'] = kideVal;
+
+    const fmbAvailable = props.is_fmb === 1 || props.is_fmb === '1'
+        || (kideVal && kideVal.includes('/'))
+        || subdivisions.some((s) => s.fmbAvailable)
+        || Boolean(subDivVal);
+
     return res.json({
       source:       'TNGIS Tamil Nilam GI Viewer',
       giViewerUrl,
       fields:       hit.fields,
       owners:       hit.owners,
-      surveyNumber: survey,
-      subDivision:  hit.fields['Sub Division'] || props.sub_division || null,
-      kide:         props.kide != null ? String(props.kide).trim() : null,
+      surveyNumber: surveyVal,
+      subDivision:  subDivVal,
+      ulpin:        giLand?.ok ? (giLand.ulpin || null) : null,
+      centroid:     giLand?.ok
+          ? (giLand.centroid || `${latN}, ${lonN}`)
+          : `${latN}, ${lonN}`,
+      kide:         kideVal,
       district:     hit.fields.District || props.district_name || null,
       taluk:        hit.fields.Taluk || props.taluk_name || null,
       village:      hit.fields.Village || props.village_name || null,
       pattaNumber:  hit.fields['Patta Number'] || props.patta_no || null,
-      fmbAvailable: props.is_fmb === 1 || props.is_fmb === '1'
-          || (props.kide && String(props.kide).trim() !== '0' && String(props.kide).includes('/')),
+      fmbAvailable,
       containsPoint: hit.pickMeta?.containsPoint ?? false,
       distanceMeters: hit.pickMeta?.containsPoint ? 0 : undefined,
       subdivisions,
+      giServices: buildGiServiceCards(props, hit.fields, giLand),
+      giLandError: giLand?.ok ? null : (giLand?.error || null),
     });
   } catch (err) {
     return res.status(502).json({
       error:       err.message,
       giViewerUrl: tngisGiViewerUrl(latN, lonN),
     });
+  }
+});
+
+function buildGiServiceCards(props = {}, fields = {}, giLand = null) {
+  const survey = String(giLand?.surveyNumber || fields['Survey Number'] || props.survey_number || '').trim();
+  const sub = String(giLand?.subDivision || fields['Sub Division'] || props.sub_division || '').trim();
+  const pattaNo = String(fields['Patta Number'] || props.patta_no || '').trim();
+  const landType = String(fields['Land Classification'] || props.type_cate || props.land_type || '').trim();
+  const fmbAvail = props.is_fmb === 1 || props.is_fmb === '1'
+      || (props.kide && String(props.kide).trim() !== '0' && String(props.kide).includes('/'));
+
+  return {
+    patta: {
+      id: 'patta', title: 'Patta', available: Boolean(survey),
+      summary: pattaNo ? `Patta ${pattaNo}` : (survey ? `Survey ${survey}${sub && sub !== survey ? ` / ${sub}` : ''}` : 'Tap a plot on the map'),
+    },
+    fmb: {
+      id: 'fmb', title: 'FMB', available: fmbAvail || Boolean(survey),
+      summary: fmbAvail ? 'Digitized FMB sketch' : 'Field Measurement Book',
+    },
+    ec: {
+      id: 'ec', title: 'EC', available: Boolean(survey),
+      summary: 'Encumbrance Certificate',
+    },
+    gvalue: {
+      id: 'gvalue', title: 'G-Value', available: Boolean(survey),
+      summary: landType || 'Guideline value',
+    },
+    crop: {
+      id: 'crop', title: 'Crop', available: Boolean(survey),
+      summary: landType || 'Crop survey',
+    },
+  };
+}
+
+router.get('/tngis/gi-detail', async (req, res) => {
+  const latN = parseFloat(req.query.lat);
+  const lonN = parseFloat(req.query.lon);
+  const { surveyNo, subDiv, type } = req.query;
+
+  if (!Number.isFinite(latN) || !Number.isFinite(lonN)) {
+    return res.status(400).json({ error: 'lat and lon required' });
+  }
+  if (!type || !['gvalue', 'crop'].includes(String(type))) {
+    return res.status(400).json({ error: 'type must be gvalue or crop' });
+  }
+
+  const giViewerUrl = tngisGiViewerUrl(latN, lonN);
+  const base = { giViewerUrl, surveyNumber: surveyNo || null, subDivision: subDiv || null };
+
+  try {
+    if (type === 'gvalue') {
+      const result = await fetchGiGuidelineValue(latN, lonN);
+      if (!result.ok) {
+        return res.status(404).json({ error: result.error, ...base, type: 'gvalue' });
+      }
+      return res.json({ ...base, type: 'gvalue', ...result });
+    }
+
+    const result = await fetchGiCropDetails(latN, lonN);
+    if (!result.ok) {
+      return res.status(404).json({ error: 'No crop data available for this parcel.', ...base, type: 'crop' });
+    }
+    return res.json({ ...base, type: 'crop', ...result });
+  } catch (err) {
+    return res.status(502).json({ error: err.message, ...base });
   }
 });
 
@@ -1889,58 +2275,138 @@ router.get('/patta', async (req, res) => {
   }
 });
 
-// Stream FMB PDF (CollabLand) — use after TNGIS lookup or with explicit codes.
-router.get('/fmb', async (req, res) => {
-  const { dc, tc, vc, surveyNo, subDiv, lat, lon, plotno } = req.query;
-  let districtCode = dc;
-  let talukCode    = tc;
-  let villageCode  = vc;
-  const surveyReq  = normalizeSurveyNo(surveyNo);
-  let survey       = surveyReq;
-  const subReq     = subDiv && normalizeSurveyNo(subDiv) !== '' && normalizeSurveyNo(subDiv) !== '-'
-    ? normalizeSurveyNo(subDiv)
-    : null;
-  let tngisProps   = null;
+function sendFmbPdfResponse(res, fmb) {
+  const pdf = Buffer.from(fmb.pdfBase64, 'base64');
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `inline; filename="${fmb.fileName || 'FMB.pdf'}"`);
+  res.setHeader('Content-Length', pdf.length);
+  return res.send(pdf);
+}
 
+// Stream FMB PDF — TNGIS GI Viewer sketch_fmb (official sketch with govt seal).
+router.get('/fmb', async (req, res) => {
+  const { dc, tc, vc, surveyNo, subDiv, lat, lon } = req.query;
   const latN = parseFloat(lat);
   const lonN = parseFloat(lon);
+  const surveyReq = normalizeSurveyNo(surveyNo);
+  const subReq = normalizeSubDivFilter(subDiv, surveyReq);
+  const hasPoint = Number.isFinite(latN) && Number.isFinite(lonN);
 
-  if (surveyReq) {
+  const codes = {
+    districtCode: dc || null,
+    talukCode:    tc || null,
+    villageCode:  vc || null,
+    surveyNumber: surveyReq || null,
+    subDivision:  subReq || '',
+    landType:     'rural',
+    isFmb:        true,
+  };
+
+  /** Direct TNGIS sketch_fmb when survey + sub + admin codes are known — no WFS guessing. */
+  async function fetchFmbWithExplicitCodes() {
+    const fmb = await fetchGiFmbSketch(codes);
+    if (fmb.ok && fmb.pdfBase64) return sendFmbPdfResponse(res, fmb);
+    return res.status(404).json({
+      error: fmb.error || `FMB sketch not available for survey ${codes.surveyNumber} sub ${codes.subDivision}.`,
+      surveyNumber: codes.surveyNumber,
+      subDivision:  codes.subDivision,
+      source:       'TNGIS GI Viewer (sketch_fmb)',
+    });
+  }
+
+  // Fast path — caller supplied survey, sub-division, and revenue codes.
+  if (codes.districtCode && codes.talukCode && codes.villageCode
+      && codes.surveyNumber && subReq) {
+    codes.subDivision = subReq;
     try {
-      tngisProps = await fetchTngisParcelPropsForFmb({
-        surveyNo:     surveyReq,
-        subDiv:       subReq,
-        districtCode: districtCode || undefined,
-        talukCode:    talukCode || undefined,
-        villageCode:  villageCode || undefined,
-        lat:          Number.isFinite(latN) ? latN : undefined,
-        lon:          Number.isFinite(lonN) ? lonN : undefined,
+      return await fetchFmbWithExplicitCodes();
+    } catch (err) {
+      return res.status(502).json({ error: err.message });
+    }
+  }
+
+  let tngisProps = null;
+
+  // Cadastral hit for admin codes when lat/lon provided (single radius try first).
+  if (hasPoint) {
+    try {
+      const hit = await lookupTngisParcelAtPoint({
+        lat: latN,
+        lon: lonN,
+        surveyNo: surveyReq || undefined,
+        subDiv:   subReq || undefined,
       });
-      if (tngisProps) {
-        districtCode = districtCode || tngisProps.district_code;
-        talukCode    = talukCode    || tngisProps.taluk_code;
-        villageCode  = villageCode  || tngisProps.village_code;
-        survey       = surveyReq;
-      }
-    } catch (_) {}
-  } else if ((!districtCode || !talukCode || !villageCode || !survey) &&
-      Number.isFinite(latN) && Number.isFinite(lonN)) {
-    try {
-      const hit = await lookupTngisParcelAtPoint({ lat: latN, lon: lonN });
       if (hit?.tngisProps) {
         tngisProps = hit.tngisProps;
-        districtCode = tngisProps.district_code;
-        talukCode    = tngisProps.taluk_code;
-        villageCode  = tngisProps.village_code;
-        survey       = tngisProps.survey_number;
+        codes.districtCode = codes.districtCode || tngisProps.district_code;
+        codes.talukCode = codes.talukCode || tngisProps.taluk_code;
+        codes.villageCode = codes.villageCode || tngisProps.village_code;
+        codes.surveyNumber = codes.surveyNumber || tngisProps.survey_number;
       }
     } catch (_) {}
   }
 
-  if (!districtCode || !talukCode || !villageCode || !survey) {
+  if (!tngisProps && surveyReq) {
+    try {
+      const props = await fetchTngisParcelPropsForFmb({
+        surveyNo:     surveyReq,
+        subDiv:       subReq,
+        districtCode: codes.districtCode || undefined,
+        talukCode:    codes.talukCode || undefined,
+        villageCode:  codes.villageCode || undefined,
+        lat:          hasPoint ? latN : undefined,
+        lon:          hasPoint ? lonN : undefined,
+      });
+      if (props) {
+        tngisProps = props;
+        codes.districtCode = codes.districtCode || props.district_code;
+        codes.talukCode = codes.talukCode || props.taluk_code;
+        codes.villageCode = codes.villageCode || props.village_code;
+        codes.surveyNumber = codes.surveyNumber || props.survey_number;
+      }
+    } catch (_) {}
+  }
+
+  if (subReq) {
+    codes.subDivision = subReq;
+  } else {
+    const propsSub = resolveTngisSubDivision(tngisProps || {});
+    if (propsSub) codes.subDivision = propsSub;
+  }
+
+  // Survey + sub resolved from map tap — fetch FMB directly once admin codes are known.
+  if (subReq && codes.districtCode && codes.talukCode && codes.villageCode && codes.surveyNumber) {
+    try {
+      return await fetchFmbWithExplicitCodes();
+    } catch (err) {
+      return res.status(502).json({ error: err.message });
+    }
+  }
+
+  // view_fmb polygon at tap point — authoritative sub for FMB sketch.
+  if (!subReq && hasPoint && codes.surveyNumber
+      && codes.districtCode && codes.talukCode && codes.villageCode) {
+    try {
+      const fmbHit = await resolveFmbSubAtPoint({
+        lat:          latN,
+        lon:          lonN,
+        surveyNo:     codes.surveyNumber,
+        districtCode: codes.districtCode,
+        talukCode:    codes.talukCode,
+        villageCode:  codes.villageCode,
+      });
+      if (fmbHit?.subDivision) codes.subDivision = fmbHit.subDivision;
+    } catch (_) {}
+  }
+
+  if (!codes.districtCode || !codes.talukCode || !codes.villageCode || !codes.surveyNumber) {
     return res.status(400).json({
       error: 'Provide dc, tc, vc, surveyNo or lat/lon with a TNGIS parcel hit.',
     });
+  }
+
+  if (codes.subDivision && surveyNumberMatches(codes.subDivision, codes.surveyNumber)) {
+    codes.subDivision = '';
   }
 
   if (surveyReq && tngisProps?.survey_number
@@ -1950,29 +2416,96 @@ router.get('/fmb', async (req, res) => {
     });
   }
 
-  try {
-    const fmb = await fetchCollablandFmbPdf({
-      district_code: districtCode,
-      taluk_code:    talukCode,
-      village_code:  villageCode,
-      survey_number: surveyReq || survey,
-      sub_division:  subReq || tngisProps?.sub_division,
-      kide:          tngisProps?.kide,
-      plotno,
+  if (!codes.subDivision && hasPoint && codes.surveyNumber) {
+    try {
+      const subs = await listTngisSubdivisionsAtPoint({
+        lat: latN,
+        lon: lonN,
+        surveyNo: codes.surveyNumber,
+      });
+      const containing = subs.find((s) => s.containsPoint && s.subDivision);
+      if (containing?.subDivision) {
+        codes.subDivision = containing.subDivision;
+      } else {
+        const fmbSub = subs.find((s) => s.subDivision && s.fmbAvailable);
+        if (fmbSub?.subDivision) codes.subDivision = fmbSub.subDivision;
+      }
+    } catch (_) {}
+  }
+
+  if (!codes.subDivision) {
+    return res.status(404).json({
+      error: 'Could not resolve sub-division for FMB at this map point. Zoom in and tap directly on the land plot.',
+      source: 'TNGIS GI Viewer (sketch_fmb)',
     });
-    if (!fmb?.available || !fmb.pdfBase64) {
+  }
+
+  try {
+    const fmb = await fetchGiFmbSketch(codes);
+    if (!fmb.ok || !fmb.pdfBase64) {
       return res.status(404).json({
-        error: fmb?.error || 'FMB sketch not available for this parcel',
-        giscode: fmb?.giscode || buildCollablandGiscode({
-          districtCode, talukCode, villageCode, surveyNo: survey,
-        }),
+        error: fmb.error || 'FMB sketch not available from TNGIS for this parcel',
+        source: 'TNGIS GI Viewer (sketch_fmb)',
       });
     }
-    const pdf = Buffer.from(fmb.pdfBase64, 'base64');
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `inline; filename="${fmb.fileName || 'FMB.pdf'}"`);
-    res.setHeader('Content-Length', pdf.length);
-    return res.send(pdf);
+    return sendFmbPdfResponse(res, fmb);
+  } catch (err) {
+    return res.status(502).json({ error: err.message });
+  }
+});
+
+// Encumbrance Certificate — TNGIS GI Viewer encumbrance_certificate API.
+router.get('/tngis/ec', async (req, res) => {
+  const latN = parseFloat(req.query.lat);
+  const lonN = parseFloat(req.query.lon);
+  const { surveyNo, subDiv } = req.query;
+
+  if (!Number.isFinite(latN) || !Number.isFinite(lonN)) {
+    return res.status(400).json({ error: 'lat and lon required' });
+  }
+
+  let tngisProps = null;
+  try {
+    const hit = await lookupTngisParcelAtPoint({
+      lat: latN, lon: lonN, surveyNo, subDiv,
+    });
+    tngisProps = hit?.tngisProps || null;
+  } catch (_) {}
+
+  let giLand = null;
+  try {
+    giLand = await fetchGiLandDetails(latN, lonN);
+    if (!giLand.ok) giLand = null;
+  } catch (_) {}
+
+  const codes = mergeGiParcelCodes(giLand, tngisProps || {}, { surveyNo, subDiv });
+  if (!codes.districtCode || !codes.talukCode || !codes.villageCode || !codes.surveyNumber) {
+    return res.status(404).json({
+      error: 'Could not resolve district/taluk/village/survey from TNGIS for this plot.',
+      giViewerUrl: tngisGiViewerUrl(latN, lonN),
+    });
+  }
+
+  try {
+    const ec = await fetchGiEncumbranceCertificate(codes);
+    if (!ec.ok) {
+      return res.status(404).json({
+        error: ec.error,
+        source: 'TNGIS GI Viewer',
+        giViewerUrl: tngisGiViewerUrl(latN, lonN),
+      });
+    }
+    return res.json({
+      source: ec.source,
+      giViewerUrl: tngisGiViewerUrl(latN, lonN),
+      surveyNumber: codes.surveyNumber,
+      subDivision: codes.subDivision || null,
+      document: {
+        pdfBase64: ec.pdfBase64,
+        pdfFileName: ec.fileName,
+        mimeType: 'application/pdf',
+      },
+    });
   } catch (err) {
     return res.status(502).json({ error: err.message });
   }

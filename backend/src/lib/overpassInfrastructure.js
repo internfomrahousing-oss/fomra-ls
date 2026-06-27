@@ -106,6 +106,8 @@ function parseInfrastructureElements(elements, lat, lon) {
       const coords = elementCoords(el);
       const entry = { name };
       if (coords) {
+        entry.lat = coords.lat;
+        entry.lon = coords.lon;
         entry.distance = Math.round(haversineKm(lat, lon, coords.lat, coords.lon) * 100) / 100;
       }
       places[cat.name].push(entry);

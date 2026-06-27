@@ -16,7 +16,6 @@ import '../../widgets/fomra_app_bar.dart';
 import '../../widgets/fomra_bottom_nav.dart';
 import '../../widgets/patta_document_preview.dart';
 import '../../widgets/patta_html_preview.dart';
-import '../../utils/tngis_parcel_picker.dart';
 import '../../services/app_store.dart';
 import '../../models/land_lead.dart';
 
@@ -30,6 +29,18 @@ class _PoiCategory {
   final String value;
   const _PoiCategory(this.name, this.icon, this.color, this.tag, this.value);
 }
+
+const _kTransportPoiNames = [
+  'Railway Stations',
+  'Metro Stations',
+  'Bus Terminals',
+];
+
+enum _MarketMapLayer { standard, transport }
+
+const _kOsmTileUrl = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+const _kOsmTransportRailUrl =
+    'https://tiles.openrailwaymap.org/standard/{z}/{x}/{y}.png';
 
 const _kCategories = [
   _PoiCategory('Schools', Icons.school_outlined, Color(0xFF1565C0), 'amenity', 'school'),
@@ -86,6 +97,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
   final MapController _mapController = MapController();
   bool _mapReady = false;
   bool _mapFullScreen = false;
+  _MarketMapLayer _mapLayer = _MarketMapLayer.standard;
   LatLng? _tappedPoint;
 
   // Location â€“ Search
@@ -132,7 +144,13 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
   String? _detectedVillage;
   String? _tngisSurvey;
   String? _tngisSubDiv;
+  String? _tngisDc;
+  String? _tngisTc;
+  String? _tngisVc;
   String? _tngisGiViewerUrl;
+  Map<String, dynamic>? _tngisGiServices;
+  String? _tngisUlpin;
+  String? _tngisCentroid;
   bool _tngisParcelLoading = false;
   String? _tngisParcelError;
   Map<String, String>? _tngisParcelPreview;
@@ -330,6 +348,12 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
       _valuationResult = null;
       _tngisSurvey = null;
       _tngisSubDiv = null;
+      _tngisDc = null;
+      _tngisTc = null;
+      _tngisVc = null;
+      _tngisGiServices = null;
+      _tngisUlpin = null;
+      _tngisCentroid = null;
       _tngisParcelPreview = null;
       _tngisSubdivisions = [];
     });
@@ -349,6 +373,12 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
       _poiPlaces = {};
       _infraScoreMap = {};
       _valuationResult = null;
+      _tngisSurvey = null;
+      _tngisSubDiv = null;
+      _tngisDc = null;
+      _tngisTc = null;
+      _tngisVc = null;
+      _tngisSubdivisions = [];
       _tngisParcelLoading = true;
       _tngisParcelError = null;
     });
@@ -360,6 +390,24 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
     _collectPois();
   }
 
+  /// Parse sub-division from TNGIS (often in kide e.g. 394/15C).
+  String? _parseTngisSubDivision(String? subDiv, String? kide, String? survey) {
+    final s = subDiv?.trim();
+    final surveyTrim = survey?.trim() ?? '';
+    if (s != null && s.isNotEmpty && s != '-' && s != surveyTrim) return s;
+    final k = kide?.trim();
+    if (k == null || k.isEmpty || k == '0' || !k.contains('/')) return null;
+    final parts = k.split('/');
+    if (parts.length < 2) return null;
+    final kideSub = parts.sublist(1).join('/').trim();
+    if (kideSub.isEmpty || kideSub == '-' || kideSub == surveyTrim) return null;
+    final kideSurvey = parts[0].trim();
+    if (surveyTrim.isNotEmpty && kideSurvey.isNotEmpty && kideSurvey != surveyTrim) {
+      return null;
+    }
+    return kideSub;
+  }
+
   /// Fetch survey no & sub-division from TNGIS for the tapped map point.
   Future<void> _fetchTngisParcelDetails(LatLng loc) async {
     setState(() {
@@ -367,48 +415,53 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
       _tngisParcelError = null;
     });
     try {
-      // Step 1: load nearby parcel polygons and hit-test (matches Tamil Nilam geometry).
-      TngisParcelPickResult? geoPick;
-      try {
-        final parcelGeo = await ApiClient.get(
-          '/api/tnlands/tngis/parcels?lat=${loc.latitude}&lon=${loc.longitude}&zoom=18&radius=500',
-          timeout: const Duration(seconds: 45),
-        );
-        geoPick = pickTngisParcelFromFeatures(
-          loc,
-          parcelGeo['features'] as List<dynamic>? ?? [],
-        );
-      } catch (_) {}
-
       final params = <String, String>{
         'lat': loc.latitude.toString(),
         'lon': loc.longitude.toString(),
       };
-      if (geoPick != null) {
-        params['surveyNo'] = geoPick.survey;
-        final sub = geoPick.subDivision?.trim();
-        if (sub != null && sub.isNotEmpty && sub != '-') {
-          params['subDiv'] = sub;
-        }
-      }
 
       final query = params.entries
           .map((e) => '${e.key}=${Uri.encodeComponent(e.value)}')
           .join('&');
       final result = await ApiClient.get(
         '/api/tnlands/tngis/parcel?$query',
-        timeout: const Duration(seconds: 45),
+        timeout: const Duration(seconds: 90),
       );
       final fields = (result['fields'] as Map<String, dynamic>? ?? {})
           .map((k, v) => MapEntry(k, v.toString()));
       final survey = (result['surveyNumber'] ?? fields['Survey Number'])?.toString();
-      final subDiv = (result['subDivision'] ?? fields['Sub Division'])?.toString();
+      final kideRaw = result['kide']?.toString() ?? fields['Kide'];
+      final subdivisions = ((result['subdivisions'] as List<dynamic>? ?? [])
+          .map((e) => _TngisSubdivisionRow.fromJson(e as Map<String, dynamic>))
+          .where((r) => r.surveyNumber.isNotEmpty)
+          .toList());
+
+      // Sub at map point — prefer view_fmb subdivision polygon containing the tap.
+      String? resolvedSub;
+      String? resolvedKide = kideRaw;
+      for (final row in subdivisions) {
+        if (row.containsPoint && row.effectiveSubDivision != null) {
+          resolvedSub = row.effectiveSubDivision;
+          resolvedKide = row.kide ?? resolvedKide;
+          break;
+        }
+      }
+      resolvedSub ??= _parseTngisSubDivision(
+        (result['subDivision'] ?? fields['Sub Division'])?.toString(),
+        resolvedKide,
+        survey,
+      );
+
       setState(() {
         _tngisGiViewerUrl = result['giViewerUrl'] as String?;
+        _tngisGiServices = (result['giServices'] as Map?)?.cast<String, dynamic>();
+        _tngisUlpin = result['ulpin']?.toString();
+        _tngisCentroid = result['centroid']?.toString();
         _tngisSurvey = survey?.isNotEmpty == true ? survey : null;
-        _tngisSubDiv = (subDiv != null && subDiv.isNotEmpty && subDiv != '-')
-            ? subDiv
-            : null;
+        _tngisSubDiv = resolvedSub;
+        _tngisDc = fields['District Code'];
+        _tngisTc = fields['Taluk Code'];
+        _tngisVc = fields['Village Code'];
         _detectedDistrict = (result['district'] as String?)?.trim().isNotEmpty == true
             ? result['district'] as String
             : (fields['District']?.isNotEmpty == true ? fields['District'] : _detectedDistrict);
@@ -420,19 +473,17 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
             : (fields['Village']?.isNotEmpty == true ? fields['Village'] : _detectedVillage);
         _tngisParcelPreview = fields.isNotEmpty ? fields : null;
         _tngisParcelError = null;
-        _tngisSubdivisions = ((result['subdivisions'] as List<dynamic>? ?? [])
-            .map((e) => _TngisSubdivisionRow.fromJson(e as Map<String, dynamic>))
-            .where((r) => r.surveyNumber.isNotEmpty)
-            .toList());
+        _tngisSubdivisions = subdivisions;
         if (_tngisSubdivisions.isEmpty && _tngisSurvey != null) {
-          final kide = result['kide']?.toString();
           _tngisSubdivisions = [
             _TngisSubdivisionRow(
               surveyNumber: _tngisSurvey!,
               subDivision: _tngisSubDiv,
-              kide: (kide != null && kide.isNotEmpty && kide != '0') ? kide : null,
+              kide: (resolvedKide != null && resolvedKide.isNotEmpty && resolvedKide != '0')
+                  ? resolvedKide
+                  : null,
               fields: fields,
-              containsPoint: result['containsPoint'] == true,
+              containsPoint: result['containsPoint'] == true || _tngisSubDiv != null,
               fmbAvailable: result['fmbAvailable'] == true,
             ),
           ];
@@ -443,34 +494,26 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
         _tngisParcelError = e.message;
         _tngisSurvey = null;
         _tngisSubDiv = null;
+        _tngisDc = null;
+        _tngisTc = null;
+        _tngisVc = null;
+        _tngisGiServices = null;
+        _tngisUlpin = null;
+        _tngisCentroid = null;
         _tngisParcelPreview = null;
         _tngisSubdivisions = [];
       });
     } catch (e) {
       setState(() {
         _tngisParcelError = e.toString().replaceAll('Exception: ', '');
+        _tngisGiServices = null;
+        _tngisUlpin = null;
+        _tngisCentroid = null;
         _tngisParcelPreview = null;
         _tngisSubdivisions = [];
       });
     } finally {
       if (mounted) setState(() => _tngisParcelLoading = false);
-    }
-  }
-
-  Future<void> _openTngisGiViewer() async {
-    final loc = _activeLatLng;
-    final url = _tngisGiViewerUrl ??
-        (loc != null
-            ? 'https://tngis.tn.gov.in/apps/gi_viewer/map-viewer/index.html'
-                '?lat=${loc.latitude}&lon=${loc.longitude}'
-            : 'https://tngis.tn.gov.in/apps/gi_viewer/map-viewer/index.html');
-    final uri = Uri.parse(url);
-    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not open Tamil Nilam GI Viewer.')),
-        );
-      }
     }
   }
 
@@ -515,6 +558,8 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
           final m = (e as Map).cast<String, dynamic>();
           return <String, dynamic>{
             'name': m['name']?.toString() ?? 'Unnamed',
+            if (m['lat'] != null) 'lat': (m['lat'] as num).toDouble(),
+            if (m['lon'] != null) 'lon': (m['lon'] as num).toDouble(),
             if (m['distance'] != null) 'distance': (m['distance'] as num).toDouble(),
           };
         }).toList();
@@ -1008,12 +1053,20 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
       district: _detectedDistrict,
       taluk: _detectedTaluk,
       village: _detectedVillage,
-      surveyNumber: surveyNo ?? _tngisSurvey,
-      subDivision: subDiv ?? _tngisSubDiv,
+      // Map tap / TNGIS parcel wins over lead survey when both exist.
+      surveyNumber: _tngisSurvey ?? surveyNo,
+      subDivision: _tngisSubDiv ?? subDiv,
+      districtCode: _tngisDc,
+      talukCode: _tngisTc,
+      villageCode: _tngisVc,
       lat: loc?.latitude,
       lon: loc?.longitude,
       tngisGiViewerUrl: _tngisGiViewerUrl,
+      giServices: _tngisGiServices,
+      ulpin: _tngisUlpin,
+      centroid: _tngisCentroid,
       tngisSubdivisions: _tngisSubdivisions,
+      tngisParcelLoading: _tngisParcelLoading,
     );
   }
 
@@ -1456,6 +1509,82 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
         ),
       );
 
+  void _setMapLayer(_MarketMapLayer layer) {
+    setState(() => _mapLayer = layer);
+    if (layer == _MarketMapLayer.transport &&
+        _activeLatLng != null &&
+        !_poisCollected &&
+        !_collectingPois) {
+      _collectPois();
+    }
+  }
+
+  Widget _buildMapLayerChip(_MarketMapLayer layer, String label, IconData icon) {
+    final selected = _mapLayer == layer;
+    return Material(
+      color: selected ? AppColors.primary : Colors.white,
+      elevation: selected ? 2 : 1,
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        onTap: () => _setMapLayer(layer),
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 14, color: selected ? Colors.white : AppColors.primary),
+              const SizedBox(width: 4),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: selected ? Colors.white : AppColors.primary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  List<Marker> _buildTransportPoiMarkers() {
+    if (_mapLayer != _MarketMapLayer.transport) return [];
+    final markers = <Marker>[];
+    for (final cat in _kCategories) {
+      if (!_kTransportPoiNames.contains(cat.name)) continue;
+      final places = _poiPlaces[cat.name] ?? [];
+      for (final place in places) {
+        final lat = place['lat'] as double?;
+        final lon = place['lon'] as double?;
+        if (lat == null || lon == null) continue;
+        final name = place['name']?.toString() ?? cat.name;
+        markers.add(Marker(
+          point: LatLng(lat, lon),
+          width: 32,
+          height: 32,
+          child: Tooltip(
+            message: name,
+            child: Container(
+              decoration: BoxDecoration(
+                color: cat.color.withValues(alpha: 0.92),
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white, width: 1.5),
+                boxShadow: const [
+                  BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 1)),
+                ],
+              ),
+              child: Icon(cat.icon, color: Colors.white, size: 16),
+            ),
+          ),
+        ));
+      }
+    }
+    return markers;
+  }
+
   Widget _buildMapStack({bool showMaximize = false, bool showMinimize = false}) {
     final activeLoc = _activeLatLng;
     return Stack(
@@ -1471,9 +1600,15 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
             ),
             children: [
               TileLayer(
-                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                urlTemplate: _kOsmTileUrl,
                 userAgentPackageName: 'in.fomrahousing.fomrals',
               ),
+              if (_mapLayer == _MarketMapLayer.transport)
+                TileLayer(
+                  urlTemplate: _kOsmTransportRailUrl,
+                  userAgentPackageName: 'in.fomrahousing.fomrals',
+                  tileDisplay: const TileDisplay.instantaneous(opacity: 0.72),
+                ),
               CircleLayer(circles: [
                 if (activeLoc != null)
                   CircleMarker(
@@ -1485,6 +1620,8 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                     borderStrokeWidth: 2,
                   ),
               ]),
+              if (_mapLayer == _MarketMapLayer.transport)
+                MarkerLayer(markers: _buildTransportPoiMarkers()),
               MarkerLayer(markers: [
                 if (activeLoc != null)
                   Marker(
@@ -1537,6 +1674,25 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
               ),
             ),
           ),
+        Positioned(
+          top: 8,
+          left: 8,
+          child: Row(
+            children: [
+              _buildMapLayerChip(
+                _MarketMapLayer.standard,
+                'Standard',
+                Icons.map_outlined,
+              ),
+              const SizedBox(width: 6),
+              _buildMapLayerChip(
+                _MarketMapLayer.transport,
+                'Transport',
+                Icons.directions_transit_outlined,
+              ),
+            ],
+          ),
+        ),
         if (showMaximize)
           Positioned(
             top: 8,
@@ -1672,47 +1828,6 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                 ],
               ),
             ],
-            if (_tngisParcelPreview != null && !_tngisParcelLoading) ...[
-              const SizedBox(height: 8),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE3F2FD),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: const Color(0xFF90CAF9)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Tamil Nilam parcel (TNGIS)',
-                        style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFF1565C0))),
-                    const SizedBox(height: 6),
-                    if (_tngisSurvey != null)
-                      _buildInfoRow('Survey Number:', _tngisSurvey!),
-                    if (_tngisSubDiv != null &&
-                        _tngisSubDiv!.isNotEmpty &&
-                        _tngisSubDiv != '-')
-                      _buildInfoRow('Sub Division:', _tngisSubDiv!),
-                    if (_tngisSubdivisions.length > 1) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        '${_tngisSubdivisions.length} subdivisions found for this survey',
-                        style: const TextStyle(
-                            fontSize: 10, color: AppColors.textSecondary),
-                      ),
-                    ],
-                    if (_detectedVillage != null)
-                      Text('Village: $_detectedVillage',
-                          style: const TextStyle(
-                              fontSize: 11, color: AppColors.textSecondary)),
-                  ],
-                ),
-              ),
-            ],
             if (_tngisParcelError != null && !_tngisParcelLoading) ...[
               const SizedBox(height: 6),
               Text(_tngisParcelError!,
@@ -1725,6 +1840,36 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
             _ErrorBanner(_locationError!),
             const SizedBox(height: 10),
           ],
+
+          Row(children: [
+            const Text('Layer:',
+                style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textSecondary)),
+            const SizedBox(width: 8),
+            _buildMapLayerChip(
+              _MarketMapLayer.standard,
+              'Standard',
+              Icons.map_outlined,
+            ),
+            const SizedBox(width: 6),
+            _buildMapLayerChip(
+              _MarketMapLayer.transport,
+              'Transport',
+              Icons.directions_transit_outlined,
+            ),
+          ]),
+          if (_mapLayer == _MarketMapLayer.transport) ...[
+            const SizedBox(height: 6),
+            Text(
+              _collectingPois
+                  ? 'Loading transport POIs from OpenStreetMap…'
+                  : 'OpenStreetMap transport layer — railways, stations & bus terminals.',
+              style: const TextStyle(fontSize: 10, color: AppColors.textSecondary),
+            ),
+          ],
+          const SizedBox(height: 10),
 
         Row(children: [
           const Text('Zoom:',
@@ -1751,31 +1896,6 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
             }
           }),
         ]),
-        const SizedBox(height: 12),
-
-        SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: _fetchingLocation
-                  ? null
-                  : () {
-                      setState(() => _selectedLeadId = null);
-                      _detectLocation();
-                    },
-              icon: _fetchingLocation
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                          color: Colors.white, strokeWidth: 2))
-                  : const Icon(Icons.gps_fixed, size: 18),
-              label: Text(_position == null
-                  ? 'Detect My Location'
-                  : 'Refresh Location'),
-              style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 12)),
-            ),
-          ),
       ]),
     );
   }
@@ -2703,10 +2823,16 @@ class _TngisSubdivisionRow {
     final fields = (j['fields'] as Map<String, dynamic>? ?? {})
         .map((k, v) => MapEntry(k.toString(), v?.toString() ?? ''));
     final kideRaw = j['kide']?.toString() ?? fields['Kide'];
+    final survey =
+        j['surveyNumber']?.toString() ?? fields['Survey Number'] ?? '';
+    final sub = _parseTngisSubDivision(
+      j['subDivision']?.toString() ?? fields['Sub Division'],
+      kideRaw,
+      survey,
+    );
     return _TngisSubdivisionRow(
-      surveyNumber:
-          j['surveyNumber']?.toString() ?? fields['Survey Number'] ?? '',
-      subDivision: j['subDivision']?.toString(),
+      surveyNumber: survey,
+      subDivision: sub,
       kide: (kideRaw != null && kideRaw.trim().isNotEmpty) ? kideRaw.trim() : null,
       fields: fields,
       containsPoint: j['containsPoint'] == true,
@@ -2714,12 +2840,28 @@ class _TngisSubdivisionRow {
     );
   }
 
-  String get key => '$surveyNumber|${subDivision ?? ''}';
+  String get key => '$surveyNumber|${subDivision ?? kide ?? ''}';
+
+  /// Sub-division for FMB/EC — from sub_division or kide (e.g. 394/15C → 15C).
+  String? get effectiveSubDivision =>
+      _parseTngisSubDivision(subDivision, kide, surveyNumber);
 
   String get subLabel {
-    final s = subDivision?.trim();
-    if (s == null || s.isEmpty || s == '-') return '—';
-    return s;
+    return effectiveSubDivision ?? '—';
+  }
+
+  static String? _parseTngisSubDivision(String? subDiv, String? kide, String survey) {
+    final s = subDiv?.trim();
+    if (s != null && s.isNotEmpty && s != '-' && s != survey) return s;
+    final k = kide?.trim();
+    if (k == null || k.isEmpty || k == '0' || !k.contains('/')) return null;
+    final parts = k.split('/');
+    if (parts.length < 2) return null;
+    final kideSub = parts.sublist(1).join('/').trim();
+    if (kideSub.isEmpty || kideSub == '-' || kideSub == survey) return null;
+    final kideSurvey = parts[0].trim();
+    if (kideSurvey.isNotEmpty && kideSurvey != survey) return null;
+    return kideSub;
   }
 }
 
@@ -2739,20 +2881,34 @@ class _GovtDocsSection extends StatefulWidget {
   final String? village;
   final String? surveyNumber;
   final String? subDivision;
+  final String? districtCode;
+  final String? talukCode;
+  final String? villageCode;
   final double? lat; // active map location — enables the TNGIS patta fallback
   final double? lon;
   final String? tngisGiViewerUrl;
+  final Map<String, dynamic>? giServices;
+  final String? ulpin;
+  final String? centroid;
   final List<_TngisSubdivisionRow> tngisSubdivisions;
+  final bool tngisParcelLoading;
   const _GovtDocsSection({
     this.district,
     this.taluk,
     this.village,
     this.surveyNumber,
     this.subDivision,
+    this.districtCode,
+    this.talukCode,
+    this.villageCode,
     this.lat,
     this.lon,
     this.tngisGiViewerUrl,
+    this.giServices,
+    this.ulpin,
+    this.centroid,
     this.tngisSubdivisions = const [],
+    this.tngisParcelLoading = false,
   });
 
   @override
@@ -2907,6 +3063,23 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
   bool _loadingEcCaptcha = false;
   final _ecCaptchaCtrl = TextEditingController();
 
+  String? _selectedGiService;
+  bool _loadingGvalue = false;
+  bool _loadingCrop = false;
+  Map<String, dynamic>? _gvalueData;
+  Map<String, dynamic>? _cropData;
+  String? _gvalueError;
+  String? _cropError;
+  String? _selectedCropSeason;
+
+  static const _kGiServices = [
+    (id: 'patta', label: 'Patta', icon: Icons.article_outlined, color: Color(0xFF1B5E20)),
+    (id: 'fmb', label: 'FMB', icon: Icons.picture_as_pdf_outlined, color: Color(0xFFC62828)),
+    (id: 'ec', label: 'EC', icon: Icons.account_balance_outlined, color: Color(0xFF1565C0)),
+    (id: 'gvalue', label: 'G-Value', icon: Icons.currency_rupee_outlined, color: Color(0xFFE65100)),
+    (id: 'crop', label: 'Crop', icon: Icons.grass_outlined, color: Color(0xFF2E7D32)),
+  ];
+
   @override
   void initState() {
     super.initState();
@@ -2985,10 +3158,23 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
         oldWidget.village != widget.village;
     final surveyChanged = oldWidget.surveyNumber != widget.surveyNumber ||
         oldWidget.subDivision != widget.subDivision;
+    final codesChanged = oldWidget.districtCode != widget.districtCode ||
+        oldWidget.talukCode != widget.talukCode ||
+        oldWidget.villageCode != widget.villageCode;
 
     if (surveyChanged) _applySurveyNumber();
 
     final coordsChanged = oldWidget.lat != widget.lat || oldWidget.lon != widget.lon;
+    if (coordsChanged) {
+      _fmbPdfBytes = null;
+      _fmbLoadError = null;
+      _loadingFmb = false;
+      for (final b in _subdivBundles.values) {
+        b.fmbPdf = null;
+        b.fmbError = null;
+        b.loadingFmb = false;
+      }
+    }
     if (coordsChanged && surveyChanged) {
       // Parent pushed new TNGIS survey/sub-div from map tap.
       _tryAutoEcFill();
@@ -3019,6 +3205,29 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
         widget.tngisSubdivisions.isNotEmpty) {
       _syncSubdivisions(autoFetch: true);
     }
+
+    final parcelReady = oldWidget.tngisParcelLoading && !widget.tngisParcelLoading;
+    if ((parcelReady ||
+            surveyChanged ||
+            codesChanged ||
+            (oldWidget.tngisSubdivisions != widget.tngisSubdivisions &&
+                widget.tngisSubdivisions.isNotEmpty)) &&
+        _selectedGiService == 'fmb' &&
+        !widget.tngisParcelLoading) {
+      Future.microtask(() {
+        if (!mounted) return;
+        _loadFmbForSelectedParcel();
+      });
+    }
+
+    if (surveyChanged &&
+        widget.surveyNumber != null &&
+        widget.surveyNumber!.trim().isNotEmpty) {
+      Future.microtask(() {
+        if (!mounted) return;
+        if (_selectedGiService == null) _onSelectGiService('patta');
+      });
+    }
   }
 
   void _syncSubdivisions({bool autoFetch = false}) {
@@ -3029,7 +3238,104 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
       if (autoFetch && row.containsPoint) {
         _fetchPattaForSubdivision(row);
       }
+      if (autoFetch && _isSelectedFmbRow(row) && _hasFmbSubdivision(row)) {
+        if (_selectedGiService == 'fmb') _fetchFmbForSubdivision(row);
+      }
     }
+  }
+
+  /// Sub-division at the map tap — prefer view_fmb row containing the point.
+  String? _resolvedMapSub() {
+    for (final row in widget.tngisSubdivisions) {
+      if (row.containsPoint && row.effectiveSubDivision != null) {
+        return row.effectiveSubDivision;
+      }
+    }
+    final sd = widget.subDivision?.trim();
+    if (sd != null && sd.isNotEmpty && sd != '-' && sd != widget.surveyNumber?.trim()) {
+      return sd;
+    }
+    return null;
+  }
+
+  _TngisSubdivisionRow? _containingSubdivisionRow() {
+    for (final row in widget.tngisSubdivisions) {
+      if (_isSelectedFmbRow(row) && _hasFmbSubdivision(row)) return row;
+    }
+    return null;
+  }
+
+  _TngisSubdivisionRow? _subdivisionRowForSub(String sub) {
+    for (final row in widget.tngisSubdivisions) {
+      if (row.effectiveSubDivision == sub) return row;
+    }
+    return null;
+  }
+
+  /// Selected parcel survey + sub + TNGIS revenue codes for sketch_fmb.
+  ({String survey, String sub, String dc, String tc, String vc})? _selectedParcelForFmb() {
+    final survey = widget.surveyNumber?.trim();
+    if (survey == null || survey.isEmpty) return null;
+    final sub = _resolvedMapSub();
+    if (sub == null || sub.isEmpty) return null;
+
+    String? dc = _nonEmptyCode(widget.districtCode);
+    String? tc = _nonEmptyCode(widget.talukCode);
+    String? vc = _nonEmptyCode(widget.villageCode);
+
+    for (final row in widget.tngisSubdivisions) {
+      if (row.effectiveSubDivision != sub && !_isSelectedFmbRow(row)) continue;
+      dc ??= _nonEmptyCode(row.fields['District Code']);
+      tc ??= _nonEmptyCode(row.fields['Taluk Code']);
+      vc ??= _nonEmptyCode(row.fields['Village Code']);
+      if (dc != null && tc != null && vc != null) break;
+    }
+
+    if (dc == null || tc == null || vc == null) {
+      return null;
+    }
+    return (survey: survey, sub: sub, dc: dc, tc: tc, vc: vc);
+  }
+
+  Future<void> _loadFmbForSelectedParcel() async {
+    if (widget.tngisParcelLoading) {
+      setState(() {
+        _loadingFmb = true;
+        _fmbLoadError = null;
+      });
+      return;
+    }
+
+    final parcel = _selectedParcelForFmb();
+    if (parcel == null) {
+      setState(() {
+        _loadingFmb = false;
+        final survey = widget.surveyNumber?.trim();
+        if (survey == null || survey.isEmpty) {
+          _fmbLoadError = 'Tap the map to select a land parcel.';
+        } else if (_resolvedMapSub() == null) {
+          _fmbLoadError =
+              'Sub-division not resolved yet. Wait for parcel details or tap directly on the plot.';
+        } else {
+          _fmbLoadError =
+              'Revenue codes not ready. Wait for parcel details to finish loading.';
+        }
+      });
+      return;
+    }
+
+    final row = _subdivisionRowForSub(parcel.sub) ?? _containingSubdivisionRow();
+    if (row != null) {
+      await _fetchFmbForSubdivision(row);
+      return;
+    }
+    await _fetchFmbDirect(
+      survey: parcel.survey,
+      sub: parcel.sub,
+      dc: parcel.dc,
+      tc: parcel.tc,
+      vc: parcel.vc,
+    );
   }
 
   Future<void> _fetchPattaForSubdivision(_TngisSubdivisionRow row) async {
@@ -3043,7 +3349,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
         parts.add('lon=${widget.lon}');
       }
       parts.add('surveyNo=${Uri.encodeComponent(row.surveyNumber)}');
-      final sub = row.subDivision?.trim();
+      final sub = row.effectiveSubDivision;
       if (sub != null && sub.isNotEmpty && sub != '-') {
         parts.add('subDiv=${Uri.encodeComponent(sub)}');
       }
@@ -3053,9 +3359,6 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
       );
       bundle.documents = result['documents'] as Map<String, dynamic>?;
       if (row.containsPoint) _applyPattaResult(result);
-      if (bundle.documents?['fmb'] != null) {
-        unawaited(_fetchFmbForSubdivision(row));
-      }
     } on ApiException catch (e) {
       if (row.containsPoint) setState(() => _pattaError = e.message);
     } catch (e) {
@@ -3067,64 +3370,137 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
     }
   }
 
-  bool _isRealSubdivision(_TngisSubdivisionRow row) {
-    final sub = row.subDivision?.trim();
-    if (sub == null || sub.isEmpty || sub == '-') return false;
-    return sub != row.surveyNumber.trim();
+  bool _hasFmbSubdivision(_TngisSubdivisionRow row) =>
+      row.effectiveSubDivision != null;
+
+  static String? _nonEmptyCode(String? value) {
+    final t = value?.trim();
+    return (t != null && t.isNotEmpty) ? t : null;
+  }
+
+  /// Row matches the parcel the user selected on the map (not only strict polygon hit).
+  bool _isSelectedFmbRow(_TngisSubdivisionRow row) {
+    if (row.containsPoint) return true;
+    final sub = _resolvedMapSub();
+    if (sub != null && row.effectiveSubDivision == sub) return true;
+    if (widget.tngisSubdivisions.length == 1) return true;
+    return false;
+  }
+
+  String? _fmbApiPath({
+    String? survey,
+    String? sub,
+    String? dc,
+    String? tc,
+    String? vc,
+  }) {
+    final parts = <String>[];
+    if (widget.lat != null && widget.lon != null) {
+      parts.add('lat=${widget.lat}');
+      parts.add('lon=${widget.lon}');
+    }
+
+    final surveyNo = (survey ?? widget.surveyNumber)?.trim();
+    if (surveyNo == null || surveyNo.isEmpty) return null;
+
+    final subDiv = (sub ?? _resolvedMapSub())?.trim();
+    if (subDiv == null || subDiv.isEmpty || subDiv == '-' || subDiv == surveyNo) {
+      return null;
+    }
+
+    String? dcVal = _nonEmptyCode(dc) ?? _nonEmptyCode(widget.districtCode);
+    String? tcVal = _nonEmptyCode(tc) ?? _nonEmptyCode(widget.talukCode);
+    String? vcVal = _nonEmptyCode(vc) ?? _nonEmptyCode(widget.villageCode);
+    if (dcVal == null || tcVal == null || vcVal == null) {
+      for (final row in widget.tngisSubdivisions) {
+        if (row.effectiveSubDivision != subDiv && !_isSelectedFmbRow(row)) continue;
+        dcVal ??= _nonEmptyCode(row.fields['District Code']);
+        tcVal ??= _nonEmptyCode(row.fields['Taluk Code']);
+        vcVal ??= _nonEmptyCode(row.fields['Village Code']);
+        if (dcVal != null && tcVal != null && vcVal != null) break;
+      }
+    }
+    if (dcVal == null || tcVal == null || vcVal == null) {
+      return null;
+    }
+
+    parts.add('surveyNo=${Uri.encodeComponent(surveyNo)}');
+    parts.add('subDiv=${Uri.encodeComponent(subDiv)}');
+    parts.add('dc=${Uri.encodeComponent(dcVal)}');
+    parts.add('tc=${Uri.encodeComponent(tcVal)}');
+    parts.add('vc=${Uri.encodeComponent(vcVal)}');
+    return '/api/tnlands/fmb?${parts.join('&')}';
+  }
+
+  Future<void> _fetchFmbDirect({
+    String? survey,
+    String? sub,
+    String? dc,
+    String? tc,
+    String? vc,
+  }) async {
+    final path = _fmbApiPath(survey: survey, sub: sub, dc: dc, tc: tc, vc: vc);
+    if (path == null) {
+      setState(() => _fmbLoadError =
+          'Survey and sub-division required. Tap the map and wait for parcel details.');
+      return;
+    }
+    setState(() {
+      _loadingFmb = true;
+      _fmbLoadError = null;
+    });
+    try {
+      final bytes = await ApiClient.getBytes(path);
+      if (!mounted) return;
+      setState(() {
+        _fmbPdfBytes = Uint8List.fromList(bytes);
+        _loadingFmb = false;
+      });
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _fmbLoadError = e.message;
+        _loadingFmb = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _fmbLoadError = e.toString().replaceAll('Exception: ', '');
+        _loadingFmb = false;
+      });
+    }
   }
 
   Future<void> _fetchFmbForSubdivision(_TngisSubdivisionRow row) async {
     final bundle = _subdivBundles[row.key] ??= _SubdivDocBundle();
     if (bundle.loadingFmb) return;
+    final selected = _isSelectedFmbRow(row);
     setState(() {
       bundle.loadingFmb = true;
       bundle.fmbError = null;
+      if (selected) {
+        _loadingFmb = true;
+        _fmbLoadError = null;
+      }
     });
     try {
-      final fmbMeta = bundle.documents?['fmb'] as Map<String, dynamic>?;
-      final rel = fmbMeta?['downloadUrl'] as String?;
-      if (rel != null && rel.isNotEmpty) {
-        try {
-          final bytes = await ApiClient.getBytes(rel);
-          bundle.fmbPdf = Uint8List.fromList(bytes);
-          if (row.containsPoint) {
-            setState(() {
-              _fmbPdfBytes = bundle.fmbPdf;
-              _fmbLoadError = null;
-            });
-          }
-          return;
-        } on ApiException {
-          // downloadUrl stale — rebuild request from parcel fields below
-        }
+      final sub = row.effectiveSubDivision;
+      final path = _fmbApiPath(
+        survey: row.surveyNumber,
+        sub: sub,
+        dc: _nonEmptyCode(row.fields['District Code']) ?? widget.districtCode,
+        tc: _nonEmptyCode(row.fields['Taluk Code']) ?? widget.talukCode,
+        vc: _nonEmptyCode(row.fields['Village Code']) ?? widget.villageCode,
+      );
+      if (path == null) {
+        throw const ApiException(
+          statusCode: 400,
+          message: 'Survey, sub-division, and revenue codes required for FMB.',
+        );
       }
-
-      final parts = <String>[
-        'surveyNo=${Uri.encodeComponent(row.surveyNumber)}',
-      ];
-      final sub = row.subDivision?.trim();
-      if (_isRealSubdivision(row)) {
-        parts.add('subDiv=${Uri.encodeComponent(sub!)}');
-      }
-      final kide = row.kide;
-      if (kide != null && kide.isNotEmpty && kide != '0') {
-        parts.add('plotno=${Uri.encodeComponent(kide)}');
-      } else if (_isRealSubdivision(row)) {
-        parts.add('plotno=${Uri.encodeComponent('${row.surveyNumber}/$sub')}');
-      }
-      final dc = row.fields['District Code'];
-      final tc = row.fields['Taluk Code'];
-      final vc = row.fields['Village Code'];
-      if (dc != null && dc.isNotEmpty) parts.add('dc=${Uri.encodeComponent(dc)}');
-      if (tc != null && tc.isNotEmpty) parts.add('tc=${Uri.encodeComponent(tc)}');
-      if (vc != null && vc.isNotEmpty) parts.add('vc=${Uri.encodeComponent(vc)}');
-      if (widget.lat != null && widget.lon != null) {
-        parts.add('lat=${widget.lat}');
-        parts.add('lon=${widget.lon}');
-      }
-      final bytes = await ApiClient.getBytes('/api/tnlands/fmb?${parts.join('&')}');
+      final bytes = await ApiClient.getBytes(path);
       bundle.fmbPdf = Uint8List.fromList(bytes);
-      if (row.containsPoint) {
+      if (selected) {
         setState(() {
           _fmbPdfBytes = bundle.fmbPdf;
           _fmbLoadError = null;
@@ -3132,12 +3508,17 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
       }
     } on ApiException catch (e) {
       bundle.fmbError = e.message;
-      if (row.containsPoint) setState(() => _fmbLoadError = e.message);
+      if (selected) setState(() => _fmbLoadError = e.message);
     } catch (e) {
       bundle.fmbError = e.toString().replaceAll('Exception: ', '');
-      if (row.containsPoint) setState(() => _fmbLoadError = bundle.fmbError);
+      if (selected) setState(() => _fmbLoadError = bundle.fmbError);
     } finally {
-      if (mounted) setState(() => bundle.loadingFmb = false);
+      if (mounted) {
+        setState(() {
+          bundle.loadingFmb = false;
+          if (selected) _loadingFmb = false;
+        });
+      }
     }
   }
 
@@ -3219,102 +3600,20 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
         if (docOwners.isNotEmpty) _pattaOwners = docOwners;
       }
       final pattaErr = patta?['error'] as String?;
-      final hasPattaHtml = patta != null
-          && patta['available'] == true
-          && (patta['html'] as String?)?.isNotEmpty == true;
-      if (fields.isEmpty && owners.isEmpty && !hasPattaHtml
+      final hasPattaDoc = patta != null && patta['available'] == true
+          && ((patta['html'] as String?)?.isNotEmpty == true
+              || (patta['pdfBase64'] as String?)?.isNotEmpty == true);
+      if (fields.isEmpty && owners.isEmpty && !hasPattaDoc
           && (patta == null || patta['available'] != true)) {
         _pattaError = pattaErr ?? (result['error'] as String?) ??
             'No patta parcel found at this location in TNGIS.';
       } else {
-        _pattaError = hasPattaHtml ? null : (pattaErr ?? _pattaError);
+        _pattaError = hasPattaDoc ? null : (pattaErr ?? _pattaError);
       }
     });
-    _loadFmbPdfIfNeeded();
-    final dist = fields['District'];
-    if (dist != null && dist.isNotEmpty) {
-      Future.microtask(() => _resolveEcFromServer(
-        district: dist,
-        taluk: fields['Taluk'],
-        village: fields['Village'],
-      ));
-    }
   }
 
-  String? _fmbFetchPath() {
-    final fmb = _pattaDocuments?['fmb'] as Map<String, dynamic>?;
-    if (fmb == null) return null;
-
-    final rel = fmb['downloadUrl'] as String?;
-    if (rel != null && rel.isNotEmpty) return rel;
-
-    if (fmb['available'] != true) return null;
-
-    final fields = _pattaFields;
-    final dc = fields?['District Code'];
-    final tc = fields?['Taluk Code'];
-    final vc = fields?['Village Code'];
-    final survey = fields?['Survey Number'];
-    if (dc != null && tc != null && vc != null && survey != null) {
-      var path = '/api/tnlands/fmb'
-          '?dc=${Uri.encodeComponent(dc)}'
-          '&tc=${Uri.encodeComponent(tc)}'
-          '&vc=${Uri.encodeComponent(vc)}'
-          '&surveyNo=${Uri.encodeComponent(survey)}';
-      final sub = fields?['Sub Division'] ?? _subDivCtrl.text.trim();
-      if (sub.isNotEmpty && sub != '-') {
-        path += '&subDiv=${Uri.encodeComponent(sub)}';
-      }
-      final plotno = fmb['plotno'] as String?;
-      if (plotno != null && plotno.isNotEmpty) {
-        path += '&plotno=${Uri.encodeComponent(plotno)}';
-      }
-      return path;
-    }
-    if (widget.lat != null && widget.lon != null) {
-      var path = '/api/tnlands/fmb?lat=${widget.lat}&lon=${widget.lon}';
-      final survey = _surveyCtrl.text.trim();
-      final sub = _subDivCtrl.text.trim();
-      if (survey.isNotEmpty) path += '&surveyNo=${Uri.encodeComponent(survey)}';
-      if (sub.isNotEmpty && sub != '-') path += '&subDiv=${Uri.encodeComponent(sub)}';
-      final plotno = fmb['plotno'] as String?;
-      if (plotno != null && plotno.isNotEmpty) {
-        path += '&plotno=${Uri.encodeComponent(plotno)}';
-      }
-      return path;
-    }
-    return null;
-  }
-
-  Future<void> _loadFmbPdfIfNeeded() async {
-    final path = _fmbFetchPath();
-    if (path == null) return;
-
-    setState(() {
-      _loadingFmb = true;
-      _fmbLoadError = null;
-    });
-    try {
-      final bytes = await ApiClient.getBytes(path);
-      if (!mounted) return;
-      setState(() {
-        _fmbPdfBytes = Uint8List.fromList(bytes);
-        _loadingFmb = false;
-      });
-    } on ApiException catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _fmbLoadError = e.message;
-        _loadingFmb = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _fmbLoadError = e.toString().replaceAll('Exception: ', '');
-        _loadingFmb = false;
-      });
-    }
-  }
+  Future<void> _loadFmbPdfIfNeeded() async => _loadFmbForSelectedParcel();
 
   /// Fetch patta from TNGIS for the active map location (or device GPS).
   Future<void> _fetchPattaForLocation({bool useDeviceGps = false}) async {
@@ -4044,254 +4343,884 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
   @override
   Widget build(BuildContext context) {
     return _SectionCard(
-      title: 'EC & Patta Documents',
-      icon: Icons.description_outlined,
+      title: 'Tamil Nilam — Land Records',
+      icon: Icons.layers_outlined,
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        _buildPattaSection(),
-        const SizedBox(height: 20),
-        const Divider(),
-        const SizedBox(height: 14),
-        _buildEcSection(),
+        _buildGiParcelHeader(),
+        const SizedBox(height: 10),
+        const Text(
+          'Click on the below icons to view more details',
+          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFFC62828)),
+        ),
+        const SizedBox(height: 10),
+        _buildGiServiceBoxes(),
+        if (_selectedGiService != null) ...[
+          const SizedBox(height: 14),
+          _buildGiServiceDetail(_selectedGiService!),
+        ] else ...[
+          const SizedBox(height: 12),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade50,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.grey.shade300),
+            ),
+            child: const Text(
+              'Tap Patta, FMB, EC, G-Value, or Crop above to load details from Tamil Nilam.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+            ),
+          ),
+        ],
       ]),
     );
   }
 
-  // â”€â”€ Patta UI â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  Widget _buildGiParcelHeader() {
+    final survey = widget.surveyNumber?.trim();
+    final sub = widget.subDivision?.trim();
+    final hasPlot = widget.lat != null && widget.lon != null;
+    final centroid = widget.centroid?.trim().isNotEmpty == true
+        ? widget.centroid!
+        : (hasPlot ? '${widget.lat}, ${widget.lon}' : '-');
 
-  Widget _buildPattaSection() {
-    const color = Color(0xFF1B5E20);
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Row(children: [
-        Container(
-          padding: const EdgeInsets.all(7),
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(7),
-          ),
-          child: const Icon(Icons.article_outlined, color: color, size: 18),
-        ),
-        const SizedBox(width: 10),
-        const Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('Patta / Chitta / FMB',
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: color)),
-            Text('Tamil Nilam GI Viewer · tngis.tn.gov.in',
-                style: TextStyle(fontSize: 10, color: AppColors.textSecondary)),
-          ]),
-        ),
-        if (_fetchingPatta)
-          const SizedBox(width: 16, height: 16,
-              child: CircularProgressIndicator(strokeWidth: 2, color: color)),
-      ]),
-      const SizedBox(height: 14),
-
-      // Survey No + Sub Div — typing auto-fetches after 900 ms pause
-      Row(children: [
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const _FieldLabel('Survey No'),
-          TextField(
-            controller: _surveyCtrl,
-            decoration: _inputDec(_fetchingPatta ? 'Searching…' : 'Type to auto-fetch'),
-          ),
-        ])),
-        const SizedBox(width: 10),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const _FieldLabel('Sub Division'),
-          TextField(controller: _subDivCtrl, decoration: _inputDec('Optional')),
-        ])),
-      ]),
-      const SizedBox(height: 10),
-
-      // Primary: fetch patta for map location via TNGIS
-      SizedBox(
-        width: double.infinity,
-        child: ElevatedButton.icon(
-          onPressed: _fetchingPatta ? null : () => _fetchPattaForLocation(),
-          icon: _fetchingPatta
-              ? const SizedBox(
-                  width: 14,
-                  height: 14,
-                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-              : const Icon(Icons.map_outlined, size: 16),
-          label: Text(
-            _fetchingPatta
-                ? 'Fetching from TNGIS… (may take 1–2 min)'
-                : 'Fetch Patta & FMB for Selected Sub-Division',
-            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
-          ),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: color,
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(vertical: 13),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          ),
-        ),
-      ),
-      if (widget.lat == null || widget.lon == null) ...[
-        const SizedBox(height: 6),
-        Text(
-          'Tip: tap the map above to set a location, then fetch patta.',
-          style: TextStyle(fontSize: 11, color: Colors.orange.shade800),
-        ),
-      ] else ...[
-        const SizedBox(height: 6),
-        Text(
-          'Using map pin: ${widget.lat!.toStringAsFixed(5)}, ${widget.lon!.toStringAsFixed(5)}',
-          style: const TextStyle(fontSize: 10, color: AppColors.textSecondary),
-        ),
-      ],
-      const SizedBox(height: 8),
-      SizedBox(
-        width: double.infinity,
-        child: OutlinedButton.icon(
-          onPressed: _fetchingPatta ? null : () => _fetchPattaForLocation(useDeviceGps: true),
-          icon: const Icon(Icons.gps_fixed, size: 16),
-          label: const Text('Or use device GPS',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: const Color(0xFF0D47A1),
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          ),
-        ),
-      ),
-      const SizedBox(height: 8),
-
-      // Manual toggle — District / Taluk / Village
-      GestureDetector(
-        onTap: () => setState(() => _showManualPatta = !_showManualPatta),
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
-          decoration: BoxDecoration(
-            border: Border.all(color: color.withValues(alpha: 0.35)),
-            borderRadius: BorderRadius.circular(10),
-            color: _showManualPatta ? color.withValues(alpha: 0.06) : Colors.transparent,
-          ),
-          child: Row(children: [
-            const Icon(Icons.tune, size: 15, color: color),
-            const SizedBox(width: 8),
-            const Expanded(child: Text('Manual — District / Taluk / Village',
-                style: TextStyle(fontSize: 13, color: color, fontWeight: FontWeight.w600))),
-            Icon(_showManualPatta ? Icons.expand_less : Icons.expand_more,
-                size: 18, color: color),
-          ]),
-        ),
-      ),
-
-      if (_showManualPatta) ...[
-        const SizedBox(height: 12),
-
-        const _FieldLabel('District'),
-        _dropdown('Select District', _districts, _selDistrict, color,
-            loading: _initingPatta,
-            onChanged: (opt) => _loadTaluks(opt)),
-        const SizedBox(height: 10),
-
-        const _FieldLabel('Taluk'),
-        _dropdown('Select Taluk', _taluks, _selTaluk, color,
-            loading: _loadingTaluks,
-            hint: _selDistrict == null ? 'Select district first' : 'Select Taluk',
-            onChanged: (opt) => _loadVillages(opt)),
-        if (_talukError != null) ...[
-          const SizedBox(height: 4),
-          GestureDetector(
-            onTap: _selDistrict == null ? null : () => _loadTaluks(_selDistrict!),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: AppColors.error.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
-              ),
-              child: const Row(children: [
-                Icon(Icons.refresh, size: 14, color: AppColors.error),
-                SizedBox(width: 6),
-                Text('Failed to load taluks — tap to retry',
-                    style: TextStyle(fontSize: 11, color: AppColors.error)),
-              ]),
-            ),
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.grey.shade300),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
           ),
         ],
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('Land Parcel Information',
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Color(0xFF1565C0))),
         const SizedBox(height: 10),
-
-        const _FieldLabel('Village'),
-        _dropdown('Select Village', _villages, _selVillage, color,
-            loading: _loadingVillages,
-            hint: _selTaluk == null ? 'Select taluk first' : 'Select Village',
-            onChanged: (opt) => setState(() => _selVillage = opt)),
-        if (_villageError != null) ...[
+        _buildGiHeaderRow('ULPIN', widget.ulpin?.isNotEmpty == true ? widget.ulpin! : '-'),
+        _buildGiHeaderRow('Centroid', centroid),
+        _buildGiHeaderRow('Survey Number', survey?.isNotEmpty == true ? survey! : '-'),
+        _buildGiHeaderRow('Sub Division', sub != null && sub.isNotEmpty && sub != '-' ? sub : '-'),
+        if (widget.village != null && widget.village!.isNotEmpty) ...[
           const SizedBox(height: 4),
-          GestureDetector(
-            onTap: _selTaluk == null ? null : () => _loadVillages(_selTaluk!),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: AppColors.error.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
-              ),
-              child: const Row(children: [
-                Icon(Icons.refresh, size: 14, color: AppColors.error),
-                SizedBox(width: 6),
-                Text('Failed to load villages — tap to retry',
-                    style: TextStyle(fontSize: 11, color: AppColors.error)),
-              ]),
+          Text('${widget.village}${widget.taluk != null ? ', ${widget.taluk}' : ''}',
+              style: const TextStyle(fontSize: 10, color: AppColors.textSecondary)),
+        ],
+        if (widget.tngisGiViewerUrl != null) ...[
+          const SizedBox(height: 8),
+          TextButton.icon(
+            onPressed: () => launchUrl(
+              Uri.parse(widget.tngisGiViewerUrl!),
+              mode: LaunchMode.externalApplication,
             ),
+            icon: const Icon(Icons.open_in_new, size: 14),
+            label: const Text('Open in Tamil Nilam GI Viewer', style: TextStyle(fontSize: 11)),
           ),
         ],
-        const SizedBox(height: 12),
+      ]),
+    );
+  }
 
-        SizedBox(
-          width: double.infinity,
-          child: ElevatedButton.icon(
-            onPressed: (_fetchingPatta ||
-                    _selDistrict == null ||
-                    _selTaluk == null ||
-                    _selVillage == null)
-                ? null
-                : _fetchPatta,
-            icon: _fetchingPatta
-                ? const SizedBox(width: 14, height: 14,
-                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                : const Icon(Icons.download_outlined, size: 16),
-            label: Text(_fetchingPatta ? 'Fetching…' : 'Fetch Patta',
-                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: color,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+  Widget _buildGiHeaderRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: RichText(
+        text: TextSpan(
+          style: const TextStyle(fontSize: 12, color: Colors.black87, height: 1.35),
+          children: [
+            TextSpan(text: '$label: ', style: const TextStyle(fontWeight: FontWeight.w700)),
+            TextSpan(text: value),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGiServiceBoxes() {
+    return LayoutBuilder(builder: (context, constraints) {
+      Widget boxFor(({
+        String id,
+        String label,
+        IconData icon,
+        Color color,
+      }) svc, {bool isLast = false}) {
+        final selected = _selectedGiService == svc.id;
+        final card = widget.giServices?[svc.id] as Map?;
+        final summary = card?['summary']?.toString().trim();
+        final available = card?['available'] != false;
+        return Expanded(
+          child: Padding(
+            padding: EdgeInsets.only(right: isLast ? 0 : 6),
+            child: Material(
+              color: selected ? svc.color.withValues(alpha: 0.14) : Colors.white,
+              elevation: selected ? 2 : 0,
+              shadowColor: svc.color.withValues(alpha: 0.3),
+              borderRadius: BorderRadius.circular(10),
+              child: InkWell(
+                onTap: () => _onSelectGiService(svc.id),
+                borderRadius: BorderRadius.circular(10),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 4),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: selected ? svc.color : svc.color.withValues(alpha: 0.4),
+                      width: selected ? 2 : 1,
+                    ),
+                  ),
+                  child: Column(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(svc.icon, color: svc.color, size: 28),
+                    const SizedBox(height: 6),
+                    Text(svc.label,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          color: svc.color,
+                        )),
+                    if (summary != null && summary.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(summary,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                              fontSize: 8,
+                              height: 1.2,
+                              color: svc.color.withValues(alpha: 0.8))),
+                    ] else if (!available) ...[
+                      const SizedBox(height: 4),
+                      Text('N/A',
+                          style: TextStyle(
+                              fontSize: 8, color: Colors.grey.shade500)),
+                    ],
+                  ]),
+                ),
+              ),
             ),
           ),
-        ),
-      ],
+        );
+      }
 
-      if (_pattaError != null) ...[
+      if (constraints.maxWidth >= 520) {
+        return Row(
+          children: [
+            for (var i = 0; i < _kGiServices.length; i++)
+              boxFor(_kGiServices[i], isLast: i == _kGiServices.length - 1),
+          ],
+        );
+      }
+      return SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: _kGiServices.map((svc) {
+            final selected = _selectedGiService == svc.id;
+            final card = widget.giServices?[svc.id] as Map?;
+            final summary = card?['summary']?.toString().trim();
+            return Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: SizedBox(
+                width: 88,
+                child: Material(
+                  color: selected ? svc.color.withValues(alpha: 0.14) : Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                  child: InkWell(
+                    onTap: () => _onSelectGiService(svc.id),
+                    borderRadius: BorderRadius.circular(10),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 6),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: selected ? svc.color : svc.color.withValues(alpha: 0.4),
+                          width: selected ? 2 : 1,
+                        ),
+                      ),
+                      child: Column(children: [
+                        Icon(svc.icon, color: svc.color, size: 26),
+                        const SizedBox(height: 4),
+                        Text(svc.label,
+                            style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                                color: svc.color)),
+                        if (summary != null && summary.isNotEmpty)
+                          Text(summary,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                  fontSize: 8, color: svc.color.withValues(alpha: 0.8))),
+                      ]),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      );
+    });
+  }
+
+  Future<void> _onSelectGiService(String id) async {
+    if (_selectedGiService == id) {
+      setState(() => _selectedGiService = null);
+      return;
+    }
+    setState(() {
+      _selectedGiService = id;
+      if (id != 'crop') _selectedCropSeason = null;
+    });
+    await _loadGiService(id);
+  }
+
+  Future<void> _loadGiService(String id) async {
+    switch (id) {
+      case 'patta':
+        if (widget.tngisSubdivisions.isNotEmpty) {
+          _syncSubdivisions(autoFetch: true);
+        } else if (widget.lat != null && widget.lon != null) {
+          await _fetchPattaForLocation();
+        }
+        break;
+      case 'fmb':
+        await _loadFmbForSelectedParcel();
+        break;
+      case 'ec':
+        await _fetchGiEcFromTngis();
+        break;
+      case 'gvalue':
+        await _fetchGiDetail('gvalue');
+        break;
+      case 'crop':
+        await _fetchGiDetail('crop');
+        break;
+    }
+  }
+
+  Future<void> _fetchGiDetail(String type) async {
+    if (widget.lat == null || widget.lon == null) {
+      setState(() {
+        if (type == 'gvalue') _gvalueError = 'Tap the map to set a plot location.';
+        if (type == 'crop') _cropError = 'Tap the map to set a plot location.';
+      });
+      return;
+    }
+    setState(() {
+      if (type == 'gvalue') {
+        _loadingGvalue = true;
+        _gvalueError = null;
+      } else {
+        _loadingCrop = true;
+        _cropError = null;
+      }
+    });
+    try {
+      final parts = <String>[
+        'lat=${widget.lat}',
+        'lon=${widget.lon}',
+        'type=$type',
+      ];
+      final survey = widget.surveyNumber?.trim();
+      final sub = widget.subDivision?.trim();
+      if (survey != null && survey.isNotEmpty) {
+        parts.add('surveyNo=${Uri.encodeComponent(survey)}');
+      }
+      if (sub != null && sub.isNotEmpty && sub != '-') {
+        parts.add('subDiv=${Uri.encodeComponent(sub)}');
+      }
+      final data = await ApiClient.get('/api/tnlands/tngis/gi-detail?${parts.join('&')}');
+      setState(() {
+        if (type == 'gvalue') {
+          _gvalueData = data;
+          _gvalueError = null;
+        } else {
+          _cropData = data;
+          _cropError = null;
+        }
+      });
+    } on ApiException catch (e) {
+      setState(() {
+        if (type == 'gvalue') _gvalueError = e.message;
+        if (type == 'crop') _cropError = e.message;
+      });
+    } catch (e) {
+      setState(() {
+        final msg = e.toString().replaceAll('Exception: ', '');
+        if (type == 'gvalue') _gvalueError = msg;
+        if (type == 'crop') _cropError = msg;
+      });
+    } finally {
+      setState(() {
+        if (type == 'gvalue') _loadingGvalue = false;
+        if (type == 'crop') _loadingCrop = false;
+      });
+    }
+  }
+
+  Widget _buildGiServiceDetail(String id) {
+    final svc = _kGiServices.firstWhere((s) => s.id == id);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: svc.color.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: svc.color.withValues(alpha: 0.3)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('${svc.label} details',
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: svc.color)),
         const SizedBox(height: 10),
-        _ErrorBanner(_pattaError!),
-      ],
-      if (widget.tngisSubdivisions.isNotEmpty) ...[
-        const SizedBox(height: 14),
-        const Text('Subdivisions (separate Patta & FMB per sub)',
-            style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: AppColors.textSecondary)),
+        switch (id) {
+          'patta' => _buildGiPattaDetail(),
+          'fmb' => _buildGiFmbDetail(),
+          'ec' => _buildGiEcDetail(),
+          'gvalue' => _buildGiGvalueDetail(),
+          'crop' => _buildGiCropDetail(),
+          _ => const SizedBox.shrink(),
+        },
+      ]),
+    );
+  }
+
+  Widget _buildGiPattaDetail() {
+    if (_fetchingPatta) {
+      return const Center(child: Padding(
+        padding: EdgeInsets.all(16),
+        child: SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2)),
+      ));
+    }
+    if (widget.tngisSubdivisions.isNotEmpty) {
+      return Column(
+        children: widget.tngisSubdivisions.map((row) => Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: _buildGiSubdivisionPreview(row),
+        )).toList(),
+      );
+    }
+    final patta = _pattaDocuments?['patta'] as Map<String, dynamic>?;
+    if (_hasPattaPdf(patta)) {
+      return _buildPattaDocPreview(patta, title: 'Patta / Chitta', pdfOnly: true);
+    }
+    if (_pattaError != null) {
+      return Text(_pattaError!, style: TextStyle(fontSize: 11, color: Colors.orange.shade900));
+    }
+    return _buildGiNoResult();
+  }
+
+  bool _hasPattaPdf(Map<String, dynamic>? patta) {
+    final pdf = patta?['pdfBase64'] as String?;
+    return patta?['available'] == true && pdf != null && pdf.isNotEmpty;
+  }
+
+  Widget _buildGiNoResult([String message = 'No result found for this plot.']) {
+    return Text(message, style: TextStyle(fontSize: 11, color: Colors.grey.shade600));
+  }
+
+  Widget _buildGiFmbDetail() {
+    if (widget.tngisParcelLoading) {
+      return Column(children: [
+        const Center(child: Padding(
+          padding: EdgeInsets.all(16),
+          child: SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2)),
+        )),
+        const SizedBox(height: 6),
+        Text(
+          'Resolving plot at tap point…',
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+        ),
+      ]);
+    }
+    final loading = widget.tngisSubdivisions.any((r) => (_subdivBundles[r.key]?.loadingFmb ?? false))
+        || _loadingFmb;
+    if (loading) {
+      return Column(children: [
+        const Center(child: Padding(
+          padding: EdgeInsets.all(16),
+          child: SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2)),
+        )),
+        const SizedBox(height: 6),
+        Text(
+          'Fetching FMB for Survey ${widget.surveyNumber ?? '—'} · Sub ${_resolvedMapSub() ?? widget.subDivision ?? '—'}…',
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+        ),
+      ]);
+    }
+
+    Uint8List? pdfBytes = _fmbPdfBytes;
+    String fileName = 'FMB Sketch.pdf';
+    if (pdfBytes == null && widget.tngisSubdivisions.isNotEmpty) {
+      for (final row in widget.tngisSubdivisions) {
+        if (!_isSelectedFmbRow(row)) continue;
+        final bundle = _subdivBundles[row.key];
+        if (bundle?.fmbPdf != null) {
+          pdfBytes = bundle!.fmbPdf;
+          fileName = 'FMB Survey ${row.surveyNumber} Sub ${row.subLabel}.pdf';
+          break;
+        }
+      }
+      pdfBytes ??= widget.tngisSubdivisions
+          .where(_isSelectedFmbRow)
+          .map((r) => _subdivBundles[r.key]?.fmbPdf)
+          .firstWhere((b) => b != null, orElse: () => null);
+      if (pdfBytes != null && fileName == 'FMB Sketch.pdf') {
+        for (final row in widget.tngisSubdivisions) {
+          if (_subdivBundles[row.key]?.fmbPdf == pdfBytes) {
+            fileName = 'FMB Survey ${row.surveyNumber} Sub ${row.subLabel}.pdf';
+            break;
+          }
+        }
+      }
+    }
+
+    if (pdfBytes != null && pdfBytes.isNotEmpty) {
+      final sub = _resolvedMapSub() ?? widget.subDivision?.trim();
+      final survey = widget.surveyNumber?.trim();
+      return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(
+          sub != null && sub.isNotEmpty && sub != '-'
+              ? 'FMB Sketch · Survey ${survey ?? ''} · Sub $sub'
+              : 'FMB Sketch',
+          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+        ),
+        const SizedBox(height: 4),
+        const Text('TNGIS GI Viewer (sketch_fmb)',
+            style: TextStyle(fontSize: 10, color: AppColors.textSecondary)),
+        const SizedBox(height: 10),
+        PattaDocumentPreview(pdfBytes: pdfBytes, fileName: fileName, height: 480),
+      ]);
+    }
+
+    if (_fmbLoadError != null) {
+      return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(_fmbLoadError!, style: TextStyle(fontSize: 11, color: Colors.orange.shade900)),
         const SizedBox(height: 8),
-        ...widget.tngisSubdivisions.map(
-          (row) => Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: _buildSubdivisionCard(row, color),
-          ),
+        OutlinedButton.icon(
+          onPressed: _loadFmbForSelectedParcel,
+          icon: const Icon(Icons.refresh, size: 16),
+          label: const Text('Retry FMB', style: TextStyle(fontSize: 11)),
         ),
-      ] else if (_pattaFields != null ||
-          _pattaOwners.isNotEmpty ||
-          _pattaDocuments != null) ...[
-        const SizedBox(height: 14),
-        _buildPattaResult(),
+      ]);
+    }
+
+    for (final row in widget.tngisSubdivisions) {
+      final err = _subdivBundles[row.key]?.fmbError;
+      if (err != null) {
+        return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(err, style: TextStyle(fontSize: 11, color: Colors.orange.shade900)),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: () => _fetchFmbForSubdivision(row),
+            icon: const Icon(Icons.refresh, size: 16),
+            label: const Text('Retry FMB', style: TextStyle(fontSize: 11)),
+          ),
+        ]);
+      }
+    }
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(
+        widget.surveyNumber != null && _resolvedMapSub() != null
+            ? 'Survey ${widget.surveyNumber} · Sub ${_resolvedMapSub()} — tap Load FMB to fetch sketch.'
+            : widget.lat == null
+                ? 'Tap the map to select a land parcel, then open FMB.'
+                : 'Waiting for survey and sub-division. Tap directly on your plot.',
+        style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+      ),
+      if (widget.surveyNumber != null && _resolvedMapSub() != null) ...[
+        const SizedBox(height: 8),
+        OutlinedButton.icon(
+          onPressed: _loadFmbForSelectedParcel,
+          icon: const Icon(Icons.picture_as_pdf_outlined, size: 16),
+          label: const Text('Load FMB', style: TextStyle(fontSize: 11)),
+        ),
       ],
     ]);
+  }
+
+  Future<void> _fetchGiEcFromTngis() async {
+    if (widget.lat == null || widget.lon == null) {
+      setState(() => _ecError = 'Tap the map to set a plot location.');
+      return;
+    }
+    setState(() {
+      _fetchingEc = true;
+      _ecError = null;
+      _ecDocumentHtml = null;
+      _ecPdfBytes = null;
+      _ecAllRecords = [];
+      _ecResults = [];
+    });
+    try {
+      final parts = <String>[
+        'lat=${widget.lat}',
+        'lon=${widget.lon}',
+      ];
+      final survey = widget.surveyNumber?.trim();
+      final sub = widget.subDivision?.trim();
+      if (survey != null && survey.isNotEmpty) {
+        parts.add('surveyNo=${Uri.encodeComponent(survey)}');
+      }
+      if (sub != null && sub.isNotEmpty && sub != '-') {
+        parts.add('subDiv=${Uri.encodeComponent(sub)}');
+      }
+      final result = await ApiClient.get(
+        '/api/tnlands/tngis/ec?${parts.join('&')}',
+        timeout: const Duration(seconds: 90),
+      );
+      final doc = result['document'] as Map<String, dynamic>?;
+      final pdfB64 = doc?['pdfBase64'] as String?;
+      if (pdfB64 != null && pdfB64.isNotEmpty) {
+        setState(() {
+          _ecSource = result['source']?.toString() ?? 'TNGIS GI Viewer';
+          _ecPdfBytes = Uint8List.fromList(base64.decode(pdfB64));
+          _ecPdfFileName = doc?['pdfFileName']?.toString() ?? 'Encumbrance Certificate.pdf';
+          _ecError = null;
+        });
+      } else {
+        setState(() => _ecError = result['error']?.toString()
+            ?? 'No Encumbrance Certificate found for this survey.');
+      }
+    } on ApiException catch (e) {
+      setState(() => _ecError = e.message);
+    } catch (e) {
+      setState(() => _ecError = e.toString().replaceAll('Exception: ', ''));
+    } finally {
+      setState(() => _fetchingEc = false);
+    }
+  }
+
+  Widget _buildPattaDocPreview(Map<String, dynamic>? patta, {String? title, bool pdfOnly = false}) {
+    if (patta == null) return pdfOnly ? _buildGiNoResult() : const SizedBox.shrink();
+    final pdfB64 = patta['pdfBase64'] as String?;
+    if (patta['available'] == true && pdfB64 != null && pdfB64.isNotEmpty) {
+      try {
+        return PattaDocumentPreview(
+          pdfBytes: Uint8List.fromList(base64.decode(pdfB64)),
+          fileName: patta['fileName']?.toString() ?? 'Patta.pdf',
+        );
+      } catch (_) {}
+    }
+    if (pdfOnly) {
+      if (patta['error'] != null) {
+        return Text(patta['error'].toString(),
+            style: TextStyle(fontSize: 11, color: Colors.orange.shade900));
+      }
+      return _buildGiNoResult();
+    }
+    final html = patta['html'] as String?;
+    if (patta['available'] == true && html != null && html.isNotEmpty) {
+      return PattaHtmlPreview(
+        key: ValueKey('patta-html-${html.hashCode}'),
+        html: html,
+        title: title ?? 'Patta / Chitta (TNGIS Tamil Nilam)',
+      );
+    }
+    if (patta['error'] != null) {
+      return Text(patta['error'].toString(),
+          style: TextStyle(fontSize: 11, color: Colors.orange.shade900));
+    }
+    return Text(
+      'Patta not available from TNGIS for this plot.',
+      style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+    );
+  }
+
+  Widget _buildGiEcDetail() {
+    if (_fetchingEc) {
+      return const Center(child: Padding(
+        padding: EdgeInsets.all(16),
+        child: SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2)),
+      ));
+    }
+    if (_ecError != null) {
+      return Text(_ecError!, style: TextStyle(fontSize: 11, color: Colors.orange.shade900));
+    }
+    if (_ecPdfBytes != null) {
+      return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('Encumbrance Certificate',
+            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800)),
+        const SizedBox(height: 8),
+        Text(_ecSource ?? 'TNGIS GI Viewer',
+            style: const TextStyle(fontSize: 10, color: AppColors.textSecondary)),
+        const SizedBox(height: 10),
+        PattaDocumentPreview(
+          pdfBytes: _ecPdfBytes,
+          fileName: _ecPdfFileName ?? 'Encumbrance Certificate.pdf',
+        ),
+      ]);
+    }
+    return Text(
+      'Tap EC again after selecting a plot on the map.',
+      style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+    );
+  }
+
+  String? get _ecResolvedLabel {
+    if (_selZone == null || _selEcDist == null) return null;
+    final sro = _selEcSro?.name ?? '';
+    return 'Resolved: ${_selZone!.name} · ${_selEcDist!.name}${sro.isNotEmpty ? ' · $sro' : ''}';
+  }
+
+  Widget _buildGiEcPeriodPicker() {
+    return DropdownButtonFormField<_EcPeriod>(
+      value: _selEcPeriod,
+      decoration: _inputDec('EC period'),
+      items: _ecPeriods.map((p) => DropdownMenuItem(value: p, child: Text(p.label, style: const TextStyle(fontSize: 12)))).toList(),
+      onChanged: (p) => setState(() => _selEcPeriod = p),
+    );
+  }
+
+  Widget _buildGiInfoCard(String label, String value) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey.shade300),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 4),
+        Text(value, style: const TextStyle(fontSize: 12, color: Colors.black87)),
+      ]),
+    );
+  }
+
+  Widget _buildGiGvalueDetail() {
+    if (_loadingGvalue) {
+      return const Center(child: Padding(
+        padding: EdgeInsets.all(16),
+        child: SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2)),
+      ));
+    }
+    if (_gvalueError != null) {
+      return Text(_gvalueError!, style: TextStyle(fontSize: 11, color: Colors.orange.shade900));
+    }
+    if (_gvalueData == null) return const SizedBox.shrink();
+
+    final items = (_gvalueData!['items'] as List<dynamic>? ?? []);
+    if (items.isEmpty) {
+      return Text(
+        _gvalueData!['error']?.toString() ?? 'Guideline Value not found for the selected Land',
+        style: TextStyle(fontSize: 11, color: Colors.orange.shade900),
+      );
+    }
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(
+        _gvalueData!['title']?.toString() ?? 'Guide Line Value from Registration Department',
+        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+      ),
+      const SizedBox(height: 10),
+      for (final raw in items) ...[
+        if (raw is Map) ...[
+          if (raw['landType'] != null)
+            _buildGiInfoCard('Land Type', raw['landType'].toString()),
+          if (raw['classification'] != null)
+            _buildGiInfoCard('Classification of Land Type', raw['classification'].toString()),
+          if (raw['metricRate'] != null)
+            _buildGiInfoCard('Metric Rate', raw['metricRate'].toString()),
+          if (raw['pricePerHectare'] != null)
+            _buildGiInfoCard('Price per Hectare', raw['pricePerHectare'].toString()),
+        ],
+      ],
+    ]);
+  }
+
+  Widget _buildGiCropSeasonBlock(String title, Map<String, dynamic>? season) {
+    if (season == null) return const SizedBox.shrink();
+    if (season['ok'] != true) {
+      return Container(
+        width: double.infinity,
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: Colors.grey.shade50,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.grey.shade300),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(title, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 6),
+          Text(
+            season['error']?.toString() ?? 'No crop data available for this season.',
+            style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
+          ),
+        ]),
+      );
+    }
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(title, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800)),
+        const SizedBox(height: 8),
+        if (season['cropName'] != null)
+          _buildGiInfoCard('Crop Name', season['cropName'].toString()),
+        if (season['classification'] != null)
+          _buildGiInfoCard('Classification', season['classification'].toString()),
+        if (season['cropArea'] != null)
+          _buildGiInfoCard('Crop Area', season['cropArea'].toString()),
+        if (season['landArea'] != null)
+          _buildGiInfoCard('Land Area', season['landArea'].toString()),
+        if (season['cropCount'] != null)
+          _buildGiInfoCard('Crop Count', season['cropCount'].toString()),
+        if (season['govtPriority'] != null)
+          _buildGiInfoCard('Govt Priority', season['govtPriority'].toString()),
+      ]),
+    );
+  }
+
+  Widget _buildGiCropSeasonTab(String id, String label, Map<String, dynamic>? season) {
+    final selected = _selectedCropSeason == id;
+    return Expanded(
+      child: Material(
+        color: selected ? const Color(0xFF2E7D32).withValues(alpha: 0.14) : Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        child: InkWell(
+          onTap: () => setState(() => _selectedCropSeason = id),
+          borderRadius: BorderRadius.circular(10),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: selected ? const Color(0xFF2E7D32) : const Color(0xFF2E7D32).withValues(alpha: 0.4),
+                width: selected ? 2 : 1,
+              ),
+            ),
+            child: Text(
+              label,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                color: selected ? const Color(0xFF2E7D32) : const Color(0xFF2E7D32).withValues(alpha: 0.85),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGiCropDetail() {
+    if (_loadingCrop) {
+      return const Center(child: Padding(
+        padding: EdgeInsets.all(16),
+        child: SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2)),
+      ));
+    }
+    if (_cropError != null) {
+      return Text(_cropError!, style: TextStyle(fontSize: 11, color: Colors.orange.shade900));
+    }
+    if (_cropData == null) return const SizedBox.shrink();
+
+    final seasons = (_cropData!['seasons'] as Map?)?.cast<String, dynamic>() ?? {};
+    final rabi = (seasons['rabi'] as Map?)?.cast<String, dynamic>();
+    final kharif = (seasons['kharif'] as Map?)?.cast<String, dynamic>();
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(
+        _cropData!['title']?.toString() ?? 'Crop Information',
+        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+      ),
+      const SizedBox(height: 10),
+      Row(
+        children: [
+          _buildGiCropSeasonTab('rabi', 'RABI', rabi),
+          const SizedBox(width: 8),
+          _buildGiCropSeasonTab('kharif', 'KHARIF', kharif),
+        ],
+      ),
+      if (_selectedCropSeason != null) ...[
+        const SizedBox(height: 12),
+        _buildGiCropSeasonBlock(
+          _selectedCropSeason == 'rabi' ? 'RABI' : 'KHARIF',
+          _selectedCropSeason == 'rabi' ? rabi : kharif,
+        ),
+      ],
+    ]);
+  }
+
+  Widget _buildGiSubdivisionPreview(_TngisSubdivisionRow row) {
+    const color = Color(0xFF1B5E20);
+    final bundle = _subdivBundles[row.key] ??= _SubdivDocBundle();
+    final patta = bundle.documents?['patta'] as Map<String, dynamic>?;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: row.containsPoint
+              ? const Color(0xFF1565C0).withValues(alpha: 0.5)
+              : color.withValues(alpha: 0.25),
+          width: row.containsPoint ? 2 : 1,
+        ),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        if (row.containsPoint)
+          const Padding(
+            padding: EdgeInsets.only(bottom: 6),
+            child: Text('Selected plot',
+                style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF1565C0))),
+          ),
+        _kv('Survey Number', row.surveyNumber),
+        _kv('Sub Division', row.subLabel),
+        if (row.fields['Patta Number']?.isNotEmpty == true)
+          _kv('Patta Number', row.fields['Patta Number']!),
+        const SizedBox(height: 8),
+        if (bundle.loadingPatta)
+          const Center(
+            child: Padding(
+              padding: EdgeInsets.all(12),
+              child: SizedBox(
+                  width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2)),
+            ),
+          )
+        else if (_pattaError != null && row.containsPoint)
+          Text(_pattaError!, style: TextStyle(fontSize: 11, color: Colors.orange.shade900))
+        else if (_hasPattaPdf(patta))
+          _buildPattaDocPreview(patta, title: 'Patta / Chitta', pdfOnly: true)
+        else
+          _buildGiNoResult(),
+      ]),
+    );
   }
 
   Widget _buildSubdivisionCard(_TngisSubdivisionRow row, Color color) {
@@ -4433,8 +5362,8 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
             else
               Text(
                 row.fmbAvailable
-                    ? 'Tap Load FMB for this subdivision.'
-                    : 'Tap Load FMB to check CollabLand for a digitized sketch.',
+                    ? 'Loading FMB from TNGIS…'
+                    : 'FMB may not be digitized for this subdivision.',
                 style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
               ),
           ]),
@@ -4512,12 +5441,8 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
                 fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF1B5E20))),
         const SizedBox(height: 6),
       ];
-      if (available && html != null && html.isNotEmpty) {
-        pattaChildren.add(PattaHtmlPreview(
-          key: ValueKey('patta-${html.hashCode}'),
-          html: html,
-          title: 'Patta / Chitta (TNGIS)',
-        ));
+      if (available && (html != null && html.isNotEmpty || (patta['pdfBase64'] as String?)?.isNotEmpty == true)) {
+        pattaChildren.add(_buildPattaDocPreview(patta));
         if (patta['note'] != null) {
           pattaChildren.add(const SizedBox(height: 4));
           pattaChildren.add(Text(patta['note'].toString(),
@@ -4602,270 +5527,6 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
   }
 
   // â”€â”€ EC UI â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-  Widget _buildEcSection() {
-    const color = Color(0xFFC62828);
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Row(children: [
-        Container(
-          padding: const EdgeInsets.all(7),
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(7),
-          ),
-          child: const Icon(Icons.account_balance_outlined, color: color, size: 18),
-        ),
-        const SizedBox(width: 10),
-        const Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('Encumbrance Certificate (EC)',
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: color)),
-            Text('tnreginet.gov.in',
-                style: TextStyle(fontSize: 10, color: AppColors.textSecondary)),
-          ]),
-        ),
-        if (_autoFillingEc) ...[
-          const SizedBox(width: 16, height: 16,
-              child: CircularProgressIndicator(strokeWidth: 2, color: color)),
-          const SizedBox(width: 6),
-          const Text('Auto-filling…',
-              style: TextStyle(fontSize: 10, color: AppColors.textSecondary)),
-        ],
-      ]),
-      const SizedBox(height: 14),
-
-      // Survey No + Sub Div (at top — typing auto-triggers search when fields are filled)
-      Row(children: [
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const _FieldLabel('Survey No *'),
-          TextField(controller: _ecSurveyCtrl, decoration: _inputDec('e.g. 123')),
-        ])),
-        const SizedBox(width: 10),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const _FieldLabel('Sub Division'),
-          TextField(controller: _ecSubDivCtrl, decoration: _inputDec('Optional')),
-        ])),
-      ]),
-      const SizedBox(height: 10),
-
-      const _FieldLabel('EC Period'),
-      _ecPeriodDropdown(color),
-      const SizedBox(height: 10),
-
-      const _FieldLabel('Captcha (tnreginet) *'),
-      Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        if (_ecCaptchaImage != null)
-          ClipRRect(
-            borderRadius: BorderRadius.circular(6),
-            child: Image.network(
-              _ecCaptchaImage!,
-              width: 140,
-              height: 44,
-              fit: BoxFit.contain,
-              errorBuilder: (_, __, ___) => Container(
-                width: 140, height: 44,
-                color: Colors.grey.shade200,
-                alignment: Alignment.center,
-                child: const Text('Captcha', style: TextStyle(fontSize: 10)),
-              ),
-            ),
-          )
-        else
-          Container(
-            width: 140, height: 44,
-            decoration: BoxDecoration(
-              color: Colors.grey.shade200,
-              borderRadius: BorderRadius.circular(6),
-            ),
-            alignment: Alignment.center,
-            child: _loadingEcCaptcha
-                ? const SizedBox(width: 16, height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2))
-                : const Text('No captcha', style: TextStyle(fontSize: 10)),
-          ),
-        const SizedBox(width: 8),
-        IconButton(
-          onPressed: _loadingEcCaptcha ? null : _loadEcCaptcha,
-          icon: const Icon(Icons.refresh, size: 20),
-          tooltip: 'Refresh captcha',
-        ),
-        Expanded(
-          child: TextField(
-            controller: _ecCaptchaCtrl,
-            decoration: _inputDec('Enter code'),
-            textCapitalization: TextCapitalization.characters,
-          ),
-        ),
-      ]),
-      const SizedBox(height: 10),
-
-      SizedBox(
-        width: double.infinity,
-        child: ElevatedButton.icon(
-          onPressed: (_fetchingEc || _autoFillingEc) ? null : _fetchEcForLocation,
-          icon: _fetchingEc
-              ? const SizedBox(
-                  width: 14, height: 14,
-                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-              : const Icon(Icons.map_outlined, size: 16),
-          label: Text(
-            _fetchingEc ? 'Fetching EC from tnreginet…' : 'Fetch EC for this Location',
-            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
-          ),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: color,
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(vertical: 13),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          ),
-        ),
-      ),
-      if (widget.lat == null || widget.lon == null) ...[
-        const SizedBox(height: 6),
-        Text(
-          'Tip: tap the map to set a location, then fetch EC (survey from patta helps).',
-          style: TextStyle(fontSize: 11, color: Colors.orange.shade800),
-        ),
-      ] else ...[
-        const SizedBox(height: 6),
-        Text(
-          'Map pin: ${widget.lat!.toStringAsFixed(5)}, ${widget.lon!.toStringAsFixed(5)}',
-          style: const TextStyle(fontSize: 10, color: AppColors.textSecondary),
-        ),
-        if (_selZone != null && _selEcDist != null && _selEcSro != null) ...[
-          const SizedBox(height: 4),
-          Text(
-            'Resolved: ${_selZone!.name} · ${_selEcDist!.name} · ${_selEcSro!.name}',
-            style: TextStyle(fontSize: 10, color: Colors.green.shade800),
-          ),
-        ],
-      ],
-      const SizedBox(height: 8),
-
-      SizedBox(
-        width: double.infinity,
-        child: OutlinedButton.icon(
-          onPressed: (_autoFillingEc || _fetchingEc) ? null : _fetchEcByGps,
-          icon: const Icon(Icons.gps_fixed, size: 16),
-          label: Text(_autoFillingEc ? 'Detecting…' : 'Auto-fill Zone / District / SRO',
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: const Color(0xFF0D47A1),
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          ),
-        ),
-      ),
-      const SizedBox(height: 8),
-
-      // Manual toggle — Zone / District / SRO
-      GestureDetector(
-        onTap: () => setState(() => _showManualEc = !_showManualEc),
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
-          decoration: BoxDecoration(
-            border: Border.all(color: color.withValues(alpha: 0.35)),
-            borderRadius: BorderRadius.circular(10),
-            color: _showManualEc ? color.withValues(alpha: 0.06) : Colors.transparent,
-          ),
-          child: Row(children: [
-            const Icon(Icons.tune, size: 15, color: color),
-            const SizedBox(width: 8),
-            const Expanded(child: Text('Manual — Zone / District / SRO',
-                style: TextStyle(fontSize: 13, color: color, fontWeight: FontWeight.w600))),
-            Icon(_showManualEc ? Icons.expand_less : Icons.expand_more,
-                size: 18, color: color),
-          ]),
-        ),
-      ),
-
-      if (_showManualEc) ...[
-        const SizedBox(height: 12),
-
-        const _FieldLabel('Zone'),
-        _dropdown('Select Zone', _ecZones, _selZone, color,
-            loading: _autoFillingEc,
-            onChanged: (opt) => _loadEcDistricts(opt)),
-        const SizedBox(height: 10),
-
-        const _FieldLabel('District'),
-        _dropdown('Select District', _ecDists, _selEcDist, color,
-            loading: _loadingEcDists,
-            hint: _selZone == null ? 'Select zone first' : 'Select District',
-            onChanged: (opt) => _loadEcSros(opt)),
-        const SizedBox(height: 10),
-
-        const _FieldLabel('Sub Registrar Office (SRO)'),
-        _dropdown('Select SRO', _ecSros, _selEcSro, color,
-            loading: _loadingEcSros,
-            hint: _selEcDist == null ? 'Select district first' : 'Select SRO',
-            onChanged: (opt) => setState(() => _selEcSro = opt)),
-        const SizedBox(height: 10),
-        Row(children: [
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const _FieldLabel('From Date'),
-            TextField(controller: _ecFromCtrl, decoration: _inputDec('DD/MM/YYYY')),
-          ])),
-          const SizedBox(width: 10),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const _FieldLabel('To Date'),
-            TextField(controller: _ecToCtrl, decoration: _inputDec('DD/MM/YYYY')),
-          ])),
-        ]),
-        const SizedBox(height: 12),
-
-        SizedBox(
-          width: double.infinity,
-          child: ElevatedButton.icon(
-            onPressed: _fetchingEc ? null : _searchEc,
-            icon: _fetchingEc
-                ? const SizedBox(width: 14, height: 14,
-                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                : const Icon(Icons.search, size: 16),
-            label: Text(_fetchingEc ? 'Searching…' : 'Search EC',
-                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: color,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-          ),
-        ),
-      ] else if (_selZone != null) ...[
-        // Zone/District/SRO already filled (e.g. via GPS) — show Search button
-        const SizedBox(height: 10),
-        SizedBox(
-          width: double.infinity,
-          child: ElevatedButton.icon(
-            onPressed: _fetchingEc ? null : _searchEc,
-            icon: _fetchingEc
-                ? const SizedBox(width: 14, height: 14,
-                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                : const Icon(Icons.search, size: 16),
-            label: Text(_fetchingEc ? 'Searching…' : 'Search EC',
-                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: color,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-          ),
-        ),
-      ],
-
-      if (_ecError != null) ...[
-        const SizedBox(height: 10),
-        _ErrorBanner(_ecError!),
-      ],
-      if (_ecDocumentHtml != null || _ecResults.isNotEmpty || _ecPdfBytes != null) ...[
-        const SizedBox(height: 14),
-        _buildEcResults(),
-      ],
-    ]);
-  }
 
   Widget _ecPeriodDropdown(Color color) {
     if (_loadingEcPeriods) {
