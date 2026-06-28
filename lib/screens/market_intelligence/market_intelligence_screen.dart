@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:fl_chart/fl_chart.dart';
@@ -289,6 +290,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
       }
       _fetchLocationDetails(LatLng(pos.latitude, pos.longitude));
       _collectPois();
+      _fetchMagicBricksProjects();
     } catch (e) {
       setState(() =>
           _locationError = e.toString().replaceAll('Exception: ', ''));
@@ -367,6 +369,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
     }
     _fetchLocationDetails(loc);
     _collectPois();
+    _fetchMagicBricksProjects();
   }
 
   void _handleMapTap(LatLng point) {
@@ -395,6 +398,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
     _fetchLocationDetails(point);
     _fetchTngisParcelDetails(point);
     _collectPois();
+    _fetchMagicBricksProjects();
   }
 
   /// Parse sub-division from TNGIS (often in kide e.g. 394/15C).
@@ -694,7 +698,14 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
         .replaceAll(RegExp(r'\s*[Dd]t\s*$'), '')
         .trim();
     final cityParam = city.isEmpty ? 'Chennai' : city;
-    final params = 'city=${Uri.encodeComponent(cityParam)}';
+    final loc = _activeLatLng;
+    final parts = <String>['city=${Uri.encodeComponent(cityParam)}'];
+    if (loc != null) {
+      parts.add('lat=${loc.latitude}');
+      parts.add('lng=${loc.longitude}');
+      parts.add('radius=$_selectedRadius');
+    }
+    final params = parts.join('&');
 
     setState(() {
       _fetchingMb = true;
@@ -705,7 +716,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
 
     try {
       Map<String, dynamic>? result;
-      for (final path in ['/api/magicbricks?$params', '/api/competitors?$params']) {
+      for (final path in ['/api/competitors?$params', '/api/magicbricks?$params']) {
         try {
           result = await ApiClient.get(path)
               .timeout(const Duration(seconds: 120));
@@ -723,16 +734,22 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
         );
       }
 
-      final raw = (result['listings'] as List<dynamic>?) ?? [];
-      final listings = raw
+      var raw = (result['listings'] as List<dynamic>?) ?? [];
+      var listings = raw
           .map((e) => Map<String, dynamic>.from(e as Map))
           .toList();
+
+      if (loc != null) {
+        listings = _filterListingsWithinRadius(listings, loc, _selectedRadius);
+      }
 
       if (listings.isEmpty) {
         throw ApiException(
           statusCode: 502,
-          message: (result['error'] as String?) ??
-              'No competitor projects found for $cityParam.',
+          message: loc != null
+              ? 'No competitor projects within ${_selectedRadius}km of this location.'
+              : ((result['error'] as String?) ??
+                  'No competitor projects found for $cityParam.'),
         );
       }
 
@@ -760,6 +777,38 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
         _fetchingMb = false;
       });
     }
+  }
+
+  double _haversineKm(double lat1, double lon1, double lat2, double lon2) {
+    const p = 0.017453292519943295;
+    final a = 0.5 -
+        math.cos((lat2 - lat1) * p) / 2 +
+        math.cos(lat1 * p) *
+            math.cos(lat2 * p) *
+            (1 - math.cos((lon2 - lon1) * p)) /
+            2;
+    return 6371 * 2 * math.asin(math.sqrt(a.clamp(0.0, 1.0)));
+  }
+
+  List<Map<String, dynamic>> _filterListingsWithinRadius(
+    List<Map<String, dynamic>> listings,
+    LatLng center,
+    int radiusKm,
+  ) {
+    final filtered = <Map<String, dynamic>>[];
+    for (final item in listings) {
+      final plat = (item['lat'] as num?)?.toDouble();
+      final plng = (item['lng'] as num?)?.toDouble() ??
+          (item['lon'] as num?)?.toDouble();
+      if (plat == null || plng == null) continue;
+      final dist = _haversineKm(center.latitude, center.longitude, plat, plng);
+      if (dist <= radiusKm) {
+        filtered.add({...item, 'distanceKm': (dist * 10).round() / 10});
+      }
+    }
+    filtered.sort((a, b) =>
+        ((a['distanceKm'] as num?) ?? 0).compareTo((b['distanceKm'] as num?) ?? 0));
+    return filtered;
   }
 
   List<Map<String, dynamic>> get _filteredMbListings {
@@ -791,17 +840,17 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
     final city = (_detectedDistrict ?? '')
         .replaceAll(RegExp(r'\s*[Dd]istrict\s*$'), '').trim();
 
-    String fmtPrice(Map<String, dynamic> item) {
+    String fmtPricePerSqft(Map<String, dynamic> item) {
       final ppsf = (item['pricePerSqft'] as num?)?.toDouble() ?? 0;
+      if (ppsf <= 0) return '';
+      return '₹${ppsf.toInt()}/sqft';
+    }
+
+    String fmtTotalPrice(Map<String, dynamic> item) {
       final total = (item['priceRupees'] as num?)?.toDouble() ?? 0;
-      final parts = <String>[];
-      if (ppsf > 0) parts.add('₹${ppsf.toInt()}/sqft');
-      if (total >= 1e7) {
-        parts.add('₹${(total / 1e7).toStringAsFixed(2)} Cr');
-      } else if (total > 0) {
-        parts.add('₹${(total / 1e5).toStringAsFixed(2)} L');
-      }
-      return parts.join(' · ');
+      if (total >= 1e7) return '₹${(total / 1e7).toStringAsFixed(2)} Cr';
+      if (total > 0) return '₹${(total / 1e5).toStringAsFixed(2)} L';
+      return '';
     }
 
     Widget chip(String label, Color color) => Container(
@@ -847,6 +896,46 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
             ),
           ),
         ]),
+
+        if (_activeLatLng != null) ...[
+          const SizedBox(height: 10),
+          Row(children: [
+            const Text('Radius:',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600,
+                    color: AppColors.textSecondary)),
+            const SizedBox(width: 10),
+            ...([2, 5, 10]).map((km) {
+              final selected = _selectedRadius == km;
+              return Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: GestureDetector(
+                  onTap: () {
+                    if (selected) return;
+                    setState(() => _selectedRadius = km);
+                    if (_mapReady && _activeLatLng != null) {
+                      _mapController.move(_activeLatLng!, _zoomForRadius(km));
+                    }
+                    _fetchMagicBricksProjects();
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: selected ? mbColor : const Color(0xFFF3F4F6),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                          color: selected ? mbColor : const Color(0xFFD1D5DB)),
+                    ),
+                    child: Text('${km}km',
+                        style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: selected ? Colors.white : AppColors.textSecondary)),
+                  ),
+                ),
+              );
+            }),
+          ]),
+        ],
 
         if (_mbPartialWarning != null && _mbPartialWarning!.isNotEmpty) ...[
           const SizedBox(height: 10),
@@ -950,7 +1039,9 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
             final rera      = item['reraNo']      as String? ?? '';
             final developer = item['developer']   as String? ?? '';
             final source    = item['source']      as String? ?? '';
-            final price     = fmtPrice(item);
+            final ppsfStr   = fmtPricePerSqft(item);
+            final totalStr  = fmtTotalPrice(item);
+            final distKm    = (item['distanceKm'] as num?)?.toDouble();
             final isTnrera  = source == 'TNRERA';
             return Container(
               margin: const EdgeInsets.only(bottom: 8),
@@ -976,20 +1067,38 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                       maxLines: 2, overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  if (price.isNotEmpty) ...[
+                  if (ppsfStr.isNotEmpty || totalStr.isNotEmpty) ...[
                     const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: mbColor.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(price,
-                          style: const TextStyle(
-                              fontSize: 11, fontWeight: FontWeight.w700, color: mbColor)),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        if (ppsfStr.isNotEmpty)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: mbColor.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(ppsfStr,
+                                style: const TextStyle(
+                                    fontSize: 11, fontWeight: FontWeight.w800, color: mbColor)),
+                          ),
+                        if (totalStr.isNotEmpty) ...[
+                          const SizedBox(height: 3),
+                          Text(totalStr,
+                              style: const TextStyle(
+                                  fontSize: 10, fontWeight: FontWeight.w600,
+                                  color: AppColors.textSecondary)),
+                        ],
+                      ],
                     ),
                   ],
                 ]),
+                if (distKm != null) ...[
+                  const SizedBox(height: 4),
+                  Text('${distKm.toStringAsFixed(1)} km away',
+                      style: const TextStyle(fontSize: 10, color: AppColors.textSecondary)),
+                ],
                 if (developer.isNotEmpty && isTnrera) ...[
                   const SizedBox(height: 3),
                   Text(developer,
@@ -1953,6 +2062,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                             _activeLatLng!, _zoomForRadius(km));
                       }
                     });
+                    if (_activeLatLng != null) _fetchMagicBricksProjects();
                     if (_activeLatLng != null) _collectPois();
                   },
                   child: Container(
@@ -3287,8 +3397,10 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
   }
 
   _TngisSubdivisionRow? _subdivisionRowForSub(String sub) {
+    final norm = sub.trim().toUpperCase();
     for (final row in widget.tngisSubdivisions) {
-      if (row.effectiveSubDivision == sub) return row;
+      final rowSub = row.effectiveSubDivision?.trim().toUpperCase();
+      if (rowSub != null && rowSub == norm) return row;
     }
     return null;
   }
@@ -3343,7 +3455,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
 
     final row = parcel.sub != null
         ? (_subdivisionRowForSub(parcel.sub!) ?? _containingSubdivisionRow())
-        : null;
+        : _containingSubdivisionRow();
     if (row != null && row.effectiveSubDivision != null) {
       await _fetchFmbForSubdivision(row);
       return;
@@ -3354,6 +3466,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
       dc: parcel.dc,
       tc: parcel.tc,
       vc: parcel.vc,
+      kide: row?.kide,
     );
   }
 
@@ -3425,7 +3538,10 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
   bool _isSelectedFmbRow(_TngisSubdivisionRow row) {
     if (row.containsPoint) return true;
     final sub = _resolvedMapSub();
-    if (sub != null && row.effectiveSubDivision == sub) return true;
+    if (sub != null &&
+        row.effectiveSubDivision?.trim().toUpperCase() == sub.trim().toUpperCase()) {
+      return true;
+    }
     if (widget.tngisSubdivisions.length == 1) return true;
     return false;
   }
@@ -3436,6 +3552,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
     String? dc,
     String? tc,
     String? vc,
+    String? kide,
   }) {
     final parts = <String>[];
     if (widget.lat != null && widget.lon != null) {
@@ -3477,6 +3594,10 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
     parts.add('dc=${Uri.encodeComponent(dcVal)}');
     parts.add('tc=${Uri.encodeComponent(tcVal)}');
     parts.add('vc=${Uri.encodeComponent(vcVal)}');
+    final kideVal = kide?.trim();
+    if (kideVal != null && kideVal.isNotEmpty && kideVal.contains('/')) {
+      parts.add('kide=${Uri.encodeComponent(kideVal)}');
+    }
     return '/api/tnlands/fmb?${parts.join('&')}';
   }
 
@@ -3486,8 +3607,16 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
     String? dc,
     String? tc,
     String? vc,
+    String? kide,
   }) async {
-    final path = _fmbApiPath(survey: survey, sub: sub, dc: dc, tc: tc, vc: vc);
+    final path = _fmbApiPath(
+      survey: survey,
+      sub: sub,
+      dc: dc,
+      tc: tc,
+      vc: vc,
+      kide: kide,
+    );
     if (path == null) {
       setState(() => _fmbLoadError =
           'Survey and revenue codes required. Tap the map and wait for parcel details.');
@@ -3540,6 +3669,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
         dc: _nonEmptyCode(row.fields['District Code']) ?? widget.districtCode,
         tc: _nonEmptyCode(row.fields['Taluk Code']) ?? widget.talukCode,
         vc: _nonEmptyCode(row.fields['Village Code']) ?? widget.villageCode,
+        kide: row.kide,
       );
       if (path == null) {
         throw const ApiException(

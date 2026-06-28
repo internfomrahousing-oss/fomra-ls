@@ -618,18 +618,22 @@ router.get('/', async (req, res) => {
     });
   }
 
-  // ── Radius filter (keep city-wide results if filter would remove everything) ─
+  // ── Radius filter — only projects with coordinates inside radius ───────────
   if (hasRadius) {
-    const filtered = listings.filter(l => {
-      if (!l.lat) return true;
-      const dLat = (l.lat - userLat) * Math.PI / 180;
-      const dLon = (l.lng - userLng) * Math.PI / 180;
-      const a = Math.sin(dLat / 2) ** 2 +
-        Math.cos(userLat * Math.PI / 180) * Math.cos(l.lat * Math.PI / 180) *
-        Math.sin(dLon / 2) ** 2;
-      return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)) <= radius;
-    });
-    if (filtered.length > 0) listings = filtered;
+    listings = listings
+      .map((l) => {
+        if (!l.lat || !l.lng) return null;
+        const dLat = (l.lat - userLat) * Math.PI / 180;
+        const dLon = (l.lng - userLng) * Math.PI / 180;
+        const a = Math.sin(dLat / 2) ** 2 +
+          Math.cos(userLat * Math.PI / 180) * Math.cos(l.lat * Math.PI / 180) *
+          Math.sin(dLon / 2) ** 2;
+        const distKm = 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        if (distKm > radius) return null;
+        return { ...l, distanceKm: Math.round(distKm * 10) / 10 };
+      })
+      .filter(Boolean)
+      .sort((a, b) => (a.distanceKm || 0) - (b.distanceKm || 0));
   }
 
   res.json({ source, city, count: listings.length, listings });

@@ -78,6 +78,33 @@ function ingestBatch(result, defaultSource, allListings, sources, errors) {
   }
 }
 
+function haversineKm(lat1, lon1, lat2, lon2) {
+  const p = Math.PI / 180;
+  const a = 0.5 - Math.cos((lat2 - lat1) * p) / 2
+    + Math.cos(lat1 * p) * Math.cos(lat2 * p) * (1 - Math.cos((lon2 - lon1) * p)) / 2;
+  return 6371 * 2 * Math.asin(Math.sqrt(Math.max(0, a)));
+}
+
+/** Keep only projects with coordinates inside radiusKm of lat/lng. */
+function filterListingsByRadius(listings, lat, lng, radiusKm) {
+  const latN = parseFloat(lat);
+  const lngN = parseFloat(lng);
+  const r = parseFloat(radiusKm);
+  if (!Number.isFinite(latN) || !Number.isFinite(lngN) || !Number.isFinite(r) || r <= 0) {
+    return listings;
+  }
+  return listings
+    .map((l) => {
+      const plat = parseFloat(l.lat);
+      const plng = parseFloat(l.lng ?? l.lon);
+      if (!Number.isFinite(plat) || !Number.isFinite(plng)) return null;
+      const dist = haversineKm(latN, lngN, plat, plng);
+      return { ...l, distanceKm: Math.round(dist * 10) / 10 };
+    })
+    .filter((l) => l && l.distanceKm <= r)
+    .sort((a, b) => (a.distanceKm || 0) - (b.distanceKm || 0));
+}
+
 // GET /api/competitors?city=Chennai
 router.get('/', async (req, res) => {
   const query = { ...req.query };
@@ -108,13 +135,21 @@ router.get('/', async (req, res) => {
     });
   }
 
-  const listings = dedupeListings(allListings);
+  let listings = dedupeListings(allListings);
+
+  const { lat, lng, lon, radius } = query;
+  const centerLng = lng ?? lon;
+  if (lat && centerLng && radius) {
+    listings = filterListingsByRadius(listings, lat, centerLng, radius);
+  }
 
   res.json({
     source:  sources.join(' + '),
     sources,
     city:    query.city || 'Chennai',
     count:   listings.length,
+    radiusKm: radius ? parseFloat(radius) : null,
+    center:  (lat && centerLng) ? { lat: parseFloat(lat), lng: parseFloat(centerLng) } : null,
     listings,
     partial: errors.length > 0 ? errors : undefined,
   });

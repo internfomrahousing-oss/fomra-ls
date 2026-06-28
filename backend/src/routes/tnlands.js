@@ -1798,8 +1798,9 @@ async function fetchFmbSketchMultiSource(codes, ctx = {}) {
     lastErr = general.error || lastErr;
   }
 
-  const digitized = tngisProps.is_fmb === 1 || tngisProps.is_fmb === '1';
-  if (!digitized) {
+  const digitized = tngisProps.is_fmb === 1 || tngisProps.is_fmb === '1'
+      || (tngisProps.kide && String(tngisProps.kide).includes('/'));
+  if (!digitized && !hasSub) {
     lastErr = 'FMB/TSLR sketch is not digitized for this village on Tamil Nilam yet. '
         + 'Only surveyed villages with digitized maps are available online.';
   }
@@ -2127,8 +2128,7 @@ router.get('/tngis/parcel', async (req, res) => {
 
     const fmbAvailable = props.is_fmb === 1 || props.is_fmb === '1'
         || (kideVal && kideVal.includes('/'))
-        || subdivisions.some((s) => s.fmbAvailable)
-        || Boolean(subDivVal);
+        || subdivisions.some((s) => s.fmbAvailable);
 
     const fmbNote = fmbAvailable
       ? 'Digitized FMB/TSLR sketch available from Tamil Nilam'
@@ -2405,7 +2405,7 @@ function sendFmbPdfResponse(res, fmb) {
 
 // Stream FMB PDF — TNGIS GI Viewer sketch_fmb (official sketch with govt seal).
 router.get('/fmb', async (req, res) => {
-  const { dc, tc, vc, surveyNo, subDiv, lat, lon } = req.query;
+  const { dc, tc, vc, surveyNo, subDiv, lat, lon, kide } = req.query;
   const latN = parseFloat(lat);
   const lonN = parseFloat(lon);
   const surveyReq = normalizeSurveyNo(surveyNo);
@@ -2424,8 +2424,10 @@ router.get('/fmb', async (req, res) => {
 
   let tngisProps = null;
 
-  /** Direct TNGIS sketch_fmb + CollabLand when survey + sub + admin codes are known. */
-  async function fetchFmbWithExplicitCodes() {
+  async function finalizeAndFetchFmb() {
+    if (codes.subDivision && surveyNumberMatches(codes.subDivision, codes.surveyNumber)) {
+      codes.subDivision = '';
+    }
     const fmb = await fetchFmbSketchMultiSource(codes, {
       lat: hasPoint ? latN : undefined,
       lon: hasPoint ? lonN : undefined,
@@ -2433,25 +2435,16 @@ router.get('/fmb', async (req, res) => {
     });
     if (fmb.ok && fmb.pdfBase64) return sendFmbPdfResponse(res, fmb);
     return res.status(404).json({
-      error: fmb.error || `FMB sketch not available for survey ${codes.surveyNumber} sub ${codes.subDivision}.`,
+      error:        fmb.error || 'FMB sketch not available from TNGIS for this parcel',
       surveyNumber: codes.surveyNumber,
-      subDivision:  codes.subDivision,
+      subDivision:  codes.subDivision || null,
       source:       'TNGIS GI Viewer (sketch_fmb)',
-      hint:         'FMB/TSLR is only online where Tamil Nilam has digitized the village map. Try the official GI Viewer link.',
+      hint:         'FMB/TSLR sketches are only available for villages digitized on Tamil Nilam. Rural FMB and urban TSLR coverage varies by district.',
+      fmbScope:     fmb.fmbScope,
     });
   }
 
-  // Fast path — caller supplied survey + revenue codes (sub-division optional).
-  if (codes.districtCode && codes.talukCode && codes.villageCode && codes.surveyNumber) {
-    codes.subDivision = subReq || '';
-    try {
-      return await fetchFmbWithExplicitCodes();
-    } catch (err) {
-      return res.status(502).json({ error: err.message });
-    }
-  }
-
-  // Cadastral hit for admin codes when lat/lon provided (single radius try first).
+  // Cadastral hit — admin codes + base props from map point.
   if (hasPoint) {
     try {
       const hit = await lookupTngisParcelAtPoint({
@@ -2461,7 +2454,7 @@ router.get('/fmb', async (req, res) => {
         subDiv:   subReq || undefined,
       });
       if (hit?.tngisProps) {
-        tngisProps = hit.tngisProps;
+        tngisProps = { ...hit.tngisProps };
         codes.districtCode = codes.districtCode || tngisProps.district_code;
         codes.talukCode = codes.talukCode || tngisProps.taluk_code;
         codes.villageCode = codes.villageCode || tngisProps.village_code;
@@ -2482,7 +2475,7 @@ router.get('/fmb', async (req, res) => {
         lon:          hasPoint ? lonN : undefined,
       });
       if (props) {
-        tngisProps = props;
+        tngisProps = { ...props };
         codes.districtCode = codes.districtCode || props.district_code;
         codes.talukCode = codes.talukCode || props.taluk_code;
         codes.villageCode = codes.villageCode || props.village_code;
@@ -2491,53 +2484,38 @@ router.get('/fmb', async (req, res) => {
     } catch (_) {}
   }
 
-  if (subReq) {
-    codes.subDivision = subReq;
-  } else {
-    const propsSub = resolveTngisSubDivision(tngisProps || {});
-    if (propsSub) codes.subDivision = propsSub;
+  if (kide && String(kide).trim()) {
+    tngisProps = { ...(tngisProps || {}), kide: String(kide).trim() };
   }
 
-  // Survey resolved — fetch FMB (sub-specific or general parent sketch).
-  if (codes.districtCode && codes.talukCode && codes.villageCode && codes.surveyNumber) {
-    try {
-      return await fetchFmbWithExplicitCodes();
-    } catch (err) {
-      return res.status(502).json({ error: err.message });
-    }
-  }
-
-  // view_fmb polygon at tap point — authoritative sub for FMB sketch.
-  if (!subReq && hasPoint && codes.surveyNumber
+  // view_fmb polygon at tap — authoritative sub + kide for sketch_fmb / CollabLand.
+  if (hasPoint && codes.surveyNumber
       && codes.districtCode && codes.talukCode && codes.villageCode) {
     try {
       const fmbHit = await resolveFmbSubAtPoint({
         lat:          latN,
         lon:          lonN,
         surveyNo:     codes.surveyNumber,
+        subDiv:       subReq || codes.subDivision || undefined,
         districtCode: codes.districtCode,
         talukCode:    codes.talukCode,
         villageCode:  codes.villageCode,
       });
-      if (fmbHit?.subDivision) codes.subDivision = fmbHit.subDivision;
+      if (fmbHit?.subDivision && (fmbHit.containsPoint || !subReq)) {
+        codes.subDivision = fmbHit.subDivision;
+      }
+      if (fmbHit?.kide) tngisProps = { ...(tngisProps || {}), kide: fmbHit.kide };
+      if (fmbHit?.tngisProps) {
+        tngisProps = { ...(tngisProps || {}), ...fmbHit.tngisProps, kide: fmbHit.kide || tngisProps?.kide };
+      }
     } catch (_) {}
   }
 
-  if (!codes.districtCode || !codes.talukCode || !codes.villageCode || !codes.surveyNumber) {
-    return res.status(400).json({
-      error: 'Provide dc, tc, vc, surveyNo or lat/lon with a TNGIS parcel hit.',
-    });
-  }
-
-  if (codes.subDivision && surveyNumberMatches(codes.subDivision, codes.surveyNumber)) {
-    codes.subDivision = '';
-  }
-
-  if (surveyReq && tngisProps?.survey_number
-      && !surveyNumberMatches(tngisProps.survey_number, surveyReq)) {
-    return res.status(404).json({
-      error: `Survey ${surveyReq} not found for FMB lookup.`,
-    });
+  if (subReq) {
+    codes.subDivision = subReq;
+  } else if (!codes.subDivision) {
+    const propsSub = resolveTngisSubDivision(tngisProps || {});
+    if (propsSub) codes.subDivision = propsSub;
   }
 
   if (!codes.subDivision && hasPoint && codes.surveyNumber) {
@@ -2550,31 +2528,28 @@ router.get('/fmb', async (req, res) => {
       const containing = subs.find((s) => s.containsPoint && s.subDivision);
       if (containing?.subDivision) {
         codes.subDivision = containing.subDivision;
-      } else {
-        const fmbSub = subs.find((s) => s.subDivision && s.fmbAvailable);
-        if (fmbSub?.subDivision) codes.subDivision = fmbSub.subDivision;
+        if (containing.kide) tngisProps = { ...(tngisProps || {}), kide: containing.kide };
       }
     } catch (_) {}
   }
 
-  if (!codes.subDivision) {
-    codes.subDivision = '';
+  if (!codes.districtCode || !codes.talukCode || !codes.villageCode || !codes.surveyNumber) {
+    return res.status(400).json({
+      error: 'Provide dc, tc, vc, surveyNo or lat/lon with a TNGIS parcel hit.',
+    });
   }
 
-  try {
-    const fmb = await fetchFmbSketchMultiSource(codes, {
-      lat: hasPoint ? latN : undefined,
-      lon: hasPoint ? lonN : undefined,
-      tngisProps: tngisProps || {},
+  if (surveyReq && tngisProps?.survey_number
+      && !surveyNumberMatches(tngisProps.survey_number, surveyReq)) {
+    return res.status(404).json({
+      error: `Survey ${surveyReq} not found for FMB lookup.`,
     });
-    if (!fmb.ok || !fmb.pdfBase64) {
-      return res.status(404).json({
-        error: fmb.error || 'FMB sketch not available from TNGIS for this parcel',
-        source: 'TNGIS GI Viewer (sketch_fmb)',
-        hint: 'FMB/TSLR sketches are only available for villages digitized on Tamil Nilam. Rural FMB and urban TSLR coverage varies by district.',
-      });
-    }
-    return sendFmbPdfResponse(res, fmb);
+  }
+
+  if (!codes.subDivision) codes.subDivision = '';
+
+  try {
+    return await finalizeAndFetchFmb();
   } catch (err) {
     return res.status(502).json({ error: err.message });
   }
