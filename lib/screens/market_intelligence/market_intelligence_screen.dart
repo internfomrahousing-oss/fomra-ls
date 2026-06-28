@@ -480,7 +480,11 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
         _tngisParcelError = null;
         _tngisFmbAvailable = result['fmbAvailable'] == true;
         _tngisFmbNote = result['fmbNote']?.toString();
-        _tngisSubdivisions = subdivisions;
+        _tngisSubdivisions = _TngisSubdivisionRow.filterForTap(
+          subdivisions,
+          resolvedSub,
+          survey,
+        );
         if (_tngisSubdivisions.isEmpty && _tngisSurvey != null) {
           _tngisSubdivisions = [
             _TngisSubdivisionRow(
@@ -2983,6 +2987,39 @@ class _TngisSubdivisionRow {
     if (kideSurvey.isNotEmpty && kideSurvey != survey) return null;
     return kideSub;
   }
+
+  /// Keep only the subdivision row for the map tap / resolved sub.
+  static List<_TngisSubdivisionRow> filterForTap(
+    List<_TngisSubdivisionRow> rows,
+    String? resolvedSub,
+    String? survey,
+  ) {
+    if (rows.isEmpty) return rows;
+    final surveyTrim = survey?.trim();
+
+    final atPoint = rows.where((r) => r.containsPoint).toList();
+    if (atPoint.length == 1) return atPoint;
+    if (atPoint.length > 1) return [atPoint.first];
+
+    final sub = resolvedSub?.trim();
+    if (sub != null &&
+        sub.isNotEmpty &&
+        sub != '-' &&
+        sub != surveyTrim) {
+      final norm = sub.toUpperCase();
+      for (final r in rows) {
+        if (r.effectiveSubDivision?.trim().toUpperCase() == norm) return [r];
+      }
+    }
+
+    // Parent survey (no sub-division on record)
+    for (final r in rows) {
+      if (r.effectiveSubDivision == null) return [r];
+    }
+
+    if (rows.length == 1) return rows;
+    return [rows.first];
+  }
 }
 
 class _SubdivDocBundle {
@@ -3357,9 +3394,10 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
   }
 
   void _syncSubdivisions({bool autoFetch = false}) {
-    final keys = widget.tngisSubdivisions.map((r) => r.key).toSet();
+    final visible = _visibleSubdivisionRows();
+    final keys = visible.map((r) => r.key).toSet();
     _subdivBundles.removeWhere((k, _) => !keys.contains(k));
-    for (final row in widget.tngisSubdivisions) {
+    for (final row in visible) {
       _subdivBundles.putIfAbsent(row.key, () => _SubdivDocBundle());
       if (autoFetch && row.containsPoint) {
         _fetchPattaForSubdivision(row);
@@ -3398,6 +3436,15 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
       if (rowSub != null && rowSub == norm) return row;
     }
     return null;
+  }
+
+  /// Sub-division rows to show in Patta/FMB UI — selected plot only.
+  List<_TngisSubdivisionRow> _visibleSubdivisionRows() {
+    return _TngisSubdivisionRow.filterForTap(
+      widget.tngisSubdivisions,
+      _resolvedMapSub() ?? widget.subDivision,
+      widget.surveyNumber,
+    );
   }
 
   /// Selected parcel survey + optional sub + TNGIS revenue codes for sketch_fmb.
@@ -4879,8 +4926,9 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
       ));
     }
     if (widget.tngisSubdivisions.isNotEmpty) {
+      final visible = _visibleSubdivisionRows();
       return Column(
-        children: widget.tngisSubdivisions.map((row) => Padding(
+        children: visible.map((row) => Padding(
           padding: const EdgeInsets.only(bottom: 10),
           child: _buildGiSubdivisionPreview(row),
         )).toList(),
@@ -4920,7 +4968,8 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
         ),
       ]);
     }
-    final loading = widget.tngisSubdivisions.any((r) => (_subdivBundles[r.key]?.loadingFmb ?? false))
+    final visible = _visibleSubdivisionRows();
+    final loading = visible.any((r) => (_subdivBundles[r.key]?.loadingFmb ?? false))
         || _loadingFmb;
     if (loading) {
       return Column(children: [
@@ -4939,8 +4988,8 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
 
     Uint8List? pdfBytes = _fmbPdfBytes;
     String fileName = 'FMB Sketch.pdf';
-    if (pdfBytes == null && widget.tngisSubdivisions.isNotEmpty) {
-      for (final row in widget.tngisSubdivisions) {
+    if (pdfBytes == null && visible.isNotEmpty) {
+      for (final row in visible) {
         if (!_isSelectedFmbRow(row)) continue;
         final bundle = _subdivBundles[row.key];
         if (bundle?.fmbPdf != null) {
@@ -4949,12 +4998,12 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
           break;
         }
       }
-      pdfBytes ??= widget.tngisSubdivisions
+      pdfBytes ??= visible
           .where(_isSelectedFmbRow)
           .map((r) => _subdivBundles[r.key]?.fmbPdf)
           .firstWhere((b) => b != null, orElse: () => null);
       if (pdfBytes != null && fileName == 'FMB Sketch.pdf') {
-        for (final row in widget.tngisSubdivisions) {
+        for (final row in visible) {
           if (_subdivBundles[row.key]?.fmbPdf == pdfBytes) {
             fileName = 'FMB Survey ${row.surveyNumber} Sub ${row.subLabel}.pdf';
             break;
@@ -5045,7 +5094,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
       ]);
     }
 
-    for (final row in widget.tngisSubdivisions) {
+    for (final row in _visibleSubdivisionRows()) {
       final err = _subdivBundles[row.key]?.fmbError;
       if (err != null) {
         return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
