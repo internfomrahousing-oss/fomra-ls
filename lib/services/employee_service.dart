@@ -1,0 +1,149 @@
+import 'dart:convert';
+
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../models/employee_profile.dart';
+
+class EmployeeService {
+  static const _cacheKey = 'employee_profiles_v1';
+
+  static SupabaseClient get _db => Supabase.instance.client;
+
+  static Future<List<EmployeeProfile>> getAll() async {
+    try {
+      final rows = await _db
+          .from('employee_profiles')
+          .select()
+          .order('joined_on', ascending: false);
+      final list = (rows as List)
+          .map((r) => _fromRow(r as Map<String, dynamic>))
+          .toList();
+      await _saveCache(list);
+      return list;
+    } catch (_) {
+      return _loadCache();
+    }
+  }
+
+  static Future<bool> emailExists(String email) async {
+    final normalized = email.trim().toLowerCase();
+    try {
+      final row = await _db
+          .from('employee_profiles')
+          .select('id')
+          .eq('email', normalized)
+          .maybeSingle();
+      if (row != null) return true;
+    } catch (_) {}
+    final cached = await _loadCache();
+    return cached.any((e) => e.email.trim().toLowerCase() == normalized);
+  }
+
+  static Future<EmployeeProfile> create({
+    required String fullName,
+    required String email,
+    String phone = '',
+    String designation = '',
+    String department = '',
+    String notes = '',
+  }) async {
+    final normalizedEmail = email.trim().toLowerCase();
+    if (await emailExists(normalizedEmail)) {
+      throw Exception('An employee with this email already exists.');
+    }
+
+    try {
+      final id = await _db.rpc('generate_employee_id') as String;
+      final row = await _db
+          .from('employee_profiles')
+          .insert({
+            'id': id,
+            'full_name': fullName.trim(),
+            'email': normalizedEmail,
+            'phone': phone.trim(),
+            'designation': designation.trim(),
+            'department': department.trim(),
+            'notes': notes.trim(),
+            'status': EmployeeStatus.active.name,
+            'joined_on': DateTime.now().toUtc().toIso8601String(),
+          })
+          .select()
+          .single();
+      final profile = _fromRow(row);
+      final all = await getAll();
+      if (!all.any((e) => e.id == profile.id)) {
+        all.insert(0, profile);
+        await _saveCache(all);
+      }
+      return profile;
+    } catch (e) {
+      final id = 'FE${DateTime.now().millisecondsSinceEpoch}';
+      final profile = EmployeeProfile(
+        id: id,
+        fullName: fullName.trim(),
+        email: normalizedEmail,
+        phone: phone.trim(),
+        designation: designation.trim(),
+        department: department.trim(),
+        notes: notes.trim(),
+        joinedOn: DateTime.now(),
+      );
+      final cached = await _loadCache();
+      cached.insert(0, profile);
+      await _saveCache(cached);
+      return profile;
+    }
+  }
+
+  static EmployeeProfile _fromRow(Map<String, dynamic> r) {
+    return EmployeeProfile(
+      id: r['id'] as String,
+      fullName: r['full_name'] as String,
+      email: r['email'] as String,
+      phone: r['phone'] as String? ?? '',
+      designation: r['designation'] as String? ?? '',
+      department: r['department'] as String? ?? '',
+      notes: r['notes'] as String? ?? '',
+      status: EmployeeStatus.values.firstWhere(
+        (s) => s.name == (r['status'] as String? ?? 'active'),
+        orElse: () => EmployeeStatus.active,
+      ),
+      joinedOn: DateTime.parse(r['joined_on'] as String),
+    );
+  }
+
+  static Map<String, dynamic> _toJson(EmployeeProfile e) => {
+        'id': e.id,
+        'full_name': e.fullName,
+        'email': e.email,
+        'phone': e.phone,
+        'designation': e.designation,
+        'department': e.department,
+        'notes': e.notes,
+        'status': e.status.name,
+        'joined_on': e.joinedOn.toUtc().toIso8601String(),
+      };
+
+  static Future<void> _saveCache(List<EmployeeProfile> list) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      _cacheKey,
+      jsonEncode(list.map(_toJson).toList()),
+    );
+  }
+
+  static Future<List<EmployeeProfile>> _loadCache() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_cacheKey);
+    if (raw == null || raw.isEmpty) return [];
+    try {
+      final list = jsonDecode(raw) as List<dynamic>;
+      return list
+          .map((e) => _fromRow((e as Map).cast<String, dynamic>()))
+          .toList();
+    } catch (_) {
+      return [];
+    }
+  }
+}

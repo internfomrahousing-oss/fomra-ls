@@ -2,6 +2,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/user.dart';
 import 'api_client.dart';
+import 'employee_service.dart';
 
 enum LoginPortal { employee, management }
 
@@ -11,6 +12,7 @@ class AuthService {
 
   static const _portalKey = 'login_portal';
   static const _localSessionKey = 'local_auth_session';
+  static const _loginEmailKey = 'login_email';
 
   static const managementEmail = 'management@fomrahousing.in';
   static const employeeEmail = 'employee@fomrahousing.in';
@@ -19,6 +21,7 @@ class AuthService {
   static SupabaseClient get _client => Supabase.instance.client;
 
   LoginPortal? _portal;
+  String? _loginEmail;
 
   LoginPortal? get loginPortal => _portal;
 
@@ -46,11 +49,11 @@ class AuthService {
       );
     }
     if (_portal != null) {
-      final email = emailForPortal(_portal!);
+      final email = _loginEmail ?? emailForPortal(_portal!);
       return AppUser(
         id: 'local-${_portal!.name}',
         email: email,
-        fullName: _portal == LoginPortal.management ? 'Management' : 'Employee',
+        fullName: email.split('@').first,
         role: _portal == LoginPortal.management ? 'management' : 'employee',
         createdAt: DateTime.now(),
       );
@@ -64,6 +67,7 @@ class AuthService {
   Future<void> restoreSession() async {
     final prefs = await SharedPreferences.getInstance();
     final portalName = prefs.getString(_portalKey);
+    _loginEmail = prefs.getString(_loginEmailKey);
     if (portalName == LoginPortal.management.name) {
       _portal = LoginPortal.management;
     } else if (portalName == LoginPortal.employee.name) {
@@ -80,7 +84,9 @@ class AuthService {
     final local = prefs.getBool(_localSessionKey) ?? false;
     if (!local && _client.auth.currentUser == null) {
       _portal = null;
+      _loginEmail = null;
       await prefs.remove(_portalKey);
+      await prefs.remove(_loginEmailKey);
     }
   }
 
@@ -97,12 +103,20 @@ class AuthService {
     LoginPortal portal,
   ) async {
     final normalizedEmail = email.trim().toLowerCase();
-    final expectedEmail = emailForPortal(portal);
 
-    if (normalizedEmail != expectedEmail) {
+    if (portal == LoginPortal.management &&
+        normalizedEmail != managementEmail) {
       throw const ApiException(
         statusCode: 401,
-        message: 'Invalid email for this portal.',
+        message: 'Invalid email or password.',
+      );
+    }
+    if (portal == LoginPortal.employee &&
+        normalizedEmail != employeeEmail &&
+        !await EmployeeService.emailExists(normalizedEmail)) {
+      throw const ApiException(
+        statusCode: 401,
+        message: 'Invalid email or password.',
       );
     }
     if (password != portalPassword) {
@@ -126,23 +140,38 @@ class AuthService {
     }
 
     _portal = portal;
+    _loginEmail = normalizedEmail;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_portalKey, portal.name);
+    await prefs.setString(_loginEmailKey, normalizedEmail);
     await prefs.setBool(_localSessionKey, !supabaseOk);
   }
 
-  /// Legacy single-form login — management only, routes via portal.
   Future<void> login(String email, String password) async {
     final normalized = email.trim().toLowerCase();
-    if (normalized == employeeEmail) {
-      await loginWithPortal(email, password, LoginPortal.employee);
-    } else {
-      await loginWithPortal(
-        normalized == managementEmail ? email : managementEmail,
-        password,
-        LoginPortal.management,
+    if (password != portalPassword) {
+      throw const ApiException(
+        statusCode: 401,
+        message: 'Invalid email or password.',
       );
     }
+
+    LoginPortal? portal;
+    if (normalized == managementEmail) {
+      portal = LoginPortal.management;
+    } else if (normalized == employeeEmail ||
+        await EmployeeService.emailExists(normalized)) {
+      portal = LoginPortal.employee;
+    }
+
+    if (portal == null) {
+      throw const ApiException(
+        statusCode: 401,
+        message: 'Invalid email or password.',
+      );
+    }
+
+    await loginWithPortal(email, password, portal);
   }
 
   Future<bool> register({
@@ -173,9 +202,11 @@ class AuthService {
       await _client.auth.signOut();
     } catch (_) {}
     _portal = null;
+    _loginEmail = null;
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_portalKey);
     await prefs.remove(_localSessionKey);
+    await prefs.remove(_loginEmailKey);
   }
 
   String routeForPortal(LoginPortal portal) => '/home';

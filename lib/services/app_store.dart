@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import '../models/employee_profile.dart';
 import '../models/land_lead.dart';
 
 class AppStore extends ChangeNotifier {
@@ -6,6 +7,7 @@ class AppStore extends ChangeNotifier {
   AppStore._();
 
   final List<LandLead> leads = [];
+  final List<EmployeeProfile> employees = [];
 
   void addLead(LandLead lead) {
     leads.insert(0, lead);
@@ -27,6 +29,17 @@ class AppStore extends ChangeNotifier {
   void setLeads(List<LandLead> newLeads) {
     leads.clear();
     leads.addAll(newLeads);
+    notifyListeners();
+  }
+
+  void setEmployees(List<EmployeeProfile> list) {
+    employees.clear();
+    employees.addAll(list);
+    notifyListeners();
+  }
+
+  void addEmployee(EmployeeProfile profile) {
+    employees.insert(0, profile);
     notifyListeners();
   }
 }
