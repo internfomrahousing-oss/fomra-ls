@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:fl_chart/fl_chart.dart';
@@ -139,6 +138,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
   String _mbSource = 'Property Portals';
   String _compFilter = 'All';   // All | Ongoing | Completed | Plot | Old
   int _oldYearsFilter = 5;       // 2 | 5 | 10
+  int _mbFetchSeq = 0;
 
   // EC & Patta – location data passed to the section widget
   String? _detectedDistrict;
@@ -169,12 +169,6 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
     AppStore.instance.addListener(_onStoreUpdate);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _detectLocation();
-      // Auto-load competitor projects so user doesn't have to hunt for the button
-      Future.delayed(const Duration(milliseconds: 800), () {
-        if (mounted && !_fetchingMb && _mbListings.isEmpty) {
-          _fetchMagicBricksProjects();
-        }
-      });
     });
   }
 
@@ -699,13 +693,22 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
         .trim();
     final cityParam = city.isEmpty ? 'Chennai' : city;
     final loc = _activeLatLng;
-    final parts = <String>['city=${Uri.encodeComponent(cityParam)}'];
-    if (loc != null) {
-      parts.add('lat=${loc.latitude}');
-      parts.add('lng=${loc.longitude}');
-      parts.add('radius=$_selectedRadius');
+    if (loc == null) {
+      setState(() {
+        _mbError = 'Tap the map or enable GPS to load competitor projects in your radius.';
+        _fetchingMb = false;
+      });
+      return;
     }
+
+    final parts = <String>[
+      'city=${Uri.encodeComponent(cityParam)}',
+      'lat=${loc.latitude}',
+      'lng=${loc.longitude}',
+      'radius=$_selectedRadius',
+    ];
     final params = parts.join('&');
+    final fetchSeq = ++_mbFetchSeq;
 
     setState(() {
       _fetchingMb = true;
@@ -727,6 +730,8 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
         }
       }
 
+      if (!mounted || fetchSeq != _mbFetchSeq) return;
+
       if (result == null) {
         throw const ApiException(
           statusCode: 0,
@@ -734,28 +739,21 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
         );
       }
 
-      var raw = (result['listings'] as List<dynamic>?) ?? [];
-      var listings = raw
+      var listings = ((result['listings'] as List<dynamic>?) ?? [])
           .map((e) => Map<String, dynamic>.from(e as Map))
           .toList();
 
-      String? radiusNote = result['radiusNote'] as String?;
-      final radiusApplied = result['radiusApplied'] == true;
-
-      if (loc != null && !radiusApplied) {
-        listings = _filterListingsWithinRadius(listings, loc, _selectedRadius);
-      }
+      final radiusNote = result['radiusNote'] as String?;
 
       if (listings.isEmpty) {
         throw ApiException(
           statusCode: 502,
           message: radiusNote ??
-              (loc != null
-                  ? 'No competitor projects within ${_selectedRadius}km of this location.'
-                  : ((result['error'] as String?) ??
-                      'No competitor projects found for $cityParam.')),
+              'No priced competitor projects within ${_selectedRadius}km. Try 5km or 10km.',
         );
       }
+
+      if (!mounted || fetchSeq != _mbFetchSeq) return;
 
       setState(() {
         _mbListings = listings;
@@ -785,38 +783,6 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
         _fetchingMb = false;
       });
     }
-  }
-
-  double _haversineKm(double lat1, double lon1, double lat2, double lon2) {
-    const p = 0.017453292519943295;
-    final a = 0.5 -
-        math.cos((lat2 - lat1) * p) / 2 +
-        math.cos(lat1 * p) *
-            math.cos(lat2 * p) *
-            (1 - math.cos((lon2 - lon1) * p)) /
-            2;
-    return 6371 * 2 * math.asin(math.sqrt(a.clamp(0.0, 1.0)));
-  }
-
-  List<Map<String, dynamic>> _filterListingsWithinRadius(
-    List<Map<String, dynamic>> listings,
-    LatLng center,
-    int radiusKm,
-  ) {
-    final filtered = <Map<String, dynamic>>[];
-    for (final item in listings) {
-      final plat = (item['lat'] as num?)?.toDouble();
-      final plng = (item['lng'] as num?)?.toDouble() ??
-          (item['lon'] as num?)?.toDouble();
-      if (plat == null || plng == null) continue;
-      final dist = _haversineKm(center.latitude, center.longitude, plat, plng);
-      if (dist <= radiusKm) {
-        filtered.add({...item, 'distanceKm': (dist * 10).round() / 10});
-      }
-    }
-    filtered.sort((a, b) =>
-        ((a['distanceKm'] as num?) ?? 0).compareTo((b['distanceKm'] as num?) ?? 0));
-    return filtered;
   }
 
   List<Map<String, dynamic>> get _filteredMbListings {

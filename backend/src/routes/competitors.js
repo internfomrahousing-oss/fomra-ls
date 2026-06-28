@@ -78,9 +78,18 @@ function ingestBatch(result, defaultSource, allListings, sources, errors) {
   }
 }
 
+function isPriced(l) {
+  return (l.pricePerSqft || 0) > 0 || (l.priceRupees || 0) > 0;
+}
+
 // GET /api/competitors?city=Chennai&lat=&lng=&radius=
 router.get('/', async (req, res) => {
   const query = { ...req.query };
+  const { lat, lng, lon, radius } = query;
+  const centerLng = lng ?? lon;
+  const hasRadiusFilter = !!(lat && centerLng && radius);
+  const city = query.city || 'Chennai';
+
   const fetchQuery = { ...query };
   delete fetchQuery.lat;
   delete fetchQuery.lng;
@@ -91,22 +100,44 @@ router.get('/', async (req, res) => {
   const sources = [];
   const errors = [];
 
-  const [mbResult, naResult] = await Promise.allSettled([
-    callRouter(magicbricksRouter, fetchQuery),
-    callRouter(ninetyNineRouter, fetchQuery),
-  ]);
-  ingestBatch(mbResult, 'MagicBricks', allListings, sources, errors);
-  ingestBatch(naResult, '99acres', allListings, sources, errors);
+  if (hasRadiusFilter) {
+    // Radius mode: MagicBricks priced listings first (LD+JSON on serverless)
+    const mbQuery = {
+      ...fetchQuery,
+      lat,
+      lng: centerLng,
+      radius,
+    };
+    const mbResult = await Promise.resolve(callRouter(magicbricksRouter, mbQuery));
+    ingestBatch({ status: 'fulfilled', value: mbResult }, 'MagicBricks', allListings, sources, errors);
 
-  const hasPriced = allListings.some((l) => (l.pricePerSqft || 0) > 0 || (l.priceRupees || 0) > 0);
-  if (!hasPriced) {
-    const hoResult = await Promise.resolve(callRouter(housingRouter, fetchQuery));
-    ingestBatch({ status: 'fulfilled', value: hoResult }, 'Housing.com', allListings, sources, errors);
+    if (!allListings.some(isPriced)) {
+      const [naResult, hoResult] = await Promise.allSettled([
+        callRouter(ninetyNineRouter, fetchQuery),
+        callRouter(housingRouter, fetchQuery),
+      ]);
+      ingestBatch(naResult, '99acres', allListings, sources, errors);
+      ingestBatch(hoResult, 'Housing.com', allListings, sources, errors);
+    }
+  } else {
+    const [mbResult, naResult] = await Promise.allSettled([
+      callRouter(magicbricksRouter, fetchQuery),
+      callRouter(ninetyNineRouter, fetchQuery),
+    ]);
+    ingestBatch(mbResult, 'MagicBricks', allListings, sources, errors);
+    ingestBatch(naResult, '99acres', allListings, sources, errors);
+
+    if (!allListings.some(isPriced)) {
+      const hoResult = await Promise.resolve(callRouter(housingRouter, fetchQuery));
+      ingestBatch({ status: 'fulfilled', value: hoResult }, 'Housing.com', allListings, sources, errors);
+    }
   }
 
   if (allListings.length === 0) {
     return res.status(502).json({
-      error:   `No competitor projects found for "${query.city || 'Chennai'}".`,
+      error: hasRadiusFilter
+        ? `No priced competitor projects within ${radius}km of this point. Try 5km or 10km.`
+        : `No competitor projects found for "${city}".`,
       details: errors.join(' | '),
     });
   }
@@ -114,25 +145,25 @@ router.get('/', async (req, res) => {
   let listings = dedupeListings(allListings);
   let radiusNote;
 
-  const { lat, lng, lon, radius } = query;
-  const centerLng = lng ?? lon;
-  const city = query.city || 'Chennai';
-
-  if (lat && centerLng && radius) {
+  if (hasRadiusFilter) {
     const onServerless = !!(process.env.VERCEL || process.env.NETLIFY);
-    listings = await geocodeListings(listings, city, onServerless ? 30 : 120);
-    const filtered = applyRadiusFilter(listings, lat, centerLng, radius);
-    listings = filtered.listings;
+    const priced = listings.filter(isPriced);
+    const pool = priced.length ? priced : listings;
+    const geocoded = await geocodeListings(pool, city, onServerless ? 40 : 120);
+    const filtered = applyRadiusFilter(geocoded, lat, centerLng, radius);
+    listings = filtered.listings.filter(isPriced);
     radiusNote = filtered.radiusNote;
-  }
-
-  if (listings.length === 0) {
-    return res.status(502).json({
-      error: radiusNote
-        || `No competitor projects found for "${city}".`,
-      details: errors.join(' | '),
-      radiusNote,
-    });
+    if (listings.length === 0) {
+      return res.status(502).json({
+        error: radiusNote
+          || `No priced projects within ${radius}km. Try a larger radius.`,
+        details: errors.join(' | '),
+        radiusNote,
+      });
+    }
+  } else if (listings.length > 50) {
+    listings = listings.slice(0, 50);
+    radiusNote = 'Showing top 50 city projects. Tap the map for radius-filtered results.';
   }
 
   res.json({
@@ -143,7 +174,7 @@ router.get('/', async (req, res) => {
     radiusKm: radius ? parseFloat(radius) : null,
     center:  (lat && centerLng) ? { lat: parseFloat(lat), lng: parseFloat(centerLng) } : null,
     radiusNote,
-    radiusApplied: !!(lat && centerLng && radius),
+    radiusApplied: hasRadiusFilter,
     listings,
     partial: errors.length > 0 ? errors : undefined,
   });

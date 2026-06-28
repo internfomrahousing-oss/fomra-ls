@@ -400,6 +400,19 @@ router.get('/', async (req, res) => {
   const onVercel  = !!process.env.VERCEL;
   const skipMb    = onNetlify || onVercel;
 
+  // ── Serverless: priced LD+JSON first (works when API endpoints are blocked) ─
+  if (skipMb) {
+    try {
+      const ldListings = await fetchLdJsonListings(city, mbPropType, hasRadius ? 24 : 16);
+      if (ldListings.length > 0) {
+        listings = ldListings;
+        source = 'MagicBricks';
+      } else {
+        errors.push('LdJson(serverless): no priced listings');
+      }
+    } catch (e) { errors.push(`LdJson(serverless): ${e.message}`); }
+  }
+
   const searchApiBase =
     `https://www.magicbricks.com/mbsrp/propertySearch.html` +
     `?multiLang=en&cityName=${encodeURIComponent(city)}` +
@@ -520,22 +533,22 @@ router.get('/', async (req, res) => {
     } catch (e) { errors.push(`LdJson(7): ${e.message}`); }
   }
 
-  // ── Vercel/serverless: LD+JSON often works when API endpoints are blocked ─
+  // ── Vercel/serverless retry if first LD+JSON pass returned nothing ─────────
   if (skipMb && listings.length === 0) {
     try {
-      const ldListings = await fetchLdJsonListings(city, mbPropType, 16);
+      const ldListings = await fetchLdJsonListings(city, mbPropType, 20);
       if (ldListings.length > 0) {
         listings = ldListings;
         source = 'MagicBricks';
-      } else {
-        errors.push('LdJson(serverless): no priced listings');
       }
-    } catch (e) { errors.push(`LdJson(serverless): ${e.message}`); }
+    } catch (e) { errors.push(`LdJson(retry): ${e.message}`); }
   }
 
-  // ── Fallback: TNRERA when no priced listings ─────────────────────────────
-  const needsTnrera = listings.length === 0
-    || !listings.some((l) => (l.pricePerSqft || 0) > 0 || (l.priceRupees || 0) > 0);
+  // ── Fallback: TNRERA only when no radius filter (city-wide RERA registry) ──
+  const needsTnrera = !hasRadius && (
+    listings.length === 0
+    || !listings.some((l) => (l.pricePerSqft || 0) > 0 || (l.priceRupees || 0) > 0)
+  );
 
   if (needsTnrera) {
     try {
@@ -637,7 +650,7 @@ router.get('/', async (req, res) => {
   }
   listings = [...seen.values()];
 
-  const geoLimit = skipMb ? 45 : 150;
+  const geoLimit = hasRadius ? (skipMb ? 40 : 120) : (skipMb ? 25 : 150);
   listings = await geocodeListings(listings, city, geoLimit);
 
   let radiusNote;
@@ -645,9 +658,31 @@ router.get('/', async (req, res) => {
     const filtered = applyRadiusFilter(listings, userLat, userLng, radius);
     listings = filtered.listings;
     radiusNote = filtered.radiusNote;
+    // Radius mode: only priced competitor listings (skip unpriced RERA noise)
+    listings = listings.filter((l) => (l.pricePerSqft || 0) > 0 || (l.priceRupees || 0) > 0);
+    if (listings.length === 0 && filtered.listings.length > 0) {
+      radiusNote = 'Projects found nearby but without online prices. Try Fetch again or widen radius.';
+    }
   }
 
-  res.json({ source, city, count: listings.length, listings, radiusNote });
+  if (!hasRadius && listings.length > 50) {
+    listings = listings
+      .sort((a, b) => {
+        const ap = (a.pricePerSqft || 0) + (a.priceRupees || 0) / 1e7;
+        const bp = (b.pricePerSqft || 0) + (b.priceRupees || 0) / 1e7;
+        return bp - ap;
+      })
+      .slice(0, 50);
+  }
+
+  res.json({
+    source,
+    city,
+    count: listings.length,
+    listings,
+    radiusNote,
+    radiusApplied: !!hasRadius,
+  });
 });
 
 module.exports = router;
