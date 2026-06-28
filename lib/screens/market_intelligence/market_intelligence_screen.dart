@@ -10,7 +10,9 @@ import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../models/land_lead.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/lead_location_parser.dart';
 import '../../widgets/app_drawer.dart';
 import '../../widgets/fomra_app_bar.dart';
 import '../../widgets/fomra_bottom_nav.dart';
@@ -111,7 +113,14 @@ String _fmtIndianRupee(double value) {
 // â”€â”€ Main Screen â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class MarketIntelligenceScreen extends StatefulWidget {
-  const MarketIntelligenceScreen({super.key});
+  final LandLead? lead;
+  final bool embeddedInLead;
+
+  const MarketIntelligenceScreen({
+    super.key,
+    this.lead,
+    this.embeddedInLead = false,
+  });
 
   @override
   State<MarketIntelligenceScreen> createState() =>
@@ -184,6 +193,9 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
   bool _tngisFmbAvailable = false;
   String? _tngisFmbNote;
 
+  // Lead detail mode — location from saved lead GPS
+  LatLng? _leadLocation;
+
   // Default center shown before GPS resolves
   static const _kDefaultCenter = LatLng(13.0827, 80.2707);
 
@@ -191,7 +203,11 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _detectLocation();
+      if (widget.embeddedInLead && widget.lead != null) {
+        _initializeFromLead(widget.lead!);
+      } else {
+        _detectLocation();
+      }
     });
   }
 
@@ -206,10 +222,62 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
   // â”€â”€ Active location (GPS or searched) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   LatLng? get _activeLatLng =>
+      _leadLocation ??
       _searchedLocation ??
       (_position != null
           ? LatLng(_position!.latitude, _position!.longitude)
           : null);
+
+  Future<void> _initializeFromLead(LandLead lead) async {
+    final loc = parseLeadGps(lead.gpsCoordinates);
+    final roadFt = parseRoadWidthFt(lead.roadWidth);
+    final sqft = parseLandExtentSqft(lead.landExtent);
+
+    if (roadFt != null) {
+      _roadWidthCtrl.text = roadFt.toStringAsFixed(0);
+    }
+    if (sqft != null) {
+      _landSizeCtrl.text = sqft.round().toString();
+    }
+
+    _locationCategory = switch (lead.landType) {
+      LandType.commercial || LandType.industrial => 'Premium',
+      LandType.residential => 'Urban',
+      LandType.agricultural => 'Rural',
+      LandType.nonAgricultural => 'Semi-Urban',
+      LandType.other => 'Urban',
+    };
+
+    setState(() {
+      _leadLocation = loc;
+      _detectedDistrict =
+          lead.district.isNotEmpty ? lead.district : _detectedDistrict;
+      _detectedTaluk = lead.taluk.isNotEmpty ? lead.taluk : _detectedTaluk;
+      _detectedVillage =
+          lead.village.isNotEmpty ? lead.village : _detectedVillage;
+      if (lead.surveyNumber.isNotEmpty) {
+        _tngisSurvey = lead.surveyNumber;
+      }
+    });
+
+    if (loc != null) {
+      _fetchLocationDetails(loc);
+      _fetchTngisParcelDetails(loc);
+      await Future.wait([
+        _collectPois(),
+        _fetchMagicBricksProjects(),
+      ]);
+    }
+  }
+
+  void _tryAutoValuation() {
+    if (!widget.embeddedInLead) return;
+    if (!_poisCollected || !_areaPriceStats().hasData) return;
+    final result = _computeValuation();
+    if (result != null && mounted) {
+      setState(() => _valuationResult = result);
+    }
+  }
 
   // â”€â”€ GPS Location â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -561,6 +629,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
           'Infrastructure fetch failed: ${e.toString().replaceAll('Exception: ', '')}');
     } finally {
       setState(() => _collectingPois = false);
+      _tryAutoValuation();
     }
   }
 
@@ -769,6 +838,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
             .join(' · ');
         _fetchingMb = false;
       });
+      _tryAutoValuation();
     } on ApiException catch (e) {
       setState(() {
         _mbError = e.message;
@@ -1199,8 +1269,222 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
 
   // â”€â”€ Build â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
+  Widget _buildLeadEmbeddedBody() {
+    final loc = _activeLatLng;
+    final loadingInfra =
+        loc != null && (_collectingPois || (!_poisCollected && _poiError == null));
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (loc == null)
+          _SectionCard(
+            title: 'Location',
+            icon: Icons.location_off_outlined,
+            child: const Text(
+              'This lead has no GPS coordinates. Add GPS when creating the lead to load infrastructure score and AI valuation.',
+              style: TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.4),
+            ),
+          ),
+        if (loadingInfra) ...[
+          const SizedBox(height: 20),
+          _SectionCard(
+            title: 'Infrastructure Score',
+            icon: Icons.analytics_outlined,
+            child: const Padding(
+              padding: EdgeInsets.symmetric(vertical: 20),
+              child: Center(
+                child: Column(
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(height: 12),
+                    Text(
+                      'Loading infrastructure score…',
+                      style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+        if (_poiError != null) ...[
+          const SizedBox(height: 20),
+          _SectionCard(
+            title: 'Infrastructure Score',
+            icon: Icons.analytics_outlined,
+            child: _ErrorBanner(_poiError!),
+          ),
+        ],
+        if (_poisCollected) ...[
+          const SizedBox(height: 20),
+          _buildInfraScoreSection(),
+        ],
+        const SizedBox(height: 20),
+        _buildGovtDocsSection(),
+        const SizedBox(height: 20),
+        _buildLeadValuationSection(),
+      ],
+    );
+  }
+
+  Widget _buildLeadValuationSection() {
+    final loc = _activeLatLng;
+    final stats = _areaPriceStats();
+    final loading = loc != null && (_fetchingMb || _collectingPois || !_poisCollected);
+
+    if (loading) {
+      return _SectionCard(
+        title: 'AI Land Valuation Engine',
+        icon: Icons.auto_awesome_outlined,
+        child: const Padding(
+          padding: EdgeInsets.symmetric(vertical: 20),
+          child: Center(
+            child: Column(
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 12),
+                Text(
+                  'Computing land valuation…',
+                  style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (loc == null || !stats.hasData) {
+      return _SectionCard(
+        title: 'AI Land Valuation Engine',
+        icon: Icons.auto_awesome_outlined,
+        child: Text(
+          loc == null
+              ? 'GPS coordinates are required to compute valuation.'
+              : 'No priced competitor projects near this location.',
+          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.4),
+        ),
+      );
+    }
+
+    final v = _valuationResult ?? _computeValuation();
+    if (v == null) {
+      return _SectionCard(
+        title: 'AI Land Valuation Engine',
+        icon: Icons.auto_awesome_outlined,
+        child: const Text(
+          'Unable to compute valuation for this lead.',
+          style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+        ),
+      );
+    }
+
+    final recColor = switch (v.recommendation) {
+      'Strong Buy' => AppColors.success,
+      'Buy' => const Color(0xFF00838F),
+      'Hold' => AppColors.warning,
+      _ => AppColors.error,
+    };
+
+    return _SectionCard(
+      title: 'AI Land Valuation Engine',
+      icon: Icons.auto_awesome_outlined,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Based on ₹${v.areaAvgPerSqft.round()}/sqft area average · ${v.landSizeSqft.round()} sqft',
+            style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: _LeadValuationAmountTile(
+                  label: 'Purchase Value',
+                  amount: _fmtIndianRupee(v.recommendedPurchasePrice),
+                  color: AppColors.info,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _LeadValuationAmountTile(
+                  label: 'Selling Value',
+                  amount: _fmtIndianRupee(v.recommendedSellingPrice),
+                  color: AppColors.success,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _BenchmarkTile(
+                  'Buy / sqft',
+                  '₹${v.buyPerSqft.round()}',
+                  AppColors.info,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _BenchmarkTile(
+                  'Sell / sqft',
+                  '₹${v.sellPerSqft.round()}',
+                  AppColors.success,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _BenchmarkTile(
+                  'Margin',
+                  '${v.expectedMargin.toStringAsFixed(1)}%',
+                  AppColors.accent,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: recColor.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: recColor.withValues(alpha: 0.3)),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.recommend_outlined, size: 18, color: recColor),
+                const SizedBox(width: 8),
+                Text(
+                  v.recommendation,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    color: recColor,
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  'Score ${v.investmentScore}/100',
+                  style: TextStyle(fontSize: 11, color: recColor),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (widget.embeddedInLead) {
+      return _buildLeadEmbeddedBody();
+    }
+
     final body = SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -2571,6 +2855,50 @@ class _ScoreRow extends StatelessWidget {
               fontSize: isWide ? 15 : 12, color: color, fontWeight: FontWeight.w700)),
     ]);
   }
+}
+
+class _LeadValuationAmountTile extends StatelessWidget {
+  final String label;
+  final String amount;
+  final Color color;
+
+  const _LeadValuationAmountTile({
+    required this.label,
+    required this.amount,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withValues(alpha: 0.25)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: color.withValues(alpha: 0.85),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              amount,
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: color,
+              ),
+            ),
+          ],
+        ),
+      );
 }
 
 class _BenchmarkTile extends StatelessWidget {

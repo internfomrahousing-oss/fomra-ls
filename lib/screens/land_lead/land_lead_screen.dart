@@ -7,6 +7,7 @@ import '../../widgets/app_drawer.dart';
 import '../../widgets/fomra_app_bar.dart';
 import '../../widgets/fomra_bottom_nav.dart';
 import 'add_lead_screen.dart';
+import 'lead_detail_screen.dart';
 
 class LandLeadScreen extends StatefulWidget {
   final bool isTab;
@@ -148,6 +149,13 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
                               ),
                               child: _LeadCard(
                                 lead: lead,
+                                onTap: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                        LeadDetailScreen(lead: lead),
+                                  ),
+                                ),
                                 onStatusChange: (s) => _updateStatus(lead, s),
                               ),
                             );
@@ -438,8 +446,13 @@ class _SearchBar extends StatelessWidget {
 class _LeadCard extends StatelessWidget {
   final LandLead lead;
   final ValueChanged<LeadStatus> onStatusChange;
+  final VoidCallback? onTap;
 
-  const _LeadCard({required this.lead, required this.onStatusChange});
+  const _LeadCard({
+    required this.lead,
+    required this.onStatusChange,
+    this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -448,8 +461,11 @@ class _LeadCard extends StatelessWidget {
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
-      child: IntrinsicHeight(
-        child: Row(children: [
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: IntrinsicHeight(
+          child: Row(children: [
           Container(
             width: 4,
             decoration: BoxDecoration(
@@ -566,7 +582,8 @@ class _LeadCard extends StatelessWidget {
               ),
             ),
           ),
-        ]),
+          ]),
+        ),
       ),
     );
   }
