@@ -9,7 +9,6 @@ import 'screens/land_lead/land_workspace_screen.dart';
 import 'screens/market_intelligence/market_intelligence_screen.dart';
 import 'screens/dashboard/dashboard_screen.dart';
 import 'screens/task_management/task_management_screen.dart';
-import 'services/auth_service.dart';
 
 void main() {
   runZonedGuarded(() async {
@@ -80,13 +79,6 @@ class _StartupScreenState extends State<_StartupScreen> {
         const Duration(seconds: 12),
         onTimeout: () => throw 'Connection timed out.\nCheck your internet and try again.',
       );
-      final hasSession = await AuthService.instance.checkSession();
-      if (!mounted) return;
-      if (hasSession) {
-        final route = AuthService.instance.postLoginRoute ?? '/home';
-        Navigator.of(context).pushReplacementNamed(route);
-        return;
-      }
     } catch (e) {
       error = e.toString();
     }
