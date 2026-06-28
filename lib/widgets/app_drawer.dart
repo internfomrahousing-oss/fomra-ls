@@ -11,7 +11,8 @@ class _MenuItem {
 }
 
 const _menuItems = [
-  _MenuItem('LandWorkspace', Icons.location_on_outlined, '/land-lead'),
+  _MenuItem('Land Workspace', Icons.space_dashboard_outlined, '/land-lead'),
+  _MenuItem('Market Intelligence', Icons.insights_outlined, '/market-intelligence'),
   _MenuItem('Dashboard & Reports', Icons.dashboard_outlined, '/dashboard'),
 ];
 
@@ -32,7 +33,9 @@ class AppDrawer extends StatelessWidget {
               itemCount: _menuItems.length,
               itemBuilder: (context, index) {
                 final item = _menuItems[index];
-                final isActive = currentRoute == item.route;
+                final isActive = currentRoute == item.route ||
+                    (item.route == '/land-lead' &&
+                        currentRoute == '/task-management');
                 return _DrawerTile(item: item, isActive: isActive);
               },
             ),

@@ -4,8 +4,6 @@ import '../../widgets/app_drawer.dart';
 import '../../widgets/fomra_app_bar.dart';
 import '../../widgets/fomra_bottom_nav.dart';
 import 'land_lead_screen.dart';
-import '../market_intelligence/market_intelligence_screen.dart';
-import '../legal_verification/legal_verification_screen.dart';
 import '../task_management/task_management_screen.dart';
 
 class LandWorkspaceScreen extends StatefulWidget {
@@ -21,17 +19,15 @@ class _LandWorkspaceScreenState extends State<LandWorkspaceScreen>
   late final TabController _tab;
 
   static const _tabs = [
-    _TabDef('Land Lead',   Icons.add_location_alt_outlined),
-    _TabDef('Market',      Icons.insights_outlined),
-    _TabDef('Legal',       Icons.gavel_outlined),
-    _TabDef('Tasks',       Icons.task_alt_outlined),
+    _TabDef('Land Lead', Icons.add_location_alt_outlined),
+    _TabDef('Tasks', Icons.task_alt_outlined),
   ];
 
   @override
   void initState() {
     super.initState();
-    _tab = TabController(
-        length: _tabs.length, vsync: this, initialIndex: widget.initialTab);
+    final tabIndex = widget.initialTab.clamp(0, _tabs.length - 1);
+    _tab = TabController(length: _tabs.length, vsync: this, initialIndex: tabIndex);
     _tab.addListener(() => setState(() {}));
   }
 
@@ -68,8 +64,6 @@ class _LandWorkspaceScreenState extends State<LandWorkspaceScreen>
         physics: const NeverScrollableScrollPhysics(),
         children: const [
           LandLeadScreen(isTab: true),
-          MarketIntelligenceScreen(isTab: true),
-          LegalVerificationScreen(isTab: true),
           TaskManagementScreen(isTab: true),
         ],
       ),

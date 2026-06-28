@@ -17,8 +17,6 @@ import '../../widgets/fomra_bottom_nav.dart';
 import '../../widgets/fmb_sketch_viewer.dart';
 import '../../widgets/patta_document_preview.dart';
 import '../../widgets/patta_html_preview.dart';
-import '../../services/app_store.dart';
-import '../../models/land_lead.dart';
 
 // â”€â”€ POI category definitions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -113,8 +111,7 @@ String _fmtIndianRupee(double value) {
 // â”€â”€ Main Screen â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class MarketIntelligenceScreen extends StatefulWidget {
-  final bool isTab;
-  const MarketIntelligenceScreen({super.key, this.isTab = false});
+  const MarketIntelligenceScreen({super.key});
 
   @override
   State<MarketIntelligenceScreen> createState() =>
@@ -140,10 +137,6 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
   final _searchCtrl = TextEditingController();
   List<Map<String, dynamic>> _searchResults = [];
   bool _showSearchResults = false;
-
-  // Lead-based Mode
-  bool _isLeadBasedMode = false;
-  String? _selectedLeadId;
 
   // POI
   int _selectedRadius = 2;
@@ -197,7 +190,6 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
   @override
   void initState() {
     super.initState();
-    AppStore.instance.addListener(_onStoreUpdate);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _detectLocation();
     });
@@ -205,73 +197,10 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
 
   @override
   void dispose() {
-    AppStore.instance.removeListener(_onStoreUpdate);
     _roadWidthCtrl.dispose();
     _landSizeCtrl.dispose();
     _searchCtrl.dispose();
     super.dispose();
-  }
-
-  void _onStoreUpdate() => setState(() {});
-
-  LatLng? _parseGpsCoordinates(String coords) {
-    if (coords.isEmpty) return null;
-    try {
-      String cleaned = coords
-          .replaceAll('Â°', '')
-          .replaceAll('N', '')
-          .replaceAll('S', '-')
-          .replaceAll('E', '')
-          .replaceAll('W', '-');
-      final parts = cleaned.split(',');
-      if (parts.length == 2) {
-        final lat = double.tryParse(parts[0].trim());
-        final lon = double.tryParse(parts[1].trim());
-        if (lat != null && lon != null) {
-          return LatLng(lat, lon);
-        }
-      }
-      final partsSpace = cleaned.trim().split(RegExp(r'\s+'));
-      if (partsSpace.length == 2) {
-        final lat = double.tryParse(partsSpace[0].trim());
-        final lon = double.tryParse(partsSpace[1].trim());
-        if (lat != null && lon != null) {
-          return LatLng(lat, lon);
-        }
-      }
-    } catch (_) {}
-    return null;
-  }
-
-  Widget _buildInfoRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 100,
-            child: Text(
-              label,
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: AppColors.textSecondary,
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(
-                fontSize: 12,
-                color: AppColors.textPrimary,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 
   // â”€â”€ Active location (GPS or searched) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -675,10 +604,11 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
     );
   }
 
-  _ValuationResult _computeValuation() {
+  _ValuationResult? _computeValuation() {
     final areaStats = _areaPriceStats();
-    final benchmarkPrice =
-        areaStats.hasData ? areaStats.avgPerSqft : 5000.0;
+    if (!areaStats.hasData) return null;
+
+    final benchmarkPrice = areaStats.avgPerSqft;
     final infraScore = _infraScores['Overall Location'] ?? 50;
     final roadWidth = double.tryParse(_roadWidthCtrl.text) ?? 20;
     final landSize = double.tryParse(_landSizeCtrl.text) ?? 1000;
@@ -1244,26 +1174,13 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
   // â”€â”€ Section: EC & Patta â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   Widget _buildGovtDocsSection() {
-    // In lead-based mode the selected lead carries a survey number, which lets
-    // EC & Patta auto-fetch end-to-end. Search/GPS mode has no survey number.
-    String? surveyNo;
-    String? subDiv;
-    if (_isLeadBasedMode && _selectedLeadId != null) {
-      final leads = AppStore.instance.leads;
-      final idx = leads.indexWhere((l) => l.leadId == _selectedLeadId);
-      if (idx != -1) {
-        final s = leads[idx].surveyNumber.trim();
-        if (s.isNotEmpty) surveyNo = s;
-      }
-    }
     final loc = _activeLatLng;
     return _GovtDocsSection(
       district: _detectedDistrict,
       taluk: _detectedTaluk,
       village: _detectedVillage,
-      // Map tap / TNGIS parcel wins over lead survey when both exist.
-      surveyNumber: _tngisSurvey ?? surveyNo,
-      subDivision: _tngisSubDiv ?? subDiv,
+      surveyNumber: _tngisSurvey,
+      subDivision: _tngisSubDiv,
       districtCode: _tngisDc,
       talukCode: _tngisTc,
       villageCode: _tngisVc,
@@ -1289,64 +1206,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              decoration: BoxDecoration(
-                color: const Color(0xFFF3F4F6),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              padding: const EdgeInsets.all(4),
-              child: Row(children: [
-                Expanded(
-                  child: GestureDetector(
-                    onTap: () => setState(() => _isLeadBasedMode = false),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      decoration: BoxDecoration(
-                        color: !_isLeadBasedMode ? Colors.white : Colors.transparent,
-                        borderRadius: BorderRadius.circular(8),
-                        boxShadow: !_isLeadBasedMode
-                            ? [BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.05),
-                                blurRadius: 4, offset: const Offset(0, 2))]
-                            : null,
-                      ),
-                      child: const Text('Search Mode',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                              fontSize: 13, fontWeight: FontWeight.bold,
-                              color: AppColors.primary)),
-                    ),
-                  ),
-                ),
-                Expanded(
-                  child: GestureDetector(
-                    onTap: () => setState(() => _isLeadBasedMode = true),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      decoration: BoxDecoration(
-                        color: _isLeadBasedMode ? Colors.white : Colors.transparent,
-                        borderRadius: BorderRadius.circular(8),
-                        boxShadow: _isLeadBasedMode
-                            ? [BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.05),
-                                blurRadius: 4, offset: const Offset(0, 2))]
-                            : null,
-                      ),
-                      child: const Text('Lead Based',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                              fontSize: 13, fontWeight: FontWeight.bold,
-                              color: AppColors.primary)),
-                    ),
-                  ),
-                ),
-              ]),
-            ),
-            const SizedBox(height: 16),
-            if (_isLeadBasedMode)
-              _buildLeadBasedSection()
-            else
-              _buildSearchSection(),
+            _buildSearchSection(),
             const SizedBox(height: 20),
             _buildMapSection(),
             const SizedBox(height: 20),
@@ -1365,9 +1225,6 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
           ],
         ),
       );
-    if (widget.isTab) {
-      return Scaffold(body: _wrapWithFullScreenMap(body));
-    }
     return Scaffold(
       appBar: const FomraAppBar(moduleName: 'Market Intelligence'),
       drawer: const AppDrawer(currentRoute: '/market-intelligence'),
@@ -1421,162 +1278,6 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
     } catch (_) {}
   }
 
-  // â”€â”€ Section: Lead-Based Location Setup â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  Widget _buildLeadBasedSection() {
-    final leads = AppStore.instance.leads;
-    return _SectionCard(
-      title: 'Lead-Based Location Setup',
-      icon: Icons.assignment_outlined,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (leads.isEmpty)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFEF2F2),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: const Color(0xFFFCA5A5)),
-              ),
-              child: Column(
-                children: [
-                  const Icon(Icons.warning_amber_rounded,
-                      color: Color(0xFFDC2626), size: 28),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'No Land Leads available.',
-                    style: TextStyle(
-                        fontWeight: FontWeight.bold, color: Color(0xFF991B1B)),
-                  ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'Add a lead in Land Lead Management first.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 12, color: Color(0xFF7F1D1D)),
-                  ),
-                  const SizedBox(height: 12),
-                  ElevatedButton.icon(
-                    onPressed: () =>
-                        Navigator.pushNamed(context, '/land-lead'),
-                    icon: const Icon(Icons.add_location_alt_outlined, size: 16),
-                    label: const Text('Go to Land Lead Management'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFDC2626),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            )
-          else ...[
-            DropdownButtonFormField<String>(
-              initialValue: _selectedLeadId,
-              decoration: _inputDec('Select a Land Lead'),
-              hint: const Text('Select a Land Lead'),
-              isExpanded: true,
-              items: leads.map((lead) {
-                return DropdownMenuItem<String>(
-                  value: lead.leadId,
-                  child: Text(
-                    '${lead.leadId} - ${lead.ownerName} (${lead.location})',
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 13),
-                  ),
-                );
-              }).toList(),
-              onChanged: (val) {
-                if (val == null) return;
-                final lead = leads.firstWhere((l) => l.leadId == val);
-                final loc = _parseGpsCoordinates(lead.gpsCoordinates);
-                setState(() {
-                  _selectedLeadId = val;
-                  _searchCtrl.text = ''; // Clear search bar text
-                  _searchResults = [];
-                  _poisCollected = false;
-                  _poiCounts = {};
-                  _poiPlaces = {};
-                  _valuationResult = null;
-                  if (loc != null) {
-                    _searchedLocation = loc;
-                    _detectedDistrict = lead.district.isNotEmpty ? lead.district : null;
-                    _detectedTaluk = lead.taluk.isNotEmpty ? lead.taluk : null;
-                    _detectedVillage = lead.village.isNotEmpty ? lead.village : null;
-                    if (_mapReady) {
-                      _mapController.move(loc, _zoomForRadius(_selectedRadius));
-                    }
-                    _fetchLocationDetails(loc);
-                  }
-                });
-              },
-            ),
-            if (_selectedLeadId != null) ...[
-              Builder(
-                builder: (context) {
-                  final lead = leads.firstWhere((l) => l.leadId == _selectedLeadId);
-                  return Container(
-                    margin: const EdgeInsets.only(top: 12),
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF9FAFB),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: const Color(0xFFE5E7EB)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              lead.leadId,
-                              style: const TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.primary,
-                              ),
-                            ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: AppColors.primary.withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Text(
-                                lead.status.label,
-                                style: const TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                  color: AppColors.primary,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        _buildInfoRow('Owner:', lead.ownerName),
-                        _buildInfoRow('Location:', lead.location),
-                        if (lead.gpsCoordinates.isNotEmpty)
-                          _buildInfoRow('GPS Coordinates:', lead.gpsCoordinates),
-                        _buildInfoRow('Extent:', lead.landExtent),
-                        if (lead.surveyNumber.isNotEmpty)
-                          _buildInfoRow('Survey No:', lead.surveyNumber),
-                      ],
-                    ),
-                  );
-                }
-              ),
-            ],
-          ],
-        ],
-      ),
-    );
-  }
-
   // â”€â”€ Section: Search Location Setup â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   Widget _buildSearchSection() {
     return _SectionCard(
@@ -1598,12 +1299,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                   prefixIconConstraints: const BoxConstraints(),
                 ),
                 textInputAction: TextInputAction.search,
-                onSubmitted: (val) {
-                  setState(() {
-                    _selectedLeadId = null; // Clear lead selection
-                  });
-                  _searchLocation(val);
-                },
+                onSubmitted: _searchLocation,
               ),
             ),
             const SizedBox(width: 8),
@@ -1612,12 +1308,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
               child: ElevatedButton(
                 onPressed: _searchingLocation
                     ? null
-                    : () {
-                        setState(() {
-                          _selectedLeadId = null; // Clear lead selection
-                        });
-                        _searchLocation(_searchCtrl.text);
-                      },
+                    : () => _searchLocation(_searchCtrl.text),
                 style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(horizontal: 14)),
                 child: _searchingLocation
@@ -1658,12 +1349,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                   final r = _searchResults[i];
                   final name = r['display_name'] as String? ?? '';
                   return InkWell(
-                    onTap: () {
-                      setState(() {
-                        _selectedLeadId = null; // Clear lead selection
-                      });
-                      _selectSearchResult(r);
-                    },
+                    onTap: () => _selectSearchResult(r),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 12, vertical: 10),
@@ -2476,21 +2162,27 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
           const SizedBox(height: 12),
           Builder(builder: (context) {
             final stats = _areaPriceStats();
+            String message;
+            if (_activeLatLng == null) {
+              message = 'Tap the map to pin a location';
+            } else if (_fetchingMb) {
+              message = 'Loading ${_selectedRadius}km competitor prices…';
+            } else if (!stats.hasData) {
+              message =
+                  'No priced projects in ${_selectedRadius}km — try 10km or Fetch Projects';
+            } else {
+              message =
+                  '₹${stats.avgPerSqft.round()}/sqft avg · ${stats.pricedCount} projects · ${_selectedRadius}km from pin';
+            }
+            final warn = _activeLatLng != null && !_fetchingMb && !stats.hasData;
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _AutoChip('Area Avg Price', () {
-                  if (_activeLatLng == null) {
-                    return 'Tap the map to pin a location';
-                  }
-                  if (_fetchingMb) {
-                    return 'Loading ${_selectedRadius}km competitor prices…';
-                  }
-                  if (!stats.hasData) {
-                    return 'No priced projects in ${_selectedRadius}km — using ₹5000/sqft default';
-                  }
-                  return '₹${stats.avgPerSqft.round()}/sqft avg · ${stats.pricedCount} projects · ${_selectedRadius}km from pin';
-                }()),
+                _AutoChip(
+                  'Area Avg Price',
+                  message,
+                  tone: warn ? Colors.orange.shade800 : null,
+                ),
                 if (stats.hasData) ...[
                   const SizedBox(height: 6),
                   Text(
@@ -2549,14 +2241,26 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
-              onPressed: () =>
-                  setState(() => _valuationResult = _computeValuation()),
+              onPressed: _areaPriceStats().hasData && !_fetchingMb
+                  ? () => setState(
+                        () => _valuationResult = _computeValuation(),
+                      )
+                  : null,
               icon: const Icon(Icons.auto_awesome, size: 18),
               label: const Text('Generate Valuation'),
               style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 13)),
             ),
           ),
+          if (!_areaPriceStats().hasData &&
+              _activeLatLng != null &&
+              !_fetchingMb) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Valuation needs priced competitor projects near the pinned point.',
+              style: TextStyle(fontSize: 11, color: Colors.orange.shade800),
+            ),
+          ],
           if (_valuationResult != null) ...[
             const SizedBox(height: 20),
             _buildValuationOutput(_valuationResult!),
@@ -2582,9 +2286,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
               color: AppColors.textPrimary)),
       const SizedBox(height: 8),
       Text(
-        v.pricedListingCount > 0
-            ? 'Based on ₹${v.areaAvgPerSqft.round()}/sqft area average · ${v.landSizeSqft.round()} sqft land'
-            : 'Based on ₹${v.areaAvgPerSqft.round()}/sqft default rate · ${v.landSizeSqft.round()} sqft land',
+        'Based on ₹${v.areaAvgPerSqft.round()}/sqft area average · ${v.landSizeSqft.round()} sqft land',
         style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
       ),
       const SizedBox(height: 12),
@@ -2949,28 +2651,36 @@ class _OutputCard extends StatelessWidget {
 class _AutoChip extends StatelessWidget {
   final String label;
   final String value;
-  const _AutoChip(this.label, this.value);
+  final Color? tone;
+  const _AutoChip(this.label, this.value, {this.tone});
 
   @override
-  Widget build(BuildContext context) => Container(
+  Widget build(BuildContext context) {
+    final color = tone ?? AppColors.success;
+    return Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
-          color: AppColors.success.withValues(alpha: 0.08),
+          color: color.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(20),
-          border:
-              Border.all(color: AppColors.success.withValues(alpha: 0.25)),
+          border: Border.all(color: color.withValues(alpha: 0.25)),
         ),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
-          const Icon(Icons.check_circle_outline,
-              size: 12, color: AppColors.success),
+          Icon(
+            tone != null ? Icons.info_outline : Icons.check_circle_outline,
+            size: 12,
+            color: color,
+          ),
           const SizedBox(width: 5),
-          Text('$label: $value',
-              style: const TextStyle(
-                  fontSize: 11,
-                  color: AppColors.success,
-                  fontWeight: FontWeight.w600)),
+          Flexible(
+            child: Text('$label: $value',
+                style: TextStyle(
+                    fontSize: 11,
+                    color: color,
+                    fontWeight: FontWeight.w600)),
+          ),
         ]),
       );
+  }
 }
 
 class _FieldLabel extends StatelessWidget {

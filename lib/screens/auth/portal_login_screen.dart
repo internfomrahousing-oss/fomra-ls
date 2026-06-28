@@ -29,6 +29,12 @@ class _PortalLoginScreenState extends State<PortalLoginScreen> {
     super.dispose();
   }
 
+  @override
+  void initState() {
+    super.initState();
+    _emailCtrl.text = AuthService.emailForPortal(widget.portal);
+  }
+
   Future<void> _login() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() {
@@ -163,9 +169,7 @@ class _PortalLoginScreenState extends State<PortalLoginScreen> {
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  _isManagement
-                                      ? 'Create and assign tasks to the team'
-                                      : 'View tasks assigned to you',
+                                  'Full access to land workspace & market intel',
                                   style: TextStyle(
                                       fontSize: 13,
                                       fontWeight: FontWeight.w500,
@@ -177,12 +181,9 @@ class _PortalLoginScreenState extends State<PortalLoginScreen> {
                                 // Email
                                 TextFormField(
                                   controller: _emailCtrl,
+                                  readOnly: true,
                                   keyboardType: TextInputType.emailAddress,
                                   textInputAction: TextInputAction.next,
-                                  validator: (v) =>
-                                      (v == null || v.trim().isEmpty)
-                                          ? 'Email is required'
-                                          : null,
                                   decoration: _inputDec(
                                     label: 'Email Address',
                                     icon: Icons.email_outlined,

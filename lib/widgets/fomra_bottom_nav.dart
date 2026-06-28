@@ -7,9 +7,10 @@ class FomraBottomNav extends StatelessWidget {
   const FomraBottomNav({super.key, required this.currentRoute});
 
   static const _items = [
-    _NavItem('/home',       Icons.home_outlined,           Icons.home_rounded,        'Home'),
-    _NavItem('/land-lead',  Icons.space_dashboard_outlined, Icons.space_dashboard,     'Workspace'),
-    _NavItem('/dashboard',  Icons.bar_chart_outlined,       Icons.bar_chart_rounded,   'Reports'),
+    _NavItem('/home',                Icons.home_outlined,            Icons.home_rounded,        'Home'),
+    _NavItem('/land-lead',           Icons.space_dashboard_outlined, Icons.space_dashboard,     'Workspace'),
+    _NavItem('/market-intelligence', Icons.insights_outlined,        Icons.insights,            'Market'),
+    _NavItem('/dashboard',           Icons.bar_chart_outlined,       Icons.bar_chart_rounded,   'Reports'),
   ];
 
   void _onTap(BuildContext context, _NavItem item) {
@@ -54,8 +55,7 @@ class FomraBottomNav extends StatelessWidget {
             children: _items.map((item) {
               final isActive = currentRoute == item.route ||
                   (item.route == '/land-lead' &&
-                      ['/market-intelligence', '/legal-verification',
-                       '/task-management'].contains(currentRoute));
+                      currentRoute == '/task-management');
               return Expanded(
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,

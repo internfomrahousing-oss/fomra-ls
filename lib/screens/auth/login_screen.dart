@@ -1,53 +1,18 @@
 import 'package:flutter/material.dart';
 import '../../services/auth_service.dart';
-import '../../services/api_client.dart';
 import '../../theme/app_theme.dart';
+import 'portal_login_screen.dart';
 
-class LoginScreen extends StatefulWidget {
+class LoginScreen extends StatelessWidget {
   const LoginScreen({super.key});
 
-  @override
-  State<LoginScreen> createState() => _LoginScreenState();
-}
-
-class _LoginScreenState extends State<LoginScreen> {
-  final _formKey = GlobalKey<FormState>();
-  final _emailCtrl = TextEditingController();
-  final _passwordCtrl = TextEditingController();
-  bool _obscure = true;
-  bool _loading = false;
-  String? _error;
-
-  @override
-  void dispose() {
-    _emailCtrl.dispose();
-    _passwordCtrl.dispose();
-    super.dispose();
-  }
-
-  Future<void> _login() async {
-    if (!_formKey.currentState!.validate()) return;
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-
-    try {
-      await AuthService.instance.login(
-        _emailCtrl.text.trim(),
-        _passwordCtrl.text,
-      );
-      if (!mounted) return;
-      Navigator.pushReplacementNamed(context, '/home');
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _loading = false;
-        _error = e is ApiException
-            ? e.message
-            : 'Invalid email or password. Please try again.';
-      });
-    }
+  void _openPortal(BuildContext context, LoginPortal portal) {
+    Navigator.push(
+      context,
+      MaterialPageRoute<void>(
+        builder: (_) => PortalLoginScreen(portal: portal),
+      ),
+    );
   }
 
   @override
@@ -68,7 +33,6 @@ class _LoginScreenState extends State<LoginScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  // Logo
                   Container(
                     width: 80,
                     height: 80,
@@ -76,11 +40,15 @@ class _LoginScreenState extends State<LoginScreen> {
                       color: Colors.white.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.3),
-                          width: 1.5),
+                        color: Colors.white.withValues(alpha: 0.3),
+                        width: 1.5,
+                      ),
                     ),
-                    child: const Icon(Icons.house_outlined,
-                        color: Colors.white, size: 42),
+                    child: const Icon(
+                      Icons.house_outlined,
+                      color: Colors.white,
+                      size: 42,
+                    ),
                   ),
                   const SizedBox(height: 18),
                   const Text(
@@ -101,8 +69,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                   const SizedBox(height: 40),
-
-                  // Login card
                   Container(
                     padding: const EdgeInsets.all(24),
                     decoration: BoxDecoration(
@@ -116,150 +82,66 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ],
                     ),
-                    child: Form(
-                      key: _formKey,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Sign In',
-                            style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.textPrimary,
-                            ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const Text(
+                          'Choose Portal',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textPrimary,
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Access your company portal',
-                            style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w500,
-                                color: AppColors.textSecondary
-                                    .withValues(alpha: 0.8)),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Sign in as management or employee',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            color: AppColors.textSecondary.withValues(alpha: 0.8),
                           ),
-                          const SizedBox(height: 22),
-
-                          // Email
-                          TextFormField(
-                            controller: _emailCtrl,
-                            keyboardType: TextInputType.emailAddress,
-                            textInputAction: TextInputAction.next,
-                            validator: (v) =>
-                                (v == null || v.trim().isEmpty)
-                                    ? 'Email is required'
-                                    : null,
-                            decoration: _inputDec(
-                              label: 'Email Address',
-                              icon: Icons.email_outlined,
-                            ),
-                          ),
-                          const SizedBox(height: 14),
-
-                          // Password
-                          TextFormField(
-                            controller: _passwordCtrl,
-                            obscureText: _obscure,
-                            textInputAction: TextInputAction.done,
-                            onFieldSubmitted: (_) => _login(),
-                            validator: (v) =>
-                                (v == null || v.isEmpty)
-                                    ? 'Password is required'
-                                    : null,
-                            decoration: _inputDec(
-                              label: 'Password',
-                              icon: Icons.lock_outline,
-                            ).copyWith(
-                              suffixIcon: IconButton(
-                                icon: Icon(
-                                  _obscure
-                                      ? Icons.visibility_off_outlined
-                                      : Icons.visibility_outlined,
-                                  size: 20,
-                                  color: AppColors.textSecondary,
-                                ),
-                                onPressed: () =>
-                                    setState(() => _obscure = !_obscure),
-                              ),
-                            ),
-                          ),
-
-                          // Error message
-                          if (_error != null) ...[
-                            const SizedBox(height: 12),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 8),
-                              decoration: BoxDecoration(
-                                color: AppColors.error.withValues(alpha: 0.08),
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(
-                                    color: AppColors.error
-                                        .withValues(alpha: 0.3)),
-                              ),
-                              child: Row(children: [
-                                const Icon(Icons.error_outline,
-                                    size: 15, color: AppColors.error),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(_error!,
-                                      style: const TextStyle(
-                                          fontSize: 12,
-                                          color: AppColors.error)),
-                                ),
-                              ]),
-                            ),
-                          ],
-
-                          const SizedBox(height: 22),
-
-                          // Login button
-                          SizedBox(
-                            width: double.infinity,
-                            height: 50,
-                            child: ElevatedButton(
-                              onPressed: _loading ? null : _login,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.primary,
-                                foregroundColor: Colors.white,
-                                shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12)),
-                                elevation: 0,
-                              ),
-                              child: _loading
-                                  ? const SizedBox(
-                                      width: 22,
-                                      height: 22,
-                                      child: CircularProgressIndicator(
-                                          color: Colors.white,
-                                          strokeWidth: 2.5),
-                                    )
-                                  : const Text(
-                                      'Sign In',
-                                      style: TextStyle(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w600),
-                                    ),
-                            ),
-                          ),
-                        ],
-                      ),
+                        ),
+                        const SizedBox(height: 22),
+                        _PortalCard(
+                          icon: Icons.admin_panel_settings_outlined,
+                          title: 'Management Login',
+                          subtitle: 'Land workspace, market intel & reports',
+                          email: AuthService.managementEmail,
+                          color: AppColors.primary,
+                          onTap: () => _openPortal(context, LoginPortal.management),
+                        ),
+                        const SizedBox(height: 12),
+                        _PortalCard(
+                          icon: Icons.badge_outlined,
+                          title: 'Employee Login',
+                          subtitle: 'Full access to land workspace & market intel',
+                          email: AuthService.employeeEmail,
+                          color: const Color(0xFF00838F),
+                          onTap: () => _openPortal(context, LoginPortal.employee),
+                        ),
+                      ],
                     ),
                   ),
-
                   const SizedBox(height: 28),
-                  Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                    Icon(Icons.lock_outline,
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.lock_outline,
                         size: 13,
-                        color: Colors.white.withValues(alpha: 0.6)),
-                    const SizedBox(width: 6),
-                    Text(
-                      'Secured · Fomra Housing Pvt. Ltd.',
-                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.6),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Secured · Fomra Housing Pvt. Ltd.',
+                        style: TextStyle(
                           fontSize: 12,
-                          color: Colors.white.withValues(alpha: 0.6)),
-                    ),
-                  ]),
+                          color: Colors.white.withValues(alpha: 0.6),
+                        ),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 12),
                 ],
               ),
@@ -269,27 +151,88 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
     );
   }
+}
 
-  InputDecoration _inputDec({required String label, required IconData icon}) {
-    return InputDecoration(
-      labelText: label,
-      prefixIcon: Icon(icon, size: 20, color: AppColors.primary),
-      filled: true,
-      fillColor: Colors.white,
-      border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: Color(0xFFE0E0E0))),
-      enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: Color(0xFFE0E0E0))),
-      focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: AppColors.primary, width: 2)),
-      errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: AppColors.error)),
-      contentPadding:
-          const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+class _PortalCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final String email;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _PortalCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.email,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: color.withValues(alpha: 0.06),
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: color.withValues(alpha: 0.22)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, color: color, size: 26),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: color,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      email,
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: color.withValues(alpha: 0.85),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.arrow_forward_ios_rounded, size: 16, color: color),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

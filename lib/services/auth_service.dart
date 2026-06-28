@@ -10,6 +10,11 @@ class AuthService {
   AuthService._();
 
   static const _portalKey = 'login_portal';
+  static const _localSessionKey = 'local_auth_session';
+
+  static const managementEmail = 'management@fomrahousing.in';
+  static const employeeEmail = 'employee@fomrahousing.in';
+  static const portalPassword = 'fomra@2024';
 
   static SupabaseClient get _client => Supabase.instance.client;
 
@@ -20,51 +25,122 @@ class AuthService {
   bool get isManagement => _portal == LoginPortal.management;
   bool get isEmployee => _portal == LoginPortal.employee;
 
+  static String emailForPortal(LoginPortal portal) => switch (portal) {
+        LoginPortal.management => managementEmail,
+        LoginPortal.employee => employeeEmail,
+      };
+
   AppUser? get currentUser {
     final u = _client.auth.currentUser;
-    if (u == null) return null;
-    return AppUser(
-      id: u.id,
-      email: u.email ?? '',
-      fullName: u.userMetadata?['full_name'] as String? ??
-          u.email?.split('@').first ??
-          'User',
-      phone: u.userMetadata?['phone'] as String?,
-      role: u.userMetadata?['role'] as String? ?? 'agent',
-      createdAt: DateTime.parse(u.createdAt),
-    );
+    if (u != null) {
+      return AppUser(
+        id: u.id,
+        email: u.email ?? '',
+        fullName: u.userMetadata?['full_name'] as String? ??
+            u.email?.split('@').first ??
+            'User',
+        phone: u.userMetadata?['phone'] as String?,
+        role: u.userMetadata?['role'] as String? ??
+            (_portal == LoginPortal.management ? 'management' : 'employee'),
+        createdAt: DateTime.parse(u.createdAt),
+      );
+    }
+    if (_portal != null) {
+      final email = emailForPortal(_portal!);
+      return AppUser(
+        id: 'local-${_portal!.name}',
+        email: email,
+        fullName: _portal == LoginPortal.management ? 'Management' : 'Employee',
+        role: _portal == LoginPortal.management ? 'management' : 'employee',
+        createdAt: DateTime.now(),
+      );
+    }
+    return null;
   }
 
-  bool get isLoggedIn => _client.auth.currentUser != null;
+  bool get isLoggedIn =>
+      _client.auth.currentUser != null || _portal != null;
 
-  Future<bool> checkSession() async => _client.auth.currentUser != null;
+  Future<void> restoreSession() async {
+    final prefs = await SharedPreferences.getInstance();
+    final portalName = prefs.getString(_portalKey);
+    if (portalName == LoginPortal.management.name) {
+      _portal = LoginPortal.management;
+    } else if (portalName == LoginPortal.employee.name) {
+      _portal = LoginPortal.employee;
+    }
 
-  static const _fallbackEmail = 'info@fomrahousing.in';
-  static const _fallbackPassword = 'Fomra@2024';
+    final authEmail = _client.auth.currentUser?.email?.trim().toLowerCase();
+    if (authEmail == managementEmail) {
+      _portal = LoginPortal.management;
+    } else if (authEmail == employeeEmail) {
+      _portal = LoginPortal.employee;
+    }
 
-  Future<void> login(String email, String password) async {
-    await _authenticate(email, password);
+    final local = prefs.getBool(_localSessionKey) ?? false;
+    if (!local && _client.auth.currentUser == null) {
+      _portal = null;
+      await prefs.remove(_portalKey);
+    }
   }
 
-  Future<void> _authenticate(String email, String password) async {
-    try {
-      await _client.auth.signInWithPassword(email: email, password: password);
-      return;
-    } on AuthException catch (e) {
-      if (email.trim().toLowerCase() == _fallbackEmail &&
-          password == _fallbackPassword) {
-        return;
-      }
-      throw ApiException(statusCode: 401, message: e.message);
-    } catch (e) {
-      if (email.trim().toLowerCase() == _fallbackEmail &&
-          password == _fallbackPassword) {
-        return;
-      }
-      if (e is ApiException) rethrow;
+  Future<bool> checkSession() async {
+    await restoreSession();
+    if (_client.auth.currentUser != null) return true;
+    final prefs = await SharedPreferences.getInstance();
+    return (prefs.getBool(_localSessionKey) ?? false) && _portal != null;
+  }
+
+  Future<void> loginWithPortal(
+    String email,
+    String password,
+    LoginPortal portal,
+  ) async {
+    final normalizedEmail = email.trim().toLowerCase();
+    final expectedEmail = emailForPortal(portal);
+
+    if (normalizedEmail != expectedEmail) {
       throw const ApiException(
-        statusCode: 500,
-        message: 'Connection error. Check your internet.',
+        statusCode: 401,
+        message: 'Invalid email for this portal.',
+      );
+    }
+    if (password != portalPassword) {
+      throw const ApiException(
+        statusCode: 401,
+        message: 'Invalid email or password.',
+      );
+    }
+
+    var supabaseOk = false;
+    try {
+      await _client.auth.signInWithPassword(
+        email: normalizedEmail,
+        password: password,
+      );
+      supabaseOk = true;
+    } on AuthException {
+      supabaseOk = false;
+    } catch (_) {
+      supabaseOk = false;
+    }
+
+    _portal = portal;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_portalKey, portal.name);
+    await prefs.setBool(_localSessionKey, !supabaseOk);
+  }
+
+  /// Legacy single-form login — management only, routes via portal.
+  Future<void> login(String email, String password) async {
+    final normalized = email.trim().toLowerCase();
+    if (normalized == employeeEmail) {
+      await loginWithPortal(email, password, LoginPortal.employee);
+    } else {
+      await loginWithPortal(
+        normalized == managementEmail ? email : managementEmail,
+        password,
+        LoginPortal.management,
       );
     }
   }
@@ -99,10 +175,11 @@ class AuthService {
     _portal = null;
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_portalKey);
+    await prefs.remove(_localSessionKey);
   }
 
-  String routeForPortal(LoginPortal portal) => switch (portal) {
-        LoginPortal.management => '/management-portal',
-        LoginPortal.employee => '/employee-portal',
-      };
+  String routeForPortal(LoginPortal portal) => '/home';
+
+  String? get postLoginRoute =>
+      _portal != null ? routeForPortal(_portal!) : null;
 }

@@ -6,6 +6,7 @@ import 'theme/app_theme.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/home/home_screen.dart';
 import 'screens/land_lead/land_workspace_screen.dart';
+import 'screens/market_intelligence/market_intelligence_screen.dart';
 import 'screens/dashboard/dashboard_screen.dart';
 import 'screens/task_management/task_management_screen.dart';
 import 'services/auth_service.dart';
@@ -38,9 +39,9 @@ class FomraLSApp extends StatelessWidget {
         '/management-portal':   (_) => const TaskManagementScreen(
                                     portalMode: TaskPortalMode.management),
         '/land-lead':           (_) => const LandWorkspaceScreen(initialTab: 0),
-        '/market-intelligence': (_) => const LandWorkspaceScreen(initialTab: 1),
-        '/legal-verification':  (_) => const LandWorkspaceScreen(initialTab: 2),
-        '/task-management':     (_) => const LandWorkspaceScreen(initialTab: 3),
+        '/market-intelligence': (_) => const MarketIntelligenceScreen(),
+        '/task-management':     (_) => const LandWorkspaceScreen(initialTab: 1),
+        '/legal-verification':  (_) => const LandWorkspaceScreen(initialTab: 0),
         '/dashboard':           (_) => const DashboardScreen(),
       },
     );
@@ -82,7 +83,8 @@ class _StartupScreenState extends State<_StartupScreen> {
       final hasSession = await AuthService.instance.checkSession();
       if (!mounted) return;
       if (hasSession) {
-        Navigator.of(context).pushReplacementNamed('/home');
+        final route = AuthService.instance.postLoginRoute ?? '/home';
+        Navigator.of(context).pushReplacementNamed(route);
         return;
       }
     } catch (e) {

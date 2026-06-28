@@ -135,7 +135,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       _ActionCard(
                         icon: Icons.space_dashboard_outlined,
                         label: 'Land Workspace',
-                        sub: 'Leads, Market & Legal',
+                        sub: 'Leads & tasks',
                         route: '/land-lead',
                         gradient: LinearGradient(
                           colors: [Color(0xFF091D55), Color(0xFF1A4DC9)],
@@ -159,16 +159,6 @@ class _HomeScreenState extends State<HomeScreen> {
                         route: '/dashboard',
                         gradient: LinearGradient(
                           colors: [Color(0xFF1D4ED8), Color(0xFF3B82F6)],
-                          begin: Alignment.topLeft, end: Alignment.bottomRight,
-                        ),
-                      ),
-                      _ActionCard(
-                        icon: Icons.gavel_outlined,
-                        label: 'Legal Review',
-                        sub: 'Document checks',
-                        route: '/legal-verification',
-                        gradient: LinearGradient(
-                          colors: [Color(0xFF1E40AF), Color(0xFF60A5FA)],
                           begin: Alignment.topLeft, end: Alignment.bottomRight,
                         ),
                       ),
