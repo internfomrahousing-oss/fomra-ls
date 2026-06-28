@@ -27,17 +27,24 @@ class EmployeeService {
   }
 
   static Future<bool> emailExists(String email) async {
+    return (await findByEmail(email)) != null;
+  }
+
+  static Future<EmployeeProfile?> findByEmail(String email) async {
     final normalized = email.trim().toLowerCase();
     try {
       final row = await _db
           .from('employee_profiles')
-          .select('id')
+          .select()
           .eq('email', normalized)
           .maybeSingle();
-      if (row != null) return true;
+      if (row != null) return _fromRow(Map<String, dynamic>.from(row));
     } catch (_) {}
     final cached = await _loadCache();
-    return cached.any((e) => e.email.trim().toLowerCase() == normalized);
+    for (final e in cached) {
+      if (e.email.trim().toLowerCase() == normalized) return e;
+    }
+    return null;
   }
 
   static Future<EmployeeProfile> create({
@@ -54,11 +61,10 @@ class EmployeeService {
     }
 
     try {
-      final id = await _db.rpc('generate_employee_id') as String;
       final row = await _db
           .from('employee_profiles')
           .insert({
-            'id': id,
+            'id': normalizedEmail,
             'full_name': fullName.trim(),
             'email': normalizedEmail,
             'phone': phone.trim(),
@@ -78,9 +84,8 @@ class EmployeeService {
       }
       return profile;
     } catch (e) {
-      final id = 'FE${DateTime.now().millisecondsSinceEpoch}';
       final profile = EmployeeProfile(
-        id: id,
+        id: normalizedEmail,
         fullName: fullName.trim(),
         email: normalizedEmail,
         phone: phone.trim(),

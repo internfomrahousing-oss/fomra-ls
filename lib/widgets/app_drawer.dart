@@ -139,6 +139,11 @@ class _DrawerTile extends StatelessWidget {
 class _DrawerFooter extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
+    final user = AuthService.instance.currentUser;
+    final name = user?.fullName ?? 'User';
+    final email = user?.email ?? '';
+    final initial = name.trim().isNotEmpty ? name.trim()[0].toUpperCase() : '?';
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: const BoxDecoration(
@@ -146,18 +151,42 @@ class _DrawerFooter extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const CircleAvatar(
+          CircleAvatar(
             radius: 18,
             backgroundColor: AppColors.accent,
-            child: Icon(Icons.person, color: Colors.white, size: 20),
+            child: Text(
+              initial,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ),
           const SizedBox(width: 12),
-          const Expanded(
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Admin User', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500)),
-                Text('info@fomrahousing.in', style: TextStyle(color: Color(0xFF90A4AE), fontSize: 11)),
+                Text(
+                  name,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Text(
+                  email,
+                  style: const TextStyle(
+                    color: Color(0xFF90A4AE),
+                    fontSize: 11,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ],
             ),
           ),

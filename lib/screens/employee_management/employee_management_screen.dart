@@ -71,8 +71,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
       return e.fullName.toLowerCase().contains(q) ||
           e.email.toLowerCase().contains(q) ||
           e.phone.contains(q) ||
-          e.designation.toLowerCase().contains(q) ||
-          e.id.toLowerCase().contains(q);
+          e.designation.toLowerCase().contains(q);
     }).toList();
   }
 
@@ -317,7 +316,7 @@ class _EmployeeCard extends StatelessWidget {
                   ],
                   const SizedBox(height: 6),
                   Text(
-                    '${employee.id} · Joined $joined',
+                    'Joined $joined',
                     style: TextStyle(
                       fontSize: 10,
                       color: Colors.grey.shade500,

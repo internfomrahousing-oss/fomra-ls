@@ -13,6 +13,7 @@ class AuthService {
   static const _portalKey = 'login_portal';
   static const _localSessionKey = 'local_auth_session';
   static const _loginEmailKey = 'login_email';
+  static const _loginNameKey = 'login_display_name';
 
   static const managementEmail = 'management@fomrahousing.in';
   static const employeeEmail = 'employee@fomrahousing.in';
@@ -22,6 +23,7 @@ class AuthService {
 
   LoginPortal? _portal;
   String? _loginEmail;
+  String? _loginDisplayName;
 
   LoginPortal? get loginPortal => _portal;
 
@@ -36,12 +38,13 @@ class AuthService {
   AppUser? get currentUser {
     final u = _client.auth.currentUser;
     if (u != null) {
+      final email = u.email ?? _loginEmail ?? '';
       return AppUser(
         id: u.id,
-        email: u.email ?? '',
-        fullName: u.userMetadata?['full_name'] as String? ??
-            u.email?.split('@').first ??
-            'User',
+        email: email,
+        fullName: _loginDisplayName ??
+            u.userMetadata?['full_name'] as String? ??
+            _defaultNameForEmail(email),
         phone: u.userMetadata?['phone'] as String?,
         role: u.userMetadata?['role'] as String? ??
             (_portal == LoginPortal.management ? 'management' : 'employee'),
@@ -53,7 +56,7 @@ class AuthService {
       return AppUser(
         id: 'local-${_portal!.name}',
         email: email,
-        fullName: email.split('@').first,
+        fullName: _loginDisplayName ?? _defaultNameForEmail(email),
         role: _portal == LoginPortal.management ? 'management' : 'employee',
         createdAt: DateTime.now(),
       );
@@ -68,6 +71,7 @@ class AuthService {
     final prefs = await SharedPreferences.getInstance();
     final portalName = prefs.getString(_portalKey);
     _loginEmail = prefs.getString(_loginEmailKey);
+    _loginDisplayName = prefs.getString(_loginNameKey);
     if (portalName == LoginPortal.management.name) {
       _portal = LoginPortal.management;
     } else if (portalName == LoginPortal.employee.name) {
@@ -85,9 +89,31 @@ class AuthService {
     if (!local && _client.auth.currentUser == null) {
       _portal = null;
       _loginEmail = null;
+      _loginDisplayName = null;
       await prefs.remove(_portalKey);
       await prefs.remove(_loginEmailKey);
+      await prefs.remove(_loginNameKey);
     }
+  }
+
+  static String _defaultNameForEmail(String email) {
+    final normalized = email.trim().toLowerCase();
+    if (normalized == managementEmail) return 'Management';
+    if (normalized == employeeEmail) return 'Employee';
+    final local = email.split('@').first.trim();
+    if (local.isEmpty) return 'User';
+    return local[0].toUpperCase() + local.substring(1);
+  }
+
+  Future<String> _resolveDisplayName(String email, LoginPortal portal) async {
+    final normalized = email.trim().toLowerCase();
+    if (normalized == managementEmail) return 'Management';
+    if (normalized == employeeEmail) return 'Employee';
+    final profile = await EmployeeService.findByEmail(normalized);
+    if (profile != null && profile.fullName.trim().isNotEmpty) {
+      return profile.fullName.trim();
+    }
+    return _defaultNameForEmail(normalized);
   }
 
   Future<bool> checkSession() async {
@@ -141,9 +167,11 @@ class AuthService {
 
     _portal = portal;
     _loginEmail = normalizedEmail;
+    _loginDisplayName = await _resolveDisplayName(normalizedEmail, portal);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_portalKey, portal.name);
     await prefs.setString(_loginEmailKey, normalizedEmail);
+    await prefs.setString(_loginNameKey, _loginDisplayName!);
     await prefs.setBool(_localSessionKey, !supabaseOk);
   }
 
@@ -203,10 +231,12 @@ class AuthService {
     } catch (_) {}
     _portal = null;
     _loginEmail = null;
+    _loginDisplayName = null;
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_portalKey);
     await prefs.remove(_localSessionKey);
     await prefs.remove(_loginEmailKey);
+    await prefs.remove(_loginNameKey);
   }
 
   String routeForPortal(LoginPortal portal) => '/home';
