@@ -269,9 +269,9 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
               subtitle: 'Who brought this lead?',
             ),
             const SizedBox(height: 12),
-            _InputSourceGrid(
-              selected: _inputSource,
-              onSelect: (s) => setState(() => _inputSource = s),
+            _InputSourceDropdown(
+              value: _inputSource,
+              onChanged: (s) => setState(() => _inputSource = s),
             ),
             if (_inputSource == null)
               const Padding(
@@ -290,7 +290,10 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
             ),
             const SizedBox(height: 16),
 
-            const _ReadOnlyField(label: 'Lead ID', value: 'Auto-generated on save'),
+            const _ReadOnlyField(
+              label: 'Lead ID',
+              value: 'Auto-generated (e.g. 06202600001)',
+            ),
             const SizedBox(height: 16),
 
             _LocationModeToggle(
@@ -872,73 +875,42 @@ class _SectionHeader extends StatelessWidget {
   }
 }
 
-// ── Input Source Grid (MCQ) ─────────────────────────────────────────────────
+// ── Input Source Dropdown ───────────────────────────────────────────────────
 
-class _InputSourceGrid extends StatelessWidget {
-  final InputSource? selected;
-  final ValueChanged<InputSource> onSelect;
+class _InputSourceDropdown extends StatelessWidget {
+  final InputSource? value;
+  final ValueChanged<InputSource?> onChanged;
 
-  static const _options = [
-    (InputSource.broker, Icons.handshake_outlined, 'Broker'),
-    (InputSource.landowner, Icons.person_pin_outlined, 'Landowner'),
-    (InputSource.referral, Icons.group_outlined, 'Referral'),
-    (InputSource.internalTeam, Icons.business_center_outlined, 'Internal Team'),
-    (InputSource.existingDatabase, Icons.storage_outlined, 'Existing Database'),
-  ];
-
-  const _InputSourceGrid({required this.selected, required this.onSelect});
+  const _InputSourceDropdown({required this.value, required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
-    return Wrap(
-      spacing: 10,
-      runSpacing: 10,
-      children: _options.map((opt) {
-        final isSelected = selected == opt.$1;
-        return GestureDetector(
-          onTap: () => onSelect(opt.$1),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            padding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: isSelected ? AppColors.primary : Colors.white,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color: isSelected
-                    ? AppColors.primary
-                    : const Color(0xFFE0E0E0),
-                width: isSelected ? 2 : 1,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black
-                      .withValues(alpha: isSelected ? 0.12 : 0.05),
-                  blurRadius: 6,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Row(mainAxisSize: MainAxisSize.min, children: [
-              Icon(opt.$2,
-                  size: 20,
-                  color: isSelected
-                      ? AppColors.accentLight
-                      : AppColors.primary),
-              const SizedBox(width: 8),
-              Text(opt.$3,
-                  style: TextStyle(
-                      color: isSelected
-                          ? Colors.white
-                          : AppColors.textPrimary,
-                      fontWeight: isSelected
-                          ? FontWeight.w600
-                          : FontWeight.normal,
-                      fontSize: 13)),
-            ]),
-          ),
-        );
-      }).toList(),
+    return DropdownButtonFormField<InputSource>(
+      value: value,
+      onChanged: onChanged,
+      decoration: InputDecoration(
+        labelText: 'Input Source *',
+        hintText: 'Select who brought this lead',
+        prefixIcon: const Icon(Icons.source_outlined,
+            size: 20, color: AppColors.primary),
+        filled: true,
+        fillColor: Colors.white,
+        border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: Color(0xFFE0E0E0))),
+        enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: Color(0xFFE0E0E0))),
+        focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide:
+                const BorderSide(color: AppColors.primary, width: 2)),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      ),
+      items: InputSource.values
+          .map((s) => DropdownMenuItem(value: s, child: Text(s.label)))
+          .toList(),
     );
   }
 }

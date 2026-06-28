@@ -3,14 +3,11 @@
 -- session, so the client talks to Supabase as the "anon" role. The policies
 -- below therefore allow BOTH anon and authenticated roles to manage leads.
 
--- Simple global counter — lead IDs are 1, 2, 3, …
-CREATE TABLE IF NOT EXISTS land_lead_counter (
-  id INT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+-- Yearly counter — sequence resets each calendar year (00001, 00002, …)
+CREATE TABLE IF NOT EXISTS land_lead_year_counter (
+  year INT PRIMARY KEY,
   last_seq INT NOT NULL DEFAULT 0
 );
-
-INSERT INTO land_lead_counter (id, last_seq) VALUES (1, 0)
-ON CONFLICT (id) DO NOTHING;
 
 -- Main land leads table
 CREATE TABLE IF NOT EXISTS land_leads (
@@ -37,19 +34,21 @@ CREATE TABLE IF NOT EXISTS land_leads (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Generates sequential IDs: 1, 2, 3, …
+-- Lead IDs: mmyyyy00001 (e.g. 06202600001). Counter resets every calendar year.
 CREATE OR REPLACE FUNCTION generate_land_lead_id()
 RETURNS TEXT AS $$
 DECLARE
-  seq INT;
+  curr_year  INT  := EXTRACT(YEAR  FROM NOW())::INT;
+  curr_month TEXT := LPAD(EXTRACT(MONTH FROM NOW())::TEXT, 2, '0');
+  seq        INT;
 BEGIN
-  INSERT INTO land_lead_counter (id, last_seq)
-  VALUES (1, 1)
-  ON CONFLICT (id) DO UPDATE
-    SET last_seq = land_lead_counter.last_seq + 1
+  INSERT INTO land_lead_year_counter (year, last_seq)
+  VALUES (curr_year, 1)
+  ON CONFLICT (year) DO UPDATE
+    SET last_seq = land_lead_year_counter.last_seq + 1
   RETURNING last_seq INTO seq;
 
-  RETURN seq::TEXT;
+  RETURN curr_month || curr_year::TEXT || LPAD(seq::TEXT, 5, '0');
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
