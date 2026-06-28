@@ -14,6 +14,7 @@ import '../../theme/app_theme.dart';
 import '../../widgets/app_drawer.dart';
 import '../../widgets/fomra_app_bar.dart';
 import '../../widgets/fomra_bottom_nav.dart';
+import '../../widgets/fmb_sketch_viewer.dart';
 import '../../widgets/patta_document_preview.dart';
 import '../../widgets/patta_html_preview.dart';
 import '../../services/app_store.dart';
@@ -155,6 +156,8 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
   String? _tngisParcelError;
   Map<String, String>? _tngisParcelPreview;
   List<_TngisSubdivisionRow> _tngisSubdivisions = [];
+  bool _tngisFmbAvailable = false;
+  String? _tngisFmbNote;
 
   // Default center shown before GPS resolves
   static const _kDefaultCenter = LatLng(13.0827, 80.2707);
@@ -356,6 +359,8 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
       _tngisCentroid = null;
       _tngisParcelPreview = null;
       _tngisSubdivisions = [];
+      _tngisFmbAvailable = false;
+      _tngisFmbNote = null;
     });
     if (_mapReady) {
       _mapController.move(_searchedLocation!, _zoomForRadius(_selectedRadius));
@@ -379,6 +384,8 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
       _tngisTc = null;
       _tngisVc = null;
       _tngisSubdivisions = [];
+      _tngisFmbAvailable = false;
+      _tngisFmbNote = null;
       _tngisParcelLoading = true;
       _tngisParcelError = null;
     });
@@ -473,6 +480,8 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
             : (fields['Village']?.isNotEmpty == true ? fields['Village'] : _detectedVillage);
         _tngisParcelPreview = fields.isNotEmpty ? fields : null;
         _tngisParcelError = null;
+        _tngisFmbAvailable = result['fmbAvailable'] == true;
+        _tngisFmbNote = result['fmbNote']?.toString();
         _tngisSubdivisions = subdivisions;
         if (_tngisSubdivisions.isEmpty && _tngisSurvey != null) {
           _tngisSubdivisions = [
@@ -502,6 +511,8 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
         _tngisCentroid = null;
         _tngisParcelPreview = null;
         _tngisSubdivisions = [];
+      _tngisFmbAvailable = false;
+      _tngisFmbNote = null;
       });
     } catch (e) {
       setState(() {
@@ -511,6 +522,8 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
         _tngisCentroid = null;
         _tngisParcelPreview = null;
         _tngisSubdivisions = [];
+      _tngisFmbAvailable = false;
+      _tngisFmbNote = null;
       });
     } finally {
       if (mounted) setState(() => _tngisParcelLoading = false);
@@ -1067,6 +1080,8 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
       centroid: _tngisCentroid,
       tngisSubdivisions: _tngisSubdivisions,
       tngisParcelLoading: _tngisParcelLoading,
+      fmbAvailable: _tngisFmbAvailable,
+      fmbNote: _tngisFmbNote,
     );
   }
 
@@ -2892,6 +2907,8 @@ class _GovtDocsSection extends StatefulWidget {
   final String? centroid;
   final List<_TngisSubdivisionRow> tngisSubdivisions;
   final bool tngisParcelLoading;
+  final bool fmbAvailable;
+  final String? fmbNote;
   const _GovtDocsSection({
     this.district,
     this.taluk,
@@ -2909,6 +2926,8 @@ class _GovtDocsSection extends StatefulWidget {
     this.centroid,
     this.tngisSubdivisions = const [],
     this.tngisParcelLoading = false,
+    this.fmbAvailable = false,
+    this.fmbNote,
   });
 
   @override
@@ -2940,6 +2959,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
   Uint8List? _fmbPdfBytes;
   String? _fmbLoadError;
   bool _loadingFmb = false;
+  int? _fmbViewerShownLen;
   bool   _showManualPatta = false;
   bool   _showManualEc    = false;
   Timer? _pattaDebounce;
@@ -3169,6 +3189,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
       _fmbPdfBytes = null;
       _fmbLoadError = null;
       _loadingFmb = false;
+      _fmbViewerShownLen = null;
       for (final b in _subdivBundles.values) {
         b.fmbPdf = null;
         b.fmbError = null;
@@ -3373,6 +3394,30 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
   bool _hasFmbSubdivision(_TngisSubdivisionRow row) =>
       row.effectiveSubDivision != null;
 
+  void _showFmbSketchViewer(Uint8List pdfBytes, {String? fileName}) {
+    final survey = widget.surveyNumber?.trim();
+    final sub = _resolvedMapSub() ?? widget.subDivision?.trim();
+    final name = fileName ??
+        'FMB${survey != null ? '-$survey' : ''}${sub != null ? '-Sub-$sub' : ''}.pdf';
+    FmbSketchViewer.show(
+      context,
+      pdfBytes: pdfBytes,
+      fileName: name,
+      survey: survey,
+      subDivision: sub,
+    );
+  }
+
+  void _maybeAutoOpenFmbViewer(Uint8List pdfBytes, {String? fileName}) {
+    if (_selectedGiService != 'fmb') return;
+    if (_fmbViewerShownLen == pdfBytes.length) return;
+    _fmbViewerShownLen = pdfBytes.length;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _selectedGiService != 'fmb') return;
+      _showFmbSketchViewer(pdfBytes, fileName: fileName);
+    });
+  }
+
   static String? _nonEmptyCode(String? value) {
     final t = value?.trim();
     return (t != null && t.isNotEmpty) ? t : null;
@@ -3456,6 +3501,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
         _fmbPdfBytes = Uint8List.fromList(bytes);
         _loadingFmb = false;
       });
+      _maybeAutoOpenFmbViewer(_fmbPdfBytes!);
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() {
@@ -3505,6 +3551,10 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
           _fmbPdfBytes = bundle.fmbPdf;
           _fmbLoadError = null;
         });
+        _maybeAutoOpenFmbViewer(
+          bundle.fmbPdf!,
+          fileName: 'FMB Survey ${row.surveyNumber} Sub ${row.subLabel}.pdf',
+        );
       }
     } on ApiException catch (e) {
       bundle.fmbError = e.message;
@@ -4788,18 +4838,68 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
     if (pdfBytes != null && pdfBytes.isNotEmpty) {
       final sub = _resolvedMapSub() ?? widget.subDivision?.trim();
       final survey = widget.surveyNumber?.trim();
+      final fileName = 'FMB${survey != null ? '-$survey' : ''}${sub != null ? '-Sub-$sub' : ''}.pdf';
       return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(
-          sub != null && sub.isNotEmpty && sub != '-'
-              ? 'FMB Sketch · Survey ${survey ?? ''} · Sub $sub'
-              : 'FMB Sketch',
-          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: const Color(0xFFE8EAF6),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: const Color(0xFF3949AB).withValues(alpha: 0.35)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1A237E).withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.picture_as_pdf_outlined, color: Color(0xFF1A237E), size: 28),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      sub != null && sub.isNotEmpty && sub != '-'
+                          ? 'FMB Sketch · Survey ${survey ?? ''} · Sub $sub'
+                          : 'FMB Sketch',
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Official TSLR/FMB sketch with government seal · ${(pdfBytes.length / 1024).round()} KB',
+                      style: TextStyle(fontSize: 10, color: Colors.grey.shade700),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
-        const SizedBox(height: 4),
-        const Text('TNGIS GI Viewer (sketch_fmb)',
-            style: TextStyle(fontSize: 10, color: AppColors.textSecondary)),
         const SizedBox(height: 10),
-        PattaDocumentPreview(pdfBytes: pdfBytes, fileName: fileName, height: 480),
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton.icon(
+            onPressed: () => _showFmbSketchViewer(pdfBytes!, fileName: fileName),
+            icon: const Icon(Icons.visibility_outlined, size: 18),
+            label: const Text('View FMB Sketch', style: TextStyle(fontSize: 12)),
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF1A237E),
+              padding: const EdgeInsets.symmetric(vertical: 12),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        OutlinedButton.icon(
+          onPressed: () => _showFmbSketchViewer(pdfBytes!, fileName: fileName),
+          icon: const Icon(Icons.fullscreen, size: 16),
+          label: const Text('Open fullscreen viewer', style: TextStyle(fontSize: 11)),
+        ),
       ]);
     }
 
@@ -4831,6 +4931,22 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
     }
 
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      if (!widget.fmbAvailable && widget.fmbNote != null) ...[
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(10),
+          margin: const EdgeInsets.only(bottom: 8),
+          decoration: BoxDecoration(
+            color: Colors.amber.shade50,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.amber.shade200),
+          ),
+          child: Text(
+            widget.fmbNote!,
+            style: TextStyle(fontSize: 10, color: Colors.amber.shade900, height: 1.35),
+          ),
+        ),
+      ],
       Text(
         widget.surveyNumber != null && _resolvedMapSub() != null
             ? 'Survey ${widget.surveyNumber} · Sub ${_resolvedMapSub()} — tap Load FMB to fetch sketch.'
@@ -5349,9 +5465,17 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
                     child: CircularProgressIndicator(strokeWidth: 2)),
               ))
             else if (bundle.fmbPdf != null)
-              PattaDocumentPreview(
-                pdfBytes: bundle.fmbPdf,
-                fileName: 'FMB Survey ${row.surveyNumber} Sub ${row.subLabel}.pdf',
+              FilledButton.icon(
+                onPressed: () => _showFmbSketchViewer(
+                  bundle.fmbPdf!,
+                  fileName: 'FMB Survey ${row.surveyNumber} Sub ${row.subLabel}.pdf',
+                ),
+                icon: const Icon(Icons.visibility_outlined, size: 16),
+                label: const Text('View FMB Sketch', style: TextStyle(fontSize: 11)),
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFF1A237E),
+                  minimumSize: const Size(double.infinity, 40),
+                ),
               )
             else if (bundle.fmbError != null)
               Text(bundle.fmbError!,

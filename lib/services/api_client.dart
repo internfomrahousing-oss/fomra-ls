@@ -114,6 +114,10 @@ class ApiClient {
         final body = jsonDecode(res.body);
         if (body is Map && body['error'] != null) {
           message = body['error'].toString();
+          final hint = body['hint']?.toString();
+          if (hint != null && hint.isNotEmpty) {
+            message = '$message\n$hint';
+          }
         }
       } catch (_) {
         if (res.body.isNotEmpty && res.body.length < 500) {

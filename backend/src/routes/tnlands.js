@@ -1692,6 +1692,90 @@ async function fetchCollablandFmbPdf(props = {}) {
   return last;
 }
 
+/** TNGIS sketch_fmb `type` — urban areas need "urban" (TSLR), not rural FMB. */
+function normalizeSketchFmbType(ruralUrban, props = {}) {
+  const raw = String(
+    ruralUrban ?? props.rural_urban ?? props.ruralUrban ?? props.land_type ?? '',
+  ).trim().toLowerCase();
+  if (raw.includes('urban') || raw === 'u' || raw.includes('tslr') || raw.includes('town')) {
+    return 'urban';
+  }
+  if (raw.includes('natham') || raw.includes('nattam')) return 'natham';
+  return 'rural';
+}
+
+function sketchFmbTypeCandidates(ruralUrban, props = {}) {
+  const primary = normalizeSketchFmbType(ruralUrban, props);
+  const alt = primary === 'rural' ? 'urban' : 'rural';
+  return [...new Set([primary, alt, 'natham'])];
+}
+
+function collablandPropsFromCodes(codes, tngisProps = {}) {
+  return {
+    district_code:  codes.districtCode,
+    taluk_code:     codes.talukCode,
+    village_code:   codes.villageCode,
+    survey_number:  codes.surveyNumber,
+    sub_division:   codes.subDivision,
+    kide:           tngisProps.kide,
+  };
+}
+
+/**
+ * TNGIS sketch_fmb (rural + urban/TSLR) then CollabLand — maximizes coverage across TN.
+ */
+async function fetchFmbSketchMultiSource(codes, ctx = {}) {
+  const { lat, lon, tngisProps = {} } = ctx;
+  let giLand = null;
+  if (Number.isFinite(lat) && Number.isFinite(lon)) {
+    try {
+      giLand = await fetchGiLandDetails(lat, lon);
+      if (!giLand?.ok) giLand = null;
+    } catch (_) {}
+  }
+
+  const ruralUrban = giLand?.ruralUrban ?? tngisProps.rural_urban;
+  const types = sketchFmbTypeCandidates(ruralUrban, tngisProps);
+  let lastErr = 'FMB sketch not available from TNGIS';
+
+  for (const landType of types) {
+    try {
+      const fmb = await fetchGiFmbSketch({ ...codes, landType });
+      if (fmb.ok && fmb.pdfBase64) {
+        return { ...fmb, landTypeUsed: landType };
+      }
+      if (fmb.error) lastErr = fmb.error;
+    } catch (err) {
+      lastErr = err.message;
+    }
+  }
+
+  try {
+    const props = collablandPropsFromCodes(codes, tngisProps);
+    const collab = await fetchCollablandFmbPdf(props);
+    if (collab?.available && collab.pdfBase64) {
+      return {
+        ok:         true,
+        source:     collab.source,
+        pdfBase64:  collab.pdfBase64,
+        fileName:   collab.fileName || fmbFileName(props),
+        landTypeUsed: 'collabland',
+      };
+    }
+    if (collab?.error) lastErr = collab.error;
+  } catch (err) {
+    lastErr = err.message;
+  }
+
+  const digitized = tngisProps.is_fmb === 1 || tngisProps.is_fmb === '1';
+  if (!digitized) {
+    lastErr = 'FMB/TSLR sketch is not digitized for this village on Tamil Nilam yet. '
+        + 'Only surveyed villages with digitized maps are available online.';
+  }
+
+  return { ok: false, error: lastErr };
+}
+
 // ── Patta / Chitta document (eservices + TNGIS fallback) ─────────────────────
 
 function escHtml(s) {
@@ -2015,6 +2099,10 @@ router.get('/tngis/parcel', async (req, res) => {
         || subdivisions.some((s) => s.fmbAvailable)
         || Boolean(subDivVal);
 
+    const fmbNote = fmbAvailable
+      ? 'Digitized FMB/TSLR sketch available from Tamil Nilam'
+      : 'FMB/TSLR sketch may not be digitized for this village yet — online coverage is limited across Tamil Nadu';
+
     return res.json({
       source:       'TNGIS Tamil Nilam GI Viewer',
       giViewerUrl,
@@ -2032,6 +2120,7 @@ router.get('/tngis/parcel', async (req, res) => {
       village:      hit.fields.Village || props.village_name || null,
       pattaNumber:  hit.fields['Patta Number'] || props.patta_no || null,
       fmbAvailable,
+      fmbNote,
       containsPoint: hit.pickMeta?.containsPoint ?? false,
       distanceMeters: hit.pickMeta?.containsPoint ? 0 : undefined,
       subdivisions,
@@ -2302,15 +2391,22 @@ router.get('/fmb', async (req, res) => {
     isFmb:        true,
   };
 
-  /** Direct TNGIS sketch_fmb when survey + sub + admin codes are known — no WFS guessing. */
+  let tngisProps = null;
+
+  /** Direct TNGIS sketch_fmb + CollabLand when survey + sub + admin codes are known. */
   async function fetchFmbWithExplicitCodes() {
-    const fmb = await fetchGiFmbSketch(codes);
+    const fmb = await fetchFmbSketchMultiSource(codes, {
+      lat: hasPoint ? latN : undefined,
+      lon: hasPoint ? lonN : undefined,
+      tngisProps: tngisProps || {},
+    });
     if (fmb.ok && fmb.pdfBase64) return sendFmbPdfResponse(res, fmb);
     return res.status(404).json({
       error: fmb.error || `FMB sketch not available for survey ${codes.surveyNumber} sub ${codes.subDivision}.`,
       surveyNumber: codes.surveyNumber,
       subDivision:  codes.subDivision,
       source:       'TNGIS GI Viewer (sketch_fmb)',
+      hint:         'FMB/TSLR is only online where Tamil Nilam has digitized the village map. Try the official GI Viewer link.',
     });
   }
 
@@ -2324,8 +2420,6 @@ router.get('/fmb', async (req, res) => {
       return res.status(502).json({ error: err.message });
     }
   }
-
-  let tngisProps = null;
 
   // Cadastral hit for admin codes when lat/lon provided (single radius try first).
   if (hasPoint) {
@@ -2441,11 +2535,16 @@ router.get('/fmb', async (req, res) => {
   }
 
   try {
-    const fmb = await fetchGiFmbSketch(codes);
+    const fmb = await fetchFmbSketchMultiSource(codes, {
+      lat: hasPoint ? latN : undefined,
+      lon: hasPoint ? lonN : undefined,
+      tngisProps: tngisProps || {},
+    });
     if (!fmb.ok || !fmb.pdfBase64) {
       return res.status(404).json({
         error: fmb.error || 'FMB sketch not available from TNGIS for this parcel',
         source: 'TNGIS GI Viewer (sketch_fmb)',
+        hint: 'FMB/TSLR sketches are only available for villages digitized on Tamil Nilam. Rural FMB and urban TSLR coverage varies by district.',
       });
     }
     return sendFmbPdfResponse(res, fmb);
