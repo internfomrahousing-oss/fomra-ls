@@ -54,4 +54,27 @@ function applyRadiusFilter(listings, lat, lng, radiusKm) {
   };
 }
 
-module.exports = { applyRadiusFilter, haversineKm, listingCoords };
+/** Attach distanceKm and return nearest listings (priced fallback when strict radius is empty). */
+function applyNearestListings(listings, lat, lng, maxCount = 30) {
+  const latN = parseFloat(lat);
+  const lngN = parseFloat(lng);
+  if (!Number.isFinite(latN) || !Number.isFinite(lngN)) return [];
+
+  return listings
+    .map((l) => {
+      const c = listingCoords(l);
+      if (!c) return null;
+      const dist = haversineKm(latN, lngN, c.lat, c.lng);
+      return { ...l, distanceKm: Math.round(dist * 10) / 10 };
+    })
+    .filter(Boolean)
+    .sort((a, b) => (a.distanceKm || 0) - (b.distanceKm || 0))
+    .slice(0, maxCount);
+}
+
+module.exports = {
+  applyRadiusFilter,
+  applyNearestListings,
+  haversineKm,
+  listingCoords,
+};

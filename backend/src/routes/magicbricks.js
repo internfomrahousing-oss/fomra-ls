@@ -1,7 +1,7 @@
 const express = require('express');
 const https   = require('https');
 const http    = require('http');
-const { applyRadiusFilter } = require('../lib/listingRadius');
+const { applyRadiusFilter, applyNearestListings } = require('../lib/listingRadius');
 const { geocodeListings } = require('../lib/listingGeocode');
 const router  = express.Router();
 
@@ -242,12 +242,40 @@ function parseFromMbDetailUrl(url, name) {
   };
 }
 
+function parseDetailPriceFromHtml(body) {
+  const jsonPatterns = [
+    /"price"\s*:\s*"?(\d+)"?/,
+    /"priceValue"\s*:\s*(\d+)/,
+    /"propertyPrice"\s*:\s*(\d+)/,
+    /"minPrice"\s*:\s*(\d+)/,
+    /"priceInRupee"\s*:\s*(\d+)/,
+    /"totalPrice"\s*:\s*(\d+)/,
+  ];
+  for (const pat of jsonPatterns) {
+    const m = body.match(pat);
+    if (m) {
+      const n = parseInt(m[1], 10);
+      if (n > 100000) return n;
+    }
+  }
+  const lacM = body.match(/₹\s*([\d,.]+)\s*(?:Lac|Lakh|L)\b/i);
+  if (lacM) {
+    const n = parseFloat(lacM[1].replace(/,/g, ''));
+    if (n > 0) return Math.round(n * 1e5);
+  }
+  const crM = body.match(/₹\s*([\d,.]+)\s*Cr\b/i);
+  if (crM) {
+    const n = parseFloat(crM[1].replace(/,/g, ''));
+    if (n > 0) return Math.round(n * 1e7);
+  }
+  return 0;
+}
+
 async function fetchDetailPrice(url) {
   try {
     const r = await fetchRaw(url, MINIMAL_HEADERS, 15000);
     if (r.status !== 200) return 0;
-    const m = r.body.match(/"price"\s*:\s*"?(\d+)"?/);
-    return m ? parseInt(m[1], 10) : 0;
+    return parseDetailPriceFromHtml(r.body);
   } catch {
     return 0;
   }
@@ -653,17 +681,40 @@ router.get('/', async (req, res) => {
 
   let radiusNote;
   if (hasRadius) {
+    const pricedBefore = listings.filter(
+      (l) => (l.pricePerSqft || 0) > 0 || (l.priceRupees || 0) > 0,
+    );
     const filtered = applyRadiusFilter(listings, userLat, userLng, radius);
-    listings = filtered.listings;
+    let out = filtered.listings;
     radiusNote = filtered.radiusNote;
-    const priced = listings.filter((l) => (l.pricePerSqft || 0) > 0 || (l.priceRupees || 0) > 0);
-    if (priced.length > 0) {
-      listings = priced;
-    } else if (listings.length > 0) {
-      radiusNote = 'RERA projects in radius — online prices not available for these listings.';
+
+    const pricedInRadius = out.filter(
+      (l) => (l.pricePerSqft || 0) > 0 || (l.priceRupees || 0) > 0,
+    );
+
+    if (pricedInRadius.length > 0) {
+      listings = pricedInRadius;
+    } else if (pricedBefore.length > 0) {
+      listings = applyNearestListings(pricedBefore, userLat, userLng, 30);
+      radiusNote =
+        `Showing nearest priced projects (${listings.length} found; `
+        + `none strictly within ${radius}km).`;
+    } else if (out.length > 0) {
+      listings = out;
+      radiusNote =
+        'RERA projects in radius — online prices not available for these listings.';
+    } else {
+      listings = applyNearestListings(listings, userLat, userLng, 20);
+      if (listings.length > 0) {
+        radiusNote = `Showing nearest projects (${listings.length}); price data may be limited.`;
+      }
     }
+
     listings = listings
       .sort((a, b) => {
+        if (a.distanceKm != null && b.distanceKm != null) {
+          return a.distanceKm - b.distanceKm;
+        }
         const ap = (a.pricePerSqft || 0) + (a.priceRupees || 0) / 1e7;
         const bp = (b.pricePerSqft || 0) + (b.priceRupees || 0) / 1e7;
         return bp - ap;

@@ -2,7 +2,10 @@ const express = require('express');
 const magicbricksRouter = require('./magicbricks');
 const ninetyNineRouter  = require('./ninetyninacres');
 const housingRouter     = require('./housing');
-const { applyRadiusFilter } = require('../lib/listingRadius');
+const {
+  applyRadiusFilter,
+  applyNearestListings,
+} = require('../lib/listingRadius');
 const { geocodeListings } = require('../lib/listingGeocode');
 
 const router = express.Router();
@@ -136,17 +139,15 @@ router.get('/', async (req, res) => {
     ? { ...fetchQuery, lat, lng: centerLng, radius }
     : fetchQuery;
 
-  const mbResult = await Promise.resolve(callRouter(magicbricksRouter, mbQuery));
-  ingestBatch({ status: 'fulfilled', value: mbResult }, 'MagicBricks', allListings, sources, errors);
+  const [mbResult, naResult, hoResult] = await Promise.all([
+    Promise.resolve(callRouter(magicbricksRouter, mbQuery)),
+    Promise.resolve(callRouter(ninetyNineRouter, fetchQuery)),
+    Promise.resolve(callRouter(housingRouter, fetchQuery)),
+  ]);
 
-  if (!allListings.some(isPriced)) {
-    const [naResult, hoResult] = await Promise.allSettled([
-      callRouter(ninetyNineRouter, fetchQuery),
-      callRouter(housingRouter, fetchQuery),
-    ]);
-    ingestBatch(naResult, '99acres', allListings, sources, errors);
-    ingestBatch(hoResult, 'Housing.com', allListings, sources, errors);
-  }
+  ingestBatch({ status: 'fulfilled', value: mbResult }, 'MagicBricks', allListings, sources, errors);
+  ingestBatch({ status: 'fulfilled', value: naResult }, '99acres', allListings, sources, errors);
+  ingestBatch({ status: 'fulfilled', value: hoResult }, 'Housing.com', allListings, sources, errors);
 
   if (allListings.length === 0) {
     return res.status(502).json({
@@ -159,15 +160,45 @@ router.get('/', async (req, res) => {
 
   let listings = dedupeListings(allListings);
   let radiusNote = mbResult.data?.radiusNote;
+  const pricedAll = listings.filter(isPriced);
 
   if (hasRadiusFilter) {
-    const priced = listings.filter(isPriced);
-    if (priced.length > 0) {
-      listings = priced;
-    } else if (!radiusNote) {
-      radiusNote = 'RERA projects in radius — online prices not available for these listings.';
+    const latN = parseFloat(lat);
+    const lngN = parseFloat(centerLng);
+    const rKm = parseFloat(radius);
+
+    await geocodeListings(listings, city, 120);
+
+    const pool = pricedAll.length > 0 ? pricedAll : listings;
+    const filtered = applyRadiusFilter(pool, latN, lngN, rKm);
+    const pricedInRadius = filtered.listings.filter(isPriced);
+
+    if (pricedInRadius.length > 0) {
+      listings = sortListings(pricedInRadius).slice(0, 30);
+      radiusNote = filtered.radiusNote;
+    } else if (pricedAll.length > 0) {
+      listings = applyNearestListings(pricedAll, latN, lngN, 30);
+      radiusNote =
+        `Showing nearest priced projects (${listings.length} found; `
+        + `none strictly within ${rKm}km).`;
+    } else if (filtered.listings.length > 0) {
+      listings = filtered.listings.slice(0, 30);
+      radiusNote =
+        filtered.radiusNote
+        || 'RERA projects in radius — online prices not available for these listings.';
+    } else {
+      listings = applyNearestListings(listings, latN, lngN, 20);
+      radiusNote =
+        listings.length > 0
+          ? `Showing nearest projects (${listings.length}); price data may be limited.`
+          : filtered.radiusNote;
     }
-    listings = sortListings(listings).slice(0, 30);
+  } else if (pricedAll.length > 0) {
+    listings = sortListings(pricedAll);
+    if (listings.length > 50) {
+      listings = listings.slice(0, 50);
+      radiusNote = 'Showing top 50 priced city projects.';
+    }
   } else if (listings.length > 50) {
     listings = sortListings(listings).slice(0, 50);
     radiusNote = 'Showing top 50 city projects. Tap the map for radius-filtered results.';

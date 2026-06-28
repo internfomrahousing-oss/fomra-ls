@@ -25,9 +25,13 @@ function geocodeOne(query) {
 function geocodeQueryForListing(l, city) {
   const cityNorm = (city || 'Chennai').replace(/\s+district\s*$/i, '').trim();
   const name = (l.projectName || '').trim();
-  const addr = (l.locality || l.address || '').trim();
+  const locality = (l.locality || '').trim();
+  const addr = (locality || l.address || '').trim();
   const pin = addr.match(/\b(\d{6})\b/);
   if (pin) return `${pin[1]}, Tamil Nadu, India`;
+  if (locality && locality.length > 2 && locality !== name) {
+    return `${locality}, ${cityNorm}, Tamil Nadu, India`;
+  }
   if (name && name.length > 2) return `${name}, ${cityNorm}, Tamil Nadu, India`;
   const short = addr.slice(0, 60).replace(/\s+/g, ' ').trim();
   if (short.length > 5) return `${short}, ${cityNorm}, Tamil Nadu, India`;
