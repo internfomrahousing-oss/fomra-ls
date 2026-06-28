@@ -3293,19 +3293,18 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
     return null;
   }
 
-  /// Selected parcel survey + sub + TNGIS revenue codes for sketch_fmb.
-  ({String survey, String sub, String dc, String tc, String vc})? _selectedParcelForFmb() {
+  /// Selected parcel survey + optional sub + TNGIS revenue codes for sketch_fmb.
+  ({String survey, String? sub, String dc, String tc, String vc})? _selectedParcelForFmb() {
     final survey = widget.surveyNumber?.trim();
     if (survey == null || survey.isEmpty) return null;
     final sub = _resolvedMapSub();
-    if (sub == null || sub.isEmpty) return null;
 
     String? dc = _nonEmptyCode(widget.districtCode);
     String? tc = _nonEmptyCode(widget.talukCode);
     String? vc = _nonEmptyCode(widget.villageCode);
 
     for (final row in widget.tngisSubdivisions) {
-      if (row.effectiveSubDivision != sub && !_isSelectedFmbRow(row)) continue;
+      if (sub != null && row.effectiveSubDivision != sub && !_isSelectedFmbRow(row)) continue;
       dc ??= _nonEmptyCode(row.fields['District Code']);
       tc ??= _nonEmptyCode(row.fields['Taluk Code']);
       vc ??= _nonEmptyCode(row.fields['Village Code']);
@@ -3334,9 +3333,6 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
         final survey = widget.surveyNumber?.trim();
         if (survey == null || survey.isEmpty) {
           _fmbLoadError = 'Tap the map to select a land parcel.';
-        } else if (_resolvedMapSub() == null) {
-          _fmbLoadError =
-              'Sub-division not resolved yet. Wait for parcel details or tap directly on the plot.';
         } else {
           _fmbLoadError =
               'Revenue codes not ready. Wait for parcel details to finish loading.';
@@ -3345,8 +3341,10 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
       return;
     }
 
-    final row = _subdivisionRowForSub(parcel.sub) ?? _containingSubdivisionRow();
-    if (row != null) {
+    final row = parcel.sub != null
+        ? (_subdivisionRowForSub(parcel.sub!) ?? _containingSubdivisionRow())
+        : null;
+    if (row != null && row.effectiveSubDivision != null) {
       await _fetchFmbForSubdivision(row);
       return;
     }
@@ -3449,16 +3447,19 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
     if (surveyNo == null || surveyNo.isEmpty) return null;
 
     final subDiv = (sub ?? _resolvedMapSub())?.trim();
-    if (subDiv == null || subDiv.isEmpty || subDiv == '-' || subDiv == surveyNo) {
-      return null;
-    }
+    final validSub = subDiv != null &&
+        subDiv.isNotEmpty &&
+        subDiv != '-' &&
+        subDiv != surveyNo;
 
     String? dcVal = _nonEmptyCode(dc) ?? _nonEmptyCode(widget.districtCode);
     String? tcVal = _nonEmptyCode(tc) ?? _nonEmptyCode(widget.talukCode);
     String? vcVal = _nonEmptyCode(vc) ?? _nonEmptyCode(widget.villageCode);
     if (dcVal == null || tcVal == null || vcVal == null) {
       for (final row in widget.tngisSubdivisions) {
-        if (row.effectiveSubDivision != subDiv && !_isSelectedFmbRow(row)) continue;
+        if (validSub && row.effectiveSubDivision != subDiv && !_isSelectedFmbRow(row)) {
+          continue;
+        }
         dcVal ??= _nonEmptyCode(row.fields['District Code']);
         tcVal ??= _nonEmptyCode(row.fields['Taluk Code']);
         vcVal ??= _nonEmptyCode(row.fields['Village Code']);
@@ -3470,7 +3471,9 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
     }
 
     parts.add('surveyNo=${Uri.encodeComponent(surveyNo)}');
-    parts.add('subDiv=${Uri.encodeComponent(subDiv)}');
+    if (validSub) {
+      parts.add('subDiv=${Uri.encodeComponent(subDiv)}');
+    }
     parts.add('dc=${Uri.encodeComponent(dcVal)}');
     parts.add('tc=${Uri.encodeComponent(tcVal)}');
     parts.add('vc=${Uri.encodeComponent(vcVal)}');
@@ -3487,7 +3490,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
     final path = _fmbApiPath(survey: survey, sub: sub, dc: dc, tc: tc, vc: vc);
     if (path == null) {
       setState(() => _fmbLoadError =
-          'Survey and sub-division required. Tap the map and wait for parcel details.');
+          'Survey and revenue codes required. Tap the map and wait for parcel details.');
       return;
     }
     setState(() {
@@ -4867,12 +4870,14 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
                     Text(
                       sub != null && sub.isNotEmpty && sub != '-'
                           ? 'FMB Sketch · Survey ${survey ?? ''} · Sub $sub'
-                          : 'FMB Sketch',
+                          : 'FMB Sketch · Survey ${survey ?? ''} (general)',
                       style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Official TSLR/FMB sketch with government seal · ${(pdfBytes.length / 1024).round()} KB',
+                      sub != null && sub.isNotEmpty && sub != '-'
+                          ? 'Official TSLR/FMB sketch with government seal · ${(pdfBytes.length / 1024).round()} KB'
+                          : 'General survey FMB (no sub-division) · ${(pdfBytes.length / 1024).round()} KB',
                       style: TextStyle(fontSize: 10, color: Colors.grey.shade700),
                     ),
                   ],
@@ -4948,14 +4953,16 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
         ),
       ],
       Text(
-        widget.surveyNumber != null && _resolvedMapSub() != null
-            ? 'Survey ${widget.surveyNumber} · Sub ${_resolvedMapSub()} — tap Load FMB to fetch sketch.'
+        widget.surveyNumber != null
+            ? _resolvedMapSub() != null
+                ? 'Survey ${widget.surveyNumber} · Sub ${_resolvedMapSub()} — tap Load FMB to fetch sketch.'
+                : 'Survey ${widget.surveyNumber} — no sub-division; will load general survey FMB.'
             : widget.lat == null
                 ? 'Tap the map to select a land parcel, then open FMB.'
                 : 'Waiting for survey and sub-division. Tap directly on your plot.',
         style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
       ),
-      if (widget.surveyNumber != null && _resolvedMapSub() != null) ...[
+      if (widget.surveyNumber != null) ...[
         const SizedBox(height: 8),
         OutlinedButton.icon(
           onPressed: _loadFmbForSelectedParcel,

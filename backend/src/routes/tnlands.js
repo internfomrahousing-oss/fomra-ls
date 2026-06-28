@@ -1724,7 +1724,7 @@ function collablandPropsFromCodes(codes, tngisProps = {}) {
 /**
  * TNGIS sketch_fmb (rural + urban/TSLR) then CollabLand — maximizes coverage across TN.
  */
-async function fetchFmbSketchMultiSource(codes, ctx = {}) {
+async function tryFmbSourcesForCodes(codes, ctx = {}) {
   const { lat, lon, tngisProps = {} } = ctx;
   let giLand = null;
   if (Number.isFinite(lat) && Number.isFinite(lon)) {
@@ -1755,16 +1755,47 @@ async function fetchFmbSketchMultiSource(codes, ctx = {}) {
     const collab = await fetchCollablandFmbPdf(props);
     if (collab?.available && collab.pdfBase64) {
       return {
-        ok:         true,
-        source:     collab.source,
-        pdfBase64:  collab.pdfBase64,
-        fileName:   collab.fileName || fmbFileName(props),
+        ok:           true,
+        source:       collab.source,
+        pdfBase64:    collab.pdfBase64,
+        fileName:     collab.fileName || fmbFileName(props),
         landTypeUsed: 'collabland',
       };
     }
     if (collab?.error) lastErr = collab.error;
   } catch (err) {
     lastErr = err.message;
+  }
+
+  return { ok: false, error: lastErr };
+}
+
+async function fetchFmbSketchMultiSource(codes, ctx = {}) {
+  const { tngisProps = {} } = ctx;
+  const survey = String(codes.surveyNumber ?? '').trim();
+  const sub = String(codes.subDivision ?? '').trim();
+  const hasSub = sub && !surveyNumberMatches(sub, survey);
+  let lastErr = 'FMB sketch not available from TNGIS';
+
+  if (hasSub) {
+    const withSub = await tryFmbSourcesForCodes(codes, ctx);
+    if (withSub.ok) return { ...withSub, fmbScope: 'subdivision' };
+    lastErr = withSub.error || lastErr;
+  }
+
+  if (survey) {
+    const general = await tryFmbSourcesForCodes({ ...codes, subDivision: '' }, ctx);
+    if (general.ok) {
+      return {
+        ...general,
+        fmbScope: 'general',
+        fileName: `FMB-${survey}.pdf`,
+        note:     hasSub
+          ? 'Sub-division sketch unavailable — showing general survey FMB.'
+          : 'General survey FMB (no sub-division on record).',
+      };
+    }
+    lastErr = general.error || lastErr;
   }
 
   const digitized = tngisProps.is_fmb === 1 || tngisProps.is_fmb === '1';
@@ -2410,10 +2441,9 @@ router.get('/fmb', async (req, res) => {
     });
   }
 
-  // Fast path — caller supplied survey, sub-division, and revenue codes.
-  if (codes.districtCode && codes.talukCode && codes.villageCode
-      && codes.surveyNumber && subReq) {
-    codes.subDivision = subReq;
+  // Fast path — caller supplied survey + revenue codes (sub-division optional).
+  if (codes.districtCode && codes.talukCode && codes.villageCode && codes.surveyNumber) {
+    codes.subDivision = subReq || '';
     try {
       return await fetchFmbWithExplicitCodes();
     } catch (err) {
@@ -2468,8 +2498,8 @@ router.get('/fmb', async (req, res) => {
     if (propsSub) codes.subDivision = propsSub;
   }
 
-  // Survey + sub resolved from map tap — fetch FMB directly once admin codes are known.
-  if (subReq && codes.districtCode && codes.talukCode && codes.villageCode && codes.surveyNumber) {
+  // Survey resolved — fetch FMB (sub-specific or general parent sketch).
+  if (codes.districtCode && codes.talukCode && codes.villageCode && codes.surveyNumber) {
     try {
       return await fetchFmbWithExplicitCodes();
     } catch (err) {
@@ -2528,10 +2558,7 @@ router.get('/fmb', async (req, res) => {
   }
 
   if (!codes.subDivision) {
-    return res.status(404).json({
-      error: 'Could not resolve sub-division for FMB at this map point. Zoom in and tap directly on the land plot.',
-      source: 'TNGIS GI Viewer (sketch_fmb)',
-    });
+    codes.subDivision = '';
   }
 
   try {
