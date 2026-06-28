@@ -60,7 +60,26 @@ const _kCategories = [
 
 // â”€â”€ Valuation result â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
+class _AreaPriceStats {
+  final double avgPerSqft;
+  final double medianPerSqft;
+  final int pricedCount;
+
+  const _AreaPriceStats({
+    required this.avgPerSqft,
+    required this.medianPerSqft,
+    required this.pricedCount,
+  });
+
+  bool get hasData => pricedCount > 0;
+}
+
 class _ValuationResult {
+  final double areaAvgPerSqft;
+  final int pricedListingCount;
+  final double landSizeSqft;
+  final double buyPerSqft;
+  final double sellPerSqft;
   final double recommendedPurchasePrice;
   final double recommendedSellingPrice;
   final double expectedMargin;
@@ -69,6 +88,11 @@ class _ValuationResult {
   final String recommendation;
 
   _ValuationResult({
+    required this.areaAvgPerSqft,
+    required this.pricedListingCount,
+    required this.landSizeSqft,
+    required this.buyPerSqft,
+    required this.sellPerSqft,
     required this.recommendedPurchasePrice,
     required this.recommendedSellingPrice,
     required this.expectedMargin,
@@ -76,6 +100,13 @@ class _ValuationResult {
     required this.riskScore,
     required this.recommendation,
   });
+}
+
+String _fmtIndianRupee(double value) {
+  if (value >= 1e7) return '₹${(value / 1e7).toStringAsFixed(2)} Cr';
+  if (value >= 1e5) return '₹${(value / 1e5).toStringAsFixed(2)} L';
+  if (value >= 1000) return '₹${(value / 1000).toStringAsFixed(1)}K';
+  return '₹${value.round()}';
 }
 
 
@@ -609,22 +640,46 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
 
   // â”€â”€ AI Valuation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-  double _competitorBenchmarkPrice() {
-    final priced = _mbListings
-        .map((e) => (e['pricePerSqft'] as num?)?.toDouble() ?? 0)
-        .where((p) => p > 0)
+  double? _listingPricePerSqft(Map<String, dynamic> item) {
+    var ppsf = (item['pricePerSqft'] as num?)?.toDouble() ?? 0;
+    if (ppsf <= 0) {
+      final total = (item['priceRupees'] as num?)?.toDouble() ?? 0;
+      final area = (item['area'] as num?)?.toDouble() ?? 0;
+      if (total > 0 && area > 0) ppsf = total / area;
+    }
+    return ppsf > 0 ? ppsf : null;
+  }
+
+  _AreaPriceStats _areaPriceStats() {
+    final rates = _mbListings
+        .map(_listingPricePerSqft)
+        .whereType<double>()
         .toList()
       ..sort();
-    if (priced.isEmpty) return 5000.0;
-    final mid = priced.length ~/ 2;
-    return priced.length.isOdd
-        ? priced[mid]
-        : (priced[mid - 1] + priced[mid]) / 2;
+    if (rates.isEmpty) {
+      return const _AreaPriceStats(
+        avgPerSqft: 0,
+        medianPerSqft: 0,
+        pricedCount: 0,
+      );
+    }
+    final sum = rates.fold<double>(0, (a, b) => a + b);
+    final mid = rates.length ~/ 2;
+    final median = rates.length.isOdd
+        ? rates[mid]
+        : (rates[mid - 1] + rates[mid]) / 2;
+    return _AreaPriceStats(
+      avgPerSqft: sum / rates.length,
+      medianPerSqft: median,
+      pricedCount: rates.length,
+    );
   }
 
   _ValuationResult _computeValuation() {
+    final areaStats = _areaPriceStats();
+    final benchmarkPrice =
+        areaStats.hasData ? areaStats.avgPerSqft : 5000.0;
     final infraScore = _infraScores['Overall Location'] ?? 50;
-    final benchmarkPrice = _competitorBenchmarkPrice();
     final roadWidth = double.tryParse(_roadWidthCtrl.text) ?? 20;
     final landSize = double.tryParse(_landSizeCtrl.text) ?? 1000;
 
@@ -646,11 +701,18 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
     final roadBonus = (roadWidth / 60).clamp(0.9, 1.2);
     final sizeDiscount = landSize > 10000 ? 0.95 : 1.0;
 
-    final basePrice = benchmarkPrice * locationMultiplier * potentialMultiplier *
-        roadBonus * sizeDiscount;
-    final purchasePrice = basePrice * (1 - infraScore / 500);
-    final sellingPrice = basePrice * 1.18;
-    final margin = ((sellingPrice - purchasePrice) / purchasePrice * 100);
+    final basePerSqft = benchmarkPrice *
+        locationMultiplier *
+        potentialMultiplier *
+        roadBonus *
+        sizeDiscount;
+    final buyPerSqft = basePerSqft * (1 - infraScore / 500);
+    final sellPerSqft = basePerSqft * 1.18;
+    final purchaseTotal = buyPerSqft * landSize;
+    final sellingTotal = sellPerSqft * landSize;
+    final margin = buyPerSqft > 0
+        ? ((sellPerSqft - buyPerSqft) / buyPerSqft * 100)
+        : 0.0;
 
     final investmentScore = ((infraScore * 0.55 +
                 (potentialMultiplier - 0.8) / 0.45 * 100 * 0.45) *
@@ -674,8 +736,13 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                 : 'Avoid';
 
     return _ValuationResult(
-      recommendedPurchasePrice: purchasePrice,
-      recommendedSellingPrice: sellingPrice,
+      areaAvgPerSqft: benchmarkPrice,
+      pricedListingCount: areaStats.pricedCount,
+      landSizeSqft: landSize,
+      buyPerSqft: buyPerSqft,
+      sellPerSqft: sellPerSqft,
+      recommendedPurchasePrice: purchaseTotal,
+      recommendedSellingPrice: sellingTotal,
       expectedMargin: margin,
       investmentScore: investmentScore,
       riskScore: riskScore,
@@ -719,6 +786,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
       _mbError = null;
       _mbPartialWarning = null;
       _mbListings = [];
+      _valuationResult = null;
     });
 
     try {
@@ -903,7 +971,10 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                 child: GestureDetector(
                   onTap: () {
                     if (selected) return;
-                    setState(() => _selectedRadius = km);
+                    setState(() {
+                      _selectedRadius = km;
+                      _valuationResult = null;
+                    });
                     if (_mapReady && _activeLatLng != null) {
                       _mapController.move(_activeLatLng!, _zoomForRadius(km));
                     }
@@ -973,6 +1044,22 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
 
         if (_mbListings.isNotEmpty) ...[
           const SizedBox(height: 12),
+          if (_areaPriceStats().hasData)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: mbColor.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: mbColor.withValues(alpha: 0.25)),
+              ),
+              child: Text(
+                'Area average: ₹${_areaPriceStats().avgPerSqft.round()}/sqft'
+                ' (${_areaPriceStats().pricedCount} priced projects within ${_selectedRadius}km of pin)',
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: mbColor),
+              ),
+            ),
+          if (_areaPriceStats().hasData) const SizedBox(height: 10),
           // ── Project type filters ────────────────────────────────────────
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
@@ -2056,6 +2143,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                       _poiCounts = {};
                       _poiPlaces = {};
                       _infraScoreMap = {};
+                      _valuationResult = null;
                       if (_activeLatLng != null && _mapReady) {
                         _mapController.move(
                             _activeLatLng!, _zoomForRadius(km));
@@ -2349,7 +2437,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
               SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'Inputs: Infrastructure Score Â· Market Price Â· Road Width Â· Land Size Â· Development Potential Â· Location Category',
+                  'Inputs: Area avg ₹/sqft (from pinned point) · Infrastructure · Road Width · Land Size · Development Potential · Location Category',
                   style: TextStyle(
                       fontSize: 11, color: AppColors.primary, height: 1.4),
                 ),
@@ -2386,16 +2474,33 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
             ),
           ]),
           const SizedBox(height: 12),
-          // Market price reference
-          _AutoChip('Market Reference', () {
-            final bench = _competitorBenchmarkPrice();
-            final fromCompetitors = _mbListings.any(
-              (e) => ((e['pricePerSqft'] as num?)?.toDouble() ?? 0) > 0,
+          Builder(builder: (context) {
+            final stats = _areaPriceStats();
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _AutoChip('Area Avg Price', () {
+                  if (_activeLatLng == null) {
+                    return 'Tap the map to pin a location';
+                  }
+                  if (_fetchingMb) {
+                    return 'Loading ${_selectedRadius}km competitor prices…';
+                  }
+                  if (!stats.hasData) {
+                    return 'No priced projects in ${_selectedRadius}km — using ₹5000/sqft default';
+                  }
+                  return '₹${stats.avgPerSqft.round()}/sqft avg · ${stats.pricedCount} projects · ${_selectedRadius}km from pin';
+                }()),
+                if (stats.hasData) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    'Median ₹${stats.medianPerSqft.round()}/sqft in this radius',
+                    style: TextStyle(fontSize: 10, color: Colors.grey.shade600),
+                  ),
+                ],
+              ],
             );
-            return fromCompetitors
-                ? '₹${bench.toInt()}/sqft  (median from competitor data)'
-                : '₹5000/sqft  (default — fetch competitor data to refine)';
-          }()),
+          }),
           const SizedBox(height: 12),
           // Row 3: Location Category + Development Potential
           Row(children: [
@@ -2475,6 +2580,13 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
               fontSize: 14,
               fontWeight: FontWeight.w700,
               color: AppColors.textPrimary)),
+      const SizedBox(height: 8),
+      Text(
+        v.pricedListingCount > 0
+            ? 'Based on ₹${v.areaAvgPerSqft.round()}/sqft area average · ${v.landSizeSqft.round()} sqft land'
+            : 'Based on ₹${v.areaAvgPerSqft.round()}/sqft default rate · ${v.landSizeSqft.round()} sqft land',
+        style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
+      ),
       const SizedBox(height: 12),
       GridView.count(
         crossAxisCount: 4,
@@ -2484,17 +2596,33 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
         mainAxisSpacing: 8,
         childAspectRatio: 0.95,
         children: [
-          _BenchmarkTile('Buy Price',
-              'â‚¹${v.recommendedPurchasePrice.toInt()}', AppColors.info),
-          _BenchmarkTile('Sell Price',
-              'â‚¹${v.recommendedSellingPrice.toInt()}', AppColors.success),
+          _BenchmarkTile('Buy (total)',
+              _fmtIndianRupee(v.recommendedPurchasePrice), AppColors.info),
+          _BenchmarkTile('Sell (total)',
+              _fmtIndianRupee(v.recommendedSellingPrice), AppColors.success),
+          _BenchmarkTile('Buy / sqft',
+              '₹${v.buyPerSqft.round()}', AppColors.info),
+          _BenchmarkTile('Sell / sqft',
+              '₹${v.sellPerSqft.round()}', AppColors.success),
+        ],
+      ),
+      const SizedBox(height: 10),
+      GridView.count(
+        crossAxisCount: 3,
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        crossAxisSpacing: 8,
+        mainAxisSpacing: 8,
+        childAspectRatio: 1.4,
+        children: [
           _BenchmarkTile('Margin',
               '${v.expectedMargin.toStringAsFixed(1)}%', AppColors.warning),
           _BenchmarkTile(
               'Inv. Score', '${v.investmentScore}/100', AppColors.primary),
+          _BenchmarkTile('Area avg',
+              '₹${v.areaAvgPerSqft.round()}/sqft', const Color(0xFFE65100)),
         ],
       ),
-      const SizedBox(height: 10),
       Row(children: [
         Expanded(
           child: _OutputCard(
@@ -3101,7 +3229,6 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
   Uint8List? _fmbPdfBytes;
   String? _fmbLoadError;
   bool _loadingFmb = false;
-  int? _fmbViewerShownLen;
   bool   _showManualPatta = false;
   bool   _showManualEc    = false;
   Timer? _pattaDebounce;
@@ -3331,7 +3458,6 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
       _fmbPdfBytes = null;
       _fmbLoadError = null;
       _loadingFmb = false;
-      _fmbViewerShownLen = null;
       for (final b in _subdivBundles.values) {
         b.fmbPdf = null;
         b.fmbError = null;
@@ -3547,28 +3673,16 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
   bool _hasFmbSubdivision(_TngisSubdivisionRow row) =>
       row.effectiveSubDivision != null;
 
-  void _showFmbSketchViewer(Uint8List pdfBytes, {String? fileName}) {
+  void _openFmbPdfInNewTab(Uint8List pdfBytes, {String? fileName}) {
     final survey = widget.surveyNumber?.trim();
     final sub = _resolvedMapSub() ?? widget.subDivision?.trim();
     final name = fileName ??
         'FMB${survey != null ? '-$survey' : ''}${sub != null ? '-Sub-$sub' : ''}.pdf';
-    FmbSketchViewer.show(
-      context,
-      pdfBytes: pdfBytes,
+    FmbSketchViewer.openInNewTab(
+      pdfBytes,
+      context: context,
       fileName: name,
-      survey: survey,
-      subDivision: sub,
     );
-  }
-
-  void _maybeAutoOpenFmbViewer(Uint8List pdfBytes, {String? fileName}) {
-    if (_selectedGiService != 'fmb') return;
-    if (_fmbViewerShownLen == pdfBytes.length) return;
-    _fmbViewerShownLen = pdfBytes.length;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || _selectedGiService != 'fmb') return;
-      _showFmbSketchViewer(pdfBytes, fileName: fileName);
-    });
   }
 
   static String? _nonEmptyCode(String? value) {
@@ -3675,7 +3789,6 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
         _fmbPdfBytes = Uint8List.fromList(bytes);
         _loadingFmb = false;
       });
-      _maybeAutoOpenFmbViewer(_fmbPdfBytes!);
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() {
@@ -3726,10 +3839,6 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
           _fmbPdfBytes = bundle.fmbPdf;
           _fmbLoadError = null;
         });
-        _maybeAutoOpenFmbViewer(
-          bundle.fmbPdf!,
-          fileName: 'FMB Survey ${row.surveyNumber} Sub ${row.subLabel}.pdf',
-        );
       }
     } on ApiException catch (e) {
       bundle.fmbError = e.message;
@@ -5064,20 +5173,14 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
         SizedBox(
           width: double.infinity,
           child: FilledButton.icon(
-            onPressed: () => _showFmbSketchViewer(pdfBytes!, fileName: fileName),
-            icon: const Icon(Icons.visibility_outlined, size: 18),
-            label: const Text('View FMB Sketch', style: TextStyle(fontSize: 12)),
+            onPressed: () => _openFmbPdfInNewTab(pdfBytes!, fileName: fileName),
+            icon: const Icon(Icons.open_in_new_rounded, size: 18),
+            label: const Text('View as PDF', style: TextStyle(fontSize: 12)),
             style: FilledButton.styleFrom(
               backgroundColor: const Color(0xFF1A237E),
               padding: const EdgeInsets.symmetric(vertical: 12),
             ),
           ),
-        ),
-        const SizedBox(height: 8),
-        OutlinedButton.icon(
-          onPressed: () => _showFmbSketchViewer(pdfBytes!, fileName: fileName),
-          icon: const Icon(Icons.fullscreen, size: 16),
-          label: const Text('Open fullscreen viewer', style: TextStyle(fontSize: 11)),
         ),
       ]);
     }
@@ -5647,12 +5750,12 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
               ))
             else if (bundle.fmbPdf != null)
               FilledButton.icon(
-                onPressed: () => _showFmbSketchViewer(
+                onPressed: () => _openFmbPdfInNewTab(
                   bundle.fmbPdf!,
                   fileName: 'FMB Survey ${row.surveyNumber} Sub ${row.subLabel}.pdf',
                 ),
-                icon: const Icon(Icons.visibility_outlined, size: 16),
-                label: const Text('View FMB Sketch', style: TextStyle(fontSize: 11)),
+                icon: const Icon(Icons.open_in_new_rounded, size: 16),
+                label: const Text('View as PDF', style: TextStyle(fontSize: 11)),
                 style: FilledButton.styleFrom(
                   backgroundColor: const Color(0xFF1A237E),
                   minimumSize: const Size(double.infinity, 40),

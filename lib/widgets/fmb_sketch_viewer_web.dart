@@ -6,6 +6,16 @@ import 'package:flutter/material.dart';
 
 /// TNGIS-style full-screen FMB sketch viewer (web).
 class FmbSketchViewer {
+  static void openInNewTab(
+    Uint8List pdfBytes, {
+    BuildContext? context,
+    String fileName = 'FMB Sketch.pdf',
+  }) {
+    final blob = html.Blob([pdfBytes], 'application/pdf');
+    final url = html.Url.createObjectUrlFromBlob(blob);
+    html.window.open(url, '_blank');
+  }
+
   static Future<void> show(
     BuildContext context, {
     required Uint8List pdfBytes,

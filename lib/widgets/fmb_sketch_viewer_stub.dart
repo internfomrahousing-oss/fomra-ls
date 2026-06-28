@@ -6,6 +6,16 @@ import 'patta_document_preview.dart';
 
 /// Non-web fallback — opens document preview card.
 class FmbSketchViewer {
+  static void openInNewTab(
+    Uint8List pdfBytes, {
+    BuildContext? context,
+    String fileName = 'FMB Sketch.pdf',
+  }) {
+    if (context != null) {
+      show(context, pdfBytes: pdfBytes, fileName: fileName);
+    }
+  }
+
   static Future<void> show(
     BuildContext context, {
     required Uint8List pdfBytes,

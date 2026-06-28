@@ -90,6 +90,30 @@ function sortListings(listings) {
   });
 }
 
+function computePriceStats(listings) {
+  const rates = [];
+  for (const l of listings) {
+    let ppsf = l.pricePerSqft || 0;
+    if (ppsf <= 0 && (l.priceRupees || 0) > 0 && (l.area || 0) > 0) {
+      ppsf = Math.round(l.priceRupees / l.area);
+    }
+    if (ppsf > 0) rates.push(ppsf);
+  }
+  if (!rates.length) return null;
+  rates.sort((a, b) => a - b);
+  const sum = rates.reduce((a, b) => a + b, 0);
+  const mid = Math.floor(rates.length / 2);
+  return {
+    avgPricePerSqft: Math.round(sum / rates.length),
+    medianPricePerSqft: rates.length % 2
+      ? rates[mid]
+      : Math.round((rates[mid - 1] + rates[mid]) / 2),
+    minPricePerSqft: rates[0],
+    maxPricePerSqft: rates[rates.length - 1],
+    pricedCount: rates.length,
+  };
+}
+
 // GET /api/competitors?city=Chennai&lat=&lng=&radius=
 router.get('/', async (req, res) => {
   const query = { ...req.query };
@@ -158,6 +182,7 @@ router.get('/', async (req, res) => {
     center:  (lat && centerLng) ? { lat: parseFloat(lat), lng: parseFloat(centerLng) } : null,
     radiusNote,
     radiusApplied: hasRadiusFilter,
+    priceStats: computePriceStats(listings),
     listings,
     partial: errors.length > 0 ? errors : undefined,
   });
