@@ -12,10 +12,7 @@ function listingCoords(l) {
   return null;
 }
 
-/**
- * Filter listings by radius when coordinates exist.
- * If none have coordinates, return city-wide results (common on Vercel/TNRERA).
- */
+/** Strict radius filter — only projects inside radiusKm with map coordinates. */
 function applyRadiusFilter(listings, lat, lng, radiusKm) {
   const latN = parseFloat(lat);
   const lngN = parseFloat(lng);
@@ -24,20 +21,15 @@ function applyRadiusFilter(listings, lat, lng, radiusKm) {
     return { listings, radiusApplied: false };
   }
 
-  const withCoords = [];
-  const withoutCoords = [];
-  for (const l of listings) {
-    if (listingCoords(l)) withCoords.push(l);
-    else withoutCoords.push(l);
-  }
+  const withCoords = listings.filter((l) => listingCoords(l));
 
   if (withCoords.length === 0) {
     return {
-      listings,
-      radiusApplied: false,
+      listings: [],
+      radiusApplied: true,
       radiusNote:
-        'Project map locations unavailable — showing city-wide results. '
-        + 'Radius filter applies when coordinates are available.',
+        `No projects could be mapped within ${r}km. `
+        + 'Try a larger radius or tap closer to a city centre.',
     };
   }
 
@@ -58,7 +50,7 @@ function applyRadiusFilter(listings, lat, lng, radiusKm) {
   return {
     listings: [],
     radiusApplied: true,
-    radiusNote: `No projects with map coordinates within ${r}km of this point.`,
+    radiusNote: `No projects within ${r}km of this map point. Try 5km or 10km.`,
   };
 }
 

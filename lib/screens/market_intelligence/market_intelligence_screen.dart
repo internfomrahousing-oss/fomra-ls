@@ -740,15 +740,10 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
           .toList();
 
       String? radiusNote = result['radiusNote'] as String?;
+      final radiusApplied = result['radiusApplied'] == true;
 
-      if (loc != null) {
-        final filtered = _filterListingsWithinRadius(listings, loc, _selectedRadius);
-        if (filtered.isNotEmpty) {
-          listings = filtered;
-        } else if (listings.isNotEmpty) {
-          radiusNote ??=
-              'Project map locations unavailable — showing city-wide results for ${_detectedDistrict ?? cityParam}.';
-        }
+      if (loc != null && !radiusApplied) {
+        listings = _filterListingsWithinRadius(listings, loc, _selectedRadius);
       }
 
       if (listings.isEmpty) {
@@ -854,7 +849,12 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
         .replaceAll(RegExp(r'\s*[Dd]istrict\s*$'), '').trim();
 
     String fmtPricePerSqft(Map<String, dynamic> item) {
-      final ppsf = (item['pricePerSqft'] as num?)?.toDouble() ?? 0;
+      var ppsf = (item['pricePerSqft'] as num?)?.toDouble() ?? 0;
+      if (ppsf <= 0) {
+        final total = (item['priceRupees'] as num?)?.toDouble() ?? 0;
+        final area = (item['area'] as num?)?.toDouble() ?? 0;
+        if (total > 0 && area > 0) ppsf = total / area;
+      }
       if (ppsf <= 0) return '';
       return '₹${ppsf.toInt()}/sqft';
     }
@@ -864,6 +864,15 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
       if (total >= 1e7) return '₹${(total / 1e7).toStringAsFixed(2)} Cr';
       if (total > 0) return '₹${(total / 1e5).toStringAsFixed(2)} L';
       return '';
+    }
+
+    String fmtPriceLabel(Map<String, dynamic> item) {
+      final ppsf = fmtPricePerSqft(item);
+      final total = fmtTotalPrice(item);
+      if (ppsf.isNotEmpty && total.isNotEmpty) return '$ppsf · $total';
+      if (ppsf.isNotEmpty) return ppsf;
+      if (total.isNotEmpty) return total;
+      return 'Price on request';
     }
 
     Widget chip(String label, Color color) => Container(
@@ -1054,6 +1063,8 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
             final source    = item['source']      as String? ?? '';
             final ppsfStr   = fmtPricePerSqft(item);
             final totalStr  = fmtTotalPrice(item);
+            final priceLabel = fmtPriceLabel(item);
+            final hasPrice  = ppsfStr.isNotEmpty || totalStr.isNotEmpty;
             final distKm    = (item['distanceKm'] as num?)?.toDouble();
             final isTnrera  = source == 'TNRERA';
             return Container(
@@ -1080,32 +1091,37 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                       maxLines: 2, overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  if (ppsfStr.isNotEmpty || totalStr.isNotEmpty) ...[
-                    const SizedBox(width: 8),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        if (ppsfStr.isNotEmpty)
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: mbColor.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(ppsfStr,
-                                style: const TextStyle(
-                                    fontSize: 11, fontWeight: FontWeight.w800, color: mbColor)),
+                  const SizedBox(width: 8),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      if (hasPrice && ppsfStr.isNotEmpty)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: mbColor.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(6),
                           ),
-                        if (totalStr.isNotEmpty) ...[
-                          const SizedBox(height: 3),
-                          Text(totalStr,
+                          child: Text(ppsfStr,
                               style: const TextStyle(
-                                  fontSize: 10, fontWeight: FontWeight.w600,
-                                  color: AppColors.textSecondary)),
-                        ],
+                                  fontSize: 11, fontWeight: FontWeight.w800, color: mbColor)),
+                        )
+                      else
+                        Text(priceLabel,
+                            style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                                color: hasPrice ? mbColor : AppColors.textSecondary,
+                                fontStyle: hasPrice ? FontStyle.normal : FontStyle.italic)),
+                      if (totalStr.isNotEmpty) ...[
+                        const SizedBox(height: 3),
+                        Text(totalStr,
+                            style: const TextStyle(
+                                fontSize: 10, fontWeight: FontWeight.w600,
+                                color: AppColors.textSecondary)),
                       ],
-                    ),
-                  ],
+                    ],
+                  ),
                 ]),
                 if (distKm != null) ...[
                   const SizedBox(height: 4),

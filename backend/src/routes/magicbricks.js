@@ -2,6 +2,7 @@ const express = require('express');
 const https   = require('https');
 const http    = require('http');
 const { applyRadiusFilter } = require('../lib/listingRadius');
+const { geocodeListings } = require('../lib/listingGeocode');
 const router  = express.Router();
 
 // ── City map ──────────────────────────────────────────────────────────────────
@@ -252,14 +253,14 @@ async function fetchDetailPrice(url) {
   }
 }
 
-async function fetchLdJsonListings(city, mbPropType) {
+async function fetchLdJsonListings(city, mbPropType, maxItems = 12) {
   const pageUrl =
     `https://www.magicbricks.com/property-for-sale/residential-real-estate` +
     `?proptype=${mbPropType}&cityName=${encodeURIComponent(city)}`;
   const r = await fetchRaw(pageUrl, MINIMAL_HEADERS, 25000);
   if (r.status !== 200) return [];
 
-  const ldItems = extractLdJsonItems(r.body).slice(0, 12);
+  const ldItems = extractLdJsonItems(r.body).slice(0, maxItems);
   if (!ldItems.length) return [];
 
   const results = [];
@@ -393,6 +394,7 @@ router.get('/', async (req, res) => {
 
   let listings = [];
   const errors = [];
+  let source = 'MagicBricks';
   // MagicBricks blocks all serverless IPs — skip on Netlify and Vercel
   const onNetlify = !!process.env.NETLIFY;
   const onVercel  = !!process.env.VERCEL;
@@ -518,9 +520,24 @@ router.get('/', async (req, res) => {
     } catch (e) { errors.push(`LdJson(7): ${e.message}`); }
   }
 
-  // ── Fallback: TNRERA (all years in parallel — safe within Netlify 10s) ──
-  let source = 'MagicBricks';
-  if (listings.length === 0) {
+  // ── Vercel/serverless: LD+JSON often works when API endpoints are blocked ─
+  if (skipMb && listings.length === 0) {
+    try {
+      const ldListings = await fetchLdJsonListings(city, mbPropType, 16);
+      if (ldListings.length > 0) {
+        listings = ldListings;
+        source = 'MagicBricks';
+      } else {
+        errors.push('LdJson(serverless): no priced listings');
+      }
+    } catch (e) { errors.push(`LdJson(serverless): ${e.message}`); }
+  }
+
+  // ── Fallback: TNRERA when no priced listings ─────────────────────────────
+  const needsTnrera = listings.length === 0
+    || !listings.some((l) => (l.pricePerSqft || 0) > 0 || (l.priceRupees || 0) > 0);
+
+  if (needsTnrera) {
     try {
       const TNRERA_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36';
       const TNRERA_HDR = { 'User-Agent': TNRERA_UA, 'Accept': 'text/html,*/*', 'Referer': 'https://rera.tn.gov.in/' };
@@ -570,10 +587,11 @@ router.get('/', async (req, res) => {
         for (const p of filtered) {
           if (!seen2.has(p.reraNo)) seen2.set(p.reraNo, p);
         }
-        listings = [...seen2.values()].map(p => ({
+        const tnListings = [...seen2.values()].map(p => ({
           id:             `tnrera_${p.reraNo.replace(/[^a-zA-Z0-9]/g,'_')}`,
           projectName:    p.projectName || p.reraNo,
           locality:       (p.address || '').slice(0, 120) || city,
+          address:        p.address || '',
           bhkType:        '',
           priceRupees:    0,
           pricePerSqft:   0,
@@ -588,7 +606,17 @@ router.get('/', async (req, res) => {
           lat:            null,
           lng:            null,
         }));
-        source = 'TNRERA';
+        if (listings.length === 0) {
+          listings = tnListings;
+          source = 'TNRERA';
+        } else {
+          const names = new Set(listings.map((l) => (l.projectName || '').toLowerCase().trim()));
+          for (const t of tnListings) {
+            const key = (t.projectName || '').toLowerCase().trim();
+            if (key && !names.has(key)) listings.push(t);
+          }
+          source = 'MagicBricks + TNRERA';
+        }
       }
     } catch (e) { errors.push(`TNRERA: ${e.message}`); }
   }
@@ -609,16 +637,8 @@ router.get('/', async (req, res) => {
   }
   listings = [...seen.values()];
 
-  // ── Geocode localities (limited on serverless to stay within timeout) ──────
-  const localityList = [...new Set(listings.map(l => l.locality).filter(Boolean))]
-    .slice(0, skipMb ? 20 : 200);
-  if (localityList.length > 0) {
-    const geoCache = await geocodeLocalities(localityList);
-    listings = listings.map(l => {
-      const g = geoCache[l.locality] || null;
-      return { ...l, lat: g?.lat ?? l.lat ?? null, lng: g?.lng ?? l.lng ?? null };
-    });
-  }
+  const geoLimit = skipMb ? 45 : 150;
+  listings = await geocodeListings(listings, city, geoLimit);
 
   let radiusNote;
   if (hasRadius) {

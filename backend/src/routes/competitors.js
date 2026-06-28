@@ -3,6 +3,7 @@ const magicbricksRouter = require('./magicbricks');
 const ninetyNineRouter  = require('./ninetyninacres');
 const housingRouter     = require('./housing');
 const { applyRadiusFilter } = require('../lib/listingRadius');
+const { geocodeListings } = require('../lib/listingGeocode');
 
 const router = express.Router();
 
@@ -46,11 +47,9 @@ function dedupeListings(listings) {
       merged.set(key, item);
       continue;
     }
-    const newPpsf = item.pricePerSqft || 0;
-    const oldPpsf = existing.pricePerSqft || 0;
-    if (newPpsf > oldPpsf || (oldPpsf === 0 && newPpsf > 0)) {
-      merged.set(key, item);
-    }
+    const newScore = (item.pricePerSqft || 0) + (item.priceRupees || 0) / 1e7;
+    const oldScore = (existing.pricePerSqft || 0) + (existing.priceRupees || 0) / 1e7;
+    if (newScore > oldScore) merged.set(key, item);
   }
   return [...merged.values()].sort((a, b) => {
     const ap = a.pricePerSqft || 0;
@@ -79,7 +78,7 @@ function ingestBatch(result, defaultSource, allListings, sources, errors) {
   }
 }
 
-// GET /api/competitors?city=Chennai
+// GET /api/competitors?city=Chennai&lat=&lng=&radius=
 router.get('/', async (req, res) => {
   const query = { ...req.query };
   const fetchQuery = { ...query };
@@ -92,19 +91,17 @@ router.get('/', async (req, res) => {
   const sources = [];
   const errors = [];
 
-  // MagicBricks first — fetch city-wide, radius applied below once
-  const mbResult = await Promise.resolve(callRouter(magicbricksRouter, fetchQuery));
-  ingestBatch({ status: 'fulfilled', value: mbResult }, 'MagicBricks', allListings, sources, errors);
+  const [mbResult, naResult] = await Promise.allSettled([
+    callRouter(magicbricksRouter, fetchQuery),
+    callRouter(ninetyNineRouter, fetchQuery),
+  ]);
+  ingestBatch(mbResult, 'MagicBricks', allListings, sources, errors);
+  ingestBatch(naResult, '99acres', allListings, sources, errors);
 
   const hasPriced = allListings.some((l) => (l.pricePerSqft || 0) > 0 || (l.priceRupees || 0) > 0);
-
   if (!hasPriced) {
-    const [naResult, hoResult] = await Promise.allSettled([
-      callRouter(ninetyNineRouter, fetchQuery),
-      callRouter(housingRouter, fetchQuery),
-    ]);
-    ingestBatch(naResult, '99acres', allListings, sources, errors);
-    ingestBatch(hoResult, 'Housing.com', allListings, sources, errors);
+    const hoResult = await Promise.resolve(callRouter(housingRouter, fetchQuery));
+    ingestBatch({ status: 'fulfilled', value: hoResult }, 'Housing.com', allListings, sources, errors);
   }
 
   if (allListings.length === 0) {
@@ -119,7 +116,11 @@ router.get('/', async (req, res) => {
 
   const { lat, lng, lon, radius } = query;
   const centerLng = lng ?? lon;
+  const city = query.city || 'Chennai';
+
   if (lat && centerLng && radius) {
+    const onServerless = !!(process.env.VERCEL || process.env.NETLIFY);
+    listings = await geocodeListings(listings, city, onServerless ? 30 : 120);
     const filtered = applyRadiusFilter(listings, lat, centerLng, radius);
     listings = filtered.listings;
     radiusNote = filtered.radiusNote;
@@ -128,7 +129,7 @@ router.get('/', async (req, res) => {
   if (listings.length === 0) {
     return res.status(502).json({
       error: radiusNote
-        || `No competitor projects found for "${query.city || 'Chennai'}".`,
+        || `No competitor projects found for "${city}".`,
       details: errors.join(' | '),
       radiusNote,
     });
@@ -137,11 +138,12 @@ router.get('/', async (req, res) => {
   res.json({
     source:  sources.join(' + '),
     sources,
-    city:    query.city || 'Chennai',
+    city,
     count:   listings.length,
     radiusKm: radius ? parseFloat(radius) : null,
     center:  (lat && centerLng) ? { lat: parseFloat(lat), lng: parseFloat(centerLng) } : null,
     radiusNote,
+    radiusApplied: !!(lat && centerLng && radius),
     listings,
     partial: errors.length > 0 ? errors : undefined,
   });
