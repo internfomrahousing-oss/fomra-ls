@@ -12,6 +12,22 @@ function padTalukCode(code) {
   return s.length >= 2 ? s : s.padStart(2, '0');
 }
 
+/** TNGIS sometimes returns a PDF error page instead of a real FMB sketch. */
+function isInvalidFmbPdfBase64(pdfBase64) {
+  if (!pdfBase64 || String(pdfBase64).length < 100) return true;
+  try {
+    const text = Buffer.from(String(pdfBase64), 'base64').toString('latin1').toLowerCase();
+    if (text.includes('does not exist in this fmb')) return true;
+    if (text.includes('does not exist') && text.includes('survey number')) return true;
+    if (text.includes('requested survey number') && text.includes('does not exist')) return true;
+    if (text.includes('not available') && text.includes('fmb')) return true;
+    if (text.includes('no sketch') || text.includes('not digitized')) return true;
+  } catch (_) {
+    return true;
+  }
+  return false;
+}
+
 function postJson(url, payload, headers = {}) {
   const body = JSON.stringify(payload);
   return new Promise((resolve, reject) => {
@@ -309,7 +325,7 @@ async function fetchGiFmbSketch({
   if (!json) return { ok: false, error: `HTTP ${status}` };
   if (json.success === 1 && json.data) {
     const pdfBase64 = String(json.data);
-    if (pdfBase64.length > 100) {
+    if (pdfBase64.length > 100 && !isInvalidFmbPdfBase64(pdfBase64)) {
       return {
         ok: true,
         source: 'TNGIS GI Viewer (sketch_fmb)',
@@ -317,6 +333,9 @@ async function fetchGiFmbSketch({
         fileName: `FMB-${surveyNumber}${subDivision ? `-Sub-${subDivision}` : ''}.pdf`,
         message: json.message || null,
       };
+    }
+    if (isInvalidFmbPdfBase64(pdfBase64)) {
+      return { ok: false, error: 'Survey/sub-division not found in this FMB sheet — trying alternate source.' };
     }
   }
   return { ok: false, error: json.message || 'FMB sketch not available from TNGIS' };
@@ -412,4 +431,5 @@ module.exports = {
   mergeGiParcelCodes,
   padTalukCode,
   formatIndianRupees,
+  isInvalidFmbPdfBase64,
 };

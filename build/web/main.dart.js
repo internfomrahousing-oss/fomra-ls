@@ -107273,7 +107273,7 @@ a4=A.W(a5,a5.$ti.h("aj.E"))
 i=a4
 h=A.aG(J.a2(b.a,"radiusNote"))
 if(J.bL(i)===0){a5=h
-a5=A.pC(a5==null?"No priced competitor projects within "+n.db+"km. Try 5km or 10km.":a5,502)
+a5=A.pC(a5==null?"No competitor projects in this radius. Try 10km or tap closer to a city centre.":a5,502)
 throw A.f(a5)}if(n.c==null||!J.c(l,n.rx)){s=1
 break}n.E(new A.aO_(b,n,i,h))
 p=2

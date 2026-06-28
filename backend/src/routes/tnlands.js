@@ -35,6 +35,7 @@ const {
   fetchGiFmbSketch,
   fetchGiEncumbranceCertificate,
   mergeGiParcelCodes,
+  isInvalidFmbPdfBase64,
 } = require('../lib/tngisGiViewerApi');
 
 // ── Cookie helpers ─────────────────────────────────────────────────────────────
@@ -1629,12 +1630,12 @@ async function fetchCollablandFmbByGiscode(giscode, surveyNo, plotno = '') {
 
   const pdfBase64 = String(data.success);
   const byteLen   = Buffer.from(pdfBase64, 'base64').length;
-  if (byteLen < 100) {
+  if (byteLen < 100 || isInvalidFmbPdfBase64(pdfBase64)) {
     return {
       type:      'fmb',
       source:    'collabland-tn.gov.in',
       giscode,
-      error:     'FMB PDF response was empty',
+      error:     'FMB PDF response was empty or invalid',
       available: false,
     };
   }
@@ -1738,10 +1739,36 @@ async function tryFmbSourcesForCodes(codes, ctx = {}) {
   const types = sketchFmbTypeCandidates(ruralUrban, tngisProps);
   let lastErr = 'FMB sketch not available from TNGIS';
 
+  const tryCollab = async () => {
+    try {
+      const props = collablandPropsFromCodes(codes, tngisProps);
+      const collab = await fetchCollablandFmbPdf(props);
+      if (collab?.available && collab.pdfBase64 && !isInvalidFmbPdfBase64(collab.pdfBase64)) {
+        return {
+          ok:           true,
+          source:       collab.source,
+          pdfBase64:    collab.pdfBase64,
+          fileName:     collab.fileName || fmbFileName(props),
+          landTypeUsed: 'collabland',
+        };
+      }
+      if (collab?.error) lastErr = collab.error;
+    } catch (err) {
+      lastErr = err.message;
+    }
+    return null;
+  };
+
+  // Urban/TSLR — CollabLand often succeeds when sketch_fmb returns error PDFs.
+  if (types[0] === 'urban') {
+    const collabHit = await tryCollab();
+    if (collabHit) return collabHit;
+  }
+
   for (const landType of types) {
     try {
       const fmb = await fetchGiFmbSketch({ ...codes, landType });
-      if (fmb.ok && fmb.pdfBase64) {
+      if (fmb.ok && fmb.pdfBase64 && !isInvalidFmbPdfBase64(fmb.pdfBase64)) {
         return { ...fmb, landTypeUsed: landType };
       }
       if (fmb.error) lastErr = fmb.error;
@@ -1750,22 +1777,8 @@ async function tryFmbSourcesForCodes(codes, ctx = {}) {
     }
   }
 
-  try {
-    const props = collablandPropsFromCodes(codes, tngisProps);
-    const collab = await fetchCollablandFmbPdf(props);
-    if (collab?.available && collab.pdfBase64) {
-      return {
-        ok:           true,
-        source:       collab.source,
-        pdfBase64:    collab.pdfBase64,
-        fileName:     collab.fileName || fmbFileName(props),
-        landTypeUsed: 'collabland',
-      };
-    }
-    if (collab?.error) lastErr = collab.error;
-  } catch (err) {
-    lastErr = err.message;
-  }
+  const collabHit = await tryCollab();
+  if (collabHit) return collabHit;
 
   return { ok: false, error: lastErr };
 }
@@ -2396,6 +2409,12 @@ router.get('/patta', async (req, res) => {
 });
 
 function sendFmbPdfResponse(res, fmb) {
+  if (isInvalidFmbPdfBase64(fmb.pdfBase64)) {
+    return res.status(404).json({
+      error: 'FMB sketch not available — survey/sub-division not found in this village FMB sheet.',
+      hint:  'Try tapping the exact parcel on the map or use general survey FMB.',
+    });
+  }
   const pdf = Buffer.from(fmb.pdfBase64, 'base64');
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `inline; filename="${fmb.fileName || 'FMB.pdf'}"`);
@@ -2511,7 +2530,7 @@ router.get('/fmb', async (req, res) => {
     } catch (_) {}
   }
 
-  if (subReq) {
+  if (subReq && !codes.subDivision) {
     codes.subDivision = subReq;
   } else if (!codes.subDivision) {
     const propsSub = resolveTngisSubDivision(tngisProps || {});
@@ -2547,6 +2566,35 @@ router.get('/fmb', async (req, res) => {
   }
 
   if (!codes.subDivision) codes.subDivision = '';
+
+  // GI Viewer land_details — authoritative village/survey codes at map point.
+  if (hasPoint) {
+    try {
+      const giLand = await fetchGiLandDetails(latN, lonN);
+      if (giLand?.ok) {
+        const merged = mergeGiParcelCodes(giLand, tngisProps || {}, {
+          surveyNo: codes.surveyNumber || surveyReq,
+          subDiv:   codes.subDivision || subReq || undefined,
+        });
+        codes.districtCode = merged.districtCode || codes.districtCode;
+        codes.talukCode = merged.talukCode || codes.talukCode;
+        codes.villageCode = merged.villageCode || codes.villageCode;
+        codes.surveyNumber = merged.surveyNumber || codes.surveyNumber;
+        if (merged.subDivision) codes.subDivision = merged.subDivision;
+        tngisProps = {
+          ...(tngisProps || {}),
+          district_code:  merged.districtCode,
+          taluk_code:     merged.talukCode,
+          village_code:   merged.villageCode,
+          survey_number:  merged.surveyNumber,
+          sub_division:   merged.subDivision,
+          kide:           tngisProps?.kide,
+          rural_urban:    giLand.ruralUrban || tngisProps?.rural_urban,
+          is_fmb:         giLand.isFmb ?? tngisProps?.is_fmb,
+        };
+      }
+    } catch (_) {}
+  }
 
   try {
     return await finalizeAndFetchFmb();

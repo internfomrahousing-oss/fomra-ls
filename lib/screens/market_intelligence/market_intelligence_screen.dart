@@ -749,7 +749,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
         throw ApiException(
           statusCode: 502,
           message: radiusNote ??
-              'No priced competitor projects within ${_selectedRadius}km. Try 5km or 10km.',
+              'No competitor projects in this radius. Try 10km or tap closer to a city centre.',
         );
       }
 

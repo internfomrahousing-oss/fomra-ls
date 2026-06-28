@@ -82,6 +82,14 @@ function isPriced(l) {
   return (l.pricePerSqft || 0) > 0 || (l.priceRupees || 0) > 0;
 }
 
+function sortListings(listings) {
+  return [...listings].sort((a, b) => {
+    const ap = (a.pricePerSqft || 0) + (a.priceRupees || 0) / 1e7;
+    const bp = (b.pricePerSqft || 0) + (b.priceRupees || 0) / 1e7;
+    return bp - ap;
+  });
+}
+
 // GET /api/competitors?city=Chennai&lat=&lng=&radius=
 router.get('/', async (req, res) => {
   const query = { ...req.query };
@@ -100,69 +108,44 @@ router.get('/', async (req, res) => {
   const sources = [];
   const errors = [];
 
-  if (hasRadiusFilter) {
-    // Radius mode: MagicBricks priced listings first (LD+JSON on serverless)
-    const mbQuery = {
-      ...fetchQuery,
-      lat,
-      lng: centerLng,
-      radius,
-    };
-    const mbResult = await Promise.resolve(callRouter(magicbricksRouter, mbQuery));
-    ingestBatch({ status: 'fulfilled', value: mbResult }, 'MagicBricks', allListings, sources, errors);
+  const mbQuery = hasRadiusFilter
+    ? { ...fetchQuery, lat, lng: centerLng, radius }
+    : fetchQuery;
 
-    if (!allListings.some(isPriced)) {
-      const [naResult, hoResult] = await Promise.allSettled([
-        callRouter(ninetyNineRouter, fetchQuery),
-        callRouter(housingRouter, fetchQuery),
-      ]);
-      ingestBatch(naResult, '99acres', allListings, sources, errors);
-      ingestBatch(hoResult, 'Housing.com', allListings, sources, errors);
-    }
-  } else {
-    const [mbResult, naResult] = await Promise.allSettled([
-      callRouter(magicbricksRouter, fetchQuery),
+  const mbResult = await Promise.resolve(callRouter(magicbricksRouter, mbQuery));
+  ingestBatch({ status: 'fulfilled', value: mbResult }, 'MagicBricks', allListings, sources, errors);
+
+  if (!allListings.some(isPriced)) {
+    const [naResult, hoResult] = await Promise.allSettled([
       callRouter(ninetyNineRouter, fetchQuery),
+      callRouter(housingRouter, fetchQuery),
     ]);
-    ingestBatch(mbResult, 'MagicBricks', allListings, sources, errors);
     ingestBatch(naResult, '99acres', allListings, sources, errors);
-
-    if (!allListings.some(isPriced)) {
-      const hoResult = await Promise.resolve(callRouter(housingRouter, fetchQuery));
-      ingestBatch({ status: 'fulfilled', value: hoResult }, 'Housing.com', allListings, sources, errors);
-    }
+    ingestBatch(hoResult, 'Housing.com', allListings, sources, errors);
   }
 
   if (allListings.length === 0) {
     return res.status(502).json({
       error: hasRadiusFilter
-        ? `No priced competitor projects within ${radius}km of this point. Try 5km or 10km.`
+        ? `No competitor projects within ${radius}km of this point. Try 10km radius.`
         : `No competitor projects found for "${city}".`,
       details: errors.join(' | '),
     });
   }
 
   let listings = dedupeListings(allListings);
-  let radiusNote;
+  let radiusNote = mbResult.data?.radiusNote;
 
   if (hasRadiusFilter) {
-    const onServerless = !!(process.env.VERCEL || process.env.NETLIFY);
     const priced = listings.filter(isPriced);
-    const pool = priced.length ? priced : listings;
-    const geocoded = await geocodeListings(pool, city, onServerless ? 40 : 120);
-    const filtered = applyRadiusFilter(geocoded, lat, centerLng, radius);
-    listings = filtered.listings.filter(isPriced);
-    radiusNote = filtered.radiusNote;
-    if (listings.length === 0) {
-      return res.status(502).json({
-        error: radiusNote
-          || `No priced projects within ${radius}km. Try a larger radius.`,
-        details: errors.join(' | '),
-        radiusNote,
-      });
+    if (priced.length > 0) {
+      listings = priced;
+    } else if (!radiusNote) {
+      radiusNote = 'RERA projects in radius — online prices not available for these listings.';
     }
+    listings = sortListings(listings).slice(0, 30);
   } else if (listings.length > 50) {
-    listings = listings.slice(0, 50);
+    listings = sortListings(listings).slice(0, 50);
     radiusNote = 'Showing top 50 city projects. Tap the map for radius-filtered results.';
   }
 

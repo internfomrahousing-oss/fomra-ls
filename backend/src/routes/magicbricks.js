@@ -12,7 +12,7 @@ const CITY_MAP = {
   'tiruchirappalli': 'Tiruchirappalli', 'trichy': 'Tiruchirappalli',
   'salem': 'Salem', 'tirunelveli': 'Tirunelveli', 'vellore': 'Vellore',
   'erode': 'Erode', 'kancheepuram': 'Kancheepuram', 'kanchipuram': 'Kancheepuram',
-  'chengalpattu': 'Chennai', 'tambaram': 'Chennai', 'avadi': 'Chennai',
+  'chengalpattu': 'Chengalpattu', 'tambaram': 'Chengalpattu', 'avadi': 'Chennai',
   'pondicherry': 'Pondicherry', 'puducherry': 'Pondicherry',
   'thanjavur': 'Thanjavur', 'thoothukudi': 'Thoothukudi',
   'namakkal': 'Namakkal', 'dharmapuri': 'Dharmapuri',
@@ -302,7 +302,7 @@ async function fetchLdJsonListings(city, mbPropType, maxItems = 12) {
 const TNRERA_CITY_ALIASES = {
   "chennai":         ["chennai", "madras"],
   "kancheepuram":    ["kancheepuram", "kanchipuram"],
-  "chengalpattu":    ["chengalpattu", "chengelpet"],
+  "chengalpattu":    ["chengalpattu", "chengelpet", "pallavaram", "tambaram"],
   "tiruchirappalli": ["tiruchirappalli", "trichy", "trichinopoly"],
   "thoothukudi":     ["thoothukudi", "tuticorin"],
   "tirunelveli":     ["tirunelveli", "tinnevelly"],
@@ -544,11 +544,9 @@ router.get('/', async (req, res) => {
     } catch (e) { errors.push(`LdJson(retry): ${e.message}`); }
   }
 
-  // ── Fallback: TNRERA only when no radius filter (city-wide RERA registry) ──
-  const needsTnrera = !hasRadius && (
-    listings.length === 0
-    || !listings.some((l) => (l.pricePerSqft || 0) > 0 || (l.priceRupees || 0) > 0)
-  );
+  // ── TNRERA when no priced MagicBricks/portal listings ───────────────────
+  const hasPricedListings = listings.some((l) => (l.pricePerSqft || 0) > 0 || (l.priceRupees || 0) > 0);
+  const needsTnrera = !hasPricedListings;
 
   if (needsTnrera) {
     try {
@@ -658,11 +656,19 @@ router.get('/', async (req, res) => {
     const filtered = applyRadiusFilter(listings, userLat, userLng, radius);
     listings = filtered.listings;
     radiusNote = filtered.radiusNote;
-    // Radius mode: only priced competitor listings (skip unpriced RERA noise)
-    listings = listings.filter((l) => (l.pricePerSqft || 0) > 0 || (l.priceRupees || 0) > 0);
-    if (listings.length === 0 && filtered.listings.length > 0) {
-      radiusNote = 'Projects found nearby but without online prices. Try Fetch again or widen radius.';
+    const priced = listings.filter((l) => (l.pricePerSqft || 0) > 0 || (l.priceRupees || 0) > 0);
+    if (priced.length > 0) {
+      listings = priced;
+    } else if (listings.length > 0) {
+      radiusNote = 'RERA projects in radius — online prices not available for these listings.';
     }
+    listings = listings
+      .sort((a, b) => {
+        const ap = (a.pricePerSqft || 0) + (a.priceRupees || 0) / 1e7;
+        const bp = (b.pricePerSqft || 0) + (b.priceRupees || 0) / 1e7;
+        return bp - ap;
+      })
+      .slice(0, 30);
   }
 
   if (!hasRadius && listings.length > 50) {
