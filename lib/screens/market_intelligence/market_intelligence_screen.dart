@@ -739,26 +739,39 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
           .map((e) => Map<String, dynamic>.from(e as Map))
           .toList();
 
+      String? radiusNote = result['radiusNote'] as String?;
+
       if (loc != null) {
-        listings = _filterListingsWithinRadius(listings, loc, _selectedRadius);
+        final filtered = _filterListingsWithinRadius(listings, loc, _selectedRadius);
+        if (filtered.isNotEmpty) {
+          listings = filtered;
+        } else if (listings.isNotEmpty) {
+          radiusNote ??=
+              'Project map locations unavailable — showing city-wide results for ${_detectedDistrict ?? cityParam}.';
+        }
       }
 
       if (listings.isEmpty) {
         throw ApiException(
           statusCode: 502,
-          message: loc != null
-              ? 'No competitor projects within ${_selectedRadius}km of this location.'
-              : ((result['error'] as String?) ??
-                  'No competitor projects found for $cityParam.'),
+          message: radiusNote ??
+              (loc != null
+                  ? 'No competitor projects within ${_selectedRadius}km of this location.'
+                  : ((result['error'] as String?) ??
+                      'No competitor projects found for $cityParam.')),
         );
       }
 
       setState(() {
         _mbListings = listings;
         _mbSource = (result!['source'] as String?) ?? 'MagicBricks';
-        _mbPartialWarning = result['partial'] is List
+        final partial = result['partial'] is List
             ? (result['partial'] as List).join('; ')
             : result['partial'] as String?;
+        _mbPartialWarning = [radiusNote, partial]
+            .whereType<String>()
+            .where((s) => s.isNotEmpty)
+            .join(' · ');
         _fetchingMb = false;
       });
     } on ApiException catch (e) {

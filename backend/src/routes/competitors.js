@@ -2,6 +2,7 @@ const express = require('express');
 const magicbricksRouter = require('./magicbricks');
 const ninetyNineRouter  = require('./ninetyninacres');
 const housingRouter     = require('./housing');
+const { applyRadiusFilter } = require('../lib/listingRadius');
 
 const router = express.Router();
 
@@ -78,51 +79,29 @@ function ingestBatch(result, defaultSource, allListings, sources, errors) {
   }
 }
 
-function haversineKm(lat1, lon1, lat2, lon2) {
-  const p = Math.PI / 180;
-  const a = 0.5 - Math.cos((lat2 - lat1) * p) / 2
-    + Math.cos(lat1 * p) * Math.cos(lat2 * p) * (1 - Math.cos((lon2 - lon1) * p)) / 2;
-  return 6371 * 2 * Math.asin(Math.sqrt(Math.max(0, a)));
-}
-
-/** Keep only projects with coordinates inside radiusKm of lat/lng. */
-function filterListingsByRadius(listings, lat, lng, radiusKm) {
-  const latN = parseFloat(lat);
-  const lngN = parseFloat(lng);
-  const r = parseFloat(radiusKm);
-  if (!Number.isFinite(latN) || !Number.isFinite(lngN) || !Number.isFinite(r) || r <= 0) {
-    return listings;
-  }
-  return listings
-    .map((l) => {
-      const plat = parseFloat(l.lat);
-      const plng = parseFloat(l.lng ?? l.lon);
-      if (!Number.isFinite(plat) || !Number.isFinite(plng)) return null;
-      const dist = haversineKm(latN, lngN, plat, plng);
-      return { ...l, distanceKm: Math.round(dist * 10) / 10 };
-    })
-    .filter((l) => l && l.distanceKm <= r)
-    .sort((a, b) => (a.distanceKm || 0) - (b.distanceKm || 0));
-}
-
 // GET /api/competitors?city=Chennai
 router.get('/', async (req, res) => {
   const query = { ...req.query };
+  const fetchQuery = { ...query };
+  delete fetchQuery.lat;
+  delete fetchQuery.lng;
+  delete fetchQuery.lon;
+  delete fetchQuery.radius;
+
   const allListings = [];
   const sources = [];
   const errors = [];
 
-  // MagicBricks first — slowest but most reliable for priced data locally
-  const mbResult = await Promise.resolve(callRouter(magicbricksRouter, query));
+  // MagicBricks first — fetch city-wide, radius applied below once
+  const mbResult = await Promise.resolve(callRouter(magicbricksRouter, fetchQuery));
   ingestBatch({ status: 'fulfilled', value: mbResult }, 'MagicBricks', allListings, sources, errors);
 
   const hasPriced = allListings.some((l) => (l.pricePerSqft || 0) > 0 || (l.priceRupees || 0) > 0);
 
-  // Only hit blocked portals when MagicBricks returned nothing useful
   if (!hasPriced) {
     const [naResult, hoResult] = await Promise.allSettled([
-      callRouter(ninetyNineRouter, query),
-      callRouter(housingRouter, query),
+      callRouter(ninetyNineRouter, fetchQuery),
+      callRouter(housingRouter, fetchQuery),
     ]);
     ingestBatch(naResult, '99acres', allListings, sources, errors);
     ingestBatch(hoResult, 'Housing.com', allListings, sources, errors);
@@ -136,11 +115,23 @@ router.get('/', async (req, res) => {
   }
 
   let listings = dedupeListings(allListings);
+  let radiusNote;
 
   const { lat, lng, lon, radius } = query;
   const centerLng = lng ?? lon;
   if (lat && centerLng && radius) {
-    listings = filterListingsByRadius(listings, lat, centerLng, radius);
+    const filtered = applyRadiusFilter(listings, lat, centerLng, radius);
+    listings = filtered.listings;
+    radiusNote = filtered.radiusNote;
+  }
+
+  if (listings.length === 0) {
+    return res.status(502).json({
+      error: radiusNote
+        || `No competitor projects found for "${query.city || 'Chennai'}".`,
+      details: errors.join(' | '),
+      radiusNote,
+    });
   }
 
   res.json({
@@ -150,6 +141,7 @@ router.get('/', async (req, res) => {
     count:   listings.length,
     radiusKm: radius ? parseFloat(radius) : null,
     center:  (lat && centerLng) ? { lat: parseFloat(lat), lng: parseFloat(centerLng) } : null,
+    radiusNote,
     listings,
     partial: errors.length > 0 ? errors : undefined,
   });

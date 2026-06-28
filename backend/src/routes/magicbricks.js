@@ -1,6 +1,7 @@
 const express = require('express');
 const https   = require('https');
 const http    = require('http');
+const { applyRadiusFilter } = require('../lib/listingRadius');
 const router  = express.Router();
 
 // ── City map ──────────────────────────────────────────────────────────────────
@@ -9,7 +10,7 @@ const CITY_MAP = {
   'chennai': 'Chennai', 'coimbatore': 'Coimbatore', 'madurai': 'Madurai',
   'tiruchirappalli': 'Tiruchirappalli', 'trichy': 'Tiruchirappalli',
   'salem': 'Salem', 'tirunelveli': 'Tirunelveli', 'vellore': 'Vellore',
-  'erode': 'Erode', 'kancheepuram': 'Kancheepuram',
+  'erode': 'Erode', 'kancheepuram': 'Kancheepuram', 'kanchipuram': 'Kancheepuram',
   'chengalpattu': 'Chennai', 'tambaram': 'Chennai', 'avadi': 'Chennai',
   'pondicherry': 'Pondicherry', 'puducherry': 'Pondicherry',
   'thanjavur': 'Thanjavur', 'thoothukudi': 'Thoothukudi',
@@ -572,7 +573,7 @@ router.get('/', async (req, res) => {
         listings = [...seen2.values()].map(p => ({
           id:             `tnrera_${p.reraNo.replace(/[^a-zA-Z0-9]/g,'_')}`,
           projectName:    p.projectName || p.reraNo,
-          locality:       city,
+          locality:       (p.address || '').slice(0, 120) || city,
           bhkType:        '',
           priceRupees:    0,
           pricePerSqft:   0,
@@ -608,35 +609,25 @@ router.get('/', async (req, res) => {
   }
   listings = [...seen.values()];
 
-  // ── Geocode localities (skip on serverless to stay within timeout) ──────
-  if (!skipMb) {
-    const localityList = [...new Set(listings.map(l => l.locality).filter(Boolean))];
-    const geoCache     = await geocodeLocalities(localityList);
+  // ── Geocode localities (limited on serverless to stay within timeout) ──────
+  const localityList = [...new Set(listings.map(l => l.locality).filter(Boolean))]
+    .slice(0, skipMb ? 20 : 200);
+  if (localityList.length > 0) {
+    const geoCache = await geocodeLocalities(localityList);
     listings = listings.map(l => {
       const g = geoCache[l.locality] || null;
-      return { ...l, lat: g?.lat ?? null, lng: g?.lng ?? null };
+      return { ...l, lat: g?.lat ?? l.lat ?? null, lng: g?.lng ?? l.lng ?? null };
     });
   }
 
-  // ── Radius filter — only projects with coordinates inside radius ───────────
+  let radiusNote;
   if (hasRadius) {
-    listings = listings
-      .map((l) => {
-        if (!l.lat || !l.lng) return null;
-        const dLat = (l.lat - userLat) * Math.PI / 180;
-        const dLon = (l.lng - userLng) * Math.PI / 180;
-        const a = Math.sin(dLat / 2) ** 2 +
-          Math.cos(userLat * Math.PI / 180) * Math.cos(l.lat * Math.PI / 180) *
-          Math.sin(dLon / 2) ** 2;
-        const distKm = 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        if (distKm > radius) return null;
-        return { ...l, distanceKm: Math.round(distKm * 10) / 10 };
-      })
-      .filter(Boolean)
-      .sort((a, b) => (a.distanceKm || 0) - (b.distanceKm || 0));
+    const filtered = applyRadiusFilter(listings, userLat, userLng, radius);
+    listings = filtered.listings;
+    radiusNote = filtered.radiusNote;
   }
 
-  res.json({ source, city, count: listings.length, listings });
+  res.json({ source, city, count: listings.length, listings, radiusNote });
 });
 
 module.exports = router;
