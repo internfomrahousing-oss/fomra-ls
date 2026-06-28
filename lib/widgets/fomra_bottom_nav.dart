@@ -1,17 +1,31 @@
 import 'package:flutter/material.dart';
 import '../screens/home/home_screen.dart';
+import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
 
 class FomraBottomNav extends StatelessWidget {
   final String currentRoute;
   const FomraBottomNav({super.key, required this.currentRoute});
 
-  static const _items = [
-    _NavItem('/home',                Icons.home_outlined,            Icons.home_rounded,        'Home'),
-    _NavItem('/land-lead',           Icons.space_dashboard_outlined, Icons.space_dashboard,     'Workspace'),
-    _NavItem('/market-intelligence', Icons.insights_outlined,        Icons.insights,            'Market'),
-    _NavItem('/dashboard',           Icons.bar_chart_outlined,       Icons.bar_chart_rounded,   'Reports'),
-  ];
+  static List<_NavItem> _itemsForUser() {
+    final items = [
+      const _NavItem('/home',                Icons.home_outlined,            Icons.home_rounded,        'Home'),
+      const _NavItem('/land-lead',           Icons.space_dashboard_outlined, Icons.space_dashboard,     'Workspace'),
+    ];
+    if (AuthService.instance.isManagement) {
+      items.add(const _NavItem(
+        '/employee-management',
+        Icons.groups_outlined,
+        Icons.groups,
+        'Employees',
+      ));
+    }
+    items.addAll(const [
+      _NavItem('/market-intelligence', Icons.insights_outlined,        Icons.insights,            'Market'),
+      _NavItem('/dashboard',           Icons.bar_chart_outlined,       Icons.bar_chart_rounded,   'Reports'),
+    ]);
+    return items;
+  }
 
   void _onTap(BuildContext context, _NavItem item) {
     if (currentRoute == item.route) return;
@@ -34,6 +48,7 @@ class FomraBottomNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final items = _itemsForUser();
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
@@ -52,7 +67,7 @@ class FomraBottomNav extends StatelessWidget {
           ),
           padding: const EdgeInsets.all(5),
           child: Row(
-            children: _items.map((item) {
+            children: items.map((item) {
               final isActive = currentRoute == item.route ||
                   (item.route == '/land-lead' &&
                       currentRoute == '/task-management');

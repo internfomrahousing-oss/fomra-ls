@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../services/employee_service.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/fomra_input.dart';
 
 class AddEmployeeScreen extends StatefulWidget {
   const AddEmployeeScreen({super.key});
@@ -137,21 +138,7 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
               ? (v) =>
                   (v == null || v.trim().isEmpty) ? '$label is required' : null
               : null),
-      decoration: InputDecoration(
-        labelText: label,
-        prefixIcon: Icon(icon, size: 20, color: AppColors.primary),
-        filled: true,
-        fillColor: const Color(0xFFF9FAFB),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: Colors.grey.shade300),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: AppColors.primary, width: 2),
-        ),
-      ),
+      decoration: FomraInput.decoration(label: label, icon: icon),
     );
   }
 }

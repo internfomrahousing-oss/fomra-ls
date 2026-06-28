@@ -124,6 +124,36 @@ class _LeadDetailsCard extends StatelessWidget {
             const Divider(height: 24),
             _DetailRow('Notes', lead.notes),
           ],
+          if (lead.sitePhotoUrl.isNotEmpty) ...[
+            const Divider(height: 24),
+            const Text(
+              'Site Photo',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Image.network(
+                lead.sitePhotoUrl,
+                width: double.infinity,
+                height: 200,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => Container(
+                  height: 120,
+                  color: AppColors.surfaceVar,
+                  alignment: Alignment.center,
+                  child: const Text(
+                    'Photo unavailable',
+                    style: TextStyle(color: AppColors.textSecondary),
+                  ),
+                ),
+              ),
+            ),
+          ],
           const SizedBox(height: 8),
           Text(
             'Added ${lead.addedOn.day}/${lead.addedOn.month}/${lead.addedOn.year}',

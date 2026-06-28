@@ -12,6 +12,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../models/land_lead.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/fomra_input.dart';
 import '../../utils/lead_location_parser.dart';
 import '../../widgets/app_drawer.dart';
 import '../../widgets/fomra_app_bar.dart';
@@ -3043,23 +3044,8 @@ class _Handle extends StatelessWidget {
       );
 }
 
-InputDecoration _inputDec(String? hint) => InputDecoration(
-      hintText: hint,
-      border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
-      enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
-      focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: AppColors.primary, width: 2)),
-      contentPadding:
-          const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      filled: true,
-      fillColor: Colors.white,
-      isDense: true,
-    );
+InputDecoration _inputDec(String? hint) =>
+    FomraInput.decoration(hint: hint);
 
 class _Option {
   final String code;

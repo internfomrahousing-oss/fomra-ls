@@ -10,11 +10,14 @@ class _MenuItem {
   const _MenuItem(this.title, this.icon, this.route);
 }
 
-const _menuItems = [
+const _baseMenuItems = [
   _MenuItem('Land Workspace', Icons.space_dashboard_outlined, '/land-lead'),
   _MenuItem('Market Intelligence', Icons.insights_outlined, '/market-intelligence'),
   _MenuItem('Dashboard & Reports', Icons.dashboard_outlined, '/dashboard'),
 ];
+
+const _managementMenuItem =
+    _MenuItem('Employee Management', Icons.groups_outlined, '/employee-management');
 
 class AppDrawer extends StatelessWidget {
   final String currentRoute;
@@ -23,6 +26,12 @@ class AppDrawer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final menuItems = [
+      ..._baseMenuItems.take(1),
+      if (AuthService.instance.isManagement) _managementMenuItem,
+      ..._baseMenuItems.skip(1),
+    ];
+
     return Drawer(
       child: Column(
         children: [
@@ -30,9 +39,9 @@ class AppDrawer extends StatelessWidget {
           Expanded(
             child: ListView.builder(
               padding: const EdgeInsets.symmetric(vertical: 8),
-              itemCount: _menuItems.length,
+              itemCount: menuItems.length,
               itemBuilder: (context, index) {
-                final item = _menuItems[index];
+                final item = menuItems[index];
                 final isActive = currentRoute == item.route ||
                     (item.route == '/land-lead' &&
                         currentRoute == '/task-management');

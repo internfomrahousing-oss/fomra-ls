@@ -1,8 +1,12 @@
+import 'dart:typed_data';
+
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/land_lead.dart';
+import '../utils/image_compressor.dart';
 
 class LandLeadService {
   static SupabaseClient get _db => Supabase.instance.client;
+  static const _photoBucket = 'land-lead-photos';
 
   static Future<List<LandLead>> getAll() async {
     final rows = await _db
@@ -12,9 +16,14 @@ class LandLeadService {
     return (rows as List).map((r) => _fromRow(r as Map<String, dynamic>)).toList();
   }
 
-  static Future<LandLead> create(LandLead lead) async {
+  static Future<LandLead> create(
+    LandLead lead, {
+    Uint8List? sitePhotoBytes,
+  }) async {
     final userId = _db.auth.currentUser?.id;
     final leadId = await _db.rpc('generate_land_lead_id') as String;
+
+    var sitePhotoUrl = lead.sitePhotoUrl;
 
     final row = await _db
         .from('land_leads')
@@ -41,7 +50,35 @@ class LandLeadService {
         })
         .select()
         .single();
-    return _fromRow(row);
+
+    if (sitePhotoBytes != null && sitePhotoBytes.isNotEmpty) {
+      sitePhotoUrl = await _uploadSitePhoto(leadId, sitePhotoBytes);
+      await _db.from('land_leads').update({
+        'site_photo_url': sitePhotoUrl,
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      }).eq('id', leadId);
+    }
+
+    return _fromRow({...row, 'site_photo_url': sitePhotoUrl});
+  }
+
+  static Future<String> _uploadSitePhoto(
+    String leadId,
+    Uint8List rawBytes,
+  ) async {
+    final compressed = await ImageCompressor.compressTo250Kb(rawBytes);
+    final path = '$leadId.jpg';
+
+    await _db.storage.from(_photoBucket).uploadBinary(
+          path,
+          compressed,
+          fileOptions: const FileOptions(
+            contentType: 'image/jpeg',
+            upsert: true,
+          ),
+        );
+
+    return _db.storage.from(_photoBucket).getPublicUrl(path);
   }
 
   static Future<void> updateStatus(String leadId, LeadStatus status) async {
@@ -79,6 +116,7 @@ class LandLeadService {
       roadWidth: r['road_width'] as String? ?? '',
       accessDetails: r['access_details'] as String? ?? '',
       notes: r['notes'] as String? ?? '',
+      sitePhotoUrl: r['site_photo_url'] as String? ?? '',
       addedOn: DateTime.parse(r['added_on'] as String),
       status: LeadStatus.values.firstWhere(
         (e) => e.name == r['status'],

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../services/api_client.dart';
 import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/fomra_input.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -137,7 +138,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               validator: (v) => (v == null || v.trim().isEmpty)
                                   ? 'Email is required'
                                   : null,
-                              decoration: _inputDec(
+                              decoration: FomraInput.decoration(
                                 label: 'Email',
                                 icon: Icons.email_outlined,
                               ),
@@ -151,7 +152,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               validator: (v) => (v == null || v.isEmpty)
                                   ? 'Password is required'
                                   : null,
-                              decoration: _inputDec(
+                              decoration: FomraInput.decoration(
                                 label: 'Password',
                                 icon: Icons.lock_outline,
                               ).copyWith(
@@ -221,33 +222,6 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         ),
       ),
-    );
-  }
-
-  InputDecoration _inputDec({required String label, required IconData icon}) {
-    return InputDecoration(
-      labelText: label,
-      prefixIcon: Icon(icon, size: 20, color: AppColors.primary),
-      filled: true,
-      fillColor: Colors.white,
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10),
-        borderSide: const BorderSide(color: Color(0xFFE0E0E0)),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10),
-        borderSide: const BorderSide(color: Color(0xFFE0E0E0)),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10),
-        borderSide: const BorderSide(color: AppColors.primary, width: 2),
-      ),
-      errorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10),
-        borderSide: const BorderSide(color: AppColors.error),
-      ),
-      contentPadding:
-          const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
     );
   }
 }

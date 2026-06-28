@@ -4,8 +4,11 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
+import '../../models/add_lead_result.dart';
 import '../../models/land_lead.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/fomra_input.dart';
+import '../../utils/image_compressor.dart';
 
 enum _LocationMode { manual, live }
 
@@ -56,6 +59,8 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
   // Photo
   Uint8List? _photoBytes;
   String?    _photoName;
+  int?       _photoOriginalSize;
+  bool       _compressingPhoto = false;
 
   @override
   void dispose() {
@@ -180,11 +185,28 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
     );
     if (result == null || result.files.isEmpty) return;
     final file = result.files.first;
-    if (file.bytes != null) {
+    if (file.bytes == null) return;
+
+    setState(() {
+      _compressingPhoto = true;
+      _photoOriginalSize = file.bytes!.length;
+    });
+
+    try {
+      final compressed = await ImageCompressor.compressTo250Kb(file.bytes!);
+      if (!mounted) return;
       setState(() {
-        _photoBytes = file.bytes;
-        _photoName  = file.name;
+        _photoBytes = compressed;
+        _photoName = file.name;
+        _compressingPhoto = false;
       });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _compressingPhoto = false);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(e.toString().replaceFirst('Exception: ', '')),
+        backgroundColor: AppColors.error,
+      ));
     }
   }
 
@@ -226,7 +248,10 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
       addedOn: DateTime.now(),
     );
 
-    Navigator.pop(context, lead);
+    Navigator.pop(
+      context,
+      AddLeadResult(lead: lead, sitePhotoBytes: _photoBytes),
+    );
   }
 
   @override
@@ -462,10 +487,13 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
             _PhotoUpload(
               photoBytes: _photoBytes,
               photoName:  _photoName,
+              originalSize: _photoOriginalSize,
+              compressing: _compressingPhoto,
               onPick:     _pickPhoto,
               onRemove:   () => setState(() {
                 _photoBytes = null;
                 _photoName  = null;
+                _photoOriginalSize = null;
               }),
             ),
 
@@ -507,24 +535,10 @@ class _TermsDropdown extends StatelessWidget {
     return DropdownButtonFormField<String>(
       initialValue: value,
       onChanged: onChanged,
-      decoration: InputDecoration(
-        labelText: 'Terms',
-        hintText: 'Select deal terms',
-        prefixIcon: const Icon(Icons.handshake_outlined,
-            size: 20, color: AppColors.primary),
-        filled: true,
-        fillColor: Colors.white,
-        border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: Color(0xFFE0E0E0))),
-        enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: Color(0xFFE0E0E0))),
-        focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: AppColors.primary, width: 2)),
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      decoration: FomraInput.decoration(
+        label: 'Terms',
+        hint: 'Select deal terms',
+        icon: Icons.handshake_outlined,
       ),
       items: _kTermsOptions
           .map((t) => DropdownMenuItem(value: t.$1, child: Text(t.$1)))
@@ -539,18 +553,48 @@ class _TermsDropdown extends StatelessWidget {
 class _PhotoUpload extends StatelessWidget {
   final Uint8List? photoBytes;
   final String?    photoName;
+  final int?       originalSize;
+  final bool       compressing;
   final VoidCallback onPick;
   final VoidCallback onRemove;
 
   const _PhotoUpload({
     required this.photoBytes,
     required this.photoName,
+    required this.originalSize,
+    required this.compressing,
     required this.onPick,
     required this.onRemove,
   });
 
   @override
   Widget build(BuildContext context) {
+    if (compressing) {
+      return Container(
+        width: double.infinity,
+        height: 140,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(FomraInput.borderRadius),
+          border: Border.all(color: AppColors.primary.withValues(alpha: 0.35)),
+        ),
+        child: const Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            SizedBox(
+              width: 28,
+              height: 28,
+              child: CircularProgressIndicator(strokeWidth: 2.5),
+            ),
+            SizedBox(height: 10),
+            Text('Compressing photo to 250 KB…',
+                style: TextStyle(
+                    color: AppColors.primary, fontWeight: FontWeight.w600)),
+          ],
+        ),
+      );
+    }
+
     if (photoBytes != null) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -585,6 +629,14 @@ class _PhotoUpload extends StatelessWidget {
                 style: const TextStyle(
                     fontSize: 11, color: AppColors.textSecondary)),
           ],
+          const SizedBox(height: 4),
+          Text(
+            originalSize != null
+                ? '${ImageCompressor.formatSize(originalSize!)} → ${ImageCompressor.formatSize(photoBytes!.length)} (max 250 KB)'
+                : '${ImageCompressor.formatSize(photoBytes!.length)} (max 250 KB)',
+            style: const TextStyle(
+                fontSize: 11, color: AppColors.success, fontWeight: FontWeight.w500),
+          ),
           const SizedBox(height: 8),
           OutlinedButton.icon(
             onPressed: onPick,
@@ -606,7 +658,7 @@ class _PhotoUpload extends StatelessWidget {
         height: 140,
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(FomraInput.borderRadius),
           border: Border.all(
               color: AppColors.primary.withValues(alpha: 0.35),
               width: 1.5,
@@ -888,25 +940,11 @@ class _InputSourceDropdown extends StatelessWidget {
     return DropdownButtonFormField<InputSource>(
       value: value,
       onChanged: onChanged,
-      decoration: InputDecoration(
-        labelText: 'Input Source *',
-        hintText: 'Select who brought this lead',
-        prefixIcon: const Icon(Icons.source_outlined,
-            size: 20, color: AppColors.primary),
-        filled: true,
-        fillColor: Colors.white,
-        border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: Color(0xFFE0E0E0))),
-        enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: Color(0xFFE0E0E0))),
-        focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide:
-                const BorderSide(color: AppColors.primary, width: 2)),
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      decoration: FomraInput.decoration(
+        label: 'Input Source',
+        hint: 'Select who brought this lead',
+        icon: Icons.source_outlined,
+        required: true,
       ),
       items: InputSource.values
           .map((s) => DropdownMenuItem(value: s, child: Text(s.label)))
@@ -980,27 +1018,11 @@ class _Field extends StatelessWidget {
           ? (v) =>
               (v == null || v.trim().isEmpty) ? '$label is required' : null
           : null,
-      decoration: InputDecoration(
-        labelText: label + (required ? ' *' : ''),
-        hintText: hint,
-        prefixIcon: Icon(icon, size: 20, color: AppColors.primary),
-        filled: true,
-        fillColor: Colors.white,
-        border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: Color(0xFFE0E0E0))),
-        enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: Color(0xFFE0E0E0))),
-        focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide:
-                const BorderSide(color: AppColors.primary, width: 2)),
-        errorBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: AppColors.error)),
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      decoration: FomraInput.decoration(
+        label: label,
+        hint: hint,
+        icon: icon,
+        required: required,
       ),
     );
   }
@@ -1019,24 +1041,10 @@ class _LandTypeDropdown extends StatelessWidget {
     return DropdownButtonFormField<LandType>(
       initialValue: value,
       onChanged: onChanged,
-      decoration: InputDecoration(
-        labelText: 'Land Type *',
-        prefixIcon: const Icon(Icons.terrain_outlined,
-            size: 20, color: AppColors.primary),
-        filled: true,
-        fillColor: Colors.white,
-        border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: Color(0xFFE0E0E0))),
-        enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: Color(0xFFE0E0E0))),
-        focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide:
-                const BorderSide(color: AppColors.primary, width: 2)),
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      decoration: FomraInput.decoration(
+        label: 'Land Type',
+        icon: Icons.terrain_outlined,
+        required: true,
       ),
       items: LandType.values
           .map((t) =>

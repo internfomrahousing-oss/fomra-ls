@@ -8,6 +8,7 @@ import 'screens/home/home_screen.dart';
 import 'screens/land_lead/land_workspace_screen.dart';
 import 'screens/market_intelligence/market_intelligence_screen.dart';
 import 'screens/dashboard/dashboard_screen.dart';
+import 'screens/employee_management/employee_management_portal_screen.dart';
 import 'screens/task_management/task_management_screen.dart';
 
 void main() {
@@ -38,6 +39,7 @@ class FomraLSApp extends StatelessWidget {
         '/management-portal':   (_) => const TaskManagementScreen(
                                     portalMode: TaskPortalMode.management),
         '/land-lead':           (_) => const LandWorkspaceScreen(initialTab: 0),
+        '/employee-management': (_) => const EmployeeManagementPortalScreen(),
         '/market-intelligence': (_) => const MarketIntelligenceScreen(),
         '/task-management':     (_) => const LandWorkspaceScreen(initialTab: 1),
         '/legal-verification':  (_) => const LandWorkspaceScreen(initialTab: 0),

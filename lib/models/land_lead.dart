@@ -21,6 +21,7 @@ class LandLead {
   final String roadWidth;
   final String accessDetails;
   final String notes;
+  final String sitePhotoUrl;
   final DateTime addedOn;
   LeadStatus status;
 
@@ -41,6 +42,7 @@ class LandLead {
     required this.roadWidth,
     required this.accessDetails,
     required this.notes,
+    this.sitePhotoUrl = '',
     required this.addedOn,
     this.status = LeadStatus.new_,
   });

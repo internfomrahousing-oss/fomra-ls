@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS land_leads (
   road_width TEXT DEFAULT '',
   access_details TEXT DEFAULT '',
   notes TEXT DEFAULT '',
+  site_photo_url TEXT DEFAULT '',
   status TEXT NOT NULL DEFAULT 'new_',
   added_on TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   created_by UUID,

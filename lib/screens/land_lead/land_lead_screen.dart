@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../models/add_lead_result.dart';
 import '../../models/land_lead.dart';
 import '../../services/app_store.dart';
 import '../../services/land_lead_service.dart';
@@ -242,14 +243,17 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
   }
 
   Future<void> _openAddLead() async {
-    final result = await Navigator.push<LandLead>(
+    final result = await Navigator.push<AddLeadResult>(
       context,
       MaterialPageRoute(builder: (_) => const AddLeadScreen()),
     );
     if (result == null) return;
 
     try {
-      final saved = await LandLeadService.create(result);
+      final saved = await LandLeadService.create(
+        result.lead,
+        sitePhotoBytes: result.sitePhotoBytes,
+      );
       AppStore.instance.addLead(saved);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
