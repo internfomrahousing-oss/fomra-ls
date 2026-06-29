@@ -10,6 +10,8 @@ import '../../models/add_lead_result.dart';
 import '../../models/land_lead.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_input.dart';
+import '../../theme/fomra_theme_context.dart';
+import '../../services/api_client.dart';
 import '../../utils/image_compressor.dart';
 import '../../utils/lead_location_parser.dart';
 import '../../utils/tngis_parcel_lookup.dart';
@@ -155,30 +157,41 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
     if (!mounted) return;
     setState(() => _locationStatus = 'Fetching survey from TNGIS…');
 
-    final parcel = await fetchTngisParcelAt(point);
-    if (!mounted || parcel == null) return;
+    try {
+      final parcel = await fetchTngisParcelAt(point);
+      if (!mounted) return;
 
-    if (parcel.surveyNumber != null && parcel.surveyNumber!.isNotEmpty) {
-      _surveyCtrl.text = parcel.surveyNumber!;
-    }
-    if (parcel.subDivision != null && parcel.subDivision!.isNotEmpty) {
-      _subDivCtrl.text = parcel.subDivision!;
-    }
-    if (parcel.village != null && parcel.village!.isNotEmpty) {
-      _villageCtrl.text = parcel.village!;
-    }
-    if (parcel.taluk != null && parcel.taluk!.isNotEmpty) {
-      _talukCtrl.text = parcel.taluk!;
-    }
-    if (parcel.district != null && parcel.district!.isNotEmpty) {
-      _districtCtrl.text = parcel.district!;
-    }
+      if (parcel.surveyNumber != null && parcel.surveyNumber!.isNotEmpty) {
+        _surveyCtrl.text = parcel.surveyNumber!;
+      }
+      if (parcel.subDivision != null && parcel.subDivision!.isNotEmpty) {
+        _subDivCtrl.text = parcel.subDivision!;
+      }
+      if (parcel.village != null && parcel.village!.isNotEmpty) {
+        _villageCtrl.text = parcel.village!;
+      }
+      if (parcel.taluk != null && parcel.taluk!.isNotEmpty) {
+        _talukCtrl.text = parcel.taluk!;
+      }
+      if (parcel.district != null && parcel.district!.isNotEmpty) {
+        _districtCtrl.text = parcel.district!;
+      }
 
-    if (!mounted) return;
-    final hasSurvey = parcel.hasSurvey;
-    setState(() => _locationStatus = hasSurvey
-        ? 'Location & survey filled ✓'
-        : 'Location filled — survey not found at this pin');
+      if (!mounted) return;
+      setState(() => _locationStatus = parcel.hasSurvey
+          ? 'Location & survey filled ✓'
+          : 'Location filled — survey not found at this pin');
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      final hadLocation = _locationStatus?.contains('✓') == true;
+      setState(() => _locationStatus = hadLocation
+          ? 'Location filled — survey lookup failed (${e.message})'
+          : 'Survey lookup failed: ${e.message}');
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _locationStatus =
+          'Survey lookup error: ${e.toString().replaceAll('Exception: ', '')}');
+    }
   }
 
   void _onLocationModeChanged(_LocationMode mode) {
@@ -261,12 +274,7 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
       );
 
       final point = LatLng(position.latitude, position.longitude);
-      setState(() {
-        _pinnedPoint = point;
-        _fetchingLocation = false;
-        _locationStatus = null;
-      });
-      _centerMapOn(point);
+      await _onMapPin(point);
     } on LocationServiceDisabledException {
       _setStatus('Location services are disabled.');
     } catch (e) {
@@ -312,11 +320,14 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
 
       final lat = position.latitude;
       final lng = position.longitude;
-      await _fillFromCoordinates(lat, lng);
+      await _fillFromCoordinates(lat, lng, clearLoading: false);
+      await _fillSurveyFromTngis(LatLng(lat, lng));
     } on LocationServiceDisabledException {
       _setStatus('Location services are disabled. Enable them in browser settings.');
     } catch (e) {
       _setStatus('Error: ${e.toString().replaceAll('Exception: ', '')}');
+    } finally {
+      if (mounted) setState(() => _fetchingLocation = false);
     }
   }
 
@@ -342,7 +353,7 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
   Future<void> _pickPhoto() async {
     if (_photos.length >= _kMaxSitePhotos) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+        const SnackBar(
           content: Text('Maximum $_kMaxSitePhotos photos per lead'),
           backgroundColor: AppColors.warning,
         ),
@@ -437,7 +448,7 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.fomraPageBg,
       appBar: AppBar(
         flexibleSpace: Container(
           decoration: const BoxDecoration(
@@ -727,6 +738,7 @@ class _TermsDropdown extends StatelessWidget {
       initialValue: value,
       onChanged: onChanged,
       decoration: FomraInput.decoration(
+        context: context,
         label: 'Terms',
         hint: 'Select deal terms',
         icon: Icons.handshake_outlined,
@@ -839,7 +851,7 @@ class _MultiPhotoUpload extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             '${photos.length} of $maxPhotos photos · max 250 KB each',
-            style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+            style: TextStyle(fontSize: 11, color: context.fomraTextSecondary),
           ),
           const SizedBox(height: 10),
         ],
@@ -848,7 +860,7 @@ class _MultiPhotoUpload extends StatelessWidget {
             width: double.infinity,
             height: 100,
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: context.fomraSurface,
               borderRadius: BorderRadius.circular(FomraInput.borderRadius),
               border: Border.all(color: AppColors.primary.withValues(alpha: 0.35)),
             ),
@@ -874,7 +886,7 @@ class _MultiPhotoUpload extends StatelessWidget {
               width: double.infinity,
               height: photos.isEmpty ? 140 : 100,
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: context.fomraSurface,
                 borderRadius: BorderRadius.circular(FomraInput.borderRadius),
                 border: Border.all(
                   color: AppColors.primary.withValues(alpha: 0.35),
@@ -1026,7 +1038,7 @@ class _LocationPinMap extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 12, vertical: 8),
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.92),
+                        color: context.fomraSurface.withValues(alpha: 0.95),
                         borderRadius: BorderRadius.circular(8),
                         boxShadow: [
                           BoxShadow(
@@ -1044,7 +1056,7 @@ class _LocationPinMap extends StatelessWidget {
                           SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              'Tap the map to drop a pin — GPS & address fields fill automatically',
+                              'Tap the map to drop a pin — GPS, address & survey fill automatically',
                               style: TextStyle(
                                 fontSize: 11,
                                 color: AppColors.textSecondary,
@@ -1096,7 +1108,7 @@ class _LocationModeToggle extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFFE8EEF8),
+        color: context.fomraSurfaceVar,
         borderRadius: BorderRadius.circular(12),
       ),
       padding: const EdgeInsets.all(4),
@@ -1155,7 +1167,7 @@ class _Tab extends StatelessWidget {
             children: [
               Icon(icon,
                   size: 16,
-                  color: active ? Colors.white : AppColors.textSecondary),
+                  color: active ? Colors.white : context.fomraTextSecondary),
               const SizedBox(width: 6),
               Text(label,
                   style: TextStyle(
@@ -1164,7 +1176,7 @@ class _Tab extends StatelessWidget {
                           active ? FontWeight.w600 : FontWeight.normal,
                       color: active
                           ? Colors.white
-                          : AppColors.textSecondary)),
+                          : context.fomraTextSecondary)),
             ],
           ),
         ),
@@ -1254,7 +1266,7 @@ class _LiveLocationButton extends StatelessWidget {
                                 : AppColors.textSecondary)),
                   ] else
                     const Text(
-                      'Auto-fills GPS, location, village, taluk & district',
+                      'Auto-fills GPS, location, village, taluk, district & survey',
                       style: TextStyle(
                           fontSize: 11, color: AppColors.textSecondary),
                     ),
@@ -1307,13 +1319,13 @@ class _SectionHeader extends StatelessWidget {
       const SizedBox(width: 10),
       Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text(title,
-            style: const TextStyle(
+            style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
-                color: AppColors.textPrimary)),
+                color: context.fomraTextPrimary)),
         Text(subtitle,
-            style: const TextStyle(
-                fontSize: 12, color: AppColors.textSecondary)),
+            style: TextStyle(
+                fontSize: 12, color: context.fomraTextSecondary)),
       ]),
     ]);
   }
@@ -1330,9 +1342,10 @@ class _InputSourceDropdown extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DropdownButtonFormField<InputSource>(
-      value: value,
+      initialValue: value,
       onChanged: onChanged,
       decoration: FomraInput.decoration(
+        context: context,
         label: 'Input Source',
         hint: 'Select who brought this lead',
         icon: Icons.source_outlined,
@@ -1411,6 +1424,7 @@ class _Field extends StatelessWidget {
               (v == null || v.trim().isEmpty) ? '$label is required' : null
           : null,
       decoration: FomraInput.decoration(
+        context: context,
         label: label,
         hint: hint,
         icon: icon,
@@ -1434,6 +1448,7 @@ class _LandTypeDropdown extends StatelessWidget {
       initialValue: value,
       onChanged: onChanged,
       decoration: FomraInput.decoration(
+        context: context,
         label: 'Land Type',
         icon: Icons.terrain_outlined,
         required: true,

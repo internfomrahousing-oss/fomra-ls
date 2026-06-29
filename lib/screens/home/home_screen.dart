@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../models/land_lead.dart';
 import '../../services/app_store.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/fomra_theme_context.dart';
 import '../../models/app_notification.dart';
 import '../../widgets/app_drawer.dart';
 import '../../widgets/fomra_app_bar.dart';
@@ -168,7 +169,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         sub: 'Theme & password',
                         route: '/settings',
                         gradient: LinearGradient(
-                          colors: [Color(0xFF374151), Color(0xFF6B7280)],
+                          colors: [Color(0xFF0B3D91), Color(0xFF2563EB)],
                           begin: Alignment.topLeft, end: Alignment.bottomRight,
                         ),
                       ),
@@ -342,10 +343,10 @@ class _SectionHeader extends StatelessWidget {
         ),
         const SizedBox(width: 8),
         Text(title,
-            style: const TextStyle(
+            style: TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w700,
-                color: AppColors.textPrimary,
+                color: context.fomraTextPrimary,
                 letterSpacing: 0.1)),
       ]);
 }
@@ -433,9 +434,9 @@ class _NotificationsSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: DraggableScrollableSheet(
         initialChildSize: 0.5,
@@ -476,17 +477,17 @@ class _NotificationsSheet extends StatelessWidget {
                       children: [
                         Container(
                           padding: const EdgeInsets.all(18),
-                          decoration: const BoxDecoration(
-                            color: AppColors.background,
+                          decoration: BoxDecoration(
+                            color: context.fomraSurfaceVar,
                             shape: BoxShape.circle,
                           ),
-                          child: const Icon(Icons.notifications_none,
-                              size: 32, color: AppColors.textSecondary),
+                          child: Icon(Icons.notifications_none,
+                              size: 32, color: context.fomraTextSecondary),
                         ),
                         const SizedBox(height: 10),
-                        const Text('No notifications yet',
+                        Text('No notifications yet',
                             style: TextStyle(
-                                color: AppColors.textSecondary,
+                                color: context.fomraTextSecondary,
                                 fontWeight: FontWeight.w500)),
                       ],
                     ),

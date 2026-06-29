@@ -299,7 +299,7 @@ class _TngisParcelMapState extends State<TngisParcelMap> {
 
   double _distanceM(LatLng a, LatLng b) {
     const r = 6371000.0;
-    final p = math.pi / 180.0;
+    const p = math.pi / 180.0;
     final lat1 = a.latitude * p;
     final lat2 = b.latitude * p;
     final h = math.sin((lat2 - lat1) / 2) * math.sin((lat2 - lat1) / 2) +

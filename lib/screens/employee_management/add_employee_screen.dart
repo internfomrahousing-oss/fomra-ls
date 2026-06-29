@@ -138,7 +138,7 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
               ? (v) =>
                   (v == null || v.trim().isEmpty) ? '$label is required' : null
               : null),
-      decoration: FomraInput.decoration(label: label, icon: icon),
+      decoration: FomraInput.decoration(context: context, label: label, icon: icon),
     );
   }
 }

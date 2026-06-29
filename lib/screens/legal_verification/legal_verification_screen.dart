@@ -4,6 +4,7 @@ import '../../models/land_lead.dart';
 import '../../services/app_store.dart';
 import '../../services/legal_verification_service.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/fomra_theme_context.dart';
 import '../../widgets/app_drawer.dart';
 import '../../widgets/fomra_app_bar.dart';
 import '../../widgets/fomra_bottom_nav.dart';
@@ -501,7 +502,7 @@ class _LegalVerificationScreenState extends State<LegalVerificationScreen> {
                 contentPadding: const EdgeInsets.symmetric(
                     horizontal: 12, vertical: 10),
                 filled: true,
-                fillColor: Colors.white,
+                fillColor: context.fomraSurface,
               ),
               style: const TextStyle(fontSize: 13),
             ),
@@ -516,7 +517,7 @@ class _LegalVerificationScreenState extends State<LegalVerificationScreen> {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 7),
           decoration: BoxDecoration(
-            color: selected ? color.withValues(alpha: 0.12) : Colors.white,
+            color: selected ? color.withValues(alpha: 0.12) : context.fomraSurface,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
               color: selected ? color : Colors.grey.shade300,

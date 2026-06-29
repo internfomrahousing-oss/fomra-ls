@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../models/land_lead.dart';
 import '../../services/app_store.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/fomra_theme_context.dart';
 import '../../widgets/app_drawer.dart';
 import '../../widgets/fomra_app_bar.dart';
 import '../../widgets/fomra_bottom_nav.dart';
@@ -53,7 +54,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       appBar: const FomraAppBar(moduleName: 'Dashboard'),
       drawer: const AppDrawer(currentRoute: '/dashboard'),
       bottomNavigationBar: const FomraBottomNav(currentRoute: '/dashboard'),
-      backgroundColor: const Color(0xFFF4F6FB),
+      backgroundColor: context.fomraPageBg,
       body: SingleChildScrollView(
             padding: const EdgeInsets.all(16),
             child: Column(
@@ -127,13 +128,13 @@ class _Header extends StatelessWidget {
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(title,
-                style: const TextStyle(
+                style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w800,
-                    color: AppColors.textPrimary)),
+                    color: context.fomraTextPrimary)),
             Text(subtitle,
-                style: const TextStyle(
-                    fontSize: 11, color: AppColors.textSecondary)),
+                style: TextStyle(
+                    fontSize: 11, color: context.fomraTextSecondary)),
           ]),
         ),
       ]);
@@ -157,15 +158,10 @@ class _KpiCard extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: context.fomraSurface,
           borderRadius: BorderRadius.circular(14),
           border: Border(left: BorderSide(color: d.color, width: 4)),
-          boxShadow: [
-            BoxShadow(
-                color: Colors.black.withValues(alpha: 0.06),
-                blurRadius: 8,
-                offset: const Offset(0, 2))
-          ],
+          boxShadow: context.fomraCardShadow,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -180,7 +176,8 @@ class _KpiCard extends StatelessWidget {
                 child: Icon(d.icon, color: d.color, size: 18),
               ),
               Icon(Icons.arrow_forward_ios_rounded,
-                  size: 12, color: AppColors.textSecondary.withValues(alpha: 0.4)),
+                  size: 12,
+                  color: context.fomraTextSecondary.withValues(alpha: 0.4)),
             ]),
             Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(d.value,
@@ -191,15 +188,15 @@ class _KpiCard extends StatelessWidget {
                       height: 1.1)),
               const SizedBox(height: 2),
               Text(d.label,
-                  style: const TextStyle(
+                  style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary),
+                      color: context.fomraTextPrimary),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis),
               Text(d.sub,
-                  style: const TextStyle(
-                      fontSize: 10, color: AppColors.textSecondary)),
+                  style: TextStyle(
+                      fontSize: 10, color: context.fomraTextSecondary)),
             ]),
           ],
         ),

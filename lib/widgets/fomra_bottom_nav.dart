@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../screens/home/home_screen.dart';
 import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
+import '../theme/fomra_theme_context.dart';
 
 class FomraBottomNav extends StatelessWidget {
   final String currentRoute;
@@ -49,19 +50,24 @@ class FomraBottomNav extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final items = _itemsForUser();
+    final surface = context.fomraSurface;
+    final border = context.fomraBorder;
+    final inactive = context.fomraTextTertiary;
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
         child: Container(
           decoration: BoxDecoration(
-            color: AppColors.surface,
+            color: surface,
             borderRadius: BorderRadius.circular(AppColors.radiusXl),
-            border: Border.all(color: AppColors.border),
-            boxShadow: const [
+            border: Border.all(color: border),
+            boxShadow: [
               BoxShadow(
-                color: Color(0x14000000),
+                color: context.isDarkMode
+                    ? const Color(0x40000000)
+                    : const Color(0x14000000),
                 blurRadius: 20,
-                offset: Offset(0, 8),
+                offset: const Offset(0, 8),
               ),
             ],
           ),
@@ -90,7 +96,7 @@ class FomraBottomNav extends StatelessWidget {
                           isActive ? item.activeIcon : item.icon,
                           color: isActive
                               ? Colors.white
-                              : AppColors.textTertiary,
+                              : inactive,
                           size: 20,
                         ),
                         const SizedBox(height: 3),
@@ -103,7 +109,7 @@ class FomraBottomNav extends StatelessWidget {
                                 : FontWeight.w500,
                             color: isActive
                                 ? Colors.white
-                                : AppColors.textTertiary,
+                                : inactive,
                             letterSpacing: 0.1,
                           ),
                         ),

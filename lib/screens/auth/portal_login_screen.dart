@@ -186,6 +186,7 @@ class _PortalLoginScreenState extends State<PortalLoginScreen> {
                                   keyboardType: TextInputType.emailAddress,
                                   textInputAction: TextInputAction.next,
                                   decoration: FomraInput.decoration(
+                                    context: context,
                                     label: 'Email Address',
                                     icon: Icons.email_outlined,
                                   ),
@@ -203,6 +204,7 @@ class _PortalLoginScreenState extends State<PortalLoginScreen> {
                                           ? 'Password is required'
                                           : null,
                                   decoration: FomraInput.decoration(
+                                    context: context,
                                     label: 'Password',
                                     icon: Icons.lock_outline,
                                   ).copyWith(

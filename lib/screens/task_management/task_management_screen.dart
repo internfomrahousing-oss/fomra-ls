@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_input.dart';
+import '../../theme/fomra_theme_context.dart';
 import '../../widgets/app_drawer.dart';
 import '../../widgets/fomra_app_bar.dart';
 import '../../widgets/fomra_bottom_nav.dart';
@@ -932,9 +933,9 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
       minChildSize: 0.5,
       expand: false,
       builder: (_, controller) => Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        decoration: BoxDecoration(
+          color: context.fomraSurface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
         ),
         child: Column(children: [
           _SheetHandle(),
@@ -964,7 +965,7 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
                   const _SectionLabel('Task Title'),
                   TextFormField(
                     controller: _titleCtrl,
-                    decoration: _dec('Enter task title'),
+                    decoration: _dec(context, 'Enter task title'),
                     validator: (v) =>
                         (v == null || v.trim().isEmpty) ? 'Required' : null,
                   ),
@@ -974,7 +975,7 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
                   const _SectionLabel('Description'),
                   TextFormField(
                     controller: _descCtrl,
-                    decoration: _dec('Brief description'),
+                    decoration: _dec(context, 'Brief description'),
                     maxLines: 2,
                   ),
                   const SizedBox(height: 14),
@@ -988,7 +989,7 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
                             const _SectionLabel('Priority'),
                             DropdownButtonFormField<TaskPriority>(
                               initialValue: _priority,
-                              decoration: _dec(null),
+                              decoration: _dec(context, null),
                               items: TaskPriority.values
                                   .map((p) => DropdownMenuItem(
                                         value: p,
@@ -1017,7 +1018,7 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
                             const _SectionLabel('Module'),
                             DropdownButtonFormField<String>(
                               initialValue: _module,
-                              decoration: _dec(null),
+                              decoration: _dec(context, null),
                               items: _kModules
                                   .map((m) => DropdownMenuItem(
                                       value: m, child: Text(m)))
@@ -1092,7 +1093,7 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
                             ? _assignedTo.add(name)
                             : _assignedTo.remove(name)),
                         selectedColor: AppColors.primary,
-                        backgroundColor: AppColors.background,
+                        backgroundColor: context.fomraSurfaceVar,
                         side: BorderSide(
                             color: selected
                                 ? AppColors.primary
@@ -1122,7 +1123,7 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
                             ? _reminders.add(e.value)
                             : _reminders.remove(e.value)),
                         selectedColor: AppColors.info,
-                        backgroundColor: AppColors.background,
+                        backgroundColor: context.fomraSurfaceVar,
                         side: BorderSide(
                             color: selected
                                 ? AppColors.info
@@ -1188,7 +1189,7 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
                   const _SectionLabel('Notes'),
                   TextFormField(
                     controller: _notesCtrl,
-                    decoration: _dec('Additional notes…'),
+                    decoration: _dec(context, 'Additional notes…'),
                     maxLines: 3,
                   ),
                   const SizedBox(height: 80),
@@ -1271,7 +1272,7 @@ class _AddEscalationDialogState extends State<_AddEscalationDialog> {
         const SizedBox(height: 8),
         DropdownButtonFormField<int>(
           initialValue: _hours,
-          decoration: _dec('Hours after due'),
+          decoration: _dec(context, 'Hours after due'),
           items: [1, 2, 4, 8, 12, 24, 48]
               .map((h) => DropdownMenuItem(
                   value: h, child: Text('$h hour${h > 1 ? 's' : ''}')))
@@ -1284,7 +1285,7 @@ class _AddEscalationDialogState extends State<_AddEscalationDialog> {
         const SizedBox(height: 8),
         DropdownButtonFormField<String>(
           initialValue: _escalateTo,
-          decoration: _dec('Select person'),
+          decoration: _dec(context, 'Select person'),
           items: _kTeam
               .map((t) =>
                   DropdownMenuItem(value: t, child: Text(t)))
@@ -1329,9 +1330,9 @@ class _TaskDetailSheet extends StatelessWidget {
       minChildSize: 0.4,
       expand: false,
       builder: (_, controller) => Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        decoration: BoxDecoration(
+          color: context.fomraSurface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
         ),
         child: Column(children: [
           _SheetHandle(),
@@ -1591,9 +1592,9 @@ class _NotificationsSheet extends StatelessWidget {
       minChildSize: 0.3,
       expand: false,
       builder: (_, controller) => Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        decoration: BoxDecoration(
+          color: context.fomraSurface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
         ),
         child: Column(children: [
           _SheetHandle(),
@@ -1959,4 +1960,5 @@ IconData _statusIcon(TaskStatus s) => switch (s) {
       TaskStatus.overdue => Icons.warning_amber_outlined,
     };
 
-InputDecoration _dec(String? hint) => FomraInput.decoration(hint: hint);
+InputDecoration _dec(BuildContext context, String? hint) =>
+    FomraInput.decoration(context: context, hint: hint);

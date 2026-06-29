@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../models/land_lead.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/fomra_theme_context.dart';
 import '../market_intelligence/market_intelligence_screen.dart';
 
 class LeadDetailScreen extends StatelessWidget {
@@ -11,7 +12,7 @@ class LeadDetailScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.fomraPageBg,
       appBar: AppBar(
         flexibleSpace: Container(
           decoration: const BoxDecoration(
@@ -62,9 +63,9 @@ class _LeadDetailsCard extends StatelessWidget {
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.fomraSurface,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: AppColors.cardShadow,
+        boxShadow: context.fomraCardShadow,
       ),
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -90,7 +91,6 @@ class _LeadDetailsCard extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w700,
-                  color: AppColors.textPrimary,
                 ),
               ),
               const Spacer(),
@@ -130,10 +130,10 @@ class _LeadDetailsCard extends StatelessWidget {
             const Divider(height: 24),
             Text(
               lead.sitePhotoUrls.length == 1 ? 'Site Photo' : 'Site Photos',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
-                color: AppColors.textSecondary,
+                color: context.fomraTextSecondary,
               ),
             ),
             const SizedBox(height: 8),
@@ -170,12 +170,12 @@ class _LeadDetailsCard extends StatelessWidget {
               ),
           ] else if (lead.sitePhotoUrl.isNotEmpty) ...[
             const Divider(height: 24),
-            const Text(
+            Text(
               'Site Photo',
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
-                color: AppColors.textSecondary,
+                color: context.fomraTextSecondary,
               ),
             ),
             const SizedBox(height: 8),
@@ -232,20 +232,20 @@ class _DetailRow extends StatelessWidget {
             width: 110,
             child: Text(
               label,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
-                color: AppColors.textSecondary,
+                color: context.fomraTextSecondary,
               ),
             ),
           ),
           Expanded(
             child: Text(
               value,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w500,
-                color: AppColors.textPrimary,
+                color: context.fomraTextPrimary,
               ),
             ),
           ),

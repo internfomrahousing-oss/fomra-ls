@@ -36,22 +36,42 @@ String? parseTngisSubDivision(String? subDiv, String? kide, String? survey) {
   return kideSub;
 }
 
+String? _pick(String? primary, String? fallback) {
+  final p = primary?.trim();
+  if (p != null && p.isNotEmpty && p != '-') return p;
+  final f = fallback?.trim();
+  if (f != null && f.isNotEmpty && f != '-') return f;
+  return null;
+}
+
 /// Fetches survey no. and sub-division from TNGIS for a map point.
-Future<TngisParcelDetails?> fetchTngisParcelAt(LatLng loc) async {
-  try {
-    final result = await ApiClient.get(
-      '/api/tnlands/tngis/parcel?'
-      'lat=${loc.latitude}&lon=${loc.longitude}',
-      timeout: const Duration(seconds: 90),
-    );
+/// Throws [ApiException] on HTTP errors (404, timeout, etc.).
+Future<TngisParcelDetails> fetchTngisParcelAt(LatLng loc) async {
+  final result = await ApiClient.get(
+    '/api/tnlands/tngis/parcel?'
+    'lat=${loc.latitude}&lon=${loc.longitude}',
+    timeout: const Duration(seconds: 90),
+  );
 
-    final fields = (result['fields'] as Map<String, dynamic>? ?? {})
-        .map((k, v) => MapEntry(k, v.toString()));
-    final survey = (result['surveyNumber'] ?? fields['Survey Number'])?.toString();
-    final kideRaw = result['kide']?.toString() ?? fields['Kide'];
+  final fields = (result['fields'] as Map<String, dynamic>? ?? {})
+      .map((k, v) => MapEntry(k, v.toString()));
+  final survey = _pick(
+    result['surveyNumber']?.toString(),
+    fields['Survey Number'],
+  );
+  final kideRaw = result['kide']?.toString() ?? fields['Kide'];
 
-    String? resolvedSub;
-    final subdivisions = result['subdivisions'] as List<dynamic>? ?? [];
+  // Backend resolves subDivision at map tap — prefer that first.
+  String? resolvedSub = _pick(
+    result['subDivision']?.toString(),
+    fields['Sub Division'],
+  );
+  if (resolvedSub != null && survey != null && resolvedSub == survey) {
+    resolvedSub = null;
+  }
+
+  final subdivisions = result['subdivisions'] as List<dynamic>? ?? [];
+  if (resolvedSub == null) {
     for (final raw in subdivisions) {
       if (raw is! Map<String, dynamic>) continue;
       if (raw['containsPoint'] != true) continue;
@@ -63,36 +83,26 @@ Future<TngisParcelDetails?> fetchTngisParcelAt(LatLng loc) async {
       final sub = parseTngisSubDivision(
         raw['subDivision']?.toString() ?? rowFields['Sub Division'],
         rowKide,
-        rowSurvey,
+        rowSurvey.isNotEmpty ? rowSurvey : survey,
       );
       if (sub != null) {
         resolvedSub = sub;
         break;
       }
     }
-
-    resolvedSub ??= parseTngisSubDivision(
-      (result['subDivision'] ?? fields['Sub Division'])?.toString(),
-      kideRaw,
-      survey,
-    );
-
-    String? pick(String? primary, String? fallback) {
-      final p = primary?.trim();
-      if (p != null && p.isNotEmpty && p != '-') return p;
-      final f = fallback?.trim();
-      if (f != null && f.isNotEmpty && f != '-') return f;
-      return null;
-    }
-
-    return TngisParcelDetails(
-      surveyNumber: pick(survey, fields['Survey Number']),
-      subDivision: resolvedSub,
-      village: pick(result['village'] as String?, fields['Village']),
-      taluk: pick(result['taluk'] as String?, fields['Taluk']),
-      district: pick(result['district'] as String?, fields['District']),
-    );
-  } catch (_) {
-    return null;
   }
+
+  resolvedSub ??= parseTngisSubDivision(
+    fields['Sub Division'],
+    kideRaw,
+    survey,
+  );
+
+  return TngisParcelDetails(
+    surveyNumber: survey,
+    subDivision: resolvedSub,
+    village: _pick(result['village']?.toString(), fields['Village']),
+    taluk: _pick(result['taluk']?.toString(), fields['Taluk']),
+    district: _pick(result['district']?.toString(), fields['District']),
+  );
 }

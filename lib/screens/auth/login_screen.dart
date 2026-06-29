@@ -139,6 +139,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                   ? 'Email is required'
                                   : null,
                               decoration: FomraInput.decoration(
+                                context: context,
                                 label: 'Email',
                                 icon: Icons.email_outlined,
                               ),
@@ -153,6 +154,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                   ? 'Password is required'
                                   : null,
                               decoration: FomraInput.decoration(
+                                context: context,
                                 label: 'Password',
                                 icon: Icons.lock_outline,
                               ).copyWith(

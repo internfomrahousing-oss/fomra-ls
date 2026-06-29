@@ -13,6 +13,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../models/land_lead.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_input.dart';
+import '../../theme/fomra_theme_context.dart';
 import '../../utils/lead_location_parser.dart';
 import '../../widgets/app_drawer.dart';
 import '../../widgets/fomra_app_bar.dart';
@@ -1086,7 +1087,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
               child: Text(
                 'Area average: ₹${_areaPriceStats().avgPerSqft.round()}/sqft'
                 ' (${_areaPriceStats().pricedCount} priced projects within ${_selectedRadius}km of pin)',
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: mbColor),
+                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: mbColor),
               ),
             ),
           if (_areaPriceStats().hasData) const SizedBox(height: 10),
@@ -1306,10 +1307,10 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (loc == null)
-          _SectionCard(
+          const _SectionCard(
             title: 'Location',
             icon: Icons.location_off_outlined,
-            child: const Text(
+            child: Text(
               'This lead has no GPS coordinates. Add GPS when creating the lead to load infrastructure score and AI valuation.',
               style: TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.4),
             ),
@@ -1334,10 +1335,10 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
     final loading = loc != null && (_fetchingMb || _collectingPois || !_poisCollected);
 
     if (loading) {
-      return _SectionCard(
+      return const _SectionCard(
         title: 'AI Land Valuation Engine',
         icon: Icons.auto_awesome_outlined,
-        child: const Padding(
+        child: Padding(
           padding: EdgeInsets.symmetric(vertical: 20),
           child: Center(
             child: Column(
@@ -1370,10 +1371,10 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
 
     final v = _valuationResult ?? _computeValuation();
     if (v == null) {
-      return _SectionCard(
+      return const _SectionCard(
         title: 'AI Land Valuation Engine',
         icon: Icons.auto_awesome_outlined,
-        child: const Text(
+        child: Text(
           'Unable to compute valuation for this lead.',
           style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
         ),
@@ -1570,7 +1571,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
             Expanded(
               child: TextField(
                 controller: _searchCtrl,
-                decoration: _inputDec('Search city, area, landmark...').copyWith(
+                decoration: _inputDec(context, 'Search city, area, landmark...').copyWith(
                   prefixIcon: const Padding(
                     padding: EdgeInsets.only(left: 10, right: 6),
                     child: Icon(Icons.search, size: 18,
@@ -1671,7 +1672,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
       );
 
   Widget _buildMapOverlayButton(IconData icon, VoidCallback onTap) => Material(
-        color: Colors.white,
+        color: context.fomraSurface,
         elevation: 3,
         shadowColor: Colors.black26,
         borderRadius: BorderRadius.circular(8),
@@ -2479,7 +2480,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                     TextField(
                       controller: _roadWidthCtrl,
                       keyboardType: TextInputType.number,
-                      decoration: _inputDec('e.g. 30'),
+                      decoration: _inputDec(context, 'e.g. 30'),
                     ),
                   ]),
             ),
@@ -2492,7 +2493,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                     TextField(
                       controller: _landSizeCtrl,
                       keyboardType: TextInputType.number,
-                      decoration: _inputDec('e.g. 5000'),
+                      decoration: _inputDec(context, 'e.g. 5000'),
                     ),
                   ]),
             ),
@@ -2541,7 +2542,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                     const _FieldLabel('Location Category'),
                     DropdownButtonFormField<String>(
                       initialValue: _locationCategory,
-                      decoration: _inputDec(null),
+                      decoration: _inputDec(context, null),
                       items: ['Premium', 'Urban', 'Semi-Urban', 'Rural']
                           .map((v) =>
                               DropdownMenuItem(value: v, child: Text(v)))
@@ -2559,7 +2560,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                     const _FieldLabel('Development Potential'),
                     DropdownButtonFormField<String>(
                       initialValue: _developmentPotential,
-                      decoration: _inputDec(null),
+                      decoration: _inputDec(context, null),
                       items: ['Very High', 'High', 'Medium', 'Low']
                           .map((v) =>
                               DropdownMenuItem(value: v, child: Text(v)))
@@ -2711,9 +2712,9 @@ class _PoiListSheet extends StatelessWidget {
         minChildSize: 0.3,
         expand: false,
         builder: (_, ctrl) => Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          decoration: BoxDecoration(
+            color: context.fomraSurface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
           ),
           child: Column(children: [
             _Handle(),
@@ -2821,9 +2822,9 @@ class _SectionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: context.fomraSurface,
           borderRadius: BorderRadius.circular(16),
-          boxShadow: AppColors.cardShadow,
+          boxShadow: context.fomraCardShadow,
         ),
         padding: const EdgeInsets.all(16),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -2838,10 +2839,10 @@ class _SectionCard extends StatelessWidget {
             ),
             const SizedBox(width: 10),
             Text(title,
-                style: const TextStyle(
+                style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
-                    color: AppColors.textPrimary)),
+                    color: context.fomraTextPrimary)),
           ]),
           const SizedBox(height: 14),
           child,
@@ -3099,8 +3100,8 @@ class _Handle extends StatelessWidget {
       );
 }
 
-InputDecoration _inputDec(String? hint) =>
-    FomraInput.decoration(hint: hint);
+InputDecoration _inputDec(BuildContext context, String? hint) =>
+    FomraInput.decoration(context: context, hint: hint);
 
 class _Option {
   final String code;
@@ -3308,15 +3309,15 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
   Uint8List? _fmbPdfBytes;
   String? _fmbLoadError;
   bool _loadingFmb = false;
-  bool   _showManualPatta = false;
+  final bool   _showManualPatta = false;
   bool   _showManualEc    = false;
   Timer? _pattaDebounce;
 
   // â”€â”€ EC state â”€â”€
   List<_Option> _ecZones = [
-    _Option('1', 'Chennai'),
-    _Option('2', 'Coimbatore'),
-    _Option('4', 'Madurai'),
+    const _Option('1', 'Chennai'),
+    const _Option('2', 'Coimbatore'),
+    const _Option('4', 'Madurai'),
   ];
 
   static const _kStaticEcDistricts = <String, List<_Option>>{
@@ -3460,8 +3461,9 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
     _loadEcPeriods();
     _loadEcZones();
     _loadEcCaptcha();
-    if (widget.district != null) _tryAutoEcFill();
-    else if (widget.lat != null && widget.lon != null) {
+    if (widget.district != null) {
+      _tryAutoEcFill();
+    } else if (widget.lat != null && widget.lon != null) {
       Future.microtask(() => _resolveEcFromServer());
     }
     _surveyCtrl.addListener(_onSurveyChanged);
@@ -4369,7 +4371,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
   String _buildEcHtmlForRecords(List<Map<String, String>> records) {
     if (records.isEmpty) return '<p>No records</p>';
     final headers = records.first.keys.toList();
-    final esc = (String s) => s
+    String esc(String s) => s
         .replaceAll('&', '&amp;')
         .replaceAll('<', '&lt;')
         .replaceAll('>', '&gt;');
@@ -4803,9 +4805,9 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
       width: double.infinity,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.fomraSurface,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.grey.shade300),
+        border: Border.all(color: context.fomraBorder),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.04),
@@ -4873,7 +4875,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
           child: Padding(
             padding: EdgeInsets.only(right: isLast ? 0 : 6),
             child: Material(
-              color: selected ? svc.color.withValues(alpha: 0.14) : Colors.white,
+              color: selected ? svc.color.withValues(alpha: 0.14) : context.fomraSurface,
               elevation: selected ? 2 : 0,
               shadowColor: svc.color.withValues(alpha: 0.3),
               borderRadius: BorderRadius.circular(10),
@@ -4943,7 +4945,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
               child: SizedBox(
                 width: 88,
                 child: Material(
-                  color: selected ? svc.color.withValues(alpha: 0.14) : Colors.white,
+                  color: selected ? svc.color.withValues(alpha: 0.14) : context.fomraSurface,
                   borderRadius: BorderRadius.circular(10),
                   child: InkWell(
                     onTap: () => _onSelectGiService(svc.id),
@@ -5455,8 +5457,8 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
 
   Widget _buildGiEcPeriodPicker() {
     return DropdownButtonFormField<_EcPeriod>(
-      value: _selEcPeriod,
-      decoration: _inputDec('EC period'),
+      initialValue: _selEcPeriod,
+      decoration: _inputDec(context, 'EC period'),
       items: _ecPeriods.map((p) => DropdownMenuItem(value: p, child: Text(p.label, style: const TextStyle(fontSize: 12)))).toList(),
       onChanged: (p) => setState(() => _selEcPeriod = p),
     );
@@ -5468,21 +5470,15 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.fomraSurface,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey.shade300),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        border: Border.all(color: context.fomraBorder),
+        boxShadow: context.fomraCardShadow,
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
+        Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: context.fomraTextPrimary)),
         const SizedBox(height: 4),
-        Text(value, style: const TextStyle(fontSize: 12, color: Colors.black87)),
+        Text(value, style: TextStyle(fontSize: 12, color: context.fomraTextPrimary)),
       ]),
     );
   }
