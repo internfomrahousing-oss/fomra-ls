@@ -1,5 +1,6 @@
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../models/employee_profile.dart';
 import '../models/user.dart';
 import 'api_client.dart';
 import 'employee_service.dart';
@@ -138,12 +139,14 @@ class AuthService {
       );
     }
     if (portal == LoginPortal.employee &&
-        normalizedEmail != employeeEmail &&
-        !await EmployeeService.emailExists(normalizedEmail)) {
-      throw const ApiException(
-        statusCode: 401,
-        message: 'Invalid email or password.',
-      );
+        normalizedEmail != employeeEmail) {
+      final profile = await EmployeeService.findByEmail(normalizedEmail);
+      if (profile == null || profile.status != EmployeeStatus.active) {
+        throw const ApiException(
+          statusCode: 401,
+          message: 'Invalid email or password.',
+        );
+      }
     }
     if (password != portalPassword) {
       throw const ApiException(

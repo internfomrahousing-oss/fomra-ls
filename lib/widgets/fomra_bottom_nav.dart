@@ -22,7 +22,7 @@ class FomraBottomNav extends StatelessWidget {
     }
     items.addAll(const [
       _NavItem('/market-intelligence', Icons.insights_outlined,        Icons.insights,            'Market'),
-      _NavItem('/dashboard',           Icons.bar_chart_outlined,       Icons.bar_chart_rounded,   'Reports'),
+      _NavItem('/dashboard',           Icons.bar_chart_outlined,       Icons.bar_chart_rounded,   'Dashboard'),
     ]);
     return items;
   }

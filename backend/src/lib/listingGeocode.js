@@ -17,7 +17,7 @@ function geocodeOne(query) {
       });
       res.on('error', () => resolve(null));
     });
-    req.setTimeout(6000, () => { req.destroy(); resolve(null); });
+    req.setTimeout(4000, () => { req.destroy(); resolve(null); });
     req.on('error', () => resolve(null));
   });
 }
@@ -55,7 +55,7 @@ async function geocodeListings(listings, city, maxCount = 50) {
   }).slice(0, maxCount);
 
   const queryCache = new Map();
-  const BATCH = 5;
+  const BATCH = 8;
   for (let i = 0; i < needGeo.length; i += BATCH) {
     const batch = needGeo.slice(i, i + BATCH);
     await Promise.all(batch.map(async (l) => {

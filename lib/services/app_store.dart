@@ -42,4 +42,9 @@ class AppStore extends ChangeNotifier {
     employees.insert(0, profile);
     notifyListeners();
   }
+
+  void removeEmployee(String id) {
+    employees.removeWhere((e) => e.id == id);
+    notifyListeners();
+  }
 }

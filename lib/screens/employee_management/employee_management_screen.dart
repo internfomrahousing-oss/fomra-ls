@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 
 import '../../models/employee_profile.dart';
 import '../../services/app_store.dart';
@@ -59,6 +58,51 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
     );
     if (created != null) {
       AppStore.instance.addEmployee(created);
+    }
+  }
+
+  Future<void> _confirmRemoveAccess(EmployeeProfile employee) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Remove access?'),
+        content: Text(
+          '${employee.fullName} (${employee.email}) will no longer be able to sign in.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
+            child: const Text('Remove access'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    try {
+      await EmployeeService.removeAccess(employee.id);
+      AppStore.instance.removeEmployee(employee.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Access removed for ${employee.fullName}'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceFirst('Exception: ', '')),
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     }
   }
 
@@ -197,8 +241,11 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                           child: ListView.builder(
                             padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                             itemCount: _filtered.length,
-                            itemBuilder: (_, i) =>
-                                _EmployeeCard(employee: _filtered[i]),
+                            itemBuilder: (_, i) => _EmployeeCard(
+                              employee: _filtered[i],
+                              onRemoveAccess: () =>
+                                  _confirmRemoveAccess(_filtered[i]),
+                            ),
                           ),
                         ),
         ),
@@ -209,12 +256,15 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
 
 class _EmployeeCard extends StatelessWidget {
   final EmployeeProfile employee;
-  const _EmployeeCard({required this.employee});
+  final VoidCallback onRemoveAccess;
+
+  const _EmployeeCard({
+    required this.employee,
+    required this.onRemoveAccess,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final joined =
-        DateFormat('dd MMM yyyy').format(employee.joinedOn.toLocal());
     final active = employee.status == EmployeeStatus.active;
 
     return Card(
@@ -314,16 +364,14 @@ class _EmployeeCard extends StatelessWidget {
                       ),
                     ),
                   ],
-                  const SizedBox(height: 6),
-                  Text(
-                    'Joined $joined',
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: Colors.grey.shade500,
-                    ),
-                  ),
                 ],
               ),
+            ),
+            IconButton(
+              tooltip: 'Remove access',
+              onPressed: onRemoveAccess,
+              icon: const Icon(Icons.person_remove_outlined),
+              color: AppColors.error,
             ),
           ],
         ),

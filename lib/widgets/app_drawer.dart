@@ -13,7 +13,7 @@ class _MenuItem {
 const _baseMenuItems = [
   _MenuItem('Land Workspace', Icons.space_dashboard_outlined, '/land-lead'),
   _MenuItem('Market Intelligence', Icons.insights_outlined, '/market-intelligence'),
-  _MenuItem('Dashboard & Reports', Icons.dashboard_outlined, '/dashboard'),
+  _MenuItem('Dashboard', Icons.dashboard_outlined, '/dashboard'),
 ];
 
 const _managementMenuItem =

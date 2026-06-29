@@ -153,9 +153,9 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ),
                       _ActionCard(
-                        icon: Icons.assessment_outlined,
-                        label: 'Reports',
-                        sub: 'Pipeline & analytics',
+                        icon: Icons.dashboard_outlined,
+                        label: 'Dashboard',
+                        sub: 'Pipeline KPI overview',
                         route: '/dashboard',
                         gradient: LinearGradient(
                           colors: [Color(0xFF1D4ED8), Color(0xFF3B82F6)],

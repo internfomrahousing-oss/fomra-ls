@@ -243,6 +243,47 @@ function parseFromMbDetailUrl(url, name) {
 }
 
 function parseDetailPriceFromHtml(body) {
+  const ldBlocks = body.match(/<script type="application\/ld\+json">\s*([\s\S]*?)\s*<\/script>/gi) || [];
+  for (const block of ldBlocks) {
+    const m = block.match(/<script[^>]*>([\s\S]*?)<\/script>/i);
+    if (!m) continue;
+    try {
+      const data = JSON.parse(m[1]);
+      const nodes = data['@graph'] || [data];
+      let best = 0;
+      for (const node of nodes) {
+        if (!node || typeof node !== 'object') continue;
+        const offers = node.offers;
+        const offerList = Array.isArray(offers) ? offers : offers ? [offers] : [];
+        for (const o of offerList) {
+          const n = parseInt(String(o?.price ?? '').replace(/[^0-9]/g, ''), 10);
+          if (n > 100000 && n > best) best = n;
+        }
+      }
+      if (best > 0) return best;
+    } catch (_) {}
+  }
+
+  const nextM = body.match(/<script[^>]+id="__NEXT_DATA__"[^>]*>([\s\S]+?)<\/script>/i);
+  if (nextM) {
+    try {
+      const data = JSON.parse(nextM[1]);
+      const pp = data?.props?.pageProps;
+      const candidates = [
+        pp?.propertyDetails?.price,
+        pp?.propertyDetails?.propertyPrice,
+        pp?.propertyDetails?.priceValue,
+        pp?.data?.propertyDetails?.price,
+        pp?.price,
+        pp?.priceValue,
+      ];
+      for (const v of candidates) {
+        const n = toNum(v);
+        if (n > 100000) return Math.round(n);
+      }
+    } catch (_) {}
+  }
+
   const jsonPatterns = [
     /"price"\s*:\s*"?(\d+)"?/,
     /"priceValue"\s*:\s*(\d+)/,
@@ -271,35 +312,84 @@ function parseDetailPriceFromHtml(body) {
   return 0;
 }
 
-async function fetchDetailPrice(url) {
+function parseDetailGeoFromHtml(body) {
+  const ldBlocks = body.match(/<script type="application\/ld\+json">\s*([\s\S]*?)\s*<\/script>/gi) || [];
+  for (const block of ldBlocks) {
+    const m = block.match(/<script[^>]*>([\s\S]*?)<\/script>/i);
+    if (!m) continue;
+    try {
+      const data = JSON.parse(m[1]);
+      const nodes = data['@graph'] || [data];
+      for (const node of nodes) {
+        const geo = node?.geo || node?.location;
+        if (!geo || typeof geo !== 'object') continue;
+        const lat = parseFloat(geo.latitude);
+        const lng = parseFloat(geo.longitude);
+        if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng };
+      }
+    } catch (_) {}
+  }
+  return null;
+}
+
+function parseMbDetailPage(body) {
+  const geo = parseDetailGeoFromHtml(body);
+  return {
+    priceRupees: parseDetailPriceFromHtml(body),
+    lat: geo?.lat ?? null,
+    lng: geo?.lng ?? null,
+  };
+}
+
+async function fetchDetailMeta(url, timeoutMs = 15000) {
   try {
-    const r = await fetchRaw(url, MINIMAL_HEADERS, 15000);
-    if (r.status !== 200) return 0;
-    return parseDetailPriceFromHtml(r.body);
+    const r = await fetchRaw(url, MINIMAL_HEADERS, timeoutMs);
+    if (r.status !== 200) return { priceRupees: 0, lat: null, lng: null };
+    const meta = parseMbDetailPage(r.body);
+    return {
+      priceRupees: meta.priceRupees || 0,
+      lat: meta.lat ?? null,
+      lng: meta.lng ?? null,
+    };
   } catch {
-    return 0;
+    return { priceRupees: 0, lat: null, lng: null };
   }
 }
 
-async function fetchLdJsonListings(city, mbPropType, maxItems = 12) {
+async function fetchDetailPrice(url, timeoutMs = 15000) {
+  const meta = await fetchDetailMeta(url, timeoutMs);
+  return meta.priceRupees;
+}
+
+async function fetchLdJsonListings(city, mbPropType, maxItems = 20, targetPriced = 10) {
+  const onServerless = !!process.env.VERCEL || !!process.env.NETLIFY;
+  const batchSize = onServerless ? 6 : 4;
+  const detailTimeout = onServerless ? 12000 : 15000;
+
   const pageUrl =
     `https://www.magicbricks.com/property-for-sale/residential-real-estate` +
     `?proptype=${mbPropType}&cityName=${encodeURIComponent(city)}`;
-  const r = await fetchRaw(pageUrl, MINIMAL_HEADERS, 25000);
+  const r = await fetchRaw(pageUrl, MINIMAL_HEADERS, onServerless ? 20000 : 25000);
   if (r.status !== 200) return [];
 
   const ldItems = extractLdJsonItems(r.body).slice(0, maxItems);
   if (!ldItems.length) return [];
 
   const results = [];
-  const BATCH = 4;
-  for (let i = 0; i < ldItems.length; i += BATCH) {
-    const batch  = ldItems.slice(i, i + BATCH);
-    const prices = await Promise.all(batch.map((item) => fetchDetailPrice(item.url)));
+  for (let i = 0; i < ldItems.length; i += batchSize) {
+    const pricedSoFar = results.filter((l) => l.priceRupees > 0).length;
+    if (pricedSoFar >= targetPriced && i >= batchSize * 2) break;
+
+    const batch = ldItems.slice(i, i + batchSize);
+    const metas = await Promise.all(
+      batch.map((item) => fetchDetailMeta(item.url, detailTimeout)),
+    );
     batch.forEach((item, idx) => {
       const parsed = parseFromMbDetailUrl(item.url, item.name);
-      const price  = prices[idx];
-      const ppsf   = price > 0 && parsed.area > 0 ? Math.round(price / parsed.area) : 0;
+      const { priceRupees, lat, lng } = metas[idx];
+      const ppsf = priceRupees > 0 && parsed.area > 0
+        ? Math.round(priceRupees / parsed.area)
+        : 0;
       const nameKey = (parsed.projectName || parsed.locality || 'item')
         .replace(/[^a-zA-Z0-9]/g, '_').slice(0, 30);
       results.push({
@@ -307,7 +397,7 @@ async function fetchLdJsonListings(city, mbPropType, maxItems = 12) {
         projectName:    parsed.projectName,
         locality:       parsed.locality,
         bhkType:        parsed.bhkType,
-        priceRupees:    price,
+        priceRupees,
         pricePerSqft:   ppsf,
         area:           parsed.area,
         status:         'Available',
@@ -316,8 +406,9 @@ async function fetchLdJsonListings(city, mbPropType, maxItems = 12) {
         reraNo:         '',
         projectType:    'Building',
         registeredYear: null,
-        lat:            null,
-        lng:            null,
+        lat,
+        lng,
+        detailUrl:      item.url,
       });
     });
   }
@@ -431,7 +522,7 @@ router.get('/', async (req, res) => {
   // ── Serverless: priced LD+JSON first (works when API endpoints are blocked) ─
   if (skipMb) {
     try {
-      const ldListings = await fetchLdJsonListings(city, mbPropType, hasRadius ? 24 : 16);
+      const ldListings = await fetchLdJsonListings(city, mbPropType, hasRadius ? 22 : 18, 10);
       if (ldListings.length > 0) {
         listings = ldListings;
         source = 'MagicBricks';
@@ -564,7 +655,7 @@ router.get('/', async (req, res) => {
   // ── Vercel/serverless retry if first LD+JSON pass returned nothing ─────────
   if (skipMb && listings.length === 0) {
     try {
-      const ldListings = await fetchLdJsonListings(city, mbPropType, 20);
+      const ldListings = await fetchLdJsonListings(city, mbPropType, 22, 8);
       if (ldListings.length > 0) {
         listings = ldListings;
         source = 'MagicBricks';
@@ -676,8 +767,15 @@ router.get('/', async (req, res) => {
   }
   listings = [...seen.values()];
 
-  const geoLimit = hasRadius ? (skipMb ? 40 : 120) : (skipMb ? 25 : 150);
-  listings = await geocodeListings(listings, city, geoLimit);
+  const geoLimit = hasRadius ? (skipMb ? 12 : 60) : (skipMb ? 12 : 80);
+  const needGeo = listings.filter((l) => {
+    const plat = parseFloat(l.lat);
+    const plng = parseFloat(l.lng ?? l.lon);
+    return !(Number.isFinite(plat) && Number.isFinite(plng));
+  });
+  if (needGeo.length > 0) {
+    listings = await geocodeListings(listings, city, geoLimit);
+  }
 
   let radiusNote;
   if (hasRadius) {
@@ -692,13 +790,14 @@ router.get('/', async (req, res) => {
       (l) => (l.pricePerSqft || 0) > 0 || (l.priceRupees || 0) > 0,
     );
 
-    if (pricedInRadius.length > 0) {
+    if (pricedInRadius.length >= 3) {
       listings = pricedInRadius;
     } else if (pricedBefore.length > 0) {
       listings = applyNearestListings(pricedBefore, userLat, userLng, 30);
       radiusNote =
-        `Showing nearest priced projects (${listings.length} found; `
-        + `none strictly within ${radius}km).`;
+        pricedInRadius.length > 0
+          ? `Showing nearest priced projects (${listings.length} found; only ${pricedInRadius.length} strictly within ${radius}km).`
+          : `Showing nearest priced projects (${listings.length} found; none strictly within ${radius}km).`;
     } else if (out.length > 0) {
       listings = out;
       radiusNote =

@@ -1317,6 +1317,8 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
         if (loc != null) ...[
           const SizedBox(height: 20),
           _buildInfrastructureSection(),
+          const SizedBox(height: 20),
+          _buildMagicBricksSection(),
         ],
         const SizedBox(height: 20),
         _buildGovtDocsSection(),

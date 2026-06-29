@@ -27,7 +27,8 @@ class EmployeeService {
   }
 
   static Future<bool> emailExists(String email) async {
-    return (await findByEmail(email)) != null;
+    final profile = await findByEmail(email);
+    return profile != null && profile.status == EmployeeStatus.active;
   }
 
   static Future<EmployeeProfile?> findByEmail(String email) async {
@@ -99,6 +100,18 @@ class EmployeeService {
       await _saveCache(cached);
       return profile;
     }
+  }
+
+  static Future<void> removeAccess(String id) async {
+    final normalized = id.trim().toLowerCase();
+    try {
+      await _db.from('employee_profiles').delete().eq('id', normalized);
+    } catch (_) {
+      throw Exception('Could not remove employee access. Try again.');
+    }
+    final cached = await _loadCache();
+    cached.removeWhere((e) => e.id.toLowerCase() == normalized);
+    await _saveCache(cached);
   }
 
   static EmployeeProfile _fromRow(Map<String, dynamic> r) {

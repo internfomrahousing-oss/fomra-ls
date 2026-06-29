@@ -37,6 +37,18 @@ function callRouter(subRouter, query) {
   });
 }
 
+function callRouterWithTimeout(subRouter, query, timeoutMs) {
+  return Promise.race([
+    callRouter(subRouter, query),
+    new Promise((resolve) => {
+      setTimeout(
+        () => resolve({ statusCode: 504, data: null, error: `timeout after ${timeoutMs}ms` }),
+        timeoutMs,
+      );
+    }),
+  ]);
+}
+
 function dedupeListings(listings) {
   const merged = new Map();
   for (const item of listings) {
@@ -135,15 +147,25 @@ router.get('/', async (req, res) => {
   const sources = [];
   const errors = [];
 
+  const onServerless = !!process.env.VERCEL || !!process.env.NETLIFY;
+  const mbTimeoutMs = onServerless ? 95000 : 150000;
+  const altTimeoutMs = onServerless ? 12000 : 35000;
+
   const mbQuery = hasRadiusFilter
     ? { ...fetchQuery, lat, lng: centerLng, radius }
     : fetchQuery;
 
-  const [mbResult, naResult, hoResult] = await Promise.all([
-    Promise.resolve(callRouter(magicbricksRouter, mbQuery)),
-    Promise.resolve(callRouter(ninetyNineRouter, fetchQuery)),
-    Promise.resolve(callRouter(housingRouter, fetchQuery)),
-  ]);
+  const mbResult = await callRouterWithTimeout(magicbricksRouter, mbQuery, mbTimeoutMs);
+
+  const altResults = onServerless
+    ? []
+    : await Promise.all([
+        callRouterWithTimeout(ninetyNineRouter, fetchQuery, altTimeoutMs),
+        callRouterWithTimeout(housingRouter, fetchQuery, altTimeoutMs),
+      ]);
+
+  const naResult = altResults[0] || { statusCode: 504, data: null, error: 'skipped on serverless' };
+  const hoResult = altResults[1] || { statusCode: 504, data: null, error: 'skipped on serverless' };
 
   ingestBatch({ status: 'fulfilled', value: mbResult }, 'MagicBricks', allListings, sources, errors);
   ingestBatch({ status: 'fulfilled', value: naResult }, '99acres', allListings, sources, errors);
@@ -163,35 +185,46 @@ router.get('/', async (req, res) => {
   const pricedAll = listings.filter(isPriced);
 
   if (hasRadiusFilter) {
-    const latN = parseFloat(lat);
-    const lngN = parseFloat(centerLng);
-    const rKm = parseFloat(radius);
+    const mbPriced = mbResult.statusCode === 200
+      ? dedupeListings((mbResult.data?.listings || []).filter(isPriced))
+      : [];
 
-    await geocodeListings(listings, city, 120);
-
-    const pool = pricedAll.length > 0 ? pricedAll : listings;
-    const filtered = applyRadiusFilter(pool, latN, lngN, rKm);
-    const pricedInRadius = filtered.listings.filter(isPriced);
-
-    if (pricedInRadius.length > 0) {
-      listings = sortListings(pricedInRadius).slice(0, 30);
-      radiusNote = filtered.radiusNote;
-    } else if (pricedAll.length > 0) {
-      listings = applyNearestListings(pricedAll, latN, lngN, 30);
-      radiusNote =
-        `Showing nearest priced projects (${listings.length} found; `
-        + `none strictly within ${rKm}km).`;
-    } else if (filtered.listings.length > 0) {
-      listings = filtered.listings.slice(0, 30);
-      radiusNote =
-        filtered.radiusNote
-        || 'RERA projects in radius — online prices not available for these listings.';
+    // MagicBricks already applies radius / nearest-priced fallback — trust it when priced.
+    if (mbPriced.length > 0) {
+      listings = sortListings(mbPriced).slice(0, 30);
+      radiusNote = mbResult.data?.radiusNote || radiusNote;
     } else {
-      listings = applyNearestListings(listings, latN, lngN, 20);
-      radiusNote =
-        listings.length > 0
-          ? `Showing nearest projects (${listings.length}); price data may be limited.`
-          : filtered.radiusNote;
+      const latN = parseFloat(lat);
+      const lngN = parseFloat(centerLng);
+      const rKm = parseFloat(radius);
+
+      await geocodeListings(listings, city, onServerless ? 20 : 80);
+
+      const pool = pricedAll.length > 0 ? pricedAll : listings;
+      const filtered = applyRadiusFilter(pool, latN, lngN, rKm);
+      const pricedInRadius = filtered.listings.filter(isPriced);
+
+      if (pricedInRadius.length >= 3) {
+        listings = sortListings(pricedInRadius).slice(0, 30);
+        radiusNote = filtered.radiusNote;
+      } else if (pricedAll.length > 0) {
+        listings = applyNearestListings(pricedAll, latN, lngN, 30);
+        radiusNote =
+          pricedInRadius.length > 0
+            ? `Showing nearest priced projects (${listings.length} found; only ${pricedInRadius.length} strictly within ${rKm}km).`
+            : `Showing nearest priced projects (${listings.length} found; none strictly within ${rKm}km).`;
+      } else if (filtered.listings.length > 0) {
+        listings = filtered.listings.slice(0, 30);
+        radiusNote =
+          filtered.radiusNote
+          || 'RERA projects in radius — online prices not available for these listings.';
+      } else {
+        listings = applyNearestListings(listings, latN, lngN, 20);
+        radiusNote =
+          listings.length > 0
+            ? `Showing nearest projects (${listings.length}); price data may be limited.`
+            : filtered.radiusNote;
+      }
     }
   } else if (pricedAll.length > 0) {
     listings = sortListings(pricedAll);

@@ -2,13 +2,16 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
+import 'package:latlong2/latlong.dart';
 import '../../models/add_lead_result.dart';
 import '../../models/land_lead.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_input.dart';
 import '../../utils/image_compressor.dart';
+import '../../utils/lead_location_parser.dart';
 
 enum _LocationMode { manual, live }
 
@@ -51,7 +54,14 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
 
   _LocationMode _locationMode = _LocationMode.manual;
   bool _fetchingLocation = false;
+  bool _resolvingPin = false;
   String? _locationStatus;
+  LatLng? _pinnedPoint;
+  final _mapController = MapController();
+  bool _mapReady = false;
+
+  static const _kDefaultMapCenter = LatLng(13.0827, 80.2707);
+  static const _kOsmTileUrl = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 
   // Terms
   String? _termsType;
@@ -71,7 +81,148 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
     ]) {
       c.dispose();
     }
+    _mapController.dispose();
     super.dispose();
+  }
+
+  // ── Location fill from coordinates ─────────────────────────────────────────
+
+  Future<void> _fillFromCoordinates(double lat, double lng) async {
+    _gpsCtrl.text =
+        '${lat.toStringAsFixed(6)}° N, ${lng.toStringAsFixed(6)}° E';
+
+    if (!mounted) return;
+    setState(() => _locationStatus = 'Fetching address…');
+
+    try {
+      final uri = Uri.parse(
+        'https://nominatim.openstreetmap.org/reverse'
+        '?lat=$lat&lon=$lng&format=json&addressdetails=1',
+      );
+      final response = await http.get(uri, headers: {
+        'Accept-Language': 'en',
+        'User-Agent': 'FomraLS/1.0 (in.fomrahousing)',
+      });
+
+      if (!mounted) return;
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        final addr = data['address'] as Map<String, dynamic>? ?? {};
+
+        final location = _first(addr, [
+          'suburb', 'neighbourhood', 'quarter',
+          'town', 'village', 'city', 'municipality',
+        ]);
+        if (location.isNotEmpty) _locationCtrl.text = location;
+
+        final village = _first(addr, ['village', 'hamlet', 'suburb', 'neighbourhood']);
+        if (village.isNotEmpty) _villageCtrl.text = village;
+
+        final taluk = _first(addr, ['county', 'city_district', 'district']);
+        if (taluk.isNotEmpty) _talukCtrl.text = taluk;
+
+        final district = _first(addr, ['state_district', 'county']);
+        if (district.isNotEmpty) _districtCtrl.text = district;
+
+        final postcode = addr['postcode'] as String? ?? '';
+        if (postcode.isNotEmpty) _pincodeCtrl.text = postcode;
+
+        setState(() => _locationStatus = 'Location filled ✓');
+      } else {
+        setState(() => _locationStatus = 'Address lookup failed — GPS coordinates saved.');
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _locationStatus =
+          'Error: ${e.toString().replaceAll('Exception: ', '')}');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _fetchingLocation = false;
+          _resolvingPin = false;
+        });
+      }
+    }
+  }
+
+  void _onLocationModeChanged(_LocationMode mode) {
+    setState(() => _locationMode = mode);
+    if (mode == _LocationMode.manual) {
+      final parsed = parseLeadGps(_gpsCtrl.text) ?? _pinnedPoint;
+      if (parsed != null) {
+        _pinnedPoint = parsed;
+        WidgetsBinding.instance
+            .addPostFrameCallback((_) => _centerMapOn(parsed));
+      }
+    }
+  }
+
+  void _onMapReady() {
+    setState(() => _mapReady = true);
+    final parsed = _pinnedPoint ?? parseLeadGps(_gpsCtrl.text);
+    if (parsed != null) {
+      _pinnedPoint = parsed;
+      _centerMapOn(parsed);
+    }
+  }
+
+  void _centerMapOn(LatLng point) {
+    if (!_mapReady) return;
+    _mapController.move(point, _mapController.camera.zoom.clamp(12.0, 18.0));
+  }
+
+  Future<void> _onMapPin(LatLng point) async {
+    setState(() {
+      _pinnedPoint = point;
+      _resolvingPin = true;
+      _locationStatus = 'Pin placed — fetching address…';
+    });
+    _centerMapOn(point);
+    await _fillFromCoordinates(point.latitude, point.longitude);
+  }
+
+  Future<void> _centerMapOnMyLocation() async {
+    setState(() {
+      _fetchingLocation = true;
+      _locationStatus = 'Getting your location…';
+    });
+
+    try {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        _setStatus('Location services disabled. Enable GPS to center the map.');
+        return;
+      }
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        _setStatus('Location permission denied.');
+        return;
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 15),
+        ),
+      );
+
+      final point = LatLng(position.latitude, position.longitude);
+      setState(() {
+        _pinnedPoint = point;
+        _fetchingLocation = false;
+        _locationStatus = null;
+      });
+      _centerMapOn(point);
+    } on LocationServiceDisabledException {
+      _setStatus('Location services are disabled.');
+    } catch (e) {
+      _setStatus('Error: ${e.toString().replaceAll('Exception: ', '')}');
+    }
   }
 
   // ── Live location ──────────────────────────────────────────────────────────
@@ -112,46 +263,7 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
 
       final lat = position.latitude;
       final lng = position.longitude;
-      _gpsCtrl.text =
-          '${lat.toStringAsFixed(6)}° N, ${lng.toStringAsFixed(6)}° E';
-
-      setState(() => _locationStatus = 'Fetching address…');
-
-      final uri = Uri.parse(
-        'https://nominatim.openstreetmap.org/reverse'
-        '?lat=$lat&lon=$lng&format=json&addressdetails=1',
-      );
-      final response = await http.get(uri, headers: {
-        'Accept-Language': 'en',
-        'User-Agent': 'FomraLS/1.0 (in.fomrahousing)',
-      });
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body) as Map<String, dynamic>;
-        final addr = data['address'] as Map<String, dynamic>? ?? {};
-
-        final location = _first(addr, [
-          'suburb', 'neighbourhood', 'quarter',
-          'town', 'village', 'city', 'municipality',
-        ]);
-        if (location.isNotEmpty) _locationCtrl.text = location;
-
-        final village = _first(addr, ['village', 'hamlet', 'suburb', 'neighbourhood']);
-        if (village.isNotEmpty) _villageCtrl.text = village;
-
-        final taluk = _first(addr, ['county', 'city_district', 'district']);
-        if (taluk.isNotEmpty) _talukCtrl.text = taluk;
-
-        final district = _first(addr, ['state_district', 'county']);
-        if (district.isNotEmpty) _districtCtrl.text = district;
-
-        final postcode = addr['postcode'] as String? ?? '';
-        if (postcode.isNotEmpty) _pincodeCtrl.text = postcode;
-
-        _setStatus('Location filled ✓');
-      } else {
-        _setStatus('Address lookup failed — GPS coordinates saved.');
-      }
+      await _fillFromCoordinates(lat, lng);
     } on LocationServiceDisabledException {
       _setStatus('Location services are disabled. Enable them in browser settings.');
     } catch (e) {
@@ -163,6 +275,7 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
     if (!mounted) return;
     setState(() {
       _fetchingLocation = false;
+      _resolvingPin = false;
       _locationStatus = msg;
     });
   }
@@ -323,9 +436,25 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
 
             _LocationModeToggle(
               mode: _locationMode,
-              onChanged: (m) => setState(() => _locationMode = m),
+              onChanged: _onLocationModeChanged,
             ),
             const SizedBox(height: 14),
+
+            if (_locationMode == _LocationMode.manual) ...[
+              _LocationPinMap(
+                mapController: _mapController,
+                tileUrl: _kOsmTileUrl,
+                defaultCenter: _kDefaultMapCenter,
+                pinnedPoint: _pinnedPoint,
+                resolving: _resolvingPin,
+                status: _locationStatus,
+                fetchingMyLocation: _fetchingLocation,
+                onMapReady: _onMapReady,
+                onTap: _onMapPin,
+                onMyLocation: _centerMapOnMyLocation,
+              ),
+              const SizedBox(height: 14),
+            ],
 
             if (_locationMode == _LocationMode.live) ...[
               _LiveLocationButton(
@@ -341,7 +470,7 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
               label: 'GPS Coordinates',
               hint: _locationMode == _LocationMode.live
                   ? 'Auto-filled after capture'
-                  : 'e.g. 12.971600° N, 77.594600° E',
+                  : 'Pin on map or type manually',
               icon: Icons.gps_fixed,
             ),
             const SizedBox(height: 12),
@@ -351,7 +480,7 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
               label: 'Location',
               hint: _locationMode == _LocationMode.live
                   ? 'Auto-filled after capture'
-                  : 'e.g. Whitefield, Bangalore',
+                  : 'Pin on map or type manually',
               icon: Icons.location_on_outlined,
               required: true,
             ),
@@ -689,6 +818,172 @@ class _PhotoUpload extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+// ── Map pin picker (manual mode) ─────────────────────────────────────────────
+
+class _LocationPinMap extends StatelessWidget {
+  final MapController mapController;
+  final String tileUrl;
+  final LatLng defaultCenter;
+  final LatLng? pinnedPoint;
+  final bool resolving;
+  final bool fetchingMyLocation;
+  final String? status;
+  final VoidCallback onMapReady;
+  final Future<void> Function(LatLng) onTap;
+  final Future<void> Function() onMyLocation;
+
+  const _LocationPinMap({
+    required this.mapController,
+    required this.tileUrl,
+    required this.defaultCenter,
+    required this.pinnedPoint,
+    required this.resolving,
+    required this.fetchingMyLocation,
+    required this.status,
+    required this.onMapReady,
+    required this.onTap,
+    required this.onMyLocation,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final filled = status != null && status!.contains('✓');
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(children: [
+          const Icon(Icons.map_outlined, size: 16, color: AppColors.primary),
+          const SizedBox(width: 6),
+          const Expanded(
+            child: Text(
+              'Pin location on map',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary,
+              ),
+            ),
+          ),
+          TextButton.icon(
+            onPressed: fetchingMyLocation || resolving ? null : onMyLocation,
+            icon: fetchingMyLocation
+                ? const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.my_location, size: 16),
+            label: const Text('My location', style: TextStyle(fontSize: 12)),
+            style: TextButton.styleFrom(
+              foregroundColor: AppColors.primary,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+            ),
+          ),
+        ]),
+        const SizedBox(height: 8),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: SizedBox(
+            height: 240,
+            child: Stack(
+              children: [
+                FlutterMap(
+                  mapController: mapController,
+                  options: MapOptions(
+                    initialCenter: pinnedPoint ?? defaultCenter,
+                    initialZoom: pinnedPoint != null ? 16 : 11,
+                    onMapReady: onMapReady,
+                    onTap: (_, point) => onTap(point),
+                  ),
+                  children: [
+                    TileLayer(
+                      urlTemplate: tileUrl,
+                      userAgentPackageName: 'in.fomrahousing.fomrals',
+                    ),
+                    if (pinnedPoint != null)
+                      MarkerLayer(markers: [
+                        Marker(
+                          point: pinnedPoint!,
+                          width: 40,
+                          height: 48,
+                          child: const Icon(
+                            Icons.location_on,
+                            color: Color(0xFFE53935),
+                            size: 40,
+                          ),
+                        ),
+                      ]),
+                  ],
+                ),
+                if (pinnedPoint == null && !resolving)
+                  Positioned(
+                    left: 12,
+                    right: 12,
+                    bottom: 12,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.92),
+                        borderRadius: BorderRadius.circular(8),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.08),
+                            blurRadius: 6,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.touch_app_outlined,
+                              size: 16, color: AppColors.primary),
+                          SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Tap the map to drop a pin — GPS & address fields fill automatically',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                if (resolving)
+                  Container(
+                    color: Colors.black26,
+                    child: const Center(
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2.5,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+        if (status != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            status!,
+            style: TextStyle(
+              fontSize: 11,
+              color: filled ? AppColors.success : AppColors.textSecondary,
+              fontWeight: filled ? FontWeight.w600 : FontWeight.normal,
+            ),
+          ),
+        ],
+      ],
     );
   }
 }
