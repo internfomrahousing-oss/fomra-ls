@@ -171,7 +171,11 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 5, vsync: this);
+    _tabController = TabController(
+      length: 5,
+      vsync: this,
+      animationDuration: Duration.zero,
+    );
     _tabController.addListener(() => setState(() {}));
   }
 
@@ -564,17 +568,12 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
 
     final taskListView = TabBarView(
       controller: _tabController,
+      physics: const NeverScrollableScrollPhysics(),
       children: List.generate(
         5,
         (i) => _TaskList(
           tasks: _tasksForTab(i),
           tabIndex: i,
-          scrollHeader: widget.isTab
-              ? Container(
-                  color: AppColors.primaryDark,
-                  child: _buildTaskHeader(),
-                )
-              : null,
           onStatusChange: (task, s) => setState(() {
             task.status = s;
             if (s == TaskStatus.done) task.completedAt = DateTime.now();
@@ -590,7 +589,10 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
     if (widget.isTab) {
       return Scaffold(
         backgroundColor: const Color(0xFFF6F8FC),
-        body: taskListView,
+        body: Column(children: [
+          _buildTaskTabBar(),
+          Expanded(child: taskListView),
+        ]),
         floatingActionButton: fab,
       );
     }
@@ -703,7 +705,6 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
 class _TaskList extends StatelessWidget {
   final List<Task> tasks;
   final int tabIndex;
-  final Widget? scrollHeader;
   final void Function(Task, TaskStatus) onStatusChange;
   final void Function(Task) onTap;
   final VoidCallback? onPrimaryAction;
@@ -711,7 +712,6 @@ class _TaskList extends StatelessWidget {
   const _TaskList({
     required this.tasks,
     required this.tabIndex,
-    this.scrollHeader,
     required this.onStatusChange,
     required this.onTap,
     this.onPrimaryAction,
@@ -773,42 +773,6 @@ class _TaskList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (scrollHeader != null) {
-      final slivers = <Widget>[
-        SliverToBoxAdapter(child: scrollHeader!),
-      ];
-
-      if (tasks.isEmpty) {
-        slivers.add(
-          SliverFillRemaining(
-            hasScrollBody: false,
-            child: _buildEmptyState(),
-          ),
-        );
-      } else {
-        slivers.add(
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
-            sliver: SliverList(
-              delegate: SliverChildBuilderDelegate(
-                (_, i) => _TaskCard(
-                  task: tasks[i],
-                  onStatusChange: onStatusChange,
-                  onTap: () => onTap(tasks[i]),
-                ),
-                childCount: tasks.length,
-              ),
-            ),
-          ),
-        );
-      }
-
-      return CustomScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        slivers: slivers,
-      );
-    }
-
     if (tasks.isEmpty) {
       return _buildEmptyState();
     }
