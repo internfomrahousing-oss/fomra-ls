@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'services/supabase_config.dart';
+import 'services/theme_controller.dart';
 import 'theme/app_theme.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/home/home_screen.dart';
@@ -10,11 +11,13 @@ import 'screens/market_intelligence/market_intelligence_screen.dart';
 import 'screens/dashboard/dashboard_screen.dart';
 import 'screens/employee_management/employee_management_portal_screen.dart';
 import 'screens/task_management/task_management_screen.dart';
+import 'screens/settings/settings_screen.dart';
 
 void main() {
   runZonedGuarded(() async {
     WidgetsFlutterBinding.ensureInitialized();
     FlutterError.onError = FlutterError.presentError;
+    await ThemeController.instance.load();
     runApp(const FomraLSApp());
   }, (error, stack) {
     debugPrint('ZONE ERROR: $error\n$stack');
@@ -26,25 +29,31 @@ class FomraLSApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'FomraLS',
-      debugShowCheckedModeBanner: false,
-      theme: appTheme(),
-      home: const _StartupScreen(),
-      routes: {
-        '/login':               (_) => const LoginScreen(),
-        '/home':                (_) => const HomeScreen(),
-        '/employee-portal':     (_) => const TaskManagementScreen(
-                                    portalMode: TaskPortalMode.employee),
-        '/management-portal':   (_) => const TaskManagementScreen(
-                                    portalMode: TaskPortalMode.management),
-        '/land-lead':           (_) => const LandWorkspaceScreen(initialTab: 0),
-        '/employee-management': (_) => const EmployeeManagementPortalScreen(),
-        '/market-intelligence': (_) => const MarketIntelligenceScreen(),
-        '/task-management':     (_) => const LandWorkspaceScreen(initialTab: 1),
-        '/legal-verification':  (_) => const LandWorkspaceScreen(initialTab: 0),
-        '/dashboard':           (_) => const DashboardScreen(),
-      },
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: ThemeController.instance.mode,
+      builder: (context, themeMode, _) => MaterialApp(
+        title: 'FomraLS',
+        debugShowCheckedModeBanner: false,
+        theme: appTheme(),
+        darkTheme: appThemeDark(),
+        themeMode: themeMode,
+        home: const _StartupScreen(),
+        routes: {
+          '/login':               (_) => const LoginScreen(),
+          '/home':                (_) => const HomeScreen(),
+          '/employee-portal':     (_) => const TaskManagementScreen(
+                                      portalMode: TaskPortalMode.employee),
+          '/management-portal':   (_) => const TaskManagementScreen(
+                                      portalMode: TaskPortalMode.management),
+          '/land-lead':           (_) => const LandWorkspaceScreen(initialTab: 0),
+          '/employee-management': (_) => const EmployeeManagementPortalScreen(),
+          '/market-intelligence': (_) => const MarketIntelligenceScreen(),
+          '/task-management':     (_) => const LandWorkspaceScreen(initialTab: 1),
+          '/legal-verification':  (_) => const LandWorkspaceScreen(initialTab: 0),
+          '/dashboard':           (_) => const DashboardScreen(),
+          '/settings':            (_) => const SettingsScreen(),
+        },
+      ),
     );
   }
 }

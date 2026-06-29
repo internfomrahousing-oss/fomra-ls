@@ -19,6 +19,9 @@ const _baseMenuItems = [
 const _managementMenuItem =
     _MenuItem('Employee Management', Icons.groups_outlined, '/employee-management');
 
+const _settingsMenuItem =
+    _MenuItem('Settings', Icons.settings_outlined, '/settings');
+
 class AppDrawer extends StatelessWidget {
   final String currentRoute;
 
@@ -30,6 +33,7 @@ class AppDrawer extends StatelessWidget {
       ..._baseMenuItems.take(1),
       if (AuthService.instance.isManagement) _managementMenuItem,
       ..._baseMenuItems.skip(1),
+      _settingsMenuItem,
     ];
 
     return Drawer(

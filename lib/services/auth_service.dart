@@ -16,6 +16,9 @@ class AuthService {
   static const _loginEmailKey = 'login_email';
   static const _loginNameKey = 'login_display_name';
 
+  static String _passwordKey(LoginPortal portal) =>
+      'portal_password_${portal.name}';
+
   static const managementEmail = 'management@fomrahousing.in';
   static const employeeEmail = 'employee@fomrahousing.in';
   static const portalPassword = 'fomra@2024';
@@ -35,6 +38,13 @@ class AuthService {
         LoginPortal.management => managementEmail,
         LoginPortal.employee => employeeEmail,
       };
+
+  /// The active password for a portal: a custom one set via Settings,
+  /// falling back to the shared default [portalPassword].
+  Future<String> passwordForPortal(LoginPortal portal) async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_passwordKey(portal)) ?? portalPassword;
+  }
 
   AppUser? get currentUser {
     final u = _client.auth.currentUser;
@@ -148,7 +158,7 @@ class AuthService {
         );
       }
     }
-    if (password != portalPassword) {
+    if (password != await passwordForPortal(portal)) {
       throw const ApiException(
         statusCode: 401,
         message: 'Invalid email or password.',
@@ -180,12 +190,6 @@ class AuthService {
 
   Future<void> login(String email, String password) async {
     final normalized = email.trim().toLowerCase();
-    if (password != portalPassword) {
-      throw const ApiException(
-        statusCode: 401,
-        message: 'Invalid email or password.',
-      );
-    }
 
     LoginPortal? portal;
     if (normalized == managementEmail) {
@@ -240,6 +244,44 @@ class AuthService {
     await prefs.remove(_localSessionKey);
     await prefs.remove(_loginEmailKey);
     await prefs.remove(_loginNameKey);
+  }
+
+  /// Changes the password for the currently signed-in portal. Verifies the
+  /// current password, stores the new one locally, and best-effort syncs it to
+  /// the Supabase account when a real session exists.
+  Future<void> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    final portal = _portal;
+    if (portal == null) {
+      throw const ApiException(
+        statusCode: 401,
+        message: 'You are not signed in.',
+      );
+    }
+    if (currentPassword != await passwordForPortal(portal)) {
+      throw const ApiException(
+        statusCode: 400,
+        message: 'Current password is incorrect.',
+      );
+    }
+    if (newPassword.trim().length < 6) {
+      throw const ApiException(
+        statusCode: 400,
+        message: 'New password must be at least 6 characters.',
+      );
+    }
+
+    // Best-effort: update the Supabase account password if a session exists.
+    try {
+      if (_client.auth.currentUser != null) {
+        await _client.auth.updateUser(UserAttributes(password: newPassword));
+      }
+    } catch (_) {}
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_passwordKey(portal), newPassword);
   }
 
   String routeForPortal(LoginPortal portal) => '/home';
