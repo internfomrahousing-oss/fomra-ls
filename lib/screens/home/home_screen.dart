@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../models/land_lead.dart';
+import '../../services/auth_service.dart';
 import '../../services/app_store.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_theme_context.dart';
@@ -132,8 +133,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     childAspectRatio: 3.4,
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
-                    children: const [
-                      _ActionCard(
+                    children: [
+                      const _ActionCard(
                         icon: Icons.space_dashboard_outlined,
                         label: 'Land Workspace',
                         sub: 'Leads & tasks',
@@ -143,7 +144,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           begin: Alignment.topLeft, end: Alignment.bottomRight,
                         ),
                       ),
-                      _ActionCard(
+                      const _ActionCard(
                         icon: Icons.insights_outlined,
                         label: 'Market Intel',
                         sub: 'Maps, POI & Patta',
@@ -153,17 +154,18 @@ class _HomeScreenState extends State<HomeScreen> {
                           begin: Alignment.topLeft, end: Alignment.bottomRight,
                         ),
                       ),
-                      _ActionCard(
-                        icon: Icons.dashboard_outlined,
-                        label: 'Dashboard',
-                        sub: 'Pipeline KPI overview',
-                        route: '/dashboard',
-                        gradient: LinearGradient(
-                          colors: [Color(0xFF1D4ED8), Color(0xFF3B82F6)],
-                          begin: Alignment.topLeft, end: Alignment.bottomRight,
+                      if (AuthService.instance.isManagement)
+                        const _ActionCard(
+                          icon: Icons.dashboard_outlined,
+                          label: 'Dashboard',
+                          sub: 'Pipeline KPI overview',
+                          route: '/dashboard',
+                          gradient: LinearGradient(
+                            colors: [Color(0xFF1D4ED8), Color(0xFF3B82F6)],
+                            begin: Alignment.topLeft, end: Alignment.bottomRight,
+                          ),
                         ),
-                      ),
-                      _ActionCard(
+                      const _ActionCard(
                         icon: Icons.settings_outlined,
                         label: 'Settings',
                         sub: 'Theme & password',

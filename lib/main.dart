@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'services/auth_service.dart';
 import 'services/supabase_config.dart';
 import 'services/theme_controller.dart';
 import 'theme/app_theme.dart';
@@ -50,7 +51,9 @@ class FomraLSApp extends StatelessWidget {
           '/market-intelligence': (_) => const MarketIntelligenceScreen(),
           '/task-management':     (_) => const LandWorkspaceScreen(initialTab: 1),
           '/legal-verification':  (_) => const LandWorkspaceScreen(initialTab: 0),
-          '/dashboard':           (_) => const DashboardScreen(),
+          '/dashboard':           (_) => AuthService.instance.isManagement
+                                      ? const DashboardScreen()
+                                      : const HomeScreen(),
           '/settings':            (_) => const SettingsScreen(),
         },
       ),

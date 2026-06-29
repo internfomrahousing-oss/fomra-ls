@@ -13,8 +13,10 @@ class _MenuItem {
 const _baseMenuItems = [
   _MenuItem('Land Workspace', Icons.space_dashboard_outlined, '/land-lead'),
   _MenuItem('Market Intelligence', Icons.insights_outlined, '/market-intelligence'),
-  _MenuItem('Dashboard', Icons.dashboard_outlined, '/dashboard'),
 ];
+
+const _dashboardMenuItem =
+    _MenuItem('Dashboard', Icons.dashboard_outlined, '/dashboard');
 
 const _managementMenuItem =
     _MenuItem('Employee Management', Icons.groups_outlined, '/employee-management');
@@ -30,9 +32,10 @@ class AppDrawer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final menuItems = [
-      ..._baseMenuItems.take(1),
+      _baseMenuItems[0],
       if (AuthService.instance.isManagement) _managementMenuItem,
-      ..._baseMenuItems.skip(1),
+      _baseMenuItems[1],
+      if (AuthService.instance.isManagement) _dashboardMenuItem,
       _settingsMenuItem,
     ];
 

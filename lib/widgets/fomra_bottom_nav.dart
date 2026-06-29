@@ -21,10 +21,20 @@ class FomraBottomNav extends StatelessWidget {
         'Employees',
       ));
     }
-    items.addAll(const [
-      _NavItem('/market-intelligence', Icons.insights_outlined,        Icons.insights,            'Market'),
-      _NavItem('/dashboard',           Icons.bar_chart_outlined,       Icons.bar_chart_rounded,   'Dashboard'),
-    ]);
+    items.add(const _NavItem(
+      '/market-intelligence',
+      Icons.insights_outlined,
+      Icons.insights,
+      'Market',
+    ));
+    if (AuthService.instance.isManagement) {
+      items.add(const _NavItem(
+        '/dashboard',
+        Icons.bar_chart_outlined,
+        Icons.bar_chart_rounded,
+        'Dashboard',
+      ));
+    }
     return items;
   }
 
