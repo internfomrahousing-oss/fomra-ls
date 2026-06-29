@@ -1,16 +1,31 @@
 /**
  * Infrastructure scoring from OpenStreetMap via Overpass API.
+ * Weights and distance penalties follow idea.txt (property evaluation spec).
  */
 
 const POI_CATEGORIES = [
+  // Education
   { name: 'Schools',          tag: 'amenity', value: 'school',          groups: ['education'] },
+  { name: 'Colleges',         tag: 'amenity', value: 'college',         groups: ['education'] },
+  { name: 'Universities',     tag: 'amenity', value: 'university',      groups: ['education'] },
+  // Healthcare
   { name: 'Hospitals',        tag: 'amenity', value: 'hospital',        groups: ['health'] },
+  { name: 'Clinics',          tag: 'amenity', value: 'clinic',          groups: ['health'] },
+  { name: 'Pharmacies',       tag: 'amenity', value: 'pharmacy',        groups: ['health'] },
+  // Transport
+  { name: 'Bus Stops',        tag: 'highway', value: 'bus_stop',        groups: ['transport'] },
+  { name: 'Bus Terminals',    tag: 'amenity', value: 'bus_station',     groups: ['transport'] },
   { name: 'Railway Stations', tag: 'railway', value: 'station',         groups: ['transport'], excludeSubway: true },
   { name: 'Metro Stations',   tag: 'railway', value: 'station',         groups: ['transport'], requireSubway: true },
-  { name: 'Bus Terminals',    tag: 'amenity', value: 'bus_station',     groups: ['transport'] },
-  { name: 'IT Parks',         tag: 'office',  value: 'it',              groups: ['commercial'] },
-  { name: 'Malls',            tag: 'shop',    value: 'mall',            groups: ['commercial'] },
+  { name: 'Airports',         tag: 'aeroway', value: 'aerodrome',       groups: ['transport'] },
+  // Commercial
+  { name: 'Supermarkets',     tag: 'shop',    value: 'supermarket',     groups: ['commercial'] },
   { name: 'Banks',            tag: 'amenity', value: 'bank',            groups: ['commercial'] },
+  { name: 'Malls',            tag: 'shop',    value: 'mall',            groups: ['commercial'] },
+  { name: 'Restaurants',      tag: 'amenity', value: 'restaurant',      groups: ['commercial'] },
+  { name: 'ATMs',             tag: 'amenity', value: 'atm',             groups: ['commercial'] },
+  // Supplementary (display only — not in score formula)
+  { name: 'IT Parks',         tag: 'office',  value: 'it',              groups: ['amenity'] },
   { name: 'Petrol Stations',  tag: 'amenity', value: 'fuel',            groups: ['amenity'] },
   { name: 'Govt. Offices',    tag: 'amenity', value: 'townhall',        groups: ['amenity'] },
   { name: 'Worship Places',   tag: 'amenity', value: 'place_of_worship', groups: ['amenity'] },
@@ -32,18 +47,35 @@ const HIGHWAY_WEIGHT = {
   living_street: 0.4,
 };
 
+/** Penalty per km: Score = max(0, 100 - distance × penalty) */
+const DISTANCE_PENALTY = {
+  school:      8,
+  college:     7,
+  university:  6,
+  hospital:    10,
+  clinic:      10,
+  pharmacy:    8,
+  supermarket: 7,
+  bank:        8,
+  mall:        7,
+  restaurant:  6,
+  atm:         5,
+  bus:         5,
+  railway:     5,
+  metro:       6,
+  airport:     4,
+  highway:     6,
+  mainRoad:    6,
+};
+
 function buildInfrastructureQuery(lat, lon, radiusMeters) {
   const area = `(around:${radiusMeters},${lat},${lon})`;
   const parts = [];
 
   for (const cat of POI_CATEGORIES) {
     const filter = `["${cat.tag}"="${cat.value}"]`;
-    if (cat.tag === 'landuse') {
-      parts.push(`way${filter}${area};`);
-    } else {
-      parts.push(`node${filter}${area};`);
-      parts.push(`way${filter}${area};`);
-    }
+    parts.push(`node${filter}${area};`);
+    parts.push(`way${filter}${area};`);
   }
 
   for (const hw of HIGHWAY_TYPES) {
@@ -82,6 +114,7 @@ function parseInfrastructureElements(elements, lat, lon) {
   const counts = {};
   const places = {};
   const roadCounts = {};
+  const roadNearest = {};
 
   for (const cat of POI_CATEGORIES) {
     counts[cat.name] = 0;
@@ -89,6 +122,7 @@ function parseInfrastructureElements(elements, lat, lon) {
   }
   for (const hw of HIGHWAY_TYPES) {
     roadCounts[hw] = 0;
+    roadNearest[hw] = null;
   }
 
   for (const el of elements || []) {
@@ -96,6 +130,13 @@ function parseInfrastructureElements(elements, lat, lon) {
     const hw = tags.highway;
     if (hw && roadCounts[hw] !== undefined) {
       roadCounts[hw] += 1;
+      const coords = elementCoords(el);
+      if (coords) {
+        const dist = haversineKm(lat, lon, coords.lat, coords.lon);
+        if (roadNearest[hw] == null || dist < roadNearest[hw]) {
+          roadNearest[hw] = dist;
+        }
+      }
       continue;
     }
 
@@ -119,19 +160,44 @@ function parseInfrastructureElements(elements, lat, lon) {
     list.sort((a, b) => (a.distance ?? 999) - (b.distance ?? 999));
   }
 
-  return { counts, places, roadCounts };
+  return { counts, places, roadCounts, roadNearest };
 }
 
 function clampScore(value) {
   return Math.max(0, Math.min(100, Math.round(value * 10) / 10));
 }
 
-function countScore(count, max) {
-  if (!max) return 0;
-  return clampScore((count / max) * 100);
+function nearestDistanceKm(places, categoryName) {
+  const list = places[categoryName] || [];
+  const withDist = list.filter((p) => p.distance != null);
+  if (withDist.length === 0) return null;
+  return Math.min(...withDist.map((p) => p.distance));
 }
 
-function roadConnectivityScore(roadCounts, radiusKm) {
+function nearestGroupKm(roadNearest, types) {
+  let min = null;
+  for (const t of types) {
+    const d = roadNearest[t];
+    if (d != null && (min == null || d < min)) min = d;
+  }
+  return min;
+}
+
+/** Continuous distance score from idea.txt */
+function distanceScore(km, penalty, missingScore = 30) {
+  if (km == null) return missingScore;
+  return clampScore(Math.max(0, 100 - km * penalty));
+}
+
+function nearestBusKm(places) {
+  const stop = nearestDistanceKm(places, 'Bus Stops');
+  const terminal = nearestDistanceKm(places, 'Bus Terminals');
+  if (stop == null) return terminal;
+  if (terminal == null) return stop;
+  return Math.min(stop, terminal);
+}
+
+function roadNetworkScore(roadCounts, radiusKm) {
   const major = ['motorway', 'trunk', 'primary', 'secondary', 'tertiary'];
   let weighted = 0;
   for (const hw of major) {
@@ -141,41 +207,96 @@ function roadConnectivityScore(roadCounts, radiusKm) {
   return clampScore((weighted / maxW) * 100);
 }
 
-function computeInfrastructureScores(counts, roadCounts, radiusKm) {
-  const r = radiusKm;
-  const maxEdu = r <= 2 ? 15 : r <= 5 ? 30 : 60;
-  const maxHealth = r <= 2 ? 5 : r <= 5 ? 15 : 30;
-  const maxCommercial = r <= 2 ? 10 : r <= 5 ? 25 : 50;
-  const maxTransport = r <= 2 ? 8 : r <= 5 ? 20 : 40;
+function localTrafficScore(roadCounts, radiusKm) {
+  const local = (roadCounts.tertiary || 0)
+    + (roadCounts.unclassified || 0)
+    + (roadCounts.residential || 0);
+  const maxLocal = radiusKm <= 2 ? 8 : radiusKm <= 5 ? 18 : 35;
+  return clampScore((local / maxLocal) * 100);
+}
 
-  const education = countScore(counts['Schools'] || 0, maxEdu);
-  const healthcare = countScore(counts['Hospitals'] || 0, maxHealth);
-  const transport = countScore(
-    (counts['Railway Stations'] || 0)
-    + (counts['Metro Stations'] || 0)
-    + (counts['Bus Terminals'] || 0),
-    maxTransport,
+function educationScore(places) {
+  const school = distanceScore(nearestDistanceKm(places, 'Schools'), DISTANCE_PENALTY.school);
+  const college = distanceScore(nearestDistanceKm(places, 'Colleges'), DISTANCE_PENALTY.college);
+  const university = distanceScore(nearestDistanceKm(places, 'Universities'), DISTANCE_PENALTY.university);
+  return clampScore(school * 0.40 + college * 0.35 + university * 0.25);
+}
+
+function healthcareScore(places) {
+  const hospital = distanceScore(nearestDistanceKm(places, 'Hospitals'), DISTANCE_PENALTY.hospital);
+  const clinic = distanceScore(nearestDistanceKm(places, 'Clinics'), DISTANCE_PENALTY.clinic);
+  const pharmacy = distanceScore(nearestDistanceKm(places, 'Pharmacies'), DISTANCE_PENALTY.pharmacy);
+  return clampScore(hospital * 0.50 + clinic * 0.30 + pharmacy * 0.20);
+}
+
+function commercialScore(places) {
+  const supermarket = distanceScore(nearestDistanceKm(places, 'Supermarkets'), DISTANCE_PENALTY.supermarket);
+  const bank = distanceScore(nearestDistanceKm(places, 'Banks'), DISTANCE_PENALTY.bank);
+  const mall = distanceScore(nearestDistanceKm(places, 'Malls'), DISTANCE_PENALTY.mall);
+  const restaurant = distanceScore(nearestDistanceKm(places, 'Restaurants'), DISTANCE_PENALTY.restaurant);
+  const atm = distanceScore(nearestDistanceKm(places, 'ATMs'), DISTANCE_PENALTY.atm);
+  return clampScore(
+    supermarket * 0.30
+    + bank * 0.20
+    + mall * 0.20
+    + restaurant * 0.15
+    + atm * 0.15,
   );
-  const commercial = countScore(
-    (counts['Malls'] || 0) + (counts['Banks'] || 0) + (counts['IT Parks'] || 0),
-    maxCommercial,
+}
+
+function transportScore(places) {
+  const bus = distanceScore(nearestBusKm(places), DISTANCE_PENALTY.bus);
+  const railway = distanceScore(nearestDistanceKm(places, 'Railway Stations'), DISTANCE_PENALTY.railway);
+  const metro = distanceScore(nearestDistanceKm(places, 'Metro Stations'), DISTANCE_PENALTY.metro);
+  const airport = distanceScore(nearestDistanceKm(places, 'Airports'), DISTANCE_PENALTY.airport);
+  return clampScore(bus * 0.40 + railway * 0.30 + metro * 0.20 + airport * 0.10);
+}
+
+function roadWidthFromLeadFt(ft) {
+  if (ft == null || !Number.isFinite(ft) || ft <= 0) return null;
+  if (ft >= 40) return 100;
+  if (ft >= 30) return 90;
+  if (ft >= 20) return 75;
+  if (ft >= 12) return 60;
+  return 45;
+}
+
+function roadConnectivityScore(roadCounts, roadNearest, radiusKm, roadWidthFt) {
+  const highway = distanceScore(
+    nearestGroupKm(roadNearest, ['motorway', 'trunk']),
+    DISTANCE_PENALTY.highway,
   );
-  const road = roadConnectivityScore(roadCounts, r);
+  const mainRoad = distanceScore(
+    nearestGroupKm(roadNearest, ['primary', 'secondary']),
+    DISTANCE_PENALTY.mainRoad,
+  );
+  const roadWidth = roadWidthFromLeadFt(roadWidthFt) ?? roadNetworkScore(roadCounts, radiusKm);
+  const traffic = localTrafficScore(roadCounts, radiusKm);
+  return clampScore(highway * 0.40 + mainRoad * 0.30 + roadWidth * 0.20 + traffic * 0.10);
+}
+
+function computeInfrastructureScores(counts, places, roadCounts, roadNearest, radiusKm, roadWidthFt) {
+  const education = educationScore(places);
+  const healthcare = healthcareScore(places);
+  const road = roadConnectivityScore(roadCounts, roadNearest, radiusKm, roadWidthFt);
+  const commercial = commercialScore(places);
+  const transport = transportScore(places);
+
   const overall = clampScore(
     education * 0.25
-    + healthcare * 0.25
-    + transport * 0.20
-    + commercial * 0.20
-    + road * 0.10,
+    + healthcare * 0.20
+    + road * 0.25
+    + commercial * 0.15
+    + transport * 0.15,
   );
 
   return {
-    Education:          education,
-    Healthcare:         healthcare,
+    Education:           education,
+    Healthcare:          healthcare,
     'Road Connectivity': road,
-    Commercial:         commercial,
-    Transport:          transport,
-    'Overall Location': overall,
+    Commercial:          commercial,
+    Transport:           transport,
+    'Overall Location':  overall,
   };
 }
 

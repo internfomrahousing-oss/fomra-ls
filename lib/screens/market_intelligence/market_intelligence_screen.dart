@@ -46,18 +46,43 @@ const _kOsmTransportRailUrl =
 
 const _kCategories = [
   _PoiCategory('Schools', Icons.school_outlined, Color(0xFF1565C0), 'amenity', 'school'),
+  _PoiCategory('Colleges', Icons.school, Color(0xFF0D47A1), 'amenity', 'college'),
+  _PoiCategory('Universities', Icons.account_balance_outlined, Color(0xFF1A237E), 'amenity', 'university'),
   _PoiCategory('Hospitals', Icons.local_hospital_outlined, Color(0xFFD32F2F), 'amenity', 'hospital'),
+  _PoiCategory('Clinics', Icons.medical_services_outlined, Color(0xFFE53935), 'amenity', 'clinic'),
+  _PoiCategory('Pharmacies', Icons.local_pharmacy_outlined, Color(0xFFC62828), 'amenity', 'pharmacy'),
+  _PoiCategory('Bus Stops', Icons.directions_bus_outlined, Color(0xFF1B5E20), 'highway', 'bus_stop'),
+  _PoiCategory('Bus Terminals', Icons.directions_bus_filled_outlined, Color(0xFF2E7D32), 'amenity', 'bus_station'),
   _PoiCategory('Railway Stations', Icons.train_outlined, Color(0xFF37474F), 'railway', 'station'),
   _PoiCategory('Metro Stations', Icons.subway_outlined, Color(0xFF4527A0), 'station', 'subway'),
-  _PoiCategory('Bus Terminals', Icons.directions_bus_outlined, Color(0xFF1B5E20), 'amenity', 'bus_station'),
-  _PoiCategory('IT Parks', Icons.computer_outlined, Color(0xFF006064), 'office', 'it'),
-  _PoiCategory('Industrial Areas', Icons.factory_outlined, Color(0xFF4E342E), 'landuse', 'industrial'),
+  _PoiCategory('Airports', Icons.flight_outlined, Color(0xFF0277BD), 'aeroway', 'aerodrome'),
+  _PoiCategory('Supermarkets', Icons.shopping_cart_outlined, Color(0xFF6A1B9A), 'shop', 'supermarket'),
   _PoiCategory('Malls', Icons.local_mall_outlined, Color(0xFFAD1457), 'shop', 'mall'),
   _PoiCategory('Banks', Icons.account_balance_outlined, Color(0xFFE65100), 'amenity', 'bank'),
+  _PoiCategory('Restaurants', Icons.restaurant_outlined, Color(0xFFBF360C), 'amenity', 'restaurant'),
+  _PoiCategory('ATMs', Icons.atm_outlined, Color(0xFFF57C00), 'amenity', 'atm'),
+  _PoiCategory('IT Parks', Icons.computer_outlined, Color(0xFF006064), 'office', 'it'),
   _PoiCategory('Petrol Stations', Icons.local_gas_station_outlined, Color(0xFF558B2F), 'amenity', 'fuel'),
   _PoiCategory('Govt. Offices', Icons.account_balance_wallet_outlined, Color(0xFF795548), 'amenity', 'townhall'),
   _PoiCategory('Worship Places', Icons.temple_hindu_outlined, Color(0xFF880E4F), 'amenity', 'place_of_worship'),
 ];
+
+/// Overall infrastructure weights from idea.txt
+const _kInfraCategoryOrder = [
+  'Education',
+  'Healthcare',
+  'Road Connectivity',
+  'Commercial',
+  'Transport',
+];
+
+const _kInfraWeights = <String, double>{
+  'Education': 0.25,
+  'Healthcare': 0.20,
+  'Road Connectivity': 0.25,
+  'Commercial': 0.15,
+  'Transport': 0.15,
+};
 
 // â”€â”€ Valuation result â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -576,12 +601,16 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
     });
 
     try {
+      final roadFt = parseRoadWidthFt(widget.lead?.roadWidth ?? '') ??
+          double.tryParse(_roadWidthCtrl.text);
+
       final data = await ApiClient.post(
         '/api/poi/infrastructure',
         {
           'lat': loc.latitude,
           'lon': loc.longitude,
           'radiusKm': _selectedRadius,
+          if (roadFt != null) 'roadWidthFt': roadFt,
         },
         auth: false,
       ).timeout(const Duration(seconds: 60));
@@ -1272,8 +1301,6 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
 
   Widget _buildLeadEmbeddedBody() {
     final loc = _activeLatLng;
-    final loadingInfra =
-        loc != null && (_collectingPois || (!_poisCollected && _poiError == null));
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1287,39 +1314,9 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
               style: TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.4),
             ),
           ),
-        if (loadingInfra) ...[
+        if (loc != null) ...[
           const SizedBox(height: 20),
-          _SectionCard(
-            title: 'Infrastructure Score',
-            icon: Icons.analytics_outlined,
-            child: const Padding(
-              padding: EdgeInsets.symmetric(vertical: 20),
-              child: Center(
-                child: Column(
-                  children: [
-                    CircularProgressIndicator(),
-                    SizedBox(height: 12),
-                    Text(
-                      'Loading infrastructure score…',
-                      style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
-        if (_poiError != null) ...[
-          const SizedBox(height: 20),
-          _SectionCard(
-            title: 'Infrastructure Score',
-            icon: Icons.analytics_outlined,
-            child: _ErrorBanner(_poiError!),
-          ),
-        ],
-        if (_poisCollected) ...[
-          const SizedBox(height: 20),
-          _buildInfraScoreSection(),
+          _buildInfrastructureSection(),
         ],
         const SizedBox(height: 20),
         _buildGovtDocsSection(),
@@ -1495,11 +1492,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
             const SizedBox(height: 20),
             _buildMapSection(),
             const SizedBox(height: 20),
-            _buildPoiSection(),
-            if (_poisCollected) ...[
-              const SizedBox(height: 20),
-              _buildInfraScoreSection(),
-            ],
+            _buildInfrastructureSection(),
             const SizedBox(height: 20),
             _buildMagicBricksSection(),
             const SizedBox(height: 20),
@@ -2093,14 +2086,35 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
     );
   }
 
-  Widget _buildPoiSection() => _SectionCard(
-        title: 'Infrastructure Score',
-        icon: Icons.place_outlined,
-        child: Column(children: [
+  Widget _buildInfrastructureSection() {
+    final scores = _infraScores;
+    final overall = scores['Overall Location'] ?? 0;
+    final overallColor = overall > 70
+        ? AppColors.success
+        : overall > 45
+            ? AppColors.warning
+            : AppColors.error;
+
+    final barData = _kInfraCategoryOrder
+        .where((k) => scores.containsKey(k))
+        .map((k) => MapEntry(k, scores[k]!))
+        .toList();
+
+    return _SectionCard(
+      title: 'Infrastructure Score',
+      icon: Icons.analytics_outlined,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
           Row(children: [
-            const Text('Radius:',
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600,
-                    color: AppColors.textSecondary)),
+            const Text(
+              'Radius:',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textSecondary,
+              ),
+            ),
             const SizedBox(width: 10),
             ...([2, 5, 10]).map((km) {
               final selected = _selectedRadius == km;
@@ -2115,7 +2129,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                       _poiPlaces = {};
                       _infraScoreMap = {};
                       _valuationResult = null;
-                      if (_activeLatLng != null && _mapReady) {
+                      if (_activeLatLng != null && _mapReady && !widget.embeddedInLead) {
                         _mapController.move(
                             _activeLatLng!, _zoomForRadius(km));
                       }
@@ -2136,13 +2150,16 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                               ? const Color(0xFF00838F)
                               : const Color(0xFFD1D5DB)),
                     ),
-                    child: Text('${km}km',
-                        style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: selected
-                                ? Colors.white
-                                : AppColors.textSecondary)),
+                    child: Text(
+                      '${km}km',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: selected
+                            ? Colors.white
+                            : AppColors.textSecondary,
+                      ),
+                    ),
                   ),
                 ),
               );
@@ -2163,7 +2180,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                           color: Colors.white, strokeWidth: 2))
                   : const Icon(Icons.radar, size: 18),
               label: Text(_collectingPois
-                  ? 'Loading from Overpass…'
+                  ? 'Loading from OpenStreetMap…'
                   : 'Refresh Infrastructure Score'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF00838F),
@@ -2173,216 +2190,250 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
           ),
           if (_activeLatLng == null && !_collectingPois) ...[
             const SizedBox(height: 10),
-            const Text(
-              'Set your location on the map to score nearby infrastructure via OpenStreetMap.',
+            Text(
+              widget.embeddedInLead
+                  ? 'GPS coordinates are required to score infrastructure.'
+                  : 'Set your location on the map to score nearby infrastructure via OpenStreetMap.',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+              style: const TextStyle(
+                  fontSize: 12, color: AppColors.textSecondary),
             ),
           ],
-          if (_poisCollected) ...[
-            const SizedBox(height: 8),
-            const Text(
-              'Scores from OpenStreetMap Overpass API (schools, hospitals, transport, roads).',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 10, color: AppColors.textSecondary, height: 1.3),
+          if (_collectingPois && !_poisCollected) ...[
+            const SizedBox(height: 16),
+            const Center(
+              child: Column(
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 10),
+                  Text(
+                    'Scoring education, healthcare, roads, commercial & transport…',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                        fontSize: 11, color: AppColors.textSecondary),
+                  ),
+                ],
+              ),
             ),
           ],
           if (_poiError != null) ...[
             const SizedBox(height: 10),
             _ErrorBanner(_poiError!),
           ],
-          if (_poisCollected && _poiCounts.isNotEmpty) ...[
+          if (_poisCollected) ...[
             const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: _kCategories.map((cat) {
-                final count = _poiCounts[cat.name] ?? 0;
-                return GestureDetector(
-                  onTap: () => _showPoiList(cat),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: cat.color.withValues(alpha: 0.07),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                          color: cat.color.withValues(alpha: 0.3)),
+            const Text(
+              'Weighted: Education 25% · Healthcare 20% · Roads 25% · Commercial 15% · Transport 15%. Nearest-amenity distance scoring.',
+              style: TextStyle(
+                  fontSize: 10, color: AppColors.textSecondary, height: 1.35),
+            ),
+            const SizedBox(height: 16),
+            Row(children: [
+              Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: overallColor, width: 4),
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      '${overall.toInt()}',
+                      style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                          color: overallColor),
                     ),
-                    child: Row(mainAxisSize: MainAxisSize.min, children: [
-                      Icon(cat.icon, color: cat.color, size: 13),
-                      const SizedBox(width: 5),
-                      Text('$count',
+                    const Text(
+                      '/100',
+                      style: TextStyle(
+                          fontSize: 10, color: AppColors.textSecondary),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Overall Location Score',
+                      style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: overallColor),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      overall > 70
+                          ? 'Excellent infrastructure in this area.'
+                          : overall > 45
+                              ? 'Moderate infrastructure. Room to grow.'
+                              : 'Infrastructure needs development.',
+                      style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textSecondary,
+                          height: 1.4),
+                    ),
+                  ],
+                ),
+              ),
+            ]),
+            const SizedBox(height: 20),
+            SizedBox(
+              height: 180,
+              child: BarChart(
+                BarChartData(
+                  maxY: 100,
+                  barGroups: barData.asMap().entries.map((e) {
+                    final score = e.value.value;
+                    final barColor = score > 70
+                        ? AppColors.success
+                        : score > 45
+                            ? AppColors.warning
+                            : AppColors.error;
+                    return BarChartGroupData(x: e.key, barRods: [
+                      BarChartRodData(
+                        toY: score,
+                        color: barColor,
+                        width: 22,
+                        borderRadius: BorderRadius.circular(4),
+                        backDrawRodData: BackgroundBarChartRodData(
+                          show: true,
+                          toY: 100,
+                          color: barColor.withValues(alpha: 0.08),
+                        ),
+                      ),
+                    ]);
+                  }).toList(),
+                  titlesData: FlTitlesData(
+                    leftTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        reservedSize: 30,
+                        getTitlesWidget: (v, _) => Text(
+                          '${v.toInt()}',
+                          style: const TextStyle(
+                              fontSize: 10, color: AppColors.textSecondary),
+                        ),
+                        interval: 25,
+                      ),
+                    ),
+                    bottomTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        reservedSize: 40,
+                        getTitlesWidget: (v, _) {
+                          final idx = v.toInt();
+                          if (idx < 0 || idx >= barData.length) {
+                            return const SizedBox.shrink();
+                          }
+                          final label =
+                              barData[idx].key.replaceAll(' ', '\n');
+                          return Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Text(
+                              label,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                  fontSize: 8,
+                                  color: AppColors.textSecondary),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    rightTitles: const AxisTitles(
+                        sideTitles: SideTitles(showTitles: false)),
+                    topTitles: const AxisTitles(
+                        sideTitles: SideTitles(showTitles: false)),
+                  ),
+                  gridData: FlGridData(
+                    show: true,
+                    horizontalInterval: 25,
+                    getDrawingHorizontalLine: (_) => const FlLine(
+                        color: Color(0xFFE5E7EB), strokeWidth: 1),
+                    drawVerticalLine: false,
+                  ),
+                  borderData: FlBorderData(show: false),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            ...barData.map(
+              (e) => Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: _ScoreRow(
+                  label: e.key,
+                  score: e.value,
+                  weight: _kInfraWeights[e.key],
+                ),
+              ),
+            ),
+            if (_poiCounts.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              const Divider(),
+              const SizedBox(height: 8),
+              const Text(
+                'Nearby amenities (tap to view)',
+                style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _kCategories.map((cat) {
+                  final count = _poiCounts[cat.name] ?? 0;
+                  return GestureDetector(
+                    onTap: () => _showPoiList(cat),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: cat.color.withValues(alpha: 0.07),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                            color: cat.color.withValues(alpha: 0.3)),
+                      ),
+                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                        Icon(cat.icon, color: cat.color, size: 13),
+                        const SizedBox(width: 5),
+                        Text(
+                          '$count',
                           style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w800,
-                              color: cat.color)),
-                      const SizedBox(width: 4),
-                      Text(cat.name,
+                              color: cat.color),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          cat.name,
                           style: const TextStyle(
                               fontSize: 10,
-                              color: AppColors.textSecondary)),
-                      const SizedBox(width: 3),
-                      Icon(Icons.chevron_right,
-                          size: 12,
-                          color: cat.color.withValues(alpha: 0.6)),
-                    ]),
-                  ),
-                );
-              }).toList(),
-            ),
-          ],
-        ]),
-      );
-
-  // â”€â”€ Section: Infrastructure Score â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-  Widget _buildInfraScoreSection() {
-    final scores = _infraScores;
-    final overall = scores['Overall Location'] ?? 0;
-    final overallColor = overall > 70
-        ? AppColors.success
-        : overall > 45
-            ? AppColors.warning
-            : AppColors.error;
-
-    final barData = scores.entries
-        .where((e) => e.key != 'Overall Location')
-        .toList();
-
-    return _SectionCard(
-      title: 'Infrastructure Score',
-      icon: Icons.analytics_outlined,
-      child: Column(children: [
-        Row(children: [
-          Container(
-            width: 80,
-            height: 80,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(color: overallColor, width: 4),
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text('${overall.toInt()}',
-                    style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                        color: overallColor)),
-                const Text('/100',
-                    style: TextStyle(
-                        fontSize: 10, color: AppColors.textSecondary)),
-              ],
-            ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Overall Location Score',
-                    style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        color: overallColor)),
-                const SizedBox(height: 4),
-                Text(
-                    overall > 70
-                        ? 'Excellent infrastructure in this area.'
-                        : overall > 45
-                            ? 'Moderate infrastructure. Room to grow.'
-                            : 'Infrastructure needs development.',
-                    style: const TextStyle(
-                        fontSize: 12,
-                        color: AppColors.textSecondary,
-                        height: 1.4)),
-              ],
-            ),
-          ),
-        ]),
-        const SizedBox(height: 20),
-        SizedBox(
-          height: 180,
-          child: BarChart(
-            BarChartData(
-              maxY: 100,
-              barGroups: barData.asMap().entries.map((e) {
-                final score = e.value.value;
-                final barColor = score > 70
-                    ? AppColors.success
-                    : score > 45
-                        ? AppColors.warning
-                        : AppColors.error;
-                return BarChartGroupData(x: e.key, barRods: [
-                  BarChartRodData(
-                    toY: score,
-                    color: barColor,
-                    width: 22,
-                    borderRadius: BorderRadius.circular(4),
-                    backDrawRodData: BackgroundBarChartRodData(
-                      show: true,
-                      toY: 100,
-                      color: barColor.withValues(alpha: 0.08),
+                              color: AppColors.textSecondary),
+                        ),
+                        const SizedBox(width: 3),
+                        Icon(Icons.chevron_right,
+                            size: 12,
+                            color: cat.color.withValues(alpha: 0.6)),
+                      ]),
                     ),
-                  ),
-                ]);
-              }).toList(),
-              titlesData: FlTitlesData(
-                leftTitles: AxisTitles(
-                  sideTitles: SideTitles(
-                    showTitles: true,
-                    reservedSize: 30,
-                    getTitlesWidget: (v, _) => Text('${v.toInt()}',
-                        style: const TextStyle(
-                            fontSize: 10, color: AppColors.textSecondary)),
-                    interval: 25,
-                  ),
-                ),
-                bottomTitles: AxisTitles(
-                  sideTitles: SideTitles(
-                    showTitles: true,
-                    reservedSize: 40,
-                    getTitlesWidget: (v, _) {
-                      final idx = v.toInt();
-                      if (idx < 0 || idx >= barData.length) {
-                        return const SizedBox.shrink();
-                      }
-                      final label = barData[idx].key.replaceAll(' ', '\n');
-                      return Padding(
-                        padding: const EdgeInsets.only(top: 4),
-                        child: Text(label,
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(
-                                fontSize: 8, color: AppColors.textSecondary)),
-                      );
-                    },
-                  ),
-                ),
-                rightTitles: const AxisTitles(
-                    sideTitles: SideTitles(showTitles: false)),
-                topTitles: const AxisTitles(
-                    sideTitles: SideTitles(showTitles: false)),
+                  );
+                }).toList(),
               ),
-              gridData: FlGridData(
-                show: true,
-                horizontalInterval: 25,
-                getDrawingHorizontalLine: (_) => const FlLine(
-                    color: Color(0xFFE5E7EB), strokeWidth: 1),
-                drawVerticalLine: false,
-              ),
-              borderData: FlBorderData(show: false),
-            ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        ...barData.map((e) => Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: _ScoreRow(label: e.key, score: e.value),
-            )),
-      ]),
+            ],
+          ],
+        ],
+      ),
     );
   }
+
 
   // â”€â”€ Section: AI Valuation Engine â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -2823,7 +2874,8 @@ class _ErrorBanner extends StatelessWidget {
 class _ScoreRow extends StatelessWidget {
   final String label;
   final double score;
-  const _ScoreRow({required this.label, required this.score});
+  final double? weight;
+  const _ScoreRow({required this.label, required this.score, this.weight});
 
   @override
   Widget build(BuildContext context) {
@@ -2833,9 +2885,10 @@ class _ScoreRow extends StatelessWidget {
             ? AppColors.warning
             : AppColors.error;
     final isWide = MediaQuery.of(context).size.width > 600;
+    final weightLabel = weight != null ? ' (${(weight! * 100).round()}%)' : '';
     return Row(children: [
       Expanded(
-          child: Text(label,
+          child: Text('$label$weightLabel',
               style: TextStyle(
                   fontSize: isWide ? 15 : 12, color: AppColors.textSecondary))),
       SizedBox(

@@ -101,6 +101,7 @@ router.post('/infrastructure', async (req, res) => {
   const lat = parseFloat(req.body?.lat);
   const lon = parseFloat(req.body?.lon);
   const radiusKm = parseInt(req.body?.radiusKm, 10) || 2;
+  const roadWidthFt = parseFloat(req.body?.roadWidthFt);
 
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
     return res.status(400).json({ error: 'lat and lon are required' });
@@ -119,8 +120,15 @@ router.post('/infrastructure', async (req, res) => {
       return res.status(502).json({ error: String(data.remark) });
     }
 
-    const { counts, places, roadCounts } = parseInfrastructureElements(elements, lat, lon);
-    const scores = computeInfrastructureScores(counts, roadCounts, radiusKm);
+    const { counts, places, roadCounts, roadNearest } = parseInfrastructureElements(elements, lat, lon);
+    const scores = computeInfrastructureScores(
+      counts,
+      places,
+      roadCounts,
+      roadNearest,
+      radiusKm,
+      Number.isFinite(roadWidthFt) ? roadWidthFt : undefined,
+    );
 
     return res.json({
       source:    'OpenStreetMap Overpass API',
