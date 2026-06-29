@@ -268,7 +268,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         ),
                       const _ActionCard(
-                        icon: Icons.apps_rounded,
+                        icon: Icons.settings_outlined,
                         label: 'Settings',
                         sub: 'Open',
                         route: '/settings',
