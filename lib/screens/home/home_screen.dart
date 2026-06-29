@@ -203,7 +203,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     _KpiChip(
                       label: 'Total Leads',
                       value: _totalLeads,
-                      color: AppColors.primary,
+                      color: const Color(0xFF2563EB),
                       icon: Icons.analytics_outlined,
                       trend: '+12%',
                     ),
@@ -211,7 +211,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     _KpiChip(
                       label: 'Active',
                       value: _activeLeads,
-                      color: AppColors.success,
+                      color: const Color(0xFF16A34A),
                       icon: Icons.trending_up_outlined,
                       trend: '+6%',
                     ),
@@ -219,7 +219,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     _KpiChip(
                       label: 'Broker',
                       value: _brokerLeads,
-                      color: AppColors.accent,
+                      color: const Color(0xFF7C3AED),
                       icon: Icons.handshake_outlined,
                       trend: '+3%',
                     ),
@@ -242,7 +242,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         sub: 'Open',
                         route: '/land-lead',
                         gradient: LinearGradient(
-                          colors: [Color(0xFF091D55), Color(0xFF1A4DC9)],
+                          colors: [Color(0xFF041E42), Color(0xFF1E3A8A)],
                           begin: Alignment.topLeft, end: Alignment.bottomRight,
                         ),
                       ),
@@ -252,7 +252,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         sub: 'Open',
                         route: '/market-intelligence',
                         gradient: LinearGradient(
-                          colors: [Color(0xFF0D2E8A), Color(0xFF1A56DB)],
+                          colors: [Color(0xFF0F2B6E), Color(0xFF2563EB)],
                           begin: Alignment.topLeft, end: Alignment.bottomRight,
                         ),
                       ),
@@ -263,7 +263,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           sub: 'Open',
                           route: '/dashboard',
                           gradient: LinearGradient(
-                            colors: [Color(0xFF1D4ED8), Color(0xFF3B82F6)],
+                            colors: [Color(0xFF1D4ED8), Color(0xFF60A5FA)],
                             begin: Alignment.topLeft, end: Alignment.bottomRight,
                           ),
                         ),
@@ -273,7 +273,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         sub: 'Open',
                         route: '/settings',
                         gradient: LinearGradient(
-                          colors: [Color(0xFF0B3D91), Color(0xFF2563EB)],
+                          colors: [Color(0xFF1E1B4B), Color(0xFF4F46E5)],
                           begin: Alignment.topLeft, end: Alignment.bottomRight,
                         ),
                       ),

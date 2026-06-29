@@ -293,10 +293,8 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
     if (loc != null) {
       _fetchLocationDetails(loc);
       _fetchTngisParcelDetails(loc);
-      await Future.wait([
-        _collectPois(),
-        _fetchMagicBricksProjects(),
-      ]);
+      _collectPois();
+      _fetchMagicBricksProjects();
     }
   }
 
@@ -590,13 +588,16 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
   Future<void> _collectPois() async {
     final loc = _activeLatLng;
     if (loc == null) return;
+    final hadScores = _poisCollected;
     setState(() {
       _collectingPois = true;
       _poiError = null;
-      _poiCounts = {};
-      _poiPlaces = {};
-      _infraScoreMap = {};
-      _poisCollected = false;
+      if (!hadScores) {
+        _poiCounts = {};
+        _poiPlaces = {};
+        _infraScoreMap = {};
+        _poisCollected = false;
+      }
     });
 
     try {
@@ -612,7 +613,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
           if (roadFt != null) 'roadWidthFt': roadFt,
         },
         auth: false,
-      ).timeout(const Duration(seconds: 60));
+      ).timeout(const Duration(seconds: 35));
 
       final countsRaw = (data['counts'] as Map?)?.cast<String, dynamic>() ?? {};
       final placesRaw = (data['places'] as Map?)?.cast<String, dynamic>() ?? {};
@@ -2244,18 +2245,38 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                   ),
                   const SizedBox(height: 10),
                   const Text(
-                    'Scoring education, healthcare, roads, commercial & transport…',
+                    'Fetching from OpenStreetMap via Overpass…',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                         fontSize: 11, color: AppColors.textSecondary),
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'This can take a few seconds depending on OpenStreetMap response.',
-                    style: TextStyle(fontSize: 10, color: Colors.grey.shade600),
+                    'Usually 5–15 seconds for the first load.',
+                    style: TextStyle(
+                        fontSize: 10, color: context.fomraTextSecondary),
                   ),
                 ],
               ),
+            ),
+          ],
+          if (_collectingPois && _poisCollected) ...[
+            const SizedBox(height: 10),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'Refreshing infrastructure scores…',
+                  style: TextStyle(
+                      fontSize: 11, color: context.fomraTextSecondary),
+                ),
+              ],
             ),
           ],
           if (_poiError != null) ...[
@@ -2493,7 +2514,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
               const Divider(),
               const SizedBox(height: 8),
               const Text(
-                'Nearby amenities (tap to view)',
+                'Nearby amenities (tap for Google Maps)',
                 style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
@@ -2827,10 +2848,24 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
 
 // ── POI List Sheet ───────────────────────────────────────────────────────────
 
-Future<void> _openPlaceOnWikipedia(BuildContext context, String placeName) async {
-  final uri = Uri.https('en.wikipedia.org', '/wiki/Special:Search', {
-    'search': placeName,
-  });
+Future<void> _openPlaceOnGoogleMaps(
+  BuildContext context, {
+  required String placeName,
+  double? lat,
+  double? lon,
+}) async {
+  final Uri uri;
+  if (lat != null && lon != null) {
+    uri = Uri.https('www.google.com', '/maps/search/', {
+      'api': '1',
+      'query': '$placeName@$lat,$lon',
+    });
+  } else {
+    uri = Uri.https('www.google.com', '/maps/search/', {
+      'api': '1',
+      'query': placeName,
+    });
+  }
   try {
     final opened = await launchUrl(
       uri,
@@ -2839,13 +2874,13 @@ Future<void> _openPlaceOnWikipedia(BuildContext context, String placeName) async
     );
     if (!opened && context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not open Wikipedia')),
+        const SnackBar(content: Text('Could not open Google Maps')),
       );
     }
   } catch (_) {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not open Wikipedia')),
+        const SnackBar(content: Text('Could not open Google Maps')),
       );
     }
   }
@@ -2922,10 +2957,17 @@ class _PoiListSheet extends StatelessWidget {
                         final p = places[i];
                         final dist = p['distance'] as double?;
                         final name = p['name'] as String;
+                        final lat = (p['lat'] as num?)?.toDouble();
+                        final lon = (p['lon'] as num?)?.toDouble();
                         return Material(
                           color: Colors.transparent,
                           child: InkWell(
-                            onTap: () => _openPlaceOnWikipedia(context, name),
+                            onTap: () => _openPlaceOnGoogleMaps(
+                              context,
+                              placeName: name,
+                              lat: lat,
+                              lon: lon,
+                            ),
                             borderRadius: BorderRadius.circular(10),
                             child: Padding(
                               padding:
@@ -2958,7 +3000,7 @@ class _PoiListSheet extends StatelessWidget {
                                           color: AppColors.textSecondary)),
                                 ],
                                 const SizedBox(width: 6),
-                                Icon(Icons.open_in_new_rounded,
+                                Icon(Icons.map_outlined,
                                     size: 14,
                                     color: category.color
                                         .withValues(alpha: 0.7)),
@@ -3951,12 +3993,10 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
     final sub = _resolvedMapSub() ?? widget.subDivision?.trim();
     final name = fileName ??
         'FMB${survey != null ? '-$survey' : ''}${sub != null ? '-Sub-$sub' : ''}.pdf';
-    FmbSketchViewer.show(
-      context,
-      pdfBytes: pdfBytes,
+    FmbSketchViewer.openInNewTab(
+      pdfBytes,
+      context: context,
       fileName: name,
-      survey: survey,
-      subDivision: sub,
     );
   }
 
@@ -5495,30 +5535,11 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
       final subtitle = sub != null && sub.isNotEmpty && sub != '-'
           ? 'Official TSLR/FMB sketch with government seal · ${(pdfBytes.length / 1024).round()} KB'
           : 'General survey FMB (no sub-division) · ${(pdfBytes.length / 1024).round()} KB';
-      return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        _buildFmbSketchButton(
-          title: title,
-          subtitle: subtitle,
-          onTap: () => _openFmbPdfInNewTab(pdfBytes!, fileName: fileName),
-        ),
-        const SizedBox(height: 10),
-        SizedBox(
-          width: double.infinity,
-          child: OutlinedButton.icon(
-            onPressed: () => _openFmbPdfInNewTab(pdfBytes!, fileName: fileName),
-            icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
-            label: const Text('View as PDF', style: TextStyle(fontSize: 12)),
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              side: BorderSide(
-                color: context.isDarkMode
-                    ? AppColors.primaryLight.withValues(alpha: 0.5)
-                    : const Color(0xFF3949AB).withValues(alpha: 0.45),
-              ),
-            ),
-          ),
-        ),
-      ]);
+      return _buildFmbSketchButton(
+        title: title,
+        subtitle: subtitle,
+        onTap: () => _openFmbPdfInNewTab(pdfBytes!, fileName: fileName),
+      );
     }
 
     if (_fmbLoadError != null) {
@@ -5655,59 +5676,76 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
     final iconColor =
         context.isDarkMode ? AppColors.primaryLight : const Color(0xFF1A237E);
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: cardBg,
         borderRadius: BorderRadius.circular(10),
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: cardBg,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: cardBorder),
+        border: Border.all(color: cardBorder),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: iconBg,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(Icons.picture_as_pdf_outlined, color: iconColor, size: 28),
           ),
-          child: Row(
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: iconBg,
-                  borderRadius: BorderRadius.circular(8),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    color: context.fomraTextPrimary,
+                  ),
                 ),
-                child: Icon(Icons.picture_as_pdf_outlined, color: iconColor, size: 28),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
+                const SizedBox(height: 4),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: context.fomraTextSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: onTap,
+              borderRadius: BorderRadius.circular(8),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
+                    Icon(Icons.open_in_new_rounded, color: iconColor, size: 18),
+                    const SizedBox(height: 2),
                     Text(
-                      title,
+                      'View as PDF',
                       style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w800,
-                        color: context.fomraTextPrimary,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      subtitle,
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: context.fomraTextSecondary,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w700,
+                        color: iconColor,
                       ),
                     ),
                   ],
                 ),
               ),
-              Icon(Icons.chevron_right_rounded,
-                  color: context.fomraTextSecondary, size: 22),
-            ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
@@ -6162,31 +6200,17 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
                     height: 22,
                     child: CircularProgressIndicator(strokeWidth: 2)),
               ))
-            else if (bundle.fmbPdf != null) ...[
+            else if (bundle.fmbPdf != null)
               _buildFmbSketchButton(
                 title: 'FMB Sketch · Survey ${row.surveyNumber} · Sub ${row.subLabel}',
                 subtitle:
-                    'Tap to open sketch · ${(bundle.fmbPdf!.length / 1024).round()} KB',
+                    'Official TSLR/FMB sketch · ${(bundle.fmbPdf!.length / 1024).round()} KB',
                 onTap: () => _openFmbPdfInNewTab(
                   bundle.fmbPdf!,
                   fileName:
                       'FMB Survey ${row.surveyNumber} Sub ${row.subLabel}.pdf',
                 ),
-              ),
-              const SizedBox(height: 8),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed: () => _openFmbPdfInNewTab(
-                    bundle.fmbPdf!,
-                    fileName:
-                        'FMB Survey ${row.surveyNumber} Sub ${row.subLabel}.pdf',
-                  ),
-                  icon: const Icon(Icons.picture_as_pdf_outlined, size: 16),
-                  label: const Text('View as PDF', style: TextStyle(fontSize: 11)),
-                ),
-              ),
-            ]
+              )
             else if (bundle.fmbError != null)
               Text(bundle.fmbError!,
                   style: TextStyle(fontSize: 11, color: Colors.orange.shade900))
@@ -6328,18 +6352,8 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
         final sizeKb = (_fmbPdfBytes!.length / 1024).round();
         fmbChildren.add(_buildFmbSketchButton(
           title: fmbFileName,
-          subtitle: 'Tap to open sketch · $sizeKb KB',
+          subtitle: 'Official TSLR/FMB sketch · $sizeKb KB',
           onTap: () => _openFmbPdfInNewTab(_fmbPdfBytes!, fileName: fmbFileName),
-        ));
-        fmbChildren.add(const SizedBox(height: 8));
-        fmbChildren.add(SizedBox(
-          width: double.infinity,
-          child: OutlinedButton.icon(
-            onPressed: () =>
-                _openFmbPdfInNewTab(_fmbPdfBytes!, fileName: fmbFileName),
-            icon: const Icon(Icons.picture_as_pdf_outlined, size: 16),
-            label: const Text('View as PDF', style: TextStyle(fontSize: 11)),
-          ),
         ));
       } else if (_fmbLoadError != null) {
         fmbChildren.add(Text(_fmbLoadError!,

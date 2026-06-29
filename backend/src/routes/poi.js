@@ -8,10 +8,33 @@ const {
 } = require('../lib/overpassInfrastructure');
 
 const MIRRORS = [
-  { hostname: 'overpass-api.de',          path: '/api/interpreter' },
-  { hostname: 'overpass.kumi.systems',    path: '/api/interpreter' },
-  { hostname: 'overpass.openstreetmap.ru',path: '/api/interpreter' },
+  { hostname: 'overpass.kumi.systems',     path: '/api/interpreter' },
+  { hostname: 'overpass-api.de',           path: '/api/interpreter' },
+  { hostname: 'overpass.openstreetmap.ru', path: '/api/interpreter' },
 ];
+
+/** Short-lived cache — repeated taps / refreshes return instantly. */
+const infraCache = new Map();
+const CACHE_TTL_MS = 12 * 60 * 1000;
+
+function infraCacheKey(lat, lon, radiusKm) {
+  return `${lat.toFixed(4)},${lon.toFixed(4)},${radiusKm}`;
+}
+
+function getCachedInfrastructure(lat, lon, radiusKm) {
+  const key = infraCacheKey(lat, lon, radiusKm);
+  const hit = infraCache.get(key);
+  if (!hit) return null;
+  if (Date.now() - hit.at > CACHE_TTL_MS) {
+    infraCache.delete(key);
+    return null;
+  }
+  return hit.payload;
+}
+
+function setCachedInfrastructure(lat, lon, radiusKm, payload) {
+  infraCache.set(infraCacheKey(lat, lon, radiusKm), { at: Date.now(), payload });
+}
 
 function queryMirror(mirror, body) {
   return new Promise((resolve, reject) => {
@@ -25,7 +48,7 @@ function queryMirror(mirror, body) {
         'User-Agent':     'FomraLS/1.0 (fomra.digital26@gmail.com)',
         'Accept':         'application/json',
       },
-      timeout: 55000,
+      timeout: 28000,
     };
 
     const req = https.request(options, (res) => {
@@ -82,17 +105,15 @@ router.post('/', async (req, res) => {
 
 async function runOverpassQuery(query) {
   const body = `data=${encodeURIComponent(query)}`;
-  let lastErr = 'All Overpass mirrors failed';
-  for (const mirror of MIRRORS) {
-    try {
-      return await queryMirror(mirror, body);
-    } catch (err) {
-      lastErr = err.message;
-    }
+  const attempts = MIRRORS.map((mirror) => queryMirror(mirror, body));
+
+  try {
+    return await Promise.any(attempts);
+  } catch (_) {
+    const err = new Error('All Overpass mirrors failed');
+    err.status = 502;
+    throw err;
   }
-  const err = new Error(lastErr);
-  err.status = 502;
-  throw err;
 }
 
 // POST /api/poi/infrastructure
@@ -111,6 +132,11 @@ router.post('/infrastructure', async (req, res) => {
   }
 
   try {
+    const cached = getCachedInfrastructure(lat, lon, radiusKm);
+    if (cached) {
+      return res.json({ ...cached, cached: true });
+    }
+
     const radiusMeters = radiusKm * 1000;
     const query = buildInfrastructureQuery(lat, lon, radiusMeters);
     const data = await runOverpassQuery(query);
@@ -130,7 +156,7 @@ router.post('/infrastructure', async (req, res) => {
       Number.isFinite(roadWidthFt) ? roadWidthFt : undefined,
     );
 
-    return res.json({
+    const payload = {
       source:    'OpenStreetMap Overpass API',
       lat,
       lon,
@@ -139,7 +165,10 @@ router.post('/infrastructure', async (req, res) => {
       places,
       roadCounts,
       scores,
-    });
+    };
+
+    setCachedInfrastructure(lat, lon, radiusKm, payload);
+    return res.json(payload);
   } catch (err) {
     return res.status(err.status || 502).json({ error: err.message });
   }

@@ -74,15 +74,14 @@ function buildInfrastructureQuery(lat, lon, radiusMeters) {
 
   for (const cat of POI_CATEGORIES) {
     const filter = `["${cat.tag}"="${cat.value}"]`;
-    parts.push(`node${filter}${area};`);
-    parts.push(`way${filter}${area};`);
+    parts.push(`nwr${filter}${area};`);
   }
 
   for (const hw of HIGHWAY_TYPES) {
     parts.push(`way["highway"="${hw}"]${area};`);
   }
 
-  return `[out:json][timeout:55];\n(\n${parts.join('\n')}\n);\nout tags center;`;
+  return `[out:json][timeout:25];\n(\n${parts.join('\n')}\n);\nout tags center;`;
 }
 
 function haversineKm(lat1, lon1, lat2, lon2) {
