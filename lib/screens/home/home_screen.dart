@@ -162,6 +162,16 @@ class _HomeScreenState extends State<HomeScreen> {
                           begin: Alignment.topLeft, end: Alignment.bottomRight,
                         ),
                       ),
+                      _ActionCard(
+                        icon: Icons.settings_outlined,
+                        label: 'Settings',
+                        sub: 'Theme & password',
+                        route: '/settings',
+                        gradient: LinearGradient(
+                          colors: [Color(0xFF374151), Color(0xFF6B7280)],
+                          begin: Alignment.topLeft, end: Alignment.bottomRight,
+                        ),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 24),
