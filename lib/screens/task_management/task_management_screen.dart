@@ -253,6 +253,9 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
       _tasks.where((t) => t.status == status).length;
 
   Widget _buildTaskStatsStrip() {
+    final isDark = context.isDarkMode;
+    final glass = Colors.white.withValues(alpha: isDark ? 0.08 : 0.14);
+    final glassBorder = Colors.white.withValues(alpha: isDark ? 0.12 : 0.16);
     final stats = [
       ('To Do', _statusCount(TaskStatus.todo), AppColors.textSecondary),
       ('In Progress', _statusCount(TaskStatus.inProgress), AppColors.info),
@@ -272,9 +275,9 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
             width: 130,
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.14),
+              color: glass,
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
+              border: Border.all(color: glassBorder),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -325,7 +328,12 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
         ),
       );
 
-  Widget _buildTaskHeader() => Column(
+  Widget _buildTaskHeader() {
+    final isDark = context.isDarkMode;
+    final glass = Colors.white.withValues(alpha: isDark ? 0.08 : 0.14);
+    final indicator = Colors.white.withValues(alpha: isDark ? 0.16 : 0.24);
+
+    return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SizedBox(height: 8),
@@ -338,7 +346,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
                 child: Container(
                   padding: const EdgeInsets.all(6),
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.14),
+                    color: glass,
                     borderRadius: BorderRadius.circular(14),
                   ),
                   child: TabBar(
@@ -347,10 +355,12 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
                     indicatorSize: TabBarIndicatorSize.tab,
                     indicator: BoxDecoration(
                       borderRadius: BorderRadius.circular(10),
-                      color: Colors.white.withValues(alpha: 0.24),
+                      color: indicator,
                     ),
                     labelColor: Colors.white,
-                    unselectedLabelColor: const Color(0xFFD0D9E3),
+                    unselectedLabelColor: isDark
+                        ? const Color(0xFF94A3B8)
+                        : const Color(0xFFD0D9E3),
                     labelStyle: const TextStyle(
                         fontSize: 12, fontWeight: FontWeight.w700),
                     isScrollable: true,
@@ -368,7 +378,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
               const SizedBox(width: 8),
               Stack(clipBehavior: Clip.none, children: [
                 Material(
-                  color: Colors.white.withValues(alpha: 0.14),
+                  color: glass,
                   borderRadius: BorderRadius.circular(12),
                   child: InkWell(
                     onTap: _showNotificationsSheet,
@@ -403,9 +413,12 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
           ),
         ],
       );
+  }
 
   Widget _buildTaskTabBar() => Container(
-        color: AppColors.primaryDark,
+        color: context.isDarkMode
+            ? const Color(0xFF0F1A2E)
+            : AppColors.primaryDark,
         child: _buildTaskHeader(),
       );
 

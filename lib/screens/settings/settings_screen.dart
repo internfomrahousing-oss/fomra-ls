@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'change_password_screen.dart';
 import '../../services/auth_service.dart';
 import '../../services/theme_controller.dart';
+import '../../theme/app_theme.dart';
 import '../../widgets/app_drawer.dart';
 import '../../widgets/fomra_app_bar.dart';
 import '../../widgets/fomra_bottom_nav.dart';
@@ -113,6 +114,7 @@ class _ThemeSection extends StatelessWidget {
               child: _ThemeOption(
                 icon: Icons.light_mode_outlined,
                 label: 'Light',
+                previewDark: false,
                 selected: !isDark,
                 onTap: () => ThemeController.instance.setDark(false),
               ),
@@ -122,6 +124,7 @@ class _ThemeSection extends StatelessWidget {
               child: _ThemeOption(
                 icon: Icons.dark_mode_outlined,
                 label: 'Dark',
+                previewDark: true,
                 selected: isDark,
                 onTap: () => ThemeController.instance.setDark(true),
               ),
@@ -136,12 +139,14 @@ class _ThemeSection extends StatelessWidget {
 class _ThemeOption extends StatelessWidget {
   final IconData icon;
   final String label;
+  final bool previewDark;
   final bool selected;
   final VoidCallback onTap;
 
   const _ThemeOption({
     required this.icon,
     required this.label,
+    required this.previewDark,
     required this.selected,
     required this.onTap,
   });
@@ -154,7 +159,7 @@ class _ThemeOption extends StatelessWidget {
       borderRadius: BorderRadius.circular(12),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(vertical: 18),
+        padding: const EdgeInsets.fromLTRB(10, 10, 10, 14),
         decoration: BoxDecoration(
           color: selected
               ? cs.primary.withValues(alpha: 0.12)
@@ -168,19 +173,27 @@ class _ThemeOption extends StatelessWidget {
           ),
         ),
         child: Column(children: [
-          Icon(icon,
-              size: 26,
-              color: selected
-                  ? cs.primary
-                  : cs.onSurface.withValues(alpha: 0.6)),
-          const SizedBox(height: 8),
-          Text(label,
-              style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+          _ThemeMiniPreview(isDark: previewDark),
+          const SizedBox(height: 10),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon,
+                  size: 16,
                   color: selected
                       ? cs.primary
-                      : cs.onSurface.withValues(alpha: 0.8))),
+                      : cs.onSurface.withValues(alpha: 0.6)),
+              const SizedBox(width: 6),
+              Text(label,
+                  style: TextStyle(
+                      fontSize: 13,
+                      fontWeight:
+                          selected ? FontWeight.w700 : FontWeight.w500,
+                      color: selected
+                          ? cs.primary
+                          : cs.onSurface.withValues(alpha: 0.8))),
+            ],
+          ),
           const SizedBox(height: 6),
           AnimatedOpacity(
             opacity: selected ? 1 : 0,
@@ -188,6 +201,159 @@ class _ThemeOption extends StatelessWidget {
             child: Icon(Icons.check_circle, size: 16, color: cs.primary),
           ),
         ]),
+      ),
+    );
+  }
+}
+
+/// Tiny mock UI showing how each theme looks before selecting it.
+class _ThemeMiniPreview extends StatelessWidget {
+  final bool isDark;
+  const _ThemeMiniPreview({required this.isDark});
+
+  @override
+  Widget build(BuildContext context) {
+    final pageBg = isDark ? AppColors.darkBackground : AppColors.background;
+    final surface = isDark ? AppColors.darkSurface : AppColors.surface;
+    final border = isDark ? AppColors.darkBorder : AppColors.border;
+    final text = isDark ? AppColors.darkTextPrimary : AppColors.textPrimary;
+    final subtext =
+        isDark ? AppColors.darkTextSecondary : AppColors.textSecondary;
+    final accent = isDark ? AppColors.primaryLight : AppColors.primary;
+
+    return AspectRatio(
+      aspectRatio: 1.35,
+      child: Container(
+        decoration: BoxDecoration(
+          color: pageBg,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: border),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          children: [
+            Container(
+              height: 26,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                gradient: isDark
+                    ? const LinearGradient(
+                        colors: [
+                          Color(0xFF152A52),
+                          Color(0xFF1E293B),
+                          Color(0xFF231B4A),
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      )
+                    : AppColors.heroGradient,
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 5),
+              child: Row(
+                children: [
+                  Container(
+                    width: 10,
+                    height: 10,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.22),
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                  ),
+                  const SizedBox(width: 5),
+                  Expanded(
+                    child: Container(
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.75),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(7),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(
+                      flex: 3,
+                      child: Container(
+                        padding: const EdgeInsets.all(5),
+                        decoration: BoxDecoration(
+                          color: surface,
+                          borderRadius: BorderRadius.circular(5),
+                          border: Border.all(color: border),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              width: 28,
+                              height: 4,
+                              decoration: BoxDecoration(
+                                color: text,
+                                borderRadius: BorderRadius.circular(2),
+                              ),
+                            ),
+                            const Spacer(),
+                            Container(
+                              width: double.infinity,
+                              height: 3,
+                              decoration: BoxDecoration(
+                                color: subtext.withValues(alpha: 0.55),
+                                borderRadius: BorderRadius.circular(2),
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            Container(
+                              width: 20,
+                              height: 3,
+                              decoration: BoxDecoration(
+                                color: subtext.withValues(alpha: 0.4),
+                                borderRadius: BorderRadius.circular(2),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 5),
+                    Expanded(
+                      flex: 2,
+                      child: Column(
+                        children: [
+                          Expanded(
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: accent.withValues(alpha: 0.18),
+                                borderRadius: BorderRadius.circular(5),
+                                border: Border.all(
+                                    color: accent.withValues(alpha: 0.35)),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 5),
+                          Expanded(
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: surface,
+                                borderRadius: BorderRadius.circular(5),
+                                border: Border.all(color: border),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

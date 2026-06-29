@@ -2525,12 +2525,12 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
               const SizedBox(height: 8),
               const Divider(),
               const SizedBox(height: 8),
-              const Text(
+              Text(
                 'Nearby amenities (tap for Google Maps)',
                 style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
-                    color: AppColors.textSecondary),
+                    color: context.fomraTextSecondary),
               ),
               const SizedBox(height: 10),
               Wrap(
@@ -2562,9 +2562,9 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                         const SizedBox(width: 4),
                         Text(
                           cat.name,
-                          style: const TextStyle(
+                          style: TextStyle(
                               fontSize: 10,
-                              color: AppColors.textSecondary),
+                              color: context.fomraTextSecondary),
                         ),
                         const SizedBox(width: 3),
                         Icon(Icons.chevron_right,
@@ -2933,38 +2933,39 @@ class _PoiListSheet extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(category.name,
-                            style: const TextStyle(
+                            style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w700,
-                                color: AppColors.textPrimary)),
+                                color: context.fomraTextPrimary)),
                         Text('${places.length} found nearby',
-                            style: const TextStyle(
+                            style: TextStyle(
                                 fontSize: 12,
-                                color: AppColors.textSecondary)),
+                                color: context.fomraTextSecondary)),
                       ]),
                 ),
                 IconButton(
                   onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.close, size: 20),
+                  icon: Icon(Icons.close,
+                      size: 20, color: context.fomraTextSecondary),
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
                 ),
               ]),
             ),
-            const Divider(height: 1),
+            Divider(height: 1, color: context.fomraBorder),
             Expanded(
               child: places.isEmpty
-                  ? const Center(
+                  ? Center(
                       child: Text('No places found in this category.',
                           style:
-                              TextStyle(color: AppColors.textSecondary)))
+                              TextStyle(color: context.fomraTextSecondary)))
                   : ListView.separated(
                       controller: ctrl,
                       padding: const EdgeInsets.symmetric(
                           horizontal: 16, vertical: 8),
                       itemCount: places.length,
                       separatorBuilder: (_, __) =>
-                          const Divider(height: 1, indent: 52),
+                          Divider(height: 1, indent: 52, color: context.fomraBorder),
                       itemBuilder: (_, i) {
                         final p = places[i];
                         final dist = p['distance'] as double?;
@@ -2999,17 +3000,17 @@ class _PoiListSheet extends StatelessWidget {
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: Text(name,
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                           fontSize: 13,
                                           fontWeight: FontWeight.w600,
-                                          color: AppColors.textPrimary)),
+                                          color: context.fomraTextPrimary)),
                                 ),
                                 if (dist != null) ...[
                                   const SizedBox(width: 8),
                                   Text('${dist.toStringAsFixed(1)} km',
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                           fontSize: 11,
-                                          color: AppColors.textSecondary)),
+                                          color: context.fomraTextSecondary)),
                                 ],
                                 const SizedBox(width: 6),
                                 Icon(Icons.map_outlined,
@@ -3335,7 +3336,7 @@ class _Handle extends StatelessWidget {
             width: 36,
             height: 4,
             decoration: BoxDecoration(
-              color: const Color(0xFFE5E7EB),
+              color: context.fomraBorder,
               borderRadius: BorderRadius.circular(2),
             ),
           ),
