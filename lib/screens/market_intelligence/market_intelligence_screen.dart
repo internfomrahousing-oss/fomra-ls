@@ -2803,7 +2803,31 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
 
 
 
-// â”€â”€ POI List Sheet â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── POI List Sheet ───────────────────────────────────────────────────────────
+
+Future<void> _openPlaceOnWikipedia(BuildContext context, String placeName) async {
+  final uri = Uri.https('en.wikipedia.org', '/wiki/Special:Search', {
+    'search': placeName,
+  });
+  try {
+    final opened = await launchUrl(
+      uri,
+      mode: LaunchMode.externalApplication,
+      webOnlyWindowName: '_blank',
+    );
+    if (!opened && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not open Wikipedia')),
+      );
+    }
+  } catch (_) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not open Wikipedia')),
+      );
+    }
+  }
+}
 
 class _PoiListSheet extends StatelessWidget {
   final _PoiCategory category;
@@ -2875,37 +2899,50 @@ class _PoiListSheet extends StatelessWidget {
                       itemBuilder: (_, i) {
                         final p = places[i];
                         final dist = p['distance'] as double?;
-                        return Padding(
-                          padding:
-                              const EdgeInsets.symmetric(vertical: 8),
-                          child: Row(children: [
-                            Container(
-                              width: 36,
-                              height: 36,
-                              decoration: BoxDecoration(
-                                color: category.color
-                                    .withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Icon(category.icon,
-                                  color: category.color, size: 18),
+                        final name = p['name'] as String;
+                        return Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: () => _openPlaceOnWikipedia(context, name),
+                            borderRadius: BorderRadius.circular(10),
+                            child: Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(vertical: 8),
+                              child: Row(children: [
+                                Container(
+                                  width: 36,
+                                  height: 36,
+                                  decoration: BoxDecoration(
+                                    color: category.color
+                                        .withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Icon(category.icon,
+                                      color: category.color, size: 18),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(name,
+                                      style: const TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
+                                          color: AppColors.textPrimary)),
+                                ),
+                                if (dist != null) ...[
+                                  const SizedBox(width: 8),
+                                  Text('${dist.toStringAsFixed(1)} km',
+                                      style: const TextStyle(
+                                          fontSize: 11,
+                                          color: AppColors.textSecondary)),
+                                ],
+                                const SizedBox(width: 6),
+                                Icon(Icons.open_in_new_rounded,
+                                    size: 14,
+                                    color: category.color
+                                        .withValues(alpha: 0.7)),
+                              ]),
                             ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(p['name'] as String,
-                                  style: const TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w600,
-                                      color: AppColors.textPrimary)),
-                            ),
-                            if (dist != null) ...[
-                              const SizedBox(width: 8),
-                              Text('${dist.toStringAsFixed(1)} km',
-                                  style: const TextStyle(
-                                      fontSize: 11,
-                                      color: AppColors.textSecondary)),
-                            ],
-                          ]),
+                          ),
                         );
                       },
                     ),

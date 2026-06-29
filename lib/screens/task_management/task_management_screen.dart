@@ -321,86 +321,88 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
         ),
       );
 
-  Widget _buildTaskTabBar() => Container(
-        color: AppColors.primaryDark,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 8),
-            _buildTaskStatsStrip(),
-            const SizedBox(height: 10),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-              child: Row(children: [
-                Expanded(
-                  child: Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.14),
-                      borderRadius: BorderRadius.circular(14),
+  Widget _buildTaskHeader() => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 8),
+          _buildTaskStatsStrip(),
+          const SizedBox(height: 10),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            child: Row(children: [
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: TabBar(
+                    controller: _tabController,
+                    dividerColor: Colors.transparent,
+                    indicatorSize: TabBarIndicatorSize.tab,
+                    indicator: BoxDecoration(
+                      borderRadius: BorderRadius.circular(10),
+                      color: Colors.white.withValues(alpha: 0.24),
                     ),
-                    child: TabBar(
-                      controller: _tabController,
-                      dividerColor: Colors.transparent,
-                      indicatorSize: TabBarIndicatorSize.tab,
-                      indicator: BoxDecoration(
-                        borderRadius: BorderRadius.circular(10),
-                        color: Colors.white.withValues(alpha: 0.24),
-                      ),
-                      labelColor: Colors.white,
-                      unselectedLabelColor: const Color(0xFFD0D9E3),
-                      labelStyle: const TextStyle(
-                          fontSize: 12, fontWeight: FontWeight.w700),
-                      isScrollable: true,
-                      tabs: [
-                        _tabLabel('All', _tasks.length),
-                        _tabLabel('To Do', _statusCount(TaskStatus.todo)),
-                        _tabLabel(
-                            'In Progress', _statusCount(TaskStatus.inProgress)),
-                        _tabLabel('Done', _statusCount(TaskStatus.done)),
-                        _tabLabel('Overdue', _statusCount(TaskStatus.overdue)),
-                      ],
+                    labelColor: Colors.white,
+                    unselectedLabelColor: const Color(0xFFD0D9E3),
+                    labelStyle: const TextStyle(
+                        fontSize: 12, fontWeight: FontWeight.w700),
+                    isScrollable: true,
+                    tabs: [
+                      _tabLabel('All', _tasks.length),
+                      _tabLabel('To Do', _statusCount(TaskStatus.todo)),
+                      _tabLabel(
+                          'In Progress', _statusCount(TaskStatus.inProgress)),
+                      _tabLabel('Done', _statusCount(TaskStatus.done)),
+                      _tabLabel('Overdue', _statusCount(TaskStatus.overdue)),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Stack(clipBehavior: Clip.none, children: [
+                Material(
+                  color: Colors.white.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(12),
+                  child: InkWell(
+                    onTap: _showNotificationsSheet,
+                    borderRadius: BorderRadius.circular(12),
+                    child: const Padding(
+                      padding: EdgeInsets.all(10),
+                      child: Icon(Icons.notifications_outlined,
+                          color: Colors.white70, size: 19),
                     ),
                   ),
                 ),
-                const SizedBox(width: 8),
-                Stack(clipBehavior: Clip.none, children: [
-                  Material(
-                    color: Colors.white.withValues(alpha: 0.14),
-                    borderRadius: BorderRadius.circular(12),
-                    child: InkWell(
-                      onTap: _showNotificationsSheet,
-                      borderRadius: BorderRadius.circular(12),
-                      child: const Padding(
-                        padding: EdgeInsets.all(10),
-                        child: Icon(Icons.notifications_outlined,
-                            color: Colors.white70, size: 19),
+                if (_unread > 0)
+                  Positioned(
+                    right: -2,
+                    top: -2,
+                    child: Container(
+                      width: 16,
+                      height: 16,
+                      decoration: const BoxDecoration(
+                          color: AppColors.error, shape: BoxShape.circle),
+                      child: Center(
+                        child: Text('$_unread',
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold)),
                       ),
                     ),
                   ),
-                  if (_unread > 0)
-                    Positioned(
-                      right: -2,
-                      top: -2,
-                      child: Container(
-                        width: 16,
-                        height: 16,
-                        decoration: const BoxDecoration(
-                            color: AppColors.error, shape: BoxShape.circle),
-                        child: Center(
-                          child: Text('$_unread',
-                              style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.bold)),
-                        ),
-                      ),
-                    ),
-                ]),
               ]),
-            ),
-          ],
-        ),
+            ]),
+          ),
+        ],
+      );
+
+  Widget _buildTaskTabBar() => Container(
+        color: AppColors.primaryDark,
+        child: _buildTaskHeader(),
       );
 
   void _logout() {
@@ -567,6 +569,12 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
         (i) => _TaskList(
           tasks: _tasksForTab(i),
           tabIndex: i,
+          scrollHeader: widget.isTab
+              ? Container(
+                  color: AppColors.primaryDark,
+                  child: _buildTaskHeader(),
+                )
+              : null,
           onStatusChange: (task, s) => setState(() {
             task.status = s;
             if (s == TaskStatus.done) task.completedAt = DateTime.now();
@@ -582,10 +590,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
     if (widget.isTab) {
       return Scaffold(
         backgroundColor: const Color(0xFFF6F8FC),
-        body: Column(children: [
-          _buildTaskTabBar(),
-          Expanded(child: taskListView),
-        ]),
+        body: taskListView,
         floatingActionButton: fab,
       );
     }
@@ -698,6 +703,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
 class _TaskList extends StatelessWidget {
   final List<Task> tasks;
   final int tabIndex;
+  final Widget? scrollHeader;
   final void Function(Task, TaskStatus) onStatusChange;
   final void Function(Task) onTap;
   final VoidCallback? onPrimaryAction;
@@ -705,15 +711,13 @@ class _TaskList extends StatelessWidget {
   const _TaskList({
     required this.tasks,
     required this.tabIndex,
+    this.scrollHeader,
     required this.onStatusChange,
     required this.onTap,
     this.onPrimaryAction,
   });
 
-  @override
-  Widget build(BuildContext context) {
-    if (tasks.isEmpty) {
-      return Center(
+  Widget _buildEmptyState() => Center(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 32),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -766,6 +770,47 @@ class _TaskList extends StatelessWidget {
           ]),
         ),
       );
+
+  @override
+  Widget build(BuildContext context) {
+    if (scrollHeader != null) {
+      final slivers = <Widget>[
+        SliverToBoxAdapter(child: scrollHeader!),
+      ];
+
+      if (tasks.isEmpty) {
+        slivers.add(
+          SliverFillRemaining(
+            hasScrollBody: false,
+            child: _buildEmptyState(),
+          ),
+        );
+      } else {
+        slivers.add(
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+            sliver: SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (_, i) => _TaskCard(
+                  task: tasks[i],
+                  onStatusChange: onStatusChange,
+                  onTap: () => onTap(tasks[i]),
+                ),
+                childCount: tasks.length,
+              ),
+            ),
+          ),
+        );
+      }
+
+      return CustomScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        slivers: slivers,
+      );
+    }
+
+    if (tasks.isEmpty) {
+      return _buildEmptyState();
     }
     return ListView.builder(
       padding: const EdgeInsets.all(16),

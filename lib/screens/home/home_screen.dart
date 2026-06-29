@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../models/land_lead.dart';
 import '../../services/auth_service.dart';
@@ -116,6 +117,29 @@ class _HomeScreenState extends State<HomeScreen> {
                 Navigator.pushNamed(context, '/settings');
               },
             ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.error.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.logout_rounded,
+                    size: 20, color: AppColors.error),
+              ),
+              title: const Text('Sign Out',
+                  style: TextStyle(
+                      fontWeight: FontWeight.w600, color: AppColors.error)),
+              trailing: const Icon(Icons.chevron_right_rounded,
+                  size: 20, color: AppColors.error),
+              onTap: () {
+                Navigator.pop(ctx);
+                AuthService.instance.logout();
+                Navigator.pushNamedAndRemoveUntil(
+                    context, '/login', (_) => false);
+              },
+            ),
           ],
         ),
       ),
@@ -124,10 +148,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final hour = DateTime.now().hour;
-    final greeting = hour < 12 ? 'Good Morning' : hour < 17 ? 'Good Afternoon' : 'Good Evening';
-    final greetIcon = hour < 12 ? Icons.wb_sunny_outlined
-        : hour < 17 ? Icons.wb_cloudy_outlined : Icons.nights_stay_outlined;
     final user = AuthService.instance.currentUser;
     final userName = user?.fullName ?? 'User';
     final userEmail = user?.email ?? '';
@@ -166,8 +186,6 @@ class _HomeScreenState extends State<HomeScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _HeroBanner(
-              greeting: greeting,
-              greetIcon: greetIcon,
               userName: userName,
               userEmail: userEmail,
               onProfileTap: () => _showProfileMenu(userName, userEmail),
@@ -275,14 +293,10 @@ class _HomeScreenState extends State<HomeScreen> {
 // ── Hero Banner ───────────────────────────────────────────────────────────────
 
 class _HeroBanner extends StatefulWidget {
-  final String greeting;
-  final IconData greetIcon;
   final String userName;
   final String userEmail;
   final VoidCallback onProfileTap;
   const _HeroBanner({
-    required this.greeting,
-    required this.greetIcon,
     required this.userName,
     required this.userEmail,
     required this.onProfileTap,
@@ -295,6 +309,8 @@ class _HeroBanner extends StatefulWidget {
 class _HeroBannerState extends State<_HeroBanner>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
+  Timer? _clockTimer;
+  DateTime _now = DateTime.now();
 
   @override
   void initState() {
@@ -303,18 +319,23 @@ class _HeroBannerState extends State<_HeroBanner>
       vsync: this,
       duration: const Duration(milliseconds: 3600),
     )..repeat(reverse: true);
+    _clockTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() => _now = DateTime.now());
+    });
   }
 
   @override
   void dispose() {
+    _clockTimer?.cancel();
     _controller.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final now = DateTime.now();
-    final time = _formattedTime(now);
+    final time = _formattedTime(_now);
+    final greeting = _greetingFor(_now);
+    final greetIcon = _greetIconFor(_now);
 
     return Container(
       width: double.infinity,
@@ -402,10 +423,10 @@ class _HeroBannerState extends State<_HeroBanner>
                 ),
                 child: Row(
                   children: [
-                    Icon(widget.greetIcon, color: AppColors.accentLight, size: 17),
+                    Icon(greetIcon, color: AppColors.accentLight, size: 17),
                     const SizedBox(width: 8),
                     Text(
-                      widget.greeting,
+                      greeting,
                       style: const TextStyle(
                         color: AppColors.accentLight,
                         fontWeight: FontWeight.w700,
@@ -414,11 +435,12 @@ class _HeroBannerState extends State<_HeroBanner>
                     ),
                     const Spacer(),
                     Text(
-                      '$time  |  ${_formattedDate(now)}',
+                      '$time  |  ${_formattedDate(_now)}',
                       style: const TextStyle(
                         color: Colors.white70,
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
+                        fontFeatures: [FontFeature.tabularFigures()],
                       ),
                     ),
                   ],
@@ -431,11 +453,26 @@ class _HeroBannerState extends State<_HeroBanner>
     );
   }
 
+  String _greetingFor(DateTime dt) {
+    final hour = dt.hour;
+    if (hour < 12) return 'Good Morning';
+    if (hour < 17) return 'Good Afternoon';
+    return 'Good Evening';
+  }
+
+  IconData _greetIconFor(DateTime dt) {
+    final hour = dt.hour;
+    if (hour < 12) return Icons.wb_sunny_outlined;
+    if (hour < 17) return Icons.wb_cloudy_outlined;
+    return Icons.nights_stay_outlined;
+  }
+
   String _formattedTime(DateTime dt) {
     final hour = dt.hour % 12 == 0 ? 12 : dt.hour % 12;
     final min = dt.minute.toString().padLeft(2, '0');
+    final sec = dt.second.toString().padLeft(2, '0');
     final suffix = dt.hour >= 12 ? 'PM' : 'AM';
-    return '$hour:$min $suffix';
+    return '$hour:$min:$sec $suffix';
   }
 
   String _formattedDate(DateTime now) {

@@ -737,6 +737,61 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
 
 // ── Terms Dropdown ──────────────────────────────────────────────────────────
 
+double _compactDropdownWidth(BuildContext context) {
+  final screenW = MediaQuery.sizeOf(context).width;
+  return screenW > 520 ? 380.0 : screenW - 48;
+}
+
+Widget _compactDropdownShell({
+  required BuildContext context,
+  required Widget child,
+}) {
+  return Align(
+    alignment: Alignment.centerLeft,
+    child: SizedBox(
+      width: _compactDropdownWidth(context),
+      child: child,
+    ),
+  );
+}
+
+Widget _dropdownOptionRow({
+  required IconData icon,
+  required String label,
+  required Color iconColor,
+}) {
+  return Row(
+    children: [
+      Icon(icon, size: 18, color: iconColor),
+      const SizedBox(width: 10),
+      Expanded(
+        child: Text(
+          label,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontSize: 14),
+        ),
+      ),
+    ],
+  );
+}
+
+IconData _inputSourceIcon(InputSource source) => switch (source) {
+      InputSource.broker => Icons.handshake_outlined,
+      InputSource.landowner => Icons.person_pin_outlined,
+      InputSource.referral => Icons.group_outlined,
+      InputSource.internalTeam => Icons.business_center_outlined,
+      InputSource.existingDatabase => Icons.storage_outlined,
+    };
+
+IconData _landTypeIcon(LandType type) => switch (type) {
+      LandType.agricultural => Icons.agriculture_outlined,
+      LandType.nonAgricultural => Icons.landscape_outlined,
+      LandType.residential => Icons.home_outlined,
+      LandType.commercial => Icons.storefront_outlined,
+      LandType.industrial => Icons.factory_outlined,
+      LandType.other => Icons.category_outlined,
+    };
+
 class _TermsDropdown extends StatelessWidget {
   final String? value;
   final ValueChanged<String?> onChanged;
@@ -744,18 +799,49 @@ class _TermsDropdown extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DropdownButtonFormField<String>(
-      initialValue: value,
-      onChanged: onChanged,
-      decoration: FomraInput.decoration(
-        context: context,
-        label: 'Terms',
-        hint: 'Select deal terms',
-        icon: Icons.handshake_outlined,
+    final iconColor = Theme.of(context).brightness == Brightness.dark
+        ? AppColors.primaryLight
+        : AppColors.primary;
+
+    return _compactDropdownShell(
+      context: context,
+      child: DropdownButtonFormField<String>(
+        isExpanded: true,
+        initialValue: value,
+        onChanged: onChanged,
+        menuMaxHeight: 260,
+        borderRadius: BorderRadius.circular(12),
+        decoration: FomraInput.decoration(
+          context: context,
+          label: 'Terms',
+          hint: 'Select deal terms',
+          icon: Icons.handshake_outlined,
+        ),
+        items: _kTermsOptions
+            .map(
+              (t) => DropdownMenuItem(
+                value: t.$1,
+                child: _dropdownOptionRow(
+                  icon: t.$2,
+                  label: t.$1,
+                  iconColor: iconColor,
+                ),
+              ),
+            )
+            .toList(),
+        selectedItemBuilder: (ctx) => _kTermsOptions
+            .map(
+              (t) => Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  t.$1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 14),
+                ),
+              ),
+            )
+            .toList(),
       ),
-      items: _kTermsOptions
-          .map((t) => DropdownMenuItem(value: t.$1, child: Text(t.$1)))
-          .toList(),
     );
   }
 }
@@ -1364,19 +1450,50 @@ class _InputSourceDropdown extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DropdownButtonFormField<InputSource>(
-      initialValue: value,
-      onChanged: onChanged,
-      decoration: FomraInput.decoration(
-        context: context,
-        label: 'Input Source',
-        hint: 'Select who brought this lead',
-        icon: Icons.source_outlined,
-        required: true,
+    final iconColor = Theme.of(context).brightness == Brightness.dark
+        ? AppColors.primaryLight
+        : AppColors.primary;
+
+    return _compactDropdownShell(
+      context: context,
+      child: DropdownButtonFormField<InputSource>(
+        isExpanded: true,
+        initialValue: value,
+        onChanged: onChanged,
+        menuMaxHeight: 260,
+        borderRadius: BorderRadius.circular(12),
+        decoration: FomraInput.decoration(
+          context: context,
+          label: 'Input Source',
+          hint: 'Select who brought this lead',
+          icon: Icons.source_outlined,
+          required: true,
+        ),
+        items: InputSource.values
+            .map(
+              (s) => DropdownMenuItem(
+                value: s,
+                child: _dropdownOptionRow(
+                  icon: _inputSourceIcon(s),
+                  label: s.label,
+                  iconColor: iconColor,
+                ),
+              ),
+            )
+            .toList(),
+        selectedItemBuilder: (ctx) => InputSource.values
+            .map(
+              (s) => Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  s.label,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 14),
+                ),
+              ),
+            )
+            .toList(),
       ),
-      items: InputSource.values
-          .map((s) => DropdownMenuItem(value: s, child: Text(s.label)))
-          .toList(),
     );
   }
 }
@@ -1467,19 +1584,49 @@ class _LandTypeDropdown extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DropdownButtonFormField<LandType>(
-      initialValue: value,
-      onChanged: onChanged,
-      decoration: FomraInput.decoration(
-        context: context,
-        label: 'Land Type',
-        icon: Icons.terrain_outlined,
-        required: true,
+    final iconColor = Theme.of(context).brightness == Brightness.dark
+        ? AppColors.primaryLight
+        : AppColors.primary;
+
+    return _compactDropdownShell(
+      context: context,
+      child: DropdownButtonFormField<LandType>(
+        isExpanded: true,
+        initialValue: value,
+        onChanged: onChanged,
+        menuMaxHeight: 280,
+        borderRadius: BorderRadius.circular(12),
+        decoration: FomraInput.decoration(
+          context: context,
+          label: 'Land Type',
+          icon: Icons.terrain_outlined,
+          required: true,
+        ),
+        items: LandType.values
+            .map(
+              (t) => DropdownMenuItem(
+                value: t,
+                child: _dropdownOptionRow(
+                  icon: _landTypeIcon(t),
+                  label: t.label,
+                  iconColor: iconColor,
+                ),
+              ),
+            )
+            .toList(),
+        selectedItemBuilder: (ctx) => LandType.values
+            .map(
+              (t) => Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  t.label,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 14),
+                ),
+              ),
+            )
+            .toList(),
       ),
-      items: LandType.values
-          .map((t) =>
-              DropdownMenuItem(value: t, child: Text(t.label)))
-          .toList(),
     );
   }
 }

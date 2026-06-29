@@ -77,95 +77,7 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final body = Column(
-      children: [
-        if (_leads.isNotEmpty) _LeadSummary(leads: _leads),
-        if (_leads.isNotEmpty)
-          _SearchBar(
-            onChanged: (q) => setState(() => _search = q),
-            filterStatus: _filterStatus,
-            onClearFilter: () => setState(() => _filterStatus = null),
-            onFilter: widget.isTab && _leads.isNotEmpty && !_loading
-                ? _showFilter
-                : null,
-          ),
-        Expanded(
-          child: _loading
-              ? const Center(child: CircularProgressIndicator())
-              : _loadError != null
-                  ? Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(32),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.cloud_off_outlined,
-                                size: 48, color: AppColors.textSecondary),
-                            const SizedBox(height: 12),
-                            Text(_loadError!,
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(
-                                    color: AppColors.textSecondary)),
-                            const SizedBox(height: 16),
-                            ElevatedButton.icon(
-                              onPressed: _loadLeads,
-                              icon: const Icon(Icons.refresh, size: 18),
-                              label: const Text('Retry'),
-                            ),
-                          ],
-                        ),
-                      ),
-                    )
-                  : _filtered.isEmpty
-                      ? _EmptyState(hasLeads: _leads.isNotEmpty)
-                      : ListView.builder(
-                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                          itemCount: _filtered.length,
-                          itemBuilder: (_, i) {
-                            final lead = _filtered[i];
-                            return Dismissible(
-                              key: ValueKey(lead.leadId),
-                              direction: DismissDirection.endToStart,
-                              confirmDismiss: (_) => _confirmAndDelete(lead),
-                              background: Container(
-                                margin: const EdgeInsets.only(bottom: 16),
-                                decoration: BoxDecoration(
-                                  color: AppColors.error,
-                                  borderRadius: BorderRadius.circular(18),
-                                ),
-                                alignment: Alignment.centerRight,
-                                padding: const EdgeInsets.only(right: 20),
-                                child: const Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(Icons.delete_outline,
-                                        color: Colors.white, size: 26),
-                                    SizedBox(height: 4),
-                                    Text('Delete',
-                                        style: TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.w600)),
-                                  ],
-                                ),
-                              ),
-                              child: _LeadCard(
-                                lead: lead,
-                                onTap: () => Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) =>
-                                        LeadDetailScreen(lead: lead),
-                                  ),
-                                ),
-                                onStatusChange: (s) => _updateStatus(lead, s),
-                              ),
-                            );
-                          },
-                        ),
-        ),
-      ],
-    );
+    final body = _buildScrollableBody();
 
     final fab = Container(
       decoration: BoxDecoration(
@@ -204,6 +116,117 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
       bottomNavigationBar: const FomraBottomNav(currentRoute: '/land-lead'),
       body: body,
       floatingActionButton: fab,
+    );
+  }
+
+  Widget _buildScrollableBody() {
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_loadError != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.cloud_off_outlined,
+                  size: 48, color: AppColors.textSecondary),
+              const SizedBox(height: 12),
+              Text(_loadError!,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: AppColors.textSecondary)),
+              const SizedBox(height: 16),
+              ElevatedButton.icon(
+                onPressed: _loadLeads,
+                icon: const Icon(Icons.refresh, size: 18),
+                label: const Text('Retry'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final slivers = <Widget>[
+      if (_leads.isNotEmpty) SliverToBoxAdapter(child: _LeadSummary(leads: _leads)),
+      if (_leads.isNotEmpty)
+        SliverToBoxAdapter(
+          child: _SearchBar(
+            onChanged: (q) => setState(() => _search = q),
+            filterStatus: _filterStatus,
+            onClearFilter: () => setState(() => _filterStatus = null),
+            onFilter: widget.isTab && _leads.isNotEmpty && !_loading
+                ? _showFilter
+                : null,
+          ),
+        ),
+    ];
+
+    if (_filtered.isEmpty) {
+      slivers.add(
+        SliverFillRemaining(
+          hasScrollBody: false,
+          child: _EmptyState(hasLeads: _leads.isNotEmpty),
+        ),
+      );
+    } else {
+      slivers.add(
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
+          sliver: SliverList(
+            delegate: SliverChildBuilderDelegate(
+              (_, i) {
+                final lead = _filtered[i];
+                return Dismissible(
+                  key: ValueKey(lead.leadId),
+                  direction: DismissDirection.endToStart,
+                  confirmDismiss: (_) => _confirmAndDelete(lead),
+                  background: Container(
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: AppColors.error,
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    alignment: Alignment.centerRight,
+                    padding: const EdgeInsets.only(right: 20),
+                    child: const Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.delete_outline,
+                            color: Colors.white, size: 26),
+                        SizedBox(height: 4),
+                        Text('Delete',
+                            style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                  ),
+                  child: _LeadCard(
+                    lead: lead,
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => LeadDetailScreen(lead: lead),
+                      ),
+                    ),
+                    onStatusChange: (s) => _updateStatus(lead, s),
+                  ),
+                );
+              },
+              childCount: _filtered.length,
+            ),
+          ),
+        ),
+      );
+    }
+
+    return CustomScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      slivers: slivers,
     );
   }
 

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'change_password_screen.dart';
+import '../../services/auth_service.dart';
 import '../../services/theme_controller.dart';
 import '../../widgets/app_drawer.dart';
 import '../../widgets/fomra_app_bar.dart';
@@ -25,6 +26,8 @@ class SettingsScreen extends StatelessWidget {
               MaterialPageRoute(builder: (_) => const ChangePasswordScreen()),
             ),
           ),
+          const SizedBox(height: 18),
+          const _SignOutSection(),
         ],
       ),
     );
@@ -207,6 +210,35 @@ class _ChangePasswordButtonSection extends StatelessWidget {
           onPressed: onTap,
           icon: const Icon(Icons.lock_open_outlined, size: 18),
           label: const Text('Change Password'),
+        ),
+      ),
+    );
+  }
+}
+
+class _SignOutSection extends StatelessWidget {
+  const _SignOutSection();
+
+  @override
+  Widget build(BuildContext context) {
+    final error = Theme.of(context).colorScheme.error;
+    return _SettingsCard(
+      icon: Icons.logout_rounded,
+      title: 'Sign Out',
+      subtitle: 'End your current session',
+      child: SizedBox(
+        width: double.infinity,
+        child: OutlinedButton.icon(
+          onPressed: () {
+            AuthService.instance.logout();
+            Navigator.pushNamedAndRemoveUntil(context, '/login', (_) => false);
+          },
+          icon: Icon(Icons.logout_rounded, size: 18, color: error),
+          label: Text('Sign Out', style: TextStyle(color: error)),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: error,
+            side: BorderSide(color: error.withValues(alpha: 0.45)),
+          ),
         ),
       ),
     );
