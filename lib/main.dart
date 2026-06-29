@@ -12,6 +12,7 @@ import 'screens/market_intelligence/market_intelligence_screen.dart';
 import 'screens/dashboard/dashboard_screen.dart';
 import 'screens/employee_management/employee_management_portal_screen.dart';
 import 'screens/task_management/task_management_screen.dart';
+import 'screens/settings/change_password_screen.dart';
 import 'screens/settings/settings_screen.dart';
 
 void main() {
@@ -55,6 +56,7 @@ class FomraLSApp extends StatelessWidget {
                                       ? const DashboardScreen()
                                       : const HomeScreen(),
           '/settings':            (_) => const SettingsScreen(),
+          '/change-password':     (_) => const ChangePasswordScreen(),
         },
       ),
     );
