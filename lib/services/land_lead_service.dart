@@ -18,11 +18,12 @@ class LandLeadService {
 
   static Future<LandLead> create(
     LandLead lead, {
-    Uint8List? sitePhotoBytes,
+    List<Uint8List> sitePhotoBytes = const [],
   }) async {
     final userId = _db.auth.currentUser?.id;
     final leadId = await _db.rpc('generate_land_lead_id') as String;
 
+    var sitePhotoUrls = List<String>.from(lead.sitePhotoUrls);
     var sitePhotoUrl = lead.sitePhotoUrl;
 
     final row = await _db
@@ -37,6 +38,7 @@ class LandLeadService {
           'district': lead.district,
           'pincode': lead.pincode,
           'survey_number': lead.surveyNumber,
+          'sub_division': lead.subDivision,
           'land_extent': lead.landExtent,
           'owner_name': lead.ownerName,
           'contact_details': lead.contactDetails,
@@ -51,23 +53,36 @@ class LandLeadService {
         .select()
         .single();
 
-    if (sitePhotoBytes != null && sitePhotoBytes.isNotEmpty) {
-      sitePhotoUrl = await _uploadSitePhoto(leadId, sitePhotoBytes);
+    final photos = sitePhotoBytes.where((b) => b.isNotEmpty).take(4).toList();
+    if (photos.isNotEmpty) {
+      sitePhotoUrls = [];
+      for (var i = 0; i < photos.length; i++) {
+        final url = await _uploadSitePhoto(leadId, photos[i], index: i + 1);
+        sitePhotoUrls.add(url);
+      }
+      sitePhotoUrl = sitePhotoUrls.first;
       await _db.from('land_leads').update({
         'site_photo_url': sitePhotoUrl,
+        'site_photo_urls': sitePhotoUrls,
         'updated_at': DateTime.now().toUtc().toIso8601String(),
       }).eq('id', leadId);
     }
 
-    return _fromRow({...row, 'site_photo_url': sitePhotoUrl});
+    return _fromRow({
+      ...row,
+      'site_photo_url': sitePhotoUrl,
+      'site_photo_urls': sitePhotoUrls,
+      'sub_division': lead.subDivision,
+    });
   }
 
   static Future<String> _uploadSitePhoto(
     String leadId,
-    Uint8List rawBytes,
-  ) async {
+    Uint8List rawBytes, {
+    required int index,
+  }) async {
     final compressed = await ImageCompressor.compressTo250Kb(rawBytes);
-    final path = '$leadId.jpg';
+    final path = index == 1 ? '$leadId.jpg' : '${leadId}_$index.jpg';
 
     await _db.storage.from(_photoBucket).uploadBinary(
           path,
@@ -93,6 +108,16 @@ class LandLeadService {
   }
 
   static LandLead _fromRow(Map<String, dynamic> r) {
+    final urlsRaw = r['site_photo_urls'];
+    List<String> photoUrls = [];
+    if (urlsRaw is List) {
+      photoUrls = urlsRaw.map((e) => e.toString()).where((u) => u.isNotEmpty).toList();
+    }
+    final single = r['site_photo_url'] as String? ?? '';
+    if (photoUrls.isEmpty && single.isNotEmpty) {
+      photoUrls = [single];
+    }
+
     return LandLead(
       leadId: r['id'] as String,
       inputSource: InputSource.values.firstWhere(
@@ -106,6 +131,7 @@ class LandLeadService {
       district: r['district'] as String? ?? '',
       pincode: r['pincode'] as String? ?? '',
       surveyNumber: r['survey_number'] as String? ?? '',
+      subDivision: r['sub_division'] as String? ?? '',
       landExtent: r['land_extent'] as String? ?? '',
       ownerName: r['owner_name'] as String,
       contactDetails: r['contact_details'] as String? ?? '',
@@ -116,7 +142,8 @@ class LandLeadService {
       roadWidth: r['road_width'] as String? ?? '',
       accessDetails: r['access_details'] as String? ?? '',
       notes: r['notes'] as String? ?? '',
-      sitePhotoUrl: r['site_photo_url'] as String? ?? '',
+      sitePhotoUrl: photoUrls.isNotEmpty ? photoUrls.first : single,
+      sitePhotoUrls: photoUrls,
       addedOn: DateTime.parse(r['added_on'] as String),
       status: LeadStatus.values.firstWhere(
         (e) => e.name == r['status'],

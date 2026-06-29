@@ -14,6 +14,7 @@ class LandLead {
   final String district;
   final String pincode;
   final String surveyNumber;
+  final String subDivision;
   final String landExtent;
   final String ownerName;
   final String contactDetails;
@@ -22,6 +23,7 @@ class LandLead {
   final String accessDetails;
   final String notes;
   final String sitePhotoUrl;
+  final List<String> sitePhotoUrls;
   final DateTime addedOn;
   LeadStatus status;
 
@@ -35,6 +37,7 @@ class LandLead {
     required this.district,
     required this.pincode,
     required this.surveyNumber,
+    this.subDivision = '',
     required this.landExtent,
     required this.ownerName,
     required this.contactDetails,
@@ -43,6 +46,7 @@ class LandLead {
     required this.accessDetails,
     required this.notes,
     this.sitePhotoUrl = '',
+    this.sitePhotoUrls = const [],
     required this.addedOn,
     this.status = LeadStatus.new_,
   });

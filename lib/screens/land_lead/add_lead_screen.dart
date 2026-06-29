@@ -12,8 +12,11 @@ import '../../theme/app_theme.dart';
 import '../../theme/fomra_input.dart';
 import '../../utils/image_compressor.dart';
 import '../../utils/lead_location_parser.dart';
+import '../../utils/tngis_parcel_lookup.dart';
 
 enum _LocationMode { manual, live }
+
+const _kMaxSitePhotos = 4;
 
 const _kTermsOptions = [
   ('Outrate',          Icons.currency_rupee_outlined),
@@ -66,11 +69,9 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
   // Terms
   String? _termsType;
 
-  // Photo
-  Uint8List? _photoBytes;
-  String?    _photoName;
-  int?       _photoOriginalSize;
-  bool       _compressingPhoto = false;
+  // Photos (max 4)
+  final List<_SitePhotoDraft> _photos = [];
+  bool _compressingPhoto = false;
 
   @override
   void dispose() {
@@ -87,7 +88,11 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
 
   // ── Location fill from coordinates ─────────────────────────────────────────
 
-  Future<void> _fillFromCoordinates(double lat, double lng) async {
+  Future<void> _fillFromCoordinates(
+    double lat,
+    double lng, {
+    bool clearLoading = true,
+  }) async {
     _gpsCtrl.text =
         '${lat.toStringAsFixed(6)}° N, ${lng.toStringAsFixed(6)}° E';
 
@@ -137,13 +142,43 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
       setState(() => _locationStatus =
           'Error: ${e.toString().replaceAll('Exception: ', '')}');
     } finally {
-      if (mounted) {
+      if (clearLoading && mounted) {
         setState(() {
           _fetchingLocation = false;
           _resolvingPin = false;
         });
       }
     }
+  }
+
+  Future<void> _fillSurveyFromTngis(LatLng point) async {
+    if (!mounted) return;
+    setState(() => _locationStatus = 'Fetching survey from TNGIS…');
+
+    final parcel = await fetchTngisParcelAt(point);
+    if (!mounted || parcel == null) return;
+
+    if (parcel.surveyNumber != null && parcel.surveyNumber!.isNotEmpty) {
+      _surveyCtrl.text = parcel.surveyNumber!;
+    }
+    if (parcel.subDivision != null && parcel.subDivision!.isNotEmpty) {
+      _subDivCtrl.text = parcel.subDivision!;
+    }
+    if (parcel.village != null && parcel.village!.isNotEmpty) {
+      _villageCtrl.text = parcel.village!;
+    }
+    if (parcel.taluk != null && parcel.taluk!.isNotEmpty) {
+      _talukCtrl.text = parcel.taluk!;
+    }
+    if (parcel.district != null && parcel.district!.isNotEmpty) {
+      _districtCtrl.text = parcel.district!;
+    }
+
+    if (!mounted) return;
+    final hasSurvey = parcel.hasSurvey;
+    setState(() => _locationStatus = hasSurvey
+        ? 'Location & survey filled ✓'
+        : 'Location filled — survey not found at this pin');
   }
 
   void _onLocationModeChanged(_LocationMode mode) {
@@ -176,10 +211,24 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
     setState(() {
       _pinnedPoint = point;
       _resolvingPin = true;
-      _locationStatus = 'Pin placed — fetching address…';
+      _locationStatus = 'Pin placed — fetching land details…';
     });
     _centerMapOn(point);
-    await _fillFromCoordinates(point.latitude, point.longitude);
+    try {
+      await _fillFromCoordinates(point.latitude, point.longitude, clearLoading: false);
+      await _fillSurveyFromTngis(point);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _locationStatus =
+          'Error: ${e.toString().replaceAll('Exception: ', '')}');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _resolvingPin = false;
+          _fetchingLocation = false;
+        });
+      }
+    }
   }
 
   Future<void> _centerMapOnMyLocation() async {
@@ -291,6 +340,16 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
   // ── Photo picker ───────────────────────────────────────────────────────────
 
   Future<void> _pickPhoto() async {
+    if (_photos.length >= _kMaxSitePhotos) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Maximum $_kMaxSitePhotos photos per lead'),
+          backgroundColor: AppColors.warning,
+        ),
+      );
+      return;
+    }
+
     final result = await FilePicker.platform.pickFiles(
       type: FileType.image,
       allowMultiple: false,
@@ -300,17 +359,17 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
     final file = result.files.first;
     if (file.bytes == null) return;
 
-    setState(() {
-      _compressingPhoto = true;
-      _photoOriginalSize = file.bytes!.length;
-    });
+    setState(() => _compressingPhoto = true);
 
     try {
       final compressed = await ImageCompressor.compressTo250Kb(file.bytes!);
       if (!mounted) return;
       setState(() {
-        _photoBytes = compressed;
-        _photoName = file.name;
+        _photos.add(_SitePhotoDraft(
+          bytes: compressed,
+          name: file.name,
+          originalSize: file.bytes!.length,
+        ));
         _compressingPhoto = false;
       });
     } catch (e) {
@@ -321,6 +380,10 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
         backgroundColor: AppColors.error,
       ));
     }
+  }
+
+  void _removePhoto(int index) {
+    setState(() => _photos.removeAt(index));
   }
 
   // ── Build terms details string ─────────────────────────────────────────────
@@ -351,6 +414,7 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
       district: _districtCtrl.text.trim(),
       pincode: _pincodeCtrl.text.trim(),
       surveyNumber: _surveyCtrl.text.trim(),
+      subDivision: _subDivCtrl.text.trim(),
       landExtent: _extentCtrl.text.trim(),
       ownerName: _ownerCtrl.text.trim(),
       contactDetails: _contactCtrl.text.trim(),
@@ -363,7 +427,10 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
 
     Navigator.pop(
       context,
-      AddLeadResult(lead: lead, sitePhotoBytes: _photoBytes),
+      AddLeadResult(
+        lead: lead,
+        sitePhotoBytes: _photos.map((p) => p.bytes).toList(),
+      ),
     );
   }
 
@@ -608,22 +675,17 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
             // ── Section 4: Photo ─────────────────────────────────────
             const _SectionHeader(
               number: '4',
-              title: 'Site Photo',
-              subtitle: 'Upload a photo of the land',
+              title: 'Site Photos',
+              subtitle: 'Upload up to 4 photos of the land',
             ),
             const SizedBox(height: 14),
 
-            _PhotoUpload(
-              photoBytes: _photoBytes,
-              photoName:  _photoName,
-              originalSize: _photoOriginalSize,
+            _MultiPhotoUpload(
+              photos: _photos,
+              maxPhotos: _kMaxSitePhotos,
               compressing: _compressingPhoto,
-              onPick:     _pickPhoto,
-              onRemove:   () => setState(() {
-                _photoBytes = null;
-                _photoName  = null;
-                _photoOriginalSize = null;
-              }),
+              onPick: _pickPhoto,
+              onRemove: _removePhoto,
             ),
 
             const SizedBox(height: 28),
@@ -677,20 +739,32 @@ class _TermsDropdown extends StatelessWidget {
 }
 
 
-// ── Photo Upload ────────────────────────────────────────────────────────────
+// ── Site photo draft ─────────────────────────────────────────────────────────
 
-class _PhotoUpload extends StatelessWidget {
-  final Uint8List? photoBytes;
-  final String?    photoName;
-  final int?       originalSize;
-  final bool       compressing;
-  final VoidCallback onPick;
-  final VoidCallback onRemove;
+class _SitePhotoDraft {
+  final Uint8List bytes;
+  final String name;
+  final int originalSize;
 
-  const _PhotoUpload({
-    required this.photoBytes,
-    required this.photoName,
+  const _SitePhotoDraft({
+    required this.bytes,
+    required this.name,
     required this.originalSize,
+  });
+}
+
+// ── Multi photo upload ───────────────────────────────────────────────────────
+
+class _MultiPhotoUpload extends StatelessWidget {
+  final List<_SitePhotoDraft> photos;
+  final int maxPhotos;
+  final bool compressing;
+  final VoidCallback onPick;
+  final ValueChanged<int> onRemove;
+
+  const _MultiPhotoUpload({
+    required this.photos,
+    required this.maxPhotos,
     required this.compressing,
     required this.onPick,
     required this.onRemove,
@@ -698,126 +772,149 @@ class _PhotoUpload extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (compressing) {
-      return Container(
-        width: double.infinity,
-        height: 140,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(FomraInput.borderRadius),
-          border: Border.all(color: AppColors.primary.withValues(alpha: 0.35)),
-        ),
-        child: const Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            SizedBox(
-              width: 28,
-              height: 28,
-              child: CircularProgressIndicator(strokeWidth: 2.5),
-            ),
-            SizedBox(height: 10),
-            Text('Compressing photo to 250 KB…',
-                style: TextStyle(
-                    color: AppColors.primary, fontWeight: FontWeight.w600)),
-          ],
-        ),
-      );
-    }
+    final canAdd = photos.length < maxPhotos;
 
-    if (photoBytes != null) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Stack(children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: Image.memory(
-                photoBytes!,
-                width: double.infinity,
-                height: 200,
-                fit: BoxFit.cover,
-              ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (photos.isNotEmpty)
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              crossAxisSpacing: 10,
+              mainAxisSpacing: 10,
+              childAspectRatio: 1.35,
             ),
-            Positioned(
-              top: 8,
-              right: 8,
-              child: GestureDetector(
-                onTap: onRemove,
-                child: Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: const BoxDecoration(
-                      color: Colors.black54, shape: BoxShape.circle),
-                  child: const Icon(Icons.close, color: Colors.white, size: 18),
+            itemCount: photos.length,
+            itemBuilder: (_, i) {
+              final p = photos[i];
+              return Stack(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Image.memory(
+                      p.bytes,
+                      width: double.infinity,
+                      height: double.infinity,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                  Positioned(
+                    top: 6,
+                    right: 6,
+                    child: GestureDetector(
+                      onTap: () => onRemove(i),
+                      child: Container(
+                        padding: const EdgeInsets.all(5),
+                        decoration: const BoxDecoration(
+                          color: Colors.black54,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.close, color: Colors.white, size: 16),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    left: 6,
+                    bottom: 6,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.black54,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        '${i + 1}/$maxPhotos',
+                        style: const TextStyle(color: Colors.white, fontSize: 10),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        if (photos.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Text(
+            '${photos.length} of $maxPhotos photos · max 250 KB each',
+            style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 10),
+        ],
+        if (compressing)
+          Container(
+            width: double.infinity,
+            height: 100,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(FomraInput.borderRadius),
+              border: Border.all(color: AppColors.primary.withValues(alpha: 0.35)),
+            ),
+            child: const Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(strokeWidth: 2.5),
+                ),
+                SizedBox(height: 8),
+                Text('Compressing photo to 250 KB…',
+                    style: TextStyle(
+                        color: AppColors.primary, fontWeight: FontWeight.w600)),
+              ],
+            ),
+          )
+        else if (canAdd)
+          GestureDetector(
+            onTap: onPick,
+            child: Container(
+              width: double.infinity,
+              height: photos.isEmpty ? 140 : 100,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(FomraInput.borderRadius),
+                border: Border.all(
+                  color: AppColors.primary.withValues(alpha: 0.35),
+                  width: 1.5,
                 ),
               ),
-            ),
-          ]),
-          if (photoName != null) ...[
-            const SizedBox(height: 6),
-            Text(photoName!,
-                style: const TextStyle(
-                    fontSize: 11, color: AppColors.textSecondary)),
-          ],
-          const SizedBox(height: 4),
-          Text(
-            originalSize != null
-                ? '${ImageCompressor.formatSize(originalSize!)} → ${ImageCompressor.formatSize(photoBytes!.length)} (max 250 KB)'
-                : '${ImageCompressor.formatSize(photoBytes!.length)} (max 250 KB)',
-            style: const TextStyle(
-                fontSize: 11, color: AppColors.success, fontWeight: FontWeight.w500),
-          ),
-          const SizedBox(height: 8),
-          OutlinedButton.icon(
-            onPressed: onPick,
-            icon: const Icon(Icons.refresh, size: 16),
-            label: const Text('Replace Photo'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.primary,
-              side: const BorderSide(color: AppColors.primary),
-            ),
-          ),
-        ],
-      );
-    }
-
-    return GestureDetector(
-      onTap: onPick,
-      child: Container(
-        width: double.infinity,
-        height: 140,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(FomraInput.borderRadius),
-          border: Border.all(
-              color: AppColors.primary.withValues(alpha: 0.35),
-              width: 1.5,
-              style: BorderStyle.solid),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: AppColors.primary.withValues(alpha: 0.08),
-                shape: BoxShape.circle,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.08),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.add_a_photo_outlined,
+                        color: AppColors.primary, size: 24),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    photos.isEmpty
+                        ? 'Tap to upload site photo'
+                        : 'Add another photo',
+                    style: const TextStyle(
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    'JPG, PNG · up to $maxPhotos photos',
+                    style: const TextStyle(
+                        color: AppColors.textSecondary, fontSize: 11),
+                  ),
+                ],
               ),
-              child: const Icon(Icons.add_a_photo_outlined,
-                  color: AppColors.primary, size: 28),
             ),
-            const SizedBox(height: 10),
-            const Text('Tap to upload site photo',
-                style: TextStyle(
-                    color: AppColors.primary,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14)),
-            const SizedBox(height: 3),
-            const Text('JPG, PNG supported',
-                style:
-                    TextStyle(color: AppColors.textSecondary, fontSize: 11)),
-          ],
-        ),
-      ),
+          ),
+      ],
     );
   }
 }

@@ -114,6 +114,8 @@ class _LeadDetailsCard extends StatelessWidget {
             _DetailRow('GPS', lead.gpsCoordinates),
           if (lead.surveyNumber.isNotEmpty)
             _DetailRow('Survey No.', lead.surveyNumber),
+          if (lead.subDivision.isNotEmpty)
+            _DetailRow('Sub Division', lead.subDivision),
           if (lead.landExtent.isNotEmpty)
             _DetailRow('Land Extent', lead.landExtent),
           if (lead.roadWidth.isNotEmpty)
@@ -124,7 +126,49 @@ class _LeadDetailsCard extends StatelessWidget {
             const Divider(height: 24),
             _DetailRow('Notes', lead.notes),
           ],
-          if (lead.sitePhotoUrl.isNotEmpty) ...[
+          if (lead.sitePhotoUrls.isNotEmpty) ...[
+            const Divider(height: 24),
+            Text(
+              lead.sitePhotoUrls.length == 1 ? 'Site Photo' : 'Site Photos',
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            if (lead.sitePhotoUrls.length == 1)
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image.network(
+                  lead.sitePhotoUrls.first,
+                  width: double.infinity,
+                  height: 200,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => _photoError(),
+                ),
+              )
+            else
+              GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  crossAxisSpacing: 8,
+                  mainAxisSpacing: 8,
+                  childAspectRatio: 1.2,
+                ),
+                itemCount: lead.sitePhotoUrls.length,
+                itemBuilder: (_, i) => ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: Image.network(
+                    lead.sitePhotoUrls[i],
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => _photoError(),
+                  ),
+                ),
+              ),
+          ] else if (lead.sitePhotoUrl.isNotEmpty) ...[
             const Divider(height: 24),
             const Text(
               'Site Photo',
@@ -142,15 +186,7 @@ class _LeadDetailsCard extends StatelessWidget {
                 width: double.infinity,
                 height: 200,
                 fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Container(
-                  height: 120,
-                  color: AppColors.surfaceVar,
-                  alignment: Alignment.center,
-                  child: const Text(
-                    'Photo unavailable',
-                    style: TextStyle(color: AppColors.textSecondary),
-                  ),
-                ),
+                errorBuilder: (_, __, ___) => _photoError(),
               ),
             ),
           ],
@@ -166,6 +202,18 @@ class _LeadDetailsCard extends StatelessWidget {
       ),
     );
   }
+}
+
+Widget _photoError() {
+  return Container(
+    height: 120,
+    color: AppColors.surfaceVar,
+    alignment: Alignment.center,
+    child: const Text(
+      'Photo unavailable',
+      style: TextStyle(color: AppColors.textSecondary),
+    ),
+  );
 }
 
 class _DetailRow extends StatelessWidget {
