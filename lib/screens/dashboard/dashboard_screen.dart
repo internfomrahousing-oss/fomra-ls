@@ -177,25 +177,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     label: 'New',
                     value: newLeads,
                     maxValue: maxPipeline,
-                    color: AppColors.info,
+                    color: LeadStatus.new_.color,
                   ),
                   _FunnelRow(
                     label: 'Contacted',
                     value: contacted,
                     maxValue: maxPipeline,
-                    color: const Color(0xFF8B5CF6),
+                    color: LeadStatus.contacted.color,
                   ),
                   _FunnelRow(
                     label: 'Negotiation',
                     value: negotiation,
                     maxValue: maxPipeline,
-                    color: AppColors.warning,
+                    color: LeadStatus.negotiation.color,
                   ),
                   _FunnelRow(
                     label: 'Acquired',
                     value: acquired,
                     maxValue: maxPipeline,
-                    color: AppColors.success,
+                    color: LeadStatus.closed.color,
                   ),
                 ],
               ),
@@ -648,18 +648,9 @@ class _KpiLeadTile extends StatelessWidget {
   final LandLead lead;
   const _KpiLeadTile({required this.lead});
 
-  Color _statusColor(LeadStatus s) => switch (s) {
-        LeadStatus.new_ => AppColors.info,
-        LeadStatus.contacted => const Color(0xFF8B5CF6),
-        LeadStatus.siteVisit => AppColors.warning,
-        LeadStatus.negotiation => AppColors.accent,
-        LeadStatus.closed => AppColors.success,
-        LeadStatus.lost => AppColors.error,
-      };
-
   @override
   Widget build(BuildContext context) {
-    final statusColor = _statusColor(lead.status);
+    final statusColor = lead.status.color;
     final location = [lead.location, lead.village, lead.district]
         .where((s) => s.isNotEmpty)
         .join(', ');

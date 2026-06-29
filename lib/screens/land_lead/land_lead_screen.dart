@@ -328,7 +328,7 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
               }),
           ...LeadStatus.values.where((s) => s != LeadStatus.siteVisit).map((s) => ListTile(
                 leading: CircleAvatar(
-                    radius: 8, backgroundColor: _statusColor(s)),
+                    radius: 8, backgroundColor: s.color),
                 title: Text(s.label),
                 onTap: () {
                   setState(() => _filterStatus = s);
@@ -406,7 +406,7 @@ class _LeadSummary extends StatelessWidget {
             final status = kpis[i].$1;
             final icon = kpis[i].$2;
             final count = leads.where((l) => l.status == status).length;
-            final color = _statusColor(status);
+            final color = status.color;
             return Container(
               width: 152,
               padding: const EdgeInsets.all(14),
@@ -583,7 +583,7 @@ class _LeadCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final statusColor = _statusColor(lead.status);
+    final statusColor = lead.status.color;
     final sourceColor = _sourceColor(lead.inputSource);
     final locationText = [lead.location, lead.village, lead.district]
         .where((s) => s.isNotEmpty)
@@ -702,7 +702,7 @@ class _LeadCard extends StatelessWidget {
                                       tapTargetSize:
                                           MaterialTapTargetSize.shrinkWrap,
                                       side: BorderSide(
-                                          color: _statusColor(s)
+                                          color: s.color
                                               .withValues(alpha: 0.5)),
                                       shape: RoundedRectangleBorder(
                                         borderRadius: BorderRadius.circular(999),
@@ -711,7 +711,7 @@ class _LeadCard extends StatelessWidget {
                                     child: Text('→ ${s.label}',
                                         style: TextStyle(
                                             fontSize: 11,
-                                            color: _statusColor(s))),
+                                            color: s.color)),
                                   ),
                                 ))
                             .toList(),
@@ -783,7 +783,7 @@ class _StatusBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = _statusColor(status);
+    final c = status.color;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
       decoration: BoxDecoration(
@@ -795,15 +795,6 @@ class _StatusBadge extends StatelessWidget {
     );
   }
 }
-
-Color _statusColor(LeadStatus s) => switch (s) {
-      LeadStatus.new_ => AppColors.info,
-      LeadStatus.contacted => const Color(0xFF8B5CF6),
-      LeadStatus.siteVisit => AppColors.warning,
-      LeadStatus.negotiation => AppColors.accent,
-      LeadStatus.closed => AppColors.success,
-      LeadStatus.lost => AppColors.error,
-    };
 
 Color _sourceColor(InputSource s) => switch (s) {
       InputSource.broker => AppColors.info,

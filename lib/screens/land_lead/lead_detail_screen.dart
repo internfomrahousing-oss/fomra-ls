@@ -261,14 +261,7 @@ class _StatusChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = switch (status) {
-      LeadStatus.new_ => AppColors.info,
-      LeadStatus.contacted => const Color(0xFF8B5CF6),
-      LeadStatus.siteVisit => AppColors.warning,
-      LeadStatus.negotiation => AppColors.accent,
-      LeadStatus.closed => AppColors.success,
-      LeadStatus.lost => AppColors.error,
-    };
+    final color = status.color;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
