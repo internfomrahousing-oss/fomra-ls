@@ -25,33 +25,38 @@ class FomraAppBar extends StatelessWidget implements PreferredSizeWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 28, height: 28,
+              width: 30,
+              height: 30,
               decoration: BoxDecoration(
                 color: Colors.white.withValues(alpha: 0.18),
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(10),
                 border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.12), width: 1),
+                    color: Colors.white.withValues(alpha: 0.2), width: 1),
               ),
               child: const Icon(Icons.house_outlined, color: Colors.white, size: 16),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 10),
             const Text('FomraLS',
                 style: TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.w800,
-                    fontSize: 17,
+                    fontSize: 18,
                     letterSpacing: 0.1)),
             if (moduleName != null) ...[
+              const SizedBox(width: 8),
               Container(
-                margin: const EdgeInsets.symmetric(horizontal: 8),
-                width: 1, height: 14,
-                color: Colors.white.withValues(alpha: 0.3),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
+                ),
+                child: Text(moduleName!,
+                    style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white.withValues(alpha: 0.9))),
               ),
-              Text(moduleName!,
-                  style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                      color: Colors.white.withValues(alpha: 0.75))),
             ],
           ],
         ),

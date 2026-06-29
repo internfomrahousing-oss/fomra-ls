@@ -3,15 +3,15 @@ import 'package:flutter/services.dart';
 
 class AppColors {
   // ── Brand ────────────────────────────────────────────────────────────────────
-  static const Color primary      = Color(0xFF1A56DB); // vivid indigo-blue
-  static const Color primaryLight = Color(0xFF2563EB);
-  static const Color primaryDark  = Color(0xFF0F3EB5);
+  static const Color primary      = Color(0xFF2454FF);
+  static const Color primaryLight = Color(0xFF5B7FFF);
+  static const Color primaryDark  = Color(0xFF1A43E2);
   static const Color secondary    = Color(0xFF7C3AED); // purple accent
-  static const Color accent       = Color(0xFFF59E0B); // amber
+  static const Color accent       = Color(0xFF5B7FFF);
   static const Color accentLight  = Color(0xFFFBBF24);
 
   // ── Surface ───────────────────────────────────────────────────────────────────
-  static const Color background   = Color(0xFFF1F5FB);
+  static const Color background   = Color(0xFFF6F8FC);
   static const Color surface      = Color(0xFFFFFFFF);
   static const Color surfaceVar   = Color(0xFFF8FAFF);
   static const Color border       = Color(0xFFE4E8F0);
@@ -31,9 +31,9 @@ class AppColors {
   static const Color darkTextTertiary  = Color(0xFF64748B);
 
   // ── Semantic ─────────────────────────────────────────────────────────────────
-  static const Color success = Color(0xFF059669);
+  static const Color success = Color(0xFF16C47F);
   static const Color warning = Color(0xFFF59E0B);
-  static const Color error   = Color(0xFFDC2626);
+  static const Color error   = Color(0xFFEF4444);
   static const Color info    = Color(0xFF2563EB);
 
   // ── Gradients ────────────────────────────────────────────────────────────────
@@ -52,8 +52,8 @@ class AppColors {
   // ── Radius tokens ─────────────────────────────────────────────────────────────
   static const double radiusXs = 6;
   static const double radiusSm = 10;
-  static const double radiusMd = 14;
-  static const double radiusLg = 18;
+  static const double radiusMd = 20;
+  static const double radiusLg = 20;
   static const double radiusXl = 24;
 
   // ── Shadow tokens ─────────────────────────────────────────────────────────────
@@ -82,16 +82,16 @@ TextTheme _textTheme({
 }) =>
     TextTheme(
       displayLarge:  TextStyle(fontSize: 32, fontWeight: FontWeight.w800, letterSpacing: -1.0, color: primary),
-      displayMedium: TextStyle(fontSize: 26, fontWeight: FontWeight.w700, letterSpacing: -0.5, color: primary),
+      displayMedium: TextStyle(fontSize: 28, fontWeight: FontWeight.w700, letterSpacing: -0.5, color: primary),
       headlineLarge: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, letterSpacing: -0.3, color: primary),
       headlineMedium:TextStyle(fontSize: 18, fontWeight: FontWeight.w700, letterSpacing: -0.2, color: primary),
       titleLarge:    TextStyle(fontSize: 16, fontWeight: FontWeight.w600, letterSpacing: 0.0,  color: primary),
       titleMedium:   TextStyle(fontSize: 14, fontWeight: FontWeight.w600, letterSpacing: 0.1,  color: primary),
       titleSmall:    TextStyle(fontSize: 13, fontWeight: FontWeight.w600, letterSpacing: 0.1,  color: primary),
       bodyLarge:     TextStyle(fontSize: 15, fontWeight: FontWeight.w400, letterSpacing: 0.0,  color: primary),
-      bodyMedium:    TextStyle(fontSize: 14, fontWeight: FontWeight.w400, letterSpacing: 0.0,  color: secondary),
-      bodySmall:     TextStyle(fontSize: 12, fontWeight: FontWeight.w400, letterSpacing: 0.0,  color: secondary),
-      labelLarge:    TextStyle(fontSize: 13, fontWeight: FontWeight.w600, letterSpacing: 0.3,  color: primary),
+      bodyMedium:    TextStyle(fontSize: 15, fontWeight: FontWeight.w400, letterSpacing: 0.0,  color: secondary),
+      bodySmall:     TextStyle(fontSize: 13, fontWeight: FontWeight.w400, letterSpacing: 0.0,  color: secondary),
+      labelLarge:    TextStyle(fontSize: 16, fontWeight: FontWeight.w600, letterSpacing: 0.3,  color: primary),
       labelMedium:   TextStyle(fontSize: 11, fontWeight: FontWeight.w500, letterSpacing: 0.4,  color: secondary),
       labelSmall:    TextStyle(fontSize: 10, fontWeight: FontWeight.w500, letterSpacing: 0.5,  color: tertiary),
     );
@@ -157,7 +157,7 @@ ThemeData appTheme() {
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
         textStyle: const TextStyle(
             fontFamily: fontFamily,
-            fontSize: 14,
+            fontSize: 16,
             fontWeight: FontWeight.w600,
             letterSpacing: 0.2),
       ),
@@ -171,7 +171,7 @@ ThemeData appTheme() {
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
         textStyle: const TextStyle(
             fontFamily: fontFamily,
-            fontSize: 14,
+            fontSize: 16,
             fontWeight: FontWeight.w600),
       ),
     ),
@@ -181,7 +181,7 @@ ThemeData appTheme() {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         textStyle: const TextStyle(
             fontFamily: fontFamily,
-            fontSize: 14,
+            fontSize: 16,
             fontWeight: FontWeight.w600),
       ),
     ),
@@ -327,7 +327,7 @@ ThemeData appThemeDark() {
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
         textStyle: const TextStyle(
             fontFamily: fontFamily,
-            fontSize: 14,
+            fontSize: 16,
             fontWeight: FontWeight.w600,
             letterSpacing: 0.2),
       ),
@@ -341,7 +341,7 @@ ThemeData appThemeDark() {
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
         textStyle: const TextStyle(
             fontFamily: fontFamily,
-            fontSize: 14,
+            fontSize: 16,
             fontWeight: FontWeight.w600),
       ),
     ),
@@ -351,7 +351,7 @@ ThemeData appThemeDark() {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         textStyle: const TextStyle(
             fontFamily: fontFamily,
-            fontSize: 14,
+            fontSize: 16,
             fontWeight: FontWeight.w600),
       ),
     ),

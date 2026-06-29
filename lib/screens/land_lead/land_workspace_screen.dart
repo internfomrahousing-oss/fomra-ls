@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../theme/app_theme.dart';
 import '../../widgets/app_drawer.dart';
 import '../../widgets/fomra_app_bar.dart';
 import '../../widgets/fomra_bottom_nav.dart';
@@ -46,20 +45,51 @@ class _LandWorkspaceScreenState extends State<LandWorkspaceScreen>
     return Scaffold(
       appBar: FomraAppBar(
         moduleName: 'Land Workspace',
-        bottom: TabBar(
-          controller: _tab,
-          indicatorColor: AppColors.accent,
-          indicatorWeight: 3,
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.white38,
-          isScrollable: _tabs.length > 3,
-          tabs: _tabs
-              .map((t) => Tab(
-                    icon: Icon(t.icon, size: 18),
-                    text: t.label,
-                    iconMargin: const EdgeInsets.only(bottom: 2),
-                  ))
-              .toList(),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(68),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            child: Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.12),
+                    blurRadius: 12,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: TabBar(
+                controller: _tab,
+                dividerColor: Colors.transparent,
+                indicatorSize: TabBarIndicatorSize.tab,
+                indicator: BoxDecoration(
+                  borderRadius: BorderRadius.circular(10),
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF3B82F6), Color(0xFF1D4ED8)],
+                  ),
+                ),
+                labelColor: Colors.white,
+                unselectedLabelColor: Colors.white70,
+                labelStyle: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+                tabs: _tabs
+                    .map((t) => Tab(
+                          height: 42,
+                          icon: Icon(t.icon, size: 18),
+                          text: t.label,
+                          iconMargin: const EdgeInsets.only(bottom: 2),
+                        ))
+                    .toList(),
+              ),
+            ),
+          ),
         ),
       ),
       drawer: const AppDrawer(currentRoute: '/land-lead'),

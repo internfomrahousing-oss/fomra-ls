@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import '../screens/home/home_screen.dart';
 import '../services/auth_service.dart';
@@ -66,69 +68,77 @@ class FomraBottomNav extends StatelessWidget {
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-        child: Container(
-          decoration: BoxDecoration(
-            color: surface,
-            borderRadius: BorderRadius.circular(AppColors.radiusXl),
-            border: Border.all(color: border),
-            boxShadow: [
-              BoxShadow(
-                color: context.isDarkMode
-                    ? const Color(0x40000000)
-                    : const Color(0x14000000),
-                blurRadius: 20,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
-          padding: const EdgeInsets.all(5),
-          child: Row(
-            children: items.map((item) {
-              final isActive = currentRoute == item.route ||
-                  (item.route == '/land-lead' &&
-                      currentRoute == '/task-management');
-              return Expanded(
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => _onTap(context, item),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    curve: Curves.easeInOut,
-                    padding: const EdgeInsets.symmetric(vertical: 9),
-                    decoration: BoxDecoration(
-                      gradient: isActive ? AppColors.primaryGradient : null,
-                      borderRadius: BorderRadius.circular(AppColors.radiusLg),
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          isActive ? item.activeIcon : item.icon,
-                          color: isActive
-                              ? Colors.white
-                              : inactive,
-                          size: 20,
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          item.label,
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: isActive
-                                ? FontWeight.w700
-                                : FontWeight.w500,
-                            color: isActive
-                                ? Colors.white
-                                : inactive,
-                            letterSpacing: 0.1,
-                          ),
-                        ),
-                      ],
-                    ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(AppColors.radiusXl),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+            child: Container(
+              decoration: BoxDecoration(
+                color: surface.withValues(alpha: context.isDarkMode ? 0.78 : 0.9),
+                borderRadius: BorderRadius.circular(AppColors.radiusXl),
+                border: Border.all(color: border.withValues(alpha: 0.8)),
+                boxShadow: [
+                  BoxShadow(
+                    color: context.isDarkMode
+                        ? const Color(0x40000000)
+                        : const Color(0x14000000),
+                    blurRadius: 20,
+                    offset: const Offset(0, 8),
                   ),
-                ),
-              );
-            }).toList(),
+                ],
+              ),
+              padding: const EdgeInsets.all(5),
+              child: Row(
+                children: items.map((item) {
+                  final isActive = currentRoute == item.route ||
+                      (item.route == '/land-lead' &&
+                          currentRoute == '/task-management');
+                  return Expanded(
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => _onTap(context, item),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 250),
+                        curve: Curves.easeOutCubic,
+                        padding: const EdgeInsets.symmetric(vertical: 9),
+                        decoration: BoxDecoration(
+                          gradient: isActive ? AppColors.primaryGradient : null,
+                          borderRadius: BorderRadius.circular(AppColors.radiusLg),
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 220),
+                              transitionBuilder: (child, animation) =>
+                                  ScaleTransition(scale: animation, child: child),
+                              child: Icon(
+                                isActive ? item.activeIcon : item.icon,
+                                key: ValueKey('${item.route}-$isActive'),
+                                color: isActive ? Colors.white : inactive,
+                                size: 20,
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              item.label,
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: isActive
+                                    ? FontWeight.w700
+                                    : FontWeight.w500,
+                                color: isActive ? Colors.white : inactive,
+                                letterSpacing: 0.1,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
           ),
         ),
       ),

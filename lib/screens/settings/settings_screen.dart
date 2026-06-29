@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
+import 'change_password_screen.dart';
 import '../../services/theme_controller.dart';
 import '../../widgets/app_drawer.dart';
-import '../../widgets/change_password_section.dart';
 import '../../widgets/fomra_app_bar.dart';
 import '../../widgets/fomra_bottom_nav.dart';
 
@@ -16,10 +16,15 @@ class SettingsScreen extends StatelessWidget {
       bottomNavigationBar: const FomraBottomNav(currentRoute: '/settings'),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-        children: const [
-          _ThemeSection(),
-          SizedBox(height: 18),
-          ChangePasswordSection(),
+        children: [
+          const _ThemeSection(),
+          const SizedBox(height: 18),
+          _ChangePasswordButtonSection(
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const ChangePasswordScreen()),
+            ),
+          ),
         ],
       ),
     );
@@ -180,6 +185,29 @@ class _ThemeOption extends StatelessWidget {
             child: Icon(Icons.check_circle, size: 16, color: cs.primary),
           ),
         ]),
+      ),
+    );
+  }
+}
+
+class _ChangePasswordButtonSection extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _ChangePasswordButtonSection({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return _SettingsCard(
+      icon: Icons.lock_outline,
+      title: 'Change Password',
+      subtitle: 'Open password update form',
+      child: SizedBox(
+        width: double.infinity,
+        child: OutlinedButton.icon(
+          onPressed: onTap,
+          icon: const Icon(Icons.lock_open_outlined, size: 18),
+          label: const Text('Go to Change Password'),
+        ),
       ),
     );
   }

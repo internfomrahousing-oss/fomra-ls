@@ -245,54 +245,162 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
 
   int get _unread => _notifications.where((n) => !n.isRead).length;
 
-  Widget _buildTaskTabBar() => Container(
-        color: AppColors.primaryDark,
-        child: Row(children: [
-          Expanded(
-            child: TabBar(
-              controller: _tabController,
-              indicatorColor: AppColors.accent,
-              labelColor: Colors.white,
-              unselectedLabelColor: const Color(0xFF90A4AE),
-              isScrollable: true,
-              tabs: [
-                _tabLabel('All', _tasks.length),
-                _tabLabel('To Do',
-                    _tasks.where((t) => t.status == TaskStatus.todo).length),
-                _tabLabel('In Progress',
-                    _tasks.where((t) => t.status == TaskStatus.inProgress).length),
-                _tabLabel('Done',
-                    _tasks.where((t) => t.status == TaskStatus.done).length),
-                _tabLabel('Overdue',
-                    _tasks.where((t) => t.status == TaskStatus.overdue).length),
-              ],
+  int _statusCount(TaskStatus status) =>
+      _tasks.where((t) => t.status == status).length;
+
+  Widget _buildTaskStatsStrip() {
+    final stats = [
+      ('To Do', _statusCount(TaskStatus.todo), AppColors.textSecondary),
+      ('In Progress', _statusCount(TaskStatus.inProgress), AppColors.info),
+      ('Done', _statusCount(TaskStatus.done), AppColors.success),
+      ('Overdue', _statusCount(TaskStatus.overdue), AppColors.error),
+    ];
+    return SizedBox(
+      height: 82,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: stats.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 10),
+        itemBuilder: (_, i) {
+          final item = stats[i];
+          return Container(
+            width: 130,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
             ),
-          ),
-          Stack(clipBehavior: Clip.none, children: [
-            IconButton(
-              icon: const Icon(Icons.notifications_outlined, color: Colors.white70),
-              onPressed: _showNotificationsSheet,
-            ),
-            if (_unread > 0)
-              Positioned(
-                right: 6,
-                top: 6,
-                child: Container(
-                  width: 16,
-                  height: 16,
-                  decoration: const BoxDecoration(
-                      color: AppColors.error, shape: BoxShape.circle),
-                  child: Center(
-                    child: Text('$_unread',
-                        style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 9,
-                            fontWeight: FontWeight.bold)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${item.$2}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    height: 1,
                   ),
                 ),
-              ),
-          ]),
-        ]),
+                const SizedBox(height: 4),
+                Text(
+                  item.$1,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.82),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildAddTaskFab() => Container(
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFF1D4ED8), Color(0xFF3B82F6)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(999),
+          boxShadow: AppColors.coloredShadow(AppColors.primary),
+        ),
+        child: FloatingActionButton.extended(
+          onPressed: _openAddTask,
+          icon: const Icon(Icons.add_task),
+          label: const Text('Add Task'),
+          backgroundColor: Colors.transparent,
+          foregroundColor: Colors.white,
+          elevation: 0,
+        ),
+      );
+
+  Widget _buildTaskTabBar() => Container(
+        color: AppColors.primaryDark,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 8),
+            _buildTaskStatsStrip(),
+            const SizedBox(height: 10),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              child: Row(children: [
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.14),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: TabBar(
+                      controller: _tabController,
+                      dividerColor: Colors.transparent,
+                      indicatorSize: TabBarIndicatorSize.tab,
+                      indicator: BoxDecoration(
+                        borderRadius: BorderRadius.circular(10),
+                        color: Colors.white.withValues(alpha: 0.24),
+                      ),
+                      labelColor: Colors.white,
+                      unselectedLabelColor: const Color(0xFFD0D9E3),
+                      labelStyle: const TextStyle(
+                          fontSize: 12, fontWeight: FontWeight.w700),
+                      isScrollable: true,
+                      tabs: [
+                        _tabLabel('All', _tasks.length),
+                        _tabLabel('To Do', _statusCount(TaskStatus.todo)),
+                        _tabLabel(
+                            'In Progress', _statusCount(TaskStatus.inProgress)),
+                        _tabLabel('Done', _statusCount(TaskStatus.done)),
+                        _tabLabel('Overdue', _statusCount(TaskStatus.overdue)),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Stack(clipBehavior: Clip.none, children: [
+                  Material(
+                    color: Colors.white.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(12),
+                    child: InkWell(
+                      onTap: _showNotificationsSheet,
+                      borderRadius: BorderRadius.circular(12),
+                      child: const Padding(
+                        padding: EdgeInsets.all(10),
+                        child: Icon(Icons.notifications_outlined,
+                            color: Colors.white70, size: 19),
+                      ),
+                    ),
+                  ),
+                  if (_unread > 0)
+                    Positioned(
+                      right: -2,
+                      top: -2,
+                      child: Container(
+                        width: 16,
+                        height: 16,
+                        decoration: const BoxDecoration(
+                            color: AppColors.error, shape: BoxShape.circle),
+                        child: Center(
+                          child: Text('$_unread',
+                              style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.bold)),
+                        ),
+                      ),
+                    ),
+                ]),
+              ]),
+            ),
+          ],
+        ),
       );
 
   void _logout() {
@@ -358,13 +466,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
     _refreshStatuses();
     return Scaffold(
       appBar: _portalAppBar('Management · Tasks'),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _openAddTask,
-        icon: const Icon(Icons.add_task),
-        label: const Text('Add Task'),
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
-      ),
+      floatingActionButton: _buildAddTaskFab(),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -453,23 +555,9 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
 
     _refreshStatuses();
 
-    final taskTabBar = TabBar(
-      controller: _tabController,
-      indicatorColor: AppColors.accent,
-      labelColor: Colors.white,
-      unselectedLabelColor: const Color(0xFF90A4AE),
-      isScrollable: true,
-      tabs: [
-        _tabLabel('All', _tasks.length),
-        _tabLabel('To Do',
-            _tasks.where((t) => t.status == TaskStatus.todo).length),
-        _tabLabel('In Progress',
-            _tasks.where((t) => t.status == TaskStatus.inProgress).length),
-        _tabLabel('Done',
-            _tasks.where((t) => t.status == TaskStatus.done).length),
-        _tabLabel('Overdue',
-            _tasks.where((t) => t.status == TaskStatus.overdue).length),
-      ],
+    final taskTabBar = PreferredSize(
+      preferredSize: const Size.fromHeight(168),
+      child: _buildTaskTabBar(),
     );
 
     final taskListView = TabBarView(
@@ -478,27 +566,22 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
         5,
         (i) => _TaskList(
           tasks: _tasksForTab(i),
+          tabIndex: i,
           onStatusChange: (task, s) => setState(() {
             task.status = s;
             if (s == TaskStatus.done) task.completedAt = DateTime.now();
           }),
           onTap: (task) => _showTaskDetail(task),
+          onPrimaryAction: i == 0 ? _openAddTask : null,
         ),
       ),
     );
 
-    final fab = _tabController.index == 0
-        ? FloatingActionButton.extended(
-            onPressed: _openAddTask,
-            icon: const Icon(Icons.add_task),
-            label: const Text('Add Task'),
-            backgroundColor: AppColors.primary,
-            foregroundColor: Colors.white,
-          )
-        : null;
+    final fab = _tabController.index == 0 ? _buildAddTaskFab() : null;
 
     if (widget.isTab) {
       return Scaffold(
+        backgroundColor: const Color(0xFFF6F8FC),
         body: Column(children: [
           _buildTaskTabBar(),
           Expanded(child: taskListView),
@@ -508,6 +591,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
     }
 
     return Scaffold(
+      backgroundColor: const Color(0xFFF6F8FC),
       appBar: FomraAppBar(
         moduleName: 'Task Management',
         actions: [
@@ -554,8 +638,8 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
             padding:
                 const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.2),
-              borderRadius: BorderRadius.circular(10),
+              color: Colors.white.withValues(alpha: 0.22),
+              borderRadius: BorderRadius.circular(999),
             ),
             child: Text('$count', style: const TextStyle(fontSize: 11)),
           ),
@@ -613,42 +697,78 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
 
 class _TaskList extends StatelessWidget {
   final List<Task> tasks;
+  final int tabIndex;
   final void Function(Task, TaskStatus) onStatusChange;
   final void Function(Task) onTap;
+  final VoidCallback? onPrimaryAction;
 
   const _TaskList({
     required this.tasks,
+    required this.tabIndex,
     required this.onStatusChange,
     required this.onTap,
+    this.onPrimaryAction,
   });
 
   @override
   Widget build(BuildContext context) {
     if (tasks.isEmpty) {
       return Center(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Container(
-            width: 90,
-            height: 90,
-            decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha: 0.06),
-              shape: BoxShape.circle,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Container(
+              width: 126,
+              height: 126,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    AppColors.primary.withValues(alpha: 0.13),
+                    AppColors.accent.withValues(alpha: 0.07),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(Icons.task_alt_outlined,
+                  size: 56,
+                  color: AppColors.primary.withValues(alpha: 0.6)),
             ),
-            child: Icon(Icons.task_alt_outlined,
-                size: 44,
-                color: AppColors.primary.withValues(alpha: 0.4)),
-          ),
-          const SizedBox(height: 16),
-          const Text('No tasks here yet.',
-              style: TextStyle(
-                  color: AppColors.textSecondary,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w500)),
-        ]),
+            const SizedBox(height: 18),
+            Text(
+              tabIndex == 0 ? 'No tasks yet' : 'No tasks in this tab',
+              style: const TextStyle(
+                color: AppColors.textPrimary,
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              tabIndex == 0
+                  ? 'Create your first task to start tracking assignments and progress.'
+                  : 'Try another status tab or create a new task to continue.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 13,
+              ),
+            ),
+            if (onPrimaryAction != null) ...[
+              const SizedBox(height: 14),
+              ElevatedButton.icon(
+                onPressed: onPrimaryAction,
+                icon: const Icon(Icons.add_task),
+                label: const Text('Create Task'),
+              ),
+            ],
+          ]),
+        ),
       );
     }
     return ListView.builder(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(16),
       itemCount: tasks.length,
       itemBuilder: (_, i) => _TaskCard(
         task: tasks[i],
@@ -679,7 +799,9 @@ class _TaskCard extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Card(
-        margin: const EdgeInsets.only(bottom: 10),
+        margin: const EdgeInsets.only(bottom: 16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        elevation: 0,
         child: IntrinsicHeight(
           child: Row(children: [
             Container(
@@ -687,13 +809,13 @@ class _TaskCard extends StatelessWidget {
               decoration: BoxDecoration(
                 color: pColor,
                 borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(12),
-                    bottomLeft: Radius.circular(12)),
+                    topLeft: Radius.circular(20),
+                    bottomLeft: Radius.circular(20)),
               ),
             ),
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(20),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -935,23 +1057,38 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
       builder: (_, controller) => Container(
         decoration: BoxDecoration(
           color: context.fomraSurface,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         ),
         child: Column(children: [
           _SheetHandle(),
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
-            child: Row(children: [
-              const Text('Create Task',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-              const Spacer(),
-              TextButton(
-                onPressed: _save,
-                child: const Text('SAVE',
-                    style: TextStyle(
-                        color: AppColors.primary, fontWeight: FontWeight.bold)),
-              ),
-            ]),
+            child: Column(
+              children: [
+                Row(children: [
+                  const Text('Create Task',
+                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+                  const Spacer(),
+                  TextButton(
+                    onPressed: _save,
+                    child: const Text('SAVE',
+                        style: TextStyle(
+                            color: AppColors.primary, fontWeight: FontWeight.bold)),
+                  ),
+                ]),
+                const SizedBox(height: 6),
+                const Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _TaskStepChip('Step 1', 'Basics'),
+                    _TaskStepChip('Step 2', 'Assignment'),
+                    _TaskStepChip('Step 3', 'Rules'),
+                    _TaskStepChip('Step 4', 'Save'),
+                  ],
+                ),
+              ],
+            ),
           ),
           const Divider(height: 1),
           Expanded(
@@ -961,6 +1098,32 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
                 controller: controller,
                 padding: const EdgeInsets.all(20),
                 children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          AppColors.primary.withValues(alpha: 0.08),
+                          AppColors.accent.withValues(alpha: 0.05),
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.auto_awesome, color: AppColors.primary, size: 16),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Create clear tasks with priority, assignees and reminders.',
+                            style: TextStyle(fontSize: 12, color: AppColors.primary),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
                   // Title
                   const _SectionLabel('Task Title'),
                   TextFormField(
@@ -1191,6 +1354,21 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
                     controller: _notesCtrl,
                     decoration: _dec(context, 'Additional notes…'),
                     maxLines: 3,
+                  ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: _save,
+                      icon: const Icon(Icons.check_circle_outline, size: 18),
+                      label: const Text('Create Task'),
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                    ),
                   ),
                   const SizedBox(height: 80),
                 ],
@@ -1729,6 +1907,29 @@ class _SectionLabel extends StatelessWidget {
                 color: AppColors.textSecondary,
                 letterSpacing: 0.3)),
       );
+}
+
+class _TaskStepChip extends StatelessWidget {
+  final String step;
+  final String label;
+  const _TaskStepChip(this.step, this.label);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+      ),
+      child: Text(
+        '$step · $label',
+        style: const TextStyle(
+            fontSize: 11, color: AppColors.primary, fontWeight: FontWeight.w700),
+      ),
+    );
+  }
 }
 
 class _DetailSection extends StatelessWidget {

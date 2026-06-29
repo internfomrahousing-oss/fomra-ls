@@ -74,6 +74,30 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  int _countByStatus(LeadStatus status) =>
+      AppStore.instance.leads.where((l) => l.status == status).length;
+
+  List<LandLead> get _recentLeads {
+    final leads = List<LandLead>.from(AppStore.instance.leads);
+    leads.sort((a, b) => b.addedOn.compareTo(a.addedOn));
+    return leads.take(6).toList();
+  }
+
+  List<double> _trendByDays(int days) {
+    final now = DateTime.now();
+    final buckets = List<double>.filled(days, 0);
+    for (final lead in AppStore.instance.leads) {
+      final diff = now.difference(DateTime(
+        lead.addedOn.year,
+        lead.addedOn.month,
+        lead.addedOn.day,
+      ));
+      final idx = days - 1 - diff.inDays;
+      if (idx >= 0 && idx < days) buckets[idx] += 1;
+    }
+    return buckets;
+  }
+
   @override
   Widget build(BuildContext context) {
     final leads = AppStore.instance.leads;
@@ -82,13 +106,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final acquired = _leadsForFilter(_KpiFilter.acquired).length;
     final rejected = _leadsForFilter(_KpiFilter.rejected).length;
 
+    final newLeads = _countByStatus(LeadStatus.new_);
+    final contacted = _countByStatus(LeadStatus.contacted);
+    final negotiation = _countByStatus(LeadStatus.negotiation);
+    final weeklyTrend = _trendByDays(7);
+    final maxPipeline = [newLeads, contacted, negotiation, acquired]
+        .fold<int>(1, (a, b) => a > b ? a : b);
+
     return Scaffold(
       appBar: const FomraAppBar(moduleName: 'Dashboard'),
       drawer: const AppDrawer(currentRoute: '/dashboard'),
       bottomNavigationBar: const FomraBottomNav(currentRoute: '/dashboard'),
       backgroundColor: context.fomraPageBg,
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -105,6 +136,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 Icons.location_on_outlined,
                 AppColors.info,
                 '+$totalLeads total',
+                '+18%',
+                weeklyTrend,
                 _KpiFilter.total,
                 _openKpiLeads,
               ),
@@ -114,6 +147,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 Icons.trending_up_outlined,
                 AppColors.primary,
                 'In pipeline',
+                '+8%',
+                [newLeads.toDouble(), contacted.toDouble(), negotiation.toDouble(), activeLeads.toDouble()],
                 _KpiFilter.active,
                 _openKpiLeads,
               ),
@@ -123,6 +158,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 Icons.check_circle_outline,
                 AppColors.success,
                 'Closed deals',
+                '+4%',
+                [0, 1, 1, 2, 2, 3, acquired.toDouble()],
                 _KpiFilter.acquired,
                 _openKpiLeads,
               ),
@@ -132,11 +169,62 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 Icons.cancel_outlined,
                 AppColors.error,
                 'Lost / rejected',
+                '-2%',
+                [0, 0, 1, 0, 1, 1, rejected.toDouble()],
                 _KpiFilter.rejected,
                 _openKpiLeads,
               ),
             ]),
             const SizedBox(height: 20),
+            _AnalyticsCard(
+              title: 'Pipeline Funnel',
+              subtitle: 'Track lead progression from new to acquired',
+              child: Column(
+                children: [
+                  _FunnelRow(
+                    label: 'New',
+                    value: newLeads,
+                    maxValue: maxPipeline,
+                    color: AppColors.info,
+                  ),
+                  _FunnelRow(
+                    label: 'Contacted',
+                    value: contacted,
+                    maxValue: maxPipeline,
+                    color: const Color(0xFF8B5CF6),
+                  ),
+                  _FunnelRow(
+                    label: 'Negotiation',
+                    value: negotiation,
+                    maxValue: maxPipeline,
+                    color: AppColors.warning,
+                  ),
+                  _FunnelRow(
+                    label: 'Acquired',
+                    value: acquired,
+                    maxValue: maxPipeline,
+                    color: AppColors.success,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            _AnalyticsCard(
+              title: 'Recent Lead Activity',
+              subtitle: 'Latest updates in your pipeline',
+              child: _recentLeads.isEmpty
+                  ? Text('No lead activity yet.',
+                      style: TextStyle(color: context.fomraTextSecondary))
+                  : Column(
+                      children: _recentLeads
+                          .map((lead) => Padding(
+                                padding: const EdgeInsets.only(bottom: 10),
+                                child: _ActivityRow(lead: lead),
+                              ))
+                          .toList(),
+                    ),
+            ),
+            const SizedBox(height: 16),
             SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(
@@ -150,6 +238,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
               ),
             ),
+            const SizedBox(height: 8),
           ],
         ),
       ),
@@ -164,9 +253,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
       physics: const NeverScrollableScrollPhysics(),
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: cols,
-        childAspectRatio: width > 600 ? 1.7 : 1.55,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
+        childAspectRatio: width > 900 ? 1.45 : width > 600 ? 1.35 : 1.05,
+        crossAxisSpacing: 16,
+        mainAxisSpacing: 16,
       ),
       itemCount: kpis.length,
       itemBuilder: (_, i) => _KpiCard(kpis[i]),
@@ -214,6 +303,8 @@ class _KpiData {
   final IconData icon;
   final Color color;
   final String sub;
+  final String trend;
+  final List<double> sparkline;
   final _KpiFilter filter;
   final void Function(_KpiData) onTap;
 
@@ -223,6 +314,8 @@ class _KpiData {
     this.icon,
     this.color,
     this.sub,
+    this.trend,
+    this.sparkline,
     this.filter,
     this.onTap,
   );
@@ -249,7 +342,7 @@ class _KpiCard extends StatelessWidget {
             boxShadow: context.fomraCardShadow,
           ),
           child: Padding(
-            padding: const EdgeInsets.all(14),
+            padding: const EdgeInsets.all(18),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -262,21 +355,43 @@ class _KpiCard extends StatelessWidget {
                         borderRadius: BorderRadius.circular(8)),
                     child: Icon(d.icon, color: d.color, size: 18),
                   ),
-                  Icon(Icons.arrow_forward_ios_rounded,
-                      size: 12,
-                      color: context.fomraTextSecondary.withValues(alpha: 0.4)),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: d.color.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      d.trend,
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: d.color,
+                      ),
+                    ),
+                  ),
                 ]),
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(d.value,
-                      style: TextStyle(
-                          fontSize: 26,
-                          fontWeight: FontWeight.w800,
-                          color: d.color,
-                          height: 1.1)),
-                  const SizedBox(height: 2),
+                  TweenAnimationBuilder<double>(
+                    tween: Tween(begin: 0, end: double.tryParse(d.value) ?? 0),
+                    duration: const Duration(milliseconds: 600),
+                    builder: (_, value, __) => Text('${value.toInt()}',
+                        style: TextStyle(
+                            fontSize: 30,
+                            fontWeight: FontWeight.w800,
+                            color: d.color,
+                            height: 1.1)),
+                  ),
+                  const SizedBox(height: 6),
+                  SizedBox(
+                    height: 22,
+                    child: _MiniSparkline(values: d.sparkline, color: d.color),
+                  ),
+                  const SizedBox(height: 6),
                   Text(d.label,
                       style: TextStyle(
-                          fontSize: 11,
+                          fontSize: 12,
                           fontWeight: FontWeight.w700,
                           color: context.fomraTextPrimary),
                       maxLines: 1,
@@ -290,6 +405,169 @@ class _KpiCard extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _MiniSparkline extends StatelessWidget {
+  final List<double> values;
+  final Color color;
+  const _MiniSparkline({required this.values, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    if (values.length < 2) return const SizedBox.shrink();
+    final maxV = values.fold<double>(1, (a, b) => a > b ? a : b);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: values
+          .map((v) => Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 1.5),
+                  child: Container(
+                    height: ((v / maxV) * 20).clamp(4, 20),
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: 0.8),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+              ))
+          .toList(),
+    );
+  }
+}
+
+class _AnalyticsCard extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final Widget child;
+  const _AnalyticsCard({
+    required this.title,
+    required this.subtitle,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: context.fomraSurface,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: context.fomraCardShadow,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title,
+              style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: context.fomraTextPrimary)),
+          const SizedBox(height: 4),
+          Text(subtitle,
+              style: TextStyle(fontSize: 12, color: context.fomraTextSecondary)),
+          const SizedBox(height: 14),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+class _FunnelRow extends StatelessWidget {
+  final String label;
+  final int value;
+  final int maxValue;
+  final Color color;
+  const _FunnelRow({
+    required this.label,
+    required this.value,
+    required this.maxValue,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final factor =
+        maxValue <= 0 ? 0.0 : (value / maxValue).toDouble().clamp(0.0, 1.0);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 100,
+            child: Text(label,
+                style: TextStyle(fontSize: 12, color: context.fomraTextSecondary)),
+          ),
+          Expanded(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(999),
+              child: LinearProgressIndicator(
+                value: factor,
+                minHeight: 8,
+                backgroundColor: color.withValues(alpha: 0.15),
+                color: color,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text('$value',
+              style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12,
+                  color: context.fomraTextPrimary)),
+        ],
+      ),
+    );
+  }
+}
+
+class _ActivityRow extends StatelessWidget {
+  final LandLead lead;
+  const _ActivityRow({required this.lead});
+
+  @override
+  Widget build(BuildContext context) {
+    final location = [lead.location, lead.village]
+        .where((s) => s.isNotEmpty)
+        .join(', ');
+    return Row(
+      children: [
+        CircleAvatar(
+          radius: 16,
+          backgroundColor: AppColors.primary.withValues(alpha: 0.12),
+          child: const Icon(Icons.location_on_outlined,
+              size: 16, color: AppColors.primary),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('${lead.leadId} · ${lead.ownerName}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: context.fomraTextPrimary)),
+              if (location.isNotEmpty)
+                Text(location,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        fontSize: 11, color: context.fomraTextSecondary)),
+            ],
+          ),
+        ),
+        Text(
+          '${lead.addedOn.day}/${lead.addedOn.month}',
+          style: TextStyle(fontSize: 11, color: context.fomraTextSecondary),
+        ),
+      ],
     );
   }
 }
@@ -489,7 +767,7 @@ class _KpiLeadTile extends StatelessWidget {
               ),
               const SizedBox(height: 6),
               Row(children: [
-                Text('Tap for full details',
+                const Text('Tap for full details',
                     style: TextStyle(
                         fontSize: 10,
                         color: AppColors.primary,

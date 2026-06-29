@@ -943,13 +943,13 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
     }
 
     Widget chip(String label, Color color) => Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: BorderRadius.circular(999),
       ),
       child: Text(label,
-          style: TextStyle(fontSize: 9, fontWeight: FontWeight.w600, color: color)),
+          style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: color)),
     );
 
     return _SectionCard(
@@ -981,6 +981,9 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                 style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
             style: ElevatedButton.styleFrom(
               backgroundColor: mbColor,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             ),
           ),
@@ -1154,16 +1157,16 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
             final distKm    = (item['distanceKm'] as num?)?.toDouble();
             final isTnrera  = source == 'TNRERA';
             return Container(
-              margin: const EdgeInsets.only(bottom: 8),
-              padding: const EdgeInsets.all(12),
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(10),
+                color: context.fomraSurface,
+                borderRadius: BorderRadius.circular(16),
                 border: Border.all(color: const Color(0xFFE5E7EB)),
                 boxShadow: [
                   BoxShadow(
                       color: Colors.black.withValues(alpha: 0.04),
-                      blurRadius: 4, offset: const Offset(0, 2))
+                      blurRadius: 8, offset: const Offset(0, 3))
                 ],
               ),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -1485,20 +1488,20 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
     }
 
     final body = SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _buildSearchSection(),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
             _buildMapSection(),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
             _buildInfrastructureSection(),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
             _buildMagicBricksSection(),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
             _buildGovtDocsSection(),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
             _buildValuationSection(),
             const SizedBox(height: 40),
           ],
@@ -1565,41 +1568,57 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(children: [
-            Expanded(
-              child: TextField(
-                controller: _searchCtrl,
-                decoration: _inputDec(context, 'Search city, area, landmark...').copyWith(
-                  prefixIcon: const Padding(
-                    padding: EdgeInsets.only(left: 10, right: 6),
-                    child: Icon(Icons.search, size: 18,
-                        color: AppColors.textSecondary),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: context.fomraSurfaceVar,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: context.fomraBorder.withValues(alpha: 0.7)),
+            ),
+            child: Row(children: [
+              Expanded(
+                child: TextField(
+                  controller: _searchCtrl,
+                  decoration: _inputDec(context, 'Search city, area, landmark...').copyWith(
+                    filled: true,
+                    fillColor: context.fomraSurface,
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                    prefixIcon: const Padding(
+                      padding: EdgeInsets.only(left: 10, right: 6),
+                      child: Icon(Icons.search, size: 18, color: AppColors.textSecondary),
+                    ),
+                    prefixIconConstraints: const BoxConstraints(),
                   ),
-                  prefixIconConstraints: const BoxConstraints(),
+                  textInputAction: TextInputAction.search,
+                  onSubmitted: _searchLocation,
                 ),
-                textInputAction: TextInputAction.search,
-                onSubmitted: _searchLocation,
               ),
-            ),
-            const SizedBox(width: 8),
-            SizedBox(
-              height: 44,
-              child: ElevatedButton(
-                onPressed: _searchingLocation
-                    ? null
-                    : () => _searchLocation(_searchCtrl.text),
-                style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 14)),
-                child: _searchingLocation
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                            color: Colors.white, strokeWidth: 2))
-                    : const Icon(Icons.search, size: 18),
+              const SizedBox(width: 10),
+              SizedBox(
+                height: 48,
+                child: ElevatedButton.icon(
+                  onPressed: _searchingLocation
+                      ? null
+                      : () => _searchLocation(_searchCtrl.text),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                  icon: _searchingLocation
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                              color: Colors.white, strokeWidth: 2))
+                      : const Icon(Icons.travel_explore_outlined, size: 18),
+                  label: Text(_searchingLocation ? 'Searching' : 'Search'),
+                ),
               ),
-            ),
-          ]),
+            ]),
+          ),
           if (_searchError != null) ...[
             const SizedBox(height: 6),
             _ErrorBanner(_searchError!),
@@ -1609,9 +1628,9 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
             Container(
               constraints: const BoxConstraints(maxHeight: 220),
               decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: const Color(0xFFE5E7EB)),
+                color: context.fomraSurface,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: context.fomraBorder),
                 boxShadow: [
                   BoxShadow(
                       color: Colors.black.withValues(alpha: 0.08),
@@ -1657,28 +1676,28 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
   }
 
   Widget _buildZoomButton(IconData icon, VoidCallback onTap) => Material(
-        color: AppColors.primary,
-        borderRadius: BorderRadius.circular(8),
+        color: AppColors.primary.withValues(alpha: 0.9),
+        borderRadius: BorderRadius.circular(12),
         child: InkWell(
           onTap: _mapReady ? onTap : null,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(12),
           child: Padding(
-            padding: const EdgeInsets.all(8),
+            padding: const EdgeInsets.all(10),
             child: Icon(icon, color: Colors.white, size: 20),
           ),
         ),
       );
 
   Widget _buildMapOverlayButton(IconData icon, VoidCallback onTap) => Material(
-        color: context.fomraSurface,
+        color: context.fomraSurface.withValues(alpha: 0.9),
         elevation: 3,
         shadowColor: Colors.black26,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(12),
           child: Padding(
-            padding: const EdgeInsets.all(8),
+            padding: const EdgeInsets.all(10),
             child: Icon(icon, size: 20, color: AppColors.primary),
           ),
         ),
@@ -1697,14 +1716,14 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
   Widget _buildMapLayerChip(_MarketMapLayer layer, String label, IconData icon) {
     final selected = _mapLayer == layer;
     return Material(
-      color: selected ? AppColors.primary : Colors.white,
+      color: selected ? AppColors.primary : context.fomraSurface.withValues(alpha: 0.92),
       elevation: selected ? 2 : 1,
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(12),
       child: InkWell(
         onTap: () => _setMapLayer(layer),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -1963,9 +1982,9 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           ClipRRect(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(18),
             child: SizedBox(
-              height: 260,
+              height: 320,
               child: _mapFullScreen
                   ? _buildMapFullscreenPlaceholder()
                   : _buildMapStack(showMaximize: true),
@@ -1974,11 +1993,18 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
           const SizedBox(height: 10),
 
           if (activeLoc != null) ...[
-            Text(
-              '📍 ${activeLoc.latitude.toStringAsFixed(5)}° N, ${activeLoc.longitude.toStringAsFixed(5)}° E',
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                  fontSize: 12, color: AppColors.textSecondary),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: context.fomraSurfaceVar,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                'Pinned: ${activeLoc.latitude.toStringAsFixed(5)}° N, ${activeLoc.longitude.toStringAsFixed(5)}° E',
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+              ),
             ),
             const SizedBox(height: 4),
             const Text(
@@ -2046,31 +2072,38 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
           ],
           const SizedBox(height: 10),
 
-        Row(children: [
-          const Text('Zoom:',
-              style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textSecondary)),
-          const Spacer(),
-          _buildZoomButton(Icons.remove, () {
-            if (_mapReady) {
-              _mapController.move(
-                _mapController.camera.center,
-                (_mapController.camera.zoom - 1).clamp(3.0, 18.0),
-              );
-            }
-          }),
-          const SizedBox(width: 8),
-          _buildZoomButton(Icons.add, () {
-            if (_mapReady) {
-              _mapController.move(
-                _mapController.camera.center,
-                (_mapController.camera.zoom + 1).clamp(3.0, 18.0),
-              );
-            }
-          }),
-        ]),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: context.fomraSurfaceVar,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Row(children: [
+              const Text('Zoom:',
+                  style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textSecondary)),
+              const Spacer(),
+              _buildZoomButton(Icons.remove, () {
+                if (_mapReady) {
+                  _mapController.move(
+                    _mapController.camera.center,
+                    (_mapController.camera.zoom - 1).clamp(3.0, 18.0),
+                  );
+                }
+              }),
+              const SizedBox(width: 8),
+              _buildZoomButton(Icons.add, () {
+                if (_mapReady) {
+                  _mapController.move(
+                    _mapController.camera.center,
+                    (_mapController.camera.zoom + 1).clamp(3.0, 18.0),
+                  );
+                }
+              }),
+            ]),
+          ),
       ]),
     );
   }
@@ -2121,8 +2154,16 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
               final selected = _selectedRadius == km;
               return Padding(
                 padding: const EdgeInsets.only(right: 8),
-                child: GestureDetector(
-                  onTap: () {
+                child: ChoiceChip(
+                  label: Text('${km}km'),
+                  selected: selected,
+                  selectedColor: const Color(0xFF00838F),
+                  labelStyle: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: selected ? Colors.white : AppColors.textSecondary,
+                  ),
+                  onSelected: (_) {
                     setState(() {
                       _selectedRadius = km;
                       _poisCollected = false;
@@ -2138,30 +2179,6 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                     if (_activeLatLng != null) _fetchMagicBricksProjects();
                     if (_activeLatLng != null) _collectPois();
                   },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: selected
-                          ? const Color(0xFF00838F)
-                          : const Color(0xFFF3F4F6),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                          color: selected
-                              ? const Color(0xFF00838F)
-                              : const Color(0xFFD1D5DB)),
-                    ),
-                    child: Text(
-                      '${km}km',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: selected
-                            ? Colors.white
-                            : AppColors.textSecondary,
-                      ),
-                    ),
-                  ),
                 ),
               );
             }),
@@ -2185,7 +2202,10 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                   : 'Refresh Infrastructure Score'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF00838F),
-                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                padding: const EdgeInsets.symmetric(vertical: 13),
               ),
             ),
           ),
@@ -2202,16 +2222,25 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
           ],
           if (_collectingPois && !_poisCollected) ...[
             const SizedBox(height: 16),
-            const Center(
-              child: Column(
+              Center(
+                child: Column(
                 children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 10),
-                  Text(
+                  const SizedBox(
+                    width: 34,
+                    height: 34,
+                    child: CircularProgressIndicator(strokeWidth: 2.8),
+                  ),
+                  const SizedBox(height: 10),
+                  const Text(
                     'Scoring education, healthcare, roads, commercial & transport…',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                         fontSize: 11, color: AppColors.textSecondary),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'This can take a few seconds depending on OpenStreetMap response.',
+                    style: TextStyle(fontSize: 10, color: Colors.grey.shade600),
                   ),
                 ],
               ),
@@ -2228,61 +2257,124 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
               style: TextStyle(
                   fontSize: 10, color: AppColors.textSecondary, height: 1.35),
             ),
-            const SizedBox(height: 16),
-            Row(children: [
-              Container(
-                width: 80,
-                height: 80,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: overallColor, width: 4),
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      '${overall.toInt()}',
-                      style: TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w800,
-                          color: overallColor),
-                    ),
-                    const Text(
-                      '/100',
-                      style: TextStyle(
-                          fontSize: 10, color: AppColors.textSecondary),
-                    ),
-                  ],
-                ),
+            const SizedBox(height: 18),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: context.fomraSurfaceVar,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: overallColor.withValues(alpha: 0.25)),
               ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Overall Location Score',
-                      style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          color: overallColor),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      overall > 70
-                          ? 'Excellent infrastructure in this area.'
-                          : overall > 45
-                              ? 'Moderate infrastructure. Room to grow.'
-                              : 'Infrastructure needs development.',
-                      style: const TextStyle(
-                          fontSize: 12,
-                          color: AppColors.textSecondary,
-                          height: 1.4),
-                    ),
-                  ],
+              child: Row(children: [
+                SizedBox(
+                  width: 94,
+                  height: 94,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      SizedBox(
+                        width: 94,
+                        height: 94,
+                        child: CircularProgressIndicator(
+                          value: (overall / 100).clamp(0, 1),
+                          strokeWidth: 8,
+                          backgroundColor: overallColor.withValues(alpha: 0.15),
+                          valueColor: AlwaysStoppedAnimation<Color>(overallColor),
+                        ),
+                      ),
+                      Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            '${overall.toInt()}',
+                            style: TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.w800,
+                                color: overallColor),
+                          ),
+                          const Text('/100',
+                              style: TextStyle(
+                                  fontSize: 10, color: AppColors.textSecondary)),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ]),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Overall Location Score',
+                        style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            color: overallColor),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        overall > 70
+                            ? 'Excellent infrastructure in this area.'
+                            : overall > 45
+                                ? 'Moderate infrastructure. Room to grow.'
+                                : 'Infrastructure needs development.',
+                        style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textSecondary,
+                            height: 1.4),
+                      ),
+                    ],
+                  ),
+                ),
+              ]),
+            ),
+            const SizedBox(height: 14),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: barData.map((e) {
+                final score = e.value;
+                final color = score > 70
+                    ? AppColors.success
+                    : score > 45
+                        ? AppColors.warning
+                        : AppColors.error;
+                return Container(
+                  width: 148,
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: color.withValues(alpha: 0.25)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(e.key,
+                          style: const TextStyle(
+                              fontSize: 11, fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 4),
+                      Text('${score.toInt()}',
+                          style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                              color: color)),
+                      const SizedBox(height: 6),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(999),
+                        child: LinearProgressIndicator(
+                          value: (score / 100).clamp(0, 1),
+                          minHeight: 5,
+                          color: color,
+                          backgroundColor: color.withValues(alpha: 0.2),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
             const SizedBox(height: 20),
             SizedBox(
               height: 180,
@@ -2443,7 +2535,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
         icon: Icons.auto_awesome_outlined,
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Container(
-            padding: const EdgeInsets.all(10),
+            padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [
@@ -2451,7 +2543,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                   AppColors.primary.withValues(alpha: 0.04),
                 ],
               ),
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(14),
               border: Border.all(
                   color: AppColors.primary.withValues(alpha: 0.15)),
             ),
@@ -2466,6 +2558,17 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                 ),
               ),
             ]),
+          ),
+          const SizedBox(height: 12),
+          const Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _ValuationStepChip('Step 1', 'Location'),
+              _ValuationStepChip('Step 2', 'Land Details'),
+              _ValuationStepChip('Step 3', 'Infrastructure'),
+              _ValuationStepChip('Step 4', 'Prediction'),
+            ],
           ),
           const SizedBox(height: 16),
           // Row 1: Road Width + Land Size
@@ -2586,7 +2689,11 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
               icon: const Icon(Icons.auto_awesome, size: 18),
               label: const Text('Generate Valuation'),
               style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 13)),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
             ),
           ),
           if (!_areaPriceStats().hasData &&
@@ -2821,31 +2928,58 @@ class _SectionCard extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         decoration: BoxDecoration(
           color: context.fomraSurface,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: context.fomraBorder.withValues(alpha: 0.6)),
           boxShadow: context.fomraCardShadow,
         ),
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
             Container(
-              padding: const EdgeInsets.all(10),
+              padding: const EdgeInsets.all(9),
               decoration: BoxDecoration(
                 color: AppColors.primary.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(4),
+                borderRadius: BorderRadius.circular(10),
               ),
-              child: Icon(icon, color: AppColors.primary, size: 22),
+              child: Icon(icon, color: AppColors.primary, size: 20),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 12),
             Text(title,
                 style: TextStyle(
-                    fontSize: 15,
+                    fontSize: 18,
                     fontWeight: FontWeight.w700,
                     color: context.fomraTextPrimary)),
           ]),
-          const SizedBox(height: 14),
+          const SizedBox(height: 16),
           child,
         ]),
       );
+}
+
+class _ValuationStepChip extends StatelessWidget {
+  final String step;
+  final String label;
+  const _ValuationStepChip(this.step, this.label);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+      ),
+      child: Text(
+        '$step · $label',
+        style: const TextStyle(
+          fontSize: 11,
+          color: AppColors.primary,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
 }
 
 
@@ -4803,9 +4937,19 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         _buildGiParcelHeader(),
         const SizedBox(height: 10),
-        const Text(
-          'Click on the below icons to view more details',
-          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFFC62828)),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: const Color(0xFFEFF6FF),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: const Color(0xFFBFDBFE)),
+          ),
+          child: const Text(
+            'Quick access: Patta, FMB, EC, G-Value and Crop details from Tamil Nilam.',
+            style: TextStyle(
+                fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF1D4ED8)),
+          ),
         ),
         const SizedBox(height: 10),
         _buildGiServiceBoxes(),
@@ -4818,9 +4962,9 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
             width: double.infinity,
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: Colors.grey.shade50,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: Colors.grey.shade300),
+              color: context.fomraSurfaceVar,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: context.fomraBorder),
             ),
             child: const Text(
               'Tap Patta, FMB, EC, G-Value, or Crop above to load details from Tamil Nilam.',
@@ -4843,10 +4987,15 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: context.fomraSurface,
-        borderRadius: BorderRadius.circular(10),
+        gradient: LinearGradient(
+          colors: [
+            AppColors.primary.withValues(alpha: 0.08),
+            AppColors.accent.withValues(alpha: 0.04),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(color: context.fomraBorder),
         boxShadow: [
           BoxShadow(
@@ -4858,14 +5007,20 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         const Text('Land Parcel Information',
-            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Color(0xFF1565C0))),
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Color(0xFF1565C0))),
         const SizedBox(height: 10),
-        _buildGiHeaderRow('ULPIN', widget.ulpin?.isNotEmpty == true ? widget.ulpin! : '-'),
-        _buildGiHeaderRow('Centroid', centroid),
-        _buildGiHeaderRow('Survey Number', survey?.isNotEmpty == true ? survey! : '-'),
-        _buildGiHeaderRow('Sub Division', sub != null && sub.isNotEmpty && sub != '-' ? sub : '-'),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            _buildGiDataCard('ULPIN', widget.ulpin?.isNotEmpty == true ? widget.ulpin! : '-'),
+            _buildGiDataCard('Centroid', centroid),
+            _buildGiDataCard('Survey Number', survey?.isNotEmpty == true ? survey! : '-'),
+            _buildGiDataCard('Sub Division', sub != null && sub.isNotEmpty && sub != '-' ? sub : '-'),
+          ],
+        ),
         if (widget.village != null && widget.village!.isNotEmpty) ...[
-          const SizedBox(height: 4),
+          const SizedBox(height: 8),
           Text('${widget.village}${widget.taluk != null ? ', ${widget.taluk}' : ''}',
               style: const TextStyle(fontSize: 10, color: AppColors.textSecondary)),
         ],
@@ -4884,17 +5039,27 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
     );
   }
 
-  Widget _buildGiHeaderRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: RichText(
-        text: TextSpan(
-          style: const TextStyle(fontSize: 12, color: Colors.black87, height: 1.35),
-          children: [
-            TextSpan(text: '$label: ', style: const TextStyle(fontWeight: FontWeight.w700)),
-            TextSpan(text: value),
-          ],
-        ),
+  Widget _buildGiDataCard(String label, String value) {
+    return Container(
+      width: 180,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.7),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.9)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label,
+              style: const TextStyle(
+                  fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.textSecondary)),
+          const SizedBox(height: 2),
+          Text(value,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+        ],
       ),
     );
   }
@@ -4918,14 +5083,14 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
               color: selected ? svc.color.withValues(alpha: 0.14) : context.fomraSurface,
               elevation: selected ? 2 : 0,
               shadowColor: svc.color.withValues(alpha: 0.3),
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(14),
               child: InkWell(
                 onTap: () => _onSelectGiService(svc.id),
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(14),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 4),
+                  padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 6),
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(14),
                     border: Border.all(
                       color: selected ? svc.color : svc.color.withValues(alpha: 0.4),
                       width: selected ? 2 : 1,
@@ -4986,14 +5151,14 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
                 width: 88,
                 child: Material(
                   color: selected ? svc.color.withValues(alpha: 0.14) : context.fomraSurface,
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(12),
                   child: InkWell(
                     onTap: () => _onSelectGiService(svc.id),
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(12),
                     child: Container(
                       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 6),
                       decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(12),
                         border: Border.all(
                           color: selected ? svc.color : svc.color.withValues(alpha: 0.4),
                           width: selected ? 2 : 1,

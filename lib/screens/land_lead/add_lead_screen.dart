@@ -452,31 +452,32 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
       appBar: AppBar(
         flexibleSpace: Container(
           decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [AppColors.primaryDark, AppColors.primaryLight],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
+            gradient: AppColors.heroGradient,
           ),
         ),
         backgroundColor: Colors.transparent,
         surfaceTintColor: Colors.transparent,
-        title: const Text('Add Land Lead'),
+        title: const Text('Add Land Lead',
+            style: TextStyle(fontWeight: FontWeight.w700)),
         actions: [
-          TextButton(
-            onPressed: _submit,
-            child: const Text('SAVE',
-                style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 15)),
+          Padding(
+            padding: const EdgeInsets.only(right: 10),
+            child: TextButton.icon(
+              onPressed: _submit,
+              icon: const Icon(Icons.save_outlined, size: 16, color: Colors.white),
+              label: const Text('SAVE',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14)),
+            ),
           ),
         ],
       ),
       body: Form(
         key: _formKey,
         child: ListView(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(24),
           children: [
             // ── Section 1: Input Source ──────────────────────────────
             const _SectionHeader(
@@ -704,16 +705,25 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
             SizedBox(
               width: double.infinity,
               height: 50,
-              child: ElevatedButton.icon(
-                onPressed: _submit,
-                icon: const Icon(Icons.save_outlined),
-                label: const Text('Save Lead',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: AppColors.primaryGradient,
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: AppColors.coloredShadow(AppColors.primary),
+                ),
+                child: ElevatedButton.icon(
+                  onPressed: _submit,
+                  icon: const Icon(Icons.save_outlined),
+                  label: const Text('Save Lead',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.transparent,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shadowColor: Colors.transparent,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14)),
+                  ),
                 ),
               ),
             ),
@@ -1302,32 +1312,45 @@ class _SectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(children: [
-      Container(
-        width: 32,
-        height: 32,
-        decoration: const BoxDecoration(
-            color: AppColors.primary, shape: BoxShape.circle),
-        child: Center(
-          child: Text(number,
-              style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 15)),
-        ),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: context.fomraSurface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: context.fomraBorder),
+        boxShadow: context.fomraCardShadow,
       ),
-      const SizedBox(width: 10),
-      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(title,
-            style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: context.fomraTextPrimary)),
-        Text(subtitle,
-            style: TextStyle(
-                fontSize: 12, color: context.fomraTextSecondary)),
+      child: Row(children: [
+        Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            gradient: AppColors.primaryGradient,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Center(
+            child: Text(number,
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15)),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(title,
+                style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: context.fomraTextPrimary)),
+            Text(subtitle,
+                style: TextStyle(
+                    fontSize: 12, color: context.fomraTextSecondary)),
+          ]),
+        ),
       ]),
-    ]);
+    );
   }
 }
 
@@ -1370,9 +1393,9 @@ class _ReadOnlyField extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: const Color(0xFFF0F4F8),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFE0E0E0)),
+        color: context.fomraSurfaceVar,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: context.fomraBorder),
       ),
       child: Row(children: [
         const Icon(Icons.tag, size: 18, color: AppColors.textSecondary),

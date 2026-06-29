@@ -103,34 +103,49 @@ class _HomeScreenState extends State<HomeScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _HeroBanner(greeting: greeting, greetIcon: greetIcon),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
 
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
+              padding: const EdgeInsets.symmetric(horizontal: 24),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // ── KPI strip ─────────────────────────────────────
+                  const _SectionHeader('Overview'),
+                  const SizedBox(height: 12),
                   Row(children: [
-                    _KpiChip(label: 'Total', value: _totalLeads,
-                        color: AppColors.primary),
-                    const SizedBox(width: 8),
-                    _KpiChip(label: 'Active', value: _activeLeads,
-                        color: AppColors.success),
-                    const SizedBox(width: 8),
-                    _KpiChip(label: 'Broker', value: _brokerLeads,
-                        color: AppColors.accent),
+                    _KpiChip(
+                      label: 'Total Leads',
+                      value: _totalLeads,
+                      color: AppColors.primary,
+                      icon: Icons.analytics_outlined,
+                      trend: '+12%',
+                    ),
+                    const SizedBox(width: 16),
+                    _KpiChip(
+                      label: 'Active',
+                      value: _activeLeads,
+                      color: AppColors.success,
+                      icon: Icons.trending_up_outlined,
+                      trend: '+6%',
+                    ),
+                    const SizedBox(width: 16),
+                    _KpiChip(
+                      label: 'Broker',
+                      value: _brokerLeads,
+                      color: AppColors.accent,
+                      icon: Icons.handshake_outlined,
+                      trend: '+3%',
+                    ),
                   ]),
                   const SizedBox(height: 24),
 
-                  // ── Quick actions ──────────────────────────────────
                   const _SectionHeader('Quick Actions'),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 16),
                   GridView.count(
                     crossAxisCount: 2,
-                    crossAxisSpacing: 12,
-                    mainAxisSpacing: 12,
-                    childAspectRatio: 3.4,
+                    crossAxisSpacing: 16,
+                    mainAxisSpacing: 16,
+                    childAspectRatio: 1.15,
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
                     children: [
@@ -177,7 +192,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 28),
                 ],
               ),
             ),
@@ -190,86 +205,154 @@ class _HomeScreenState extends State<HomeScreen> {
 
 // ── Hero Banner ───────────────────────────────────────────────────────────────
 
-class _HeroBanner extends StatelessWidget {
+class _HeroBanner extends StatefulWidget {
   final String greeting;
   final IconData greetIcon;
   const _HeroBanner({required this.greeting, required this.greetIcon});
 
   @override
+  State<_HeroBanner> createState() => _HeroBannerState();
+}
+
+class _HeroBannerState extends State<_HeroBanner>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 3600),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final time = _formattedTime(now);
+
     return Container(
       width: double.infinity,
       decoration: const BoxDecoration(gradient: AppColors.heroGradient),
-      child: Stack(children: [
-        // Decorative blobs
-        const Positioned(right: -40, top: -40,
-            child: _Blob(200, Colors.white, 0.04)),
-        const Positioned(right: 60, bottom: -30,
-            child: _Blob(120, Colors.white, 0.04)),
-        const Positioned(left: -30, bottom: 10,
-            child: _Blob(90, AppColors.accent, 0.08)),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            // Greeting pill
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.14),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.18), width: 1),
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (_, __) => Stack(children: [
+          Positioned(
+            right: -35 + (_controller.value * 18),
+            top: -32,
+            child: const _Blob(170, Colors.white, 0.05),
+          ),
+          Positioned(
+            right: 48,
+            bottom: -30 + (_controller.value * 12),
+            child: const _Blob(118, Colors.white, 0.04),
+          ),
+          Positioned(
+            left: -24 + (_controller.value * 10),
+            bottom: 4,
+            child: const _Blob(84, AppColors.accent, 0.09),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 16, 24, 18),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Welcome to FomraLS',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 28,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.4,
+                            height: 1.05,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Fomra Housing - Land Management',
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.72),
+                            fontSize: 15,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.white.withValues(alpha: 0.18),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.24),
+                      ),
+                    ),
+                    child: const Icon(Icons.person_outline, color: Colors.white),
+                  ),
+                ],
               ),
-              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                Icon(greetIcon, color: AppColors.accentLight, size: 13),
-                const SizedBox(width: 5),
-                Text(greeting,
-                    style: const TextStyle(
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+                ),
+                child: Row(
+                  children: [
+                    Icon(widget.greetIcon, color: AppColors.accentLight, size: 17),
+                    const SizedBox(width: 8),
+                    Text(
+                      widget.greeting,
+                      style: const TextStyle(
                         color: AppColors.accentLight,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                      ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      '$time  |  ${_formattedDate(now)}',
+                      style: const TextStyle(
+                        color: Colors.white70,
                         fontSize: 12,
-                        fontWeight: FontWeight.w600)),
-              ]),
-            ),
-            const SizedBox(height: 12),
-            const Text('Welcome to FomraLS',
-                style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.4)),
-            const SizedBox(height: 3),
-            Text('Fomra Housing — Land Management',
-                style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.55),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w400)),
-            const SizedBox(height: 14),
-            Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.10),
-                borderRadius: BorderRadius.circular(8),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                const Icon(Icons.calendar_today_outlined,
-                    color: Colors.white54, size: 11),
-                const SizedBox(width: 5),
-                Text(_formattedDate(),
-                    style: const TextStyle(
-                        color: Colors.white60,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500)),
-              ]),
-            ),
-          ]),
-        ),
-      ]),
+            ]),
+          ),
+        ]),
+      ),
     );
   }
 
-  String _formattedDate() {
-    final now = DateTime.now();
+  String _formattedTime(DateTime dt) {
+    final hour = dt.hour % 12 == 0 ? 12 : dt.hour % 12;
+    final min = dt.minute.toString().padLeft(2, '0');
+    final suffix = dt.hour >= 12 ? 'PM' : 'AM';
+    return '$hour:$min $suffix';
+  }
+
+  String _formattedDate(DateTime now) {
     const months = ['Jan','Feb','Mar','Apr','May','Jun',
                     'Jul','Aug','Sep','Oct','Nov','Dec'];
     const days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
@@ -299,30 +382,59 @@ class _KpiChip extends StatelessWidget {
   final String label;
   final int value;
   final Color color;
-  const _KpiChip({required this.label, required this.value, required this.color});
+  final IconData icon;
+  final String trend;
+  const _KpiChip({
+    required this.label,
+    required this.value,
+    required this.color,
+    required this.icon,
+    required this.trend,
+  });
 
   @override
   Widget build(BuildContext context) => Expanded(
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 10),
+          padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(AppColors.radiusSm),
-            border: Border.all(color: color.withValues(alpha: 0.18)),
+            color: context.fomraSurface,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: color.withValues(alpha: 0.2)),
+            boxShadow: context.fomraCardShadow,
           ),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, color: color, size: 14),
+              ),
+              const Spacer(),
+              Text(
+                trend,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: color,
+                ),
+              ),
+            ]),
+            const SizedBox(height: 10),
             Text('$value',
                 style: TextStyle(
-                    fontSize: 20,
+                    fontSize: 28,
                     fontWeight: FontWeight.w800,
                     color: color,
                     letterSpacing: -0.5)),
-            const SizedBox(height: 2),
+            const SizedBox(height: 4),
             Text(label,
                 style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w500,
-                    color: color.withValues(alpha: 0.75))),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: context.fomraTextSecondary)),
           ]),
         ),
       );
@@ -346,7 +458,7 @@ class _SectionHeader extends StatelessWidget {
         const SizedBox(width: 8),
         Text(title,
             style: TextStyle(
-                fontSize: 15,
+                fontSize: 18,
                 fontWeight: FontWeight.w700,
                 color: context.fomraTextPrimary,
                 letterSpacing: 0.1)),
@@ -371,50 +483,121 @@ class _ActionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return _HoverActionCard(
       onTap: () => Navigator.pushNamed(context, route),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-          gradient: gradient,
-          borderRadius: BorderRadius.circular(AppColors.radiusMd),
-          boxShadow: AppColors.coloredShadow(gradient.colors.first),
-        ),
-        child: Row(children: [
-          Container(
-            padding: const EdgeInsets.all(8),
+      gradient: gradient,
+      icon: icon,
+      label: label,
+      sub: sub,
+    );
+  }
+}
+
+class _HoverActionCard extends StatefulWidget {
+  final VoidCallback onTap;
+  final LinearGradient gradient;
+  final IconData icon;
+  final String label;
+  final String sub;
+
+  const _HoverActionCard({
+    required this.onTap,
+    required this.gradient,
+    required this.icon,
+    required this.label,
+    required this.sub,
+  });
+
+  @override
+  State<_HoverActionCard> createState() => _HoverActionCardState();
+}
+
+class _HoverActionCardState extends State<_HoverActionCard> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: AnimatedScale(
+        duration: const Duration(milliseconds: 220),
+        scale: _hovered ? 1.015 : 1,
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+          child: Ink(
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.18),
-              borderRadius: BorderRadius.circular(9),
+              gradient: widget.gradient,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: AppColors.coloredShadow(widget.gradient.colors.first),
             ),
-            child: Icon(icon, color: Colors.white, size: 18),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(label,
-                    style: const TextStyle(
+            child: InkWell(
+              onTap: widget.onTap,
+              borderRadius: BorderRadius.circular(20),
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(widget.icon, color: Colors.white, size: 24),
+                    ),
+                    const Spacer(),
+                    Text(
+                      widget.label,
+                      style: const TextStyle(
                         color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      widget.sub,
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.75),
                         fontSize: 13,
-                        fontWeight: FontWeight.w700),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis),
-                const SizedBox(height: 2),
-                Text(sub,
-                    style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.65),
-                        fontSize: 10),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis),
-              ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 7),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.18),
+                            borderRadius: BorderRadius.circular(999),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.3),
+                            ),
+                          ),
+                          child: const Text(
+                            'Open',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        const Spacer(),
+                        Icon(Icons.arrow_forward_rounded,
+                            color: Colors.white.withValues(alpha: 0.86), size: 18),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
-          Icon(Icons.arrow_forward_ios,
-              size: 11, color: Colors.white.withValues(alpha: 0.5)),
-        ]),
+        ),
       ),
     );
   }
