@@ -2388,7 +2388,16 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
               }).toList(),
             ),
             const SizedBox(height: 20),
-            SizedBox(
+            Builder(builder: (context) {
+              final chartGridLine = context.isDarkMode
+                  ? Colors.white.withValues(alpha: 0.08)
+                  : const Color(0xFFE5E7EB);
+              final chartAxisLabel = context.fomraTextSecondary;
+              final barTrackColor = context.isDarkMode
+                  ? context.fomraBorder.withValues(alpha: 0.28)
+                  : null;
+
+              return SizedBox(
               height: 180,
               child: BarChart(
                 BarChartData(
@@ -2409,7 +2418,8 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                         backDrawRodData: BackgroundBarChartRodData(
                           show: true,
                           toY: 100,
-                          color: barColor.withValues(alpha: 0.08),
+                          color: barTrackColor ??
+                              barColor.withValues(alpha: 0.08),
                         ),
                       ),
                     ]);
@@ -2421,8 +2431,8 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                         reservedSize: 30,
                         getTitlesWidget: (v, _) => Text(
                           '${v.toInt()}',
-                          style: const TextStyle(
-                              fontSize: 10, color: AppColors.textSecondary),
+                          style: TextStyle(
+                              fontSize: 10, color: chartAxisLabel),
                         ),
                         interval: 25,
                       ),
@@ -2443,9 +2453,8 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                             child: Text(
                               label,
                               textAlign: TextAlign.center,
-                              style: const TextStyle(
-                                  fontSize: 8,
-                                  color: AppColors.textSecondary),
+                              style: TextStyle(
+                                  fontSize: 8, color: chartAxisLabel),
                             ),
                           );
                         },
@@ -2459,14 +2468,15 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                   gridData: FlGridData(
                     show: true,
                     horizontalInterval: 25,
-                    getDrawingHorizontalLine: (_) => const FlLine(
-                        color: Color(0xFFE5E7EB), strokeWidth: 1),
+                    getDrawingHorizontalLine: (_) => FlLine(
+                        color: chartGridLine, strokeWidth: 1),
                     drawVerticalLine: false,
                   ),
                   borderData: FlBorderData(show: false),
                 ),
               ),
-            ),
+            );
+            }),
             const SizedBox(height: 12),
             ...barData.map(
               (e) => Padding(
