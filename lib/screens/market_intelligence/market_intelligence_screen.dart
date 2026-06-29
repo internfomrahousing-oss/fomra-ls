@@ -285,6 +285,9 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
       if (lead.surveyNumber.isNotEmpty) {
         _tngisSurvey = lead.surveyNumber;
       }
+      if (lead.subDivision.isNotEmpty) {
+        _tngisSubDiv = lead.subDivision;
+      }
     });
 
     if (loc != null) {
@@ -558,18 +561,13 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
     } on ApiException catch (e) {
       setState(() {
         _tngisParcelError = e.message;
-        _tngisSurvey = null;
-        _tngisSubDiv = null;
-        _tngisDc = null;
-        _tngisTc = null;
-        _tngisVc = null;
         _tngisGiServices = null;
         _tngisUlpin = null;
         _tngisCentroid = null;
         _tngisParcelPreview = null;
         _tngisSubdivisions = [];
-      _tngisFmbAvailable = false;
-      _tngisFmbNote = null;
+        _tngisFmbAvailable = false;
+        _tngisFmbNote = null;
       });
     } catch (e) {
       setState(() {
@@ -579,8 +577,8 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
         _tngisCentroid = null;
         _tngisParcelPreview = null;
         _tngisSubdivisions = [];
-      _tngisFmbAvailable = false;
-      _tngisFmbNote = null;
+        _tngisFmbAvailable = false;
+        _tngisFmbNote = null;
       });
     } finally {
       if (mounted) setState(() => _tngisParcelLoading = false);
@@ -3655,7 +3653,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
   }
 
   /// Selected parcel survey + optional sub + TNGIS revenue codes for sketch_fmb.
-  ({String survey, String? sub, String dc, String tc, String vc})? _selectedParcelForFmb() {
+  ({String survey, String? sub, String? dc, String? tc, String? vc})? _selectedParcelForFmb() {
     final survey = widget.surveyNumber?.trim();
     if (survey == null || survey.isEmpty) return null;
     final sub = _resolvedMapSub();
@@ -3672,7 +3670,8 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
       if (dc != null && tc != null && vc != null) break;
     }
 
-    if (dc == null || tc == null || vc == null) {
+    final hasPoint = widget.lat != null && widget.lon != null;
+    if ((dc == null || tc == null || vc == null) && !hasPoint) {
       return null;
     }
     return (survey: survey, sub: sub, dc: dc, tc: tc, vc: vc);
@@ -3696,7 +3695,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
           _fmbLoadError = 'Tap the map to select a land parcel.';
         } else {
           _fmbLoadError =
-              'Revenue codes not ready. Wait for parcel details to finish loading.';
+              'Parcel still loading — wait a moment, or tap the map on your plot.';
         }
       });
       return;
@@ -3759,10 +3758,12 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
     final sub = _resolvedMapSub() ?? widget.subDivision?.trim();
     final name = fileName ??
         'FMB${survey != null ? '-$survey' : ''}${sub != null ? '-Sub-$sub' : ''}.pdf';
-    FmbSketchViewer.openInNewTab(
-      pdfBytes,
-      context: context,
+    FmbSketchViewer.show(
+      context,
+      pdfBytes: pdfBytes,
       fileName: name,
+      survey: survey,
+      subDivision: sub,
     );
   }
 
@@ -3821,16 +3822,19 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
       }
     }
     if (dcVal == null || tcVal == null || vcVal == null) {
-      return null;
+      if (widget.lat == null || widget.lon == null) {
+        return null;
+      }
+    } else {
+      parts.add('dc=${Uri.encodeComponent(dcVal)}');
+      parts.add('tc=${Uri.encodeComponent(tcVal)}');
+      parts.add('vc=${Uri.encodeComponent(vcVal)}');
     }
 
     parts.add('surveyNo=${Uri.encodeComponent(surveyNo)}');
     if (validSub) {
       parts.add('subDiv=${Uri.encodeComponent(subDiv)}');
     }
-    parts.add('dc=${Uri.encodeComponent(dcVal)}');
-    parts.add('tc=${Uri.encodeComponent(tcVal)}');
-    parts.add('vc=${Uri.encodeComponent(vcVal)}');
     final kideVal = kide?.trim();
     if (kideVal != null && kideVal.isNotEmpty && kideVal.contains('/')) {
       parts.add('kide=${Uri.encodeComponent(kideVal)}');
@@ -3856,7 +3860,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
     );
     if (path == null) {
       setState(() => _fmbLoadError =
-          'Survey and revenue codes required. Tap the map and wait for parcel details.');
+          'Survey and map location required. Tap the map on your plot and wait for parcel details.');
       return;
     }
     setState(() {
@@ -3910,7 +3914,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
       if (path == null) {
         throw const ApiException(
           statusCode: 400,
-          message: 'Survey, sub-division, and revenue codes required for FMB.',
+          message: 'Survey and map location required for FMB.',
         );
       }
       final bytes = await ApiClient.getBytes(path);
@@ -4001,8 +4005,6 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
       _pattaFields = fields.isEmpty ? null : fields;
       _pattaOwners = owners;
       _pattaDocuments = result['documents'] as Map<String, dynamic>?;
-      _fmbPdfBytes = null;
-      _fmbLoadError = null;
       final patta = _pattaDocuments?['patta'] as Map<String, dynamic>?;
       if (patta != null && patta['official'] == true) {
         final docFields = patta['fields'] as Map<String, dynamic>?;
@@ -4026,6 +4028,44 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
         _pattaError = hasPattaDoc ? null : (pattaErr ?? _pattaError);
       }
     });
+    if (_selectedGiService == 'fmb') {
+      _maybePrefetchFmbFromPattaDocs();
+    }
+  }
+
+  Future<void> _maybePrefetchFmbFromPattaDocs() async {
+    if (_fmbPdfBytes != null || _loadingFmb) return;
+    final fmb = _pattaDocuments?['fmb'] as Map<String, dynamic>?;
+    final url = fmb?['downloadUrl'] as String?;
+    if (url == null || url.isEmpty) return;
+    await _fetchFmbFromPath(url);
+  }
+
+  Future<void> _fetchFmbFromPath(String path) async {
+    setState(() {
+      _loadingFmb = true;
+      _fmbLoadError = null;
+    });
+    try {
+      final bytes = await ApiClient.getBytes(path);
+      if (!mounted) return;
+      setState(() {
+        _fmbPdfBytes = Uint8List.fromList(bytes);
+        _loadingFmb = false;
+      });
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _fmbLoadError = e.message;
+        _loadingFmb = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _fmbLoadError = e.toString().replaceAll('Exception: ', '');
+        _loadingFmb = false;
+      });
+    }
   }
 
   Future<void> _loadFmbPdfIfNeeded() async => _loadFmbForSelectedParcel();
@@ -5256,7 +5296,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
           child: FilledButton.icon(
             onPressed: () => _openFmbPdfInNewTab(pdfBytes!, fileName: fileName),
             icon: const Icon(Icons.open_in_new_rounded, size: 18),
-            label: const Text('View as PDF', style: TextStyle(fontSize: 12)),
+            label: const Text('View FMB Sketch', style: TextStyle(fontSize: 12)),
             style: FilledButton.styleFrom(
               backgroundColor: const Color(0xFF1A237E),
               padding: const EdgeInsets.symmetric(vertical: 12),

@@ -44,11 +44,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
         .length;
     final acquired = leads.where((l) => l.status == LeadStatus.closed).length;
     final rejected = leads.where((l) => l.status == LeadStatus.lost).length;
-    final pendingLegal = leads
-        .where((l) =>
-            l.status == LeadStatus.siteVisit ||
-            l.status == LeadStatus.negotiation)
-        .length;
 
     return Scaffold(
       appBar: const FomraAppBar(moduleName: 'Dashboard'),
@@ -78,8 +73,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       Icons.check_circle_outline, AppColors.success, 'Closed deals'),
                   _KpiData('Rejected Leads', '$rejected',
                       Icons.cancel_outlined, AppColors.error, 'Lost / rejected'),
-                  _KpiData('Pending Legal Reviews', '$pendingLegal',
-                      Icons.gavel_outlined, const Color(0xFF7C3AED), 'Awaiting review'),
                 ]),
 
                 const SizedBox(height: 20),

@@ -1623,14 +1623,26 @@ async function fetchCollablandFmbByGiscode(giscode, surveyNo, plotno = '') {
       type:      'fmb',
       source:    'collabland-tn.gov.in',
       giscode,
-      error:     data.message || 'Digitized FMB sketch not available for this parcel',
+      error:     data.message || data.error || 'Digitized FMB sketch not available for this parcel',
       available: false,
     };
   }
 
-  const pdfBase64 = String(data.success);
-  const byteLen   = Buffer.from(pdfBase64, 'base64').length;
-  if (byteLen < 100 || isInvalidFmbPdfBase64(pdfBase64)) {
+  const pdfBase64 = typeof data.success === 'string' && data.success.length > 100
+    ? String(data.success)
+    : (data.data || data.pdf || data.pdfBase64 || data.PDF || null);
+  if (!pdfBase64 || String(pdfBase64).length < 100) {
+    return {
+      type:      'fmb',
+      source:    'collabland-tn.gov.in',
+      giscode,
+      error:     data.message || data.error || 'FMB PDF response was empty or invalid',
+      available: false,
+    };
+  }
+  const pdfStr = String(pdfBase64);
+  const byteLen = Buffer.from(pdfStr, 'base64').length;
+  if (byteLen < 100 || isInvalidFmbPdfBase64(pdfStr)) {
     return {
       type:      'fmb',
       source:    'collabland-tn.gov.in',
@@ -1646,7 +1658,7 @@ async function fetchCollablandFmbByGiscode(giscode, surveyNo, plotno = '') {
     giscode,
     mimeType:   'application/pdf',
     fileName:   `FMB-${surveyNo || 'sketch'}.pdf`,
-    pdfBase64,
+    pdfBase64:  pdfStr,
     byteLength: byteLen,
     available:  true,
   };

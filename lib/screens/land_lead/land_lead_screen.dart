@@ -488,16 +488,19 @@ class _LeadCard extends StatelessWidget {
                   Row(children: [
                     Text(lead.leadId,
                         style: const TextStyle(
-                            fontSize: 11,
-                            color: AppColors.textSecondary,
-                            fontWeight: FontWeight.w500)),
+                            fontSize: 17,
+                            color: AppColors.textPrimary,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.3)),
                     const Spacer(),
                     _StatusBadge(status: lead.status),
                   ]),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 4),
                   Text(lead.ownerName,
                       style: const TextStyle(
-                          fontSize: 15, fontWeight: FontWeight.bold)),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textSecondary)),
                   const SizedBox(height: 2),
                   Row(children: [
                     const Icon(Icons.location_on_outlined,

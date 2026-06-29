@@ -308,16 +308,22 @@ async function fetchGiPattaCopy({
   return { ok: false, error: parsed.message || 'Patta copy not available from Tamil Nilam' };
 }
 
+function padVillageCode(code) {
+  const s = String(code ?? '').trim();
+  if (!s) return '';
+  return s.padStart(3, '0');
+}
+
 /** FMB sketch PDF with government seal — TNGIS generic_api/sketch_fmb. */
 async function fetchGiFmbSketch({
   districtCode, talukCode, villageCode, surveyNumber, subDivision,
   landType = 'rural', isFmb = true,
 }) {
   const params = {
-    districtCode,
+    districtCode: String(districtCode ?? '').trim(),
     talukCode: padTalukCode(talukCode),
-    villageCode,
-    surveyNumber,
+    villageCode: padVillageCode(villageCode),
+    surveyNumber: String(surveyNumber ?? '').trim(),
     subdivisionNumber: subDivision ? String(subDivision) : '',
     type: landType,
   };
