@@ -62,6 +62,66 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  void _showProfileMenu(String name, String email) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+        decoration: BoxDecoration(
+          color: context.fomraSurface,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: context.fomraCardShadow,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircleAvatar(
+              radius: 28,
+              backgroundColor: AppColors.primary.withValues(alpha: 0.12),
+              child: const Icon(Icons.person_outline,
+                  size: 28, color: AppColors.primary),
+            ),
+            const SizedBox(height: 12),
+            Text(name,
+                style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: context.fomraTextPrimary)),
+            if (email.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(email,
+                  style: TextStyle(
+                      fontSize: 13, color: context.fomraTextSecondary)),
+            ],
+            const SizedBox(height: 16),
+            const Divider(height: 1),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.settings_outlined,
+                    size: 20, color: AppColors.primary),
+              ),
+              title: const Text('Settings',
+                  style: TextStyle(fontWeight: FontWeight.w600)),
+              trailing: const Icon(Icons.chevron_right_rounded, size: 20),
+              onTap: () {
+                Navigator.pop(ctx);
+                Navigator.pushNamed(context, '/settings');
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final hour = DateTime.now().hour;
@@ -105,7 +165,13 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _HeroBanner(greeting: greeting, greetIcon: greetIcon),
+            _HeroBanner(
+              greeting: greeting,
+              greetIcon: greetIcon,
+              userName: userName,
+              userEmail: userEmail,
+              onProfileTap: () => _showProfileMenu(userName, userEmail),
+            ),
             const SizedBox(height: 16),
 
             Padding(
@@ -144,12 +210,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
                   const _SectionHeader('Quick Actions'),
                   const SizedBox(height: 16),
-                  _UserInfoSettingsButton(
-                    name: userName,
-                    email: userEmail,
-                    onSettings: () => Navigator.pushNamed(context, '/settings'),
-                  ),
-                  const SizedBox(height: 12),
                   GridView.count(
                     crossAxisCount: 2,
                     crossAxisSpacing: 10,
@@ -189,7 +249,16 @@ class _HomeScreenState extends State<HomeScreen> {
                             begin: Alignment.topLeft, end: Alignment.bottomRight,
                           ),
                         ),
-                      const SizedBox.shrink(),
+                      const _ActionCard(
+                        icon: Icons.apps_rounded,
+                        label: 'Settings',
+                        sub: 'Open',
+                        route: '/settings',
+                        gradient: LinearGradient(
+                          colors: [Color(0xFF0B3D91), Color(0xFF2563EB)],
+                          begin: Alignment.topLeft, end: Alignment.bottomRight,
+                        ),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 28),
@@ -208,7 +277,16 @@ class _HomeScreenState extends State<HomeScreen> {
 class _HeroBanner extends StatefulWidget {
   final String greeting;
   final IconData greetIcon;
-  const _HeroBanner({required this.greeting, required this.greetIcon});
+  final String userName;
+  final String userEmail;
+  final VoidCallback onProfileTap;
+  const _HeroBanner({
+    required this.greeting,
+    required this.greetIcon,
+    required this.userName,
+    required this.userEmail,
+    required this.onProfileTap,
+  });
 
   @override
   State<_HeroBanner> createState() => _HeroBannerState();
@@ -291,17 +369,25 @@ class _HeroBannerState extends State<_HeroBanner>
                       ],
                     ),
                   ),
-                  Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Colors.white.withValues(alpha: 0.18),
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.24),
+                  Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: widget.onProfileTap,
+                      customBorder: const CircleBorder(),
+                      child: Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.white.withValues(alpha: 0.18),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.24),
+                          ),
+                        ),
+                        child: const Icon(Icons.person_outline,
+                            color: Colors.white),
                       ),
                     ),
-                    child: const Icon(Icons.person_outline, color: Colors.white),
                   ),
                 ],
               ),
@@ -581,84 +667,6 @@ class _HoverActionCardState extends State<_HoverActionCard> {
     );
   }
 }
-
-class _UserInfoSettingsButton extends StatelessWidget {
-  final String name;
-  final String email;
-  final VoidCallback onSettings;
-  const _UserInfoSettingsButton({
-    required this.name,
-    required this.email,
-    required this.onSettings,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              color: context.fomraSurface,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: context.fomraBorder),
-              boxShadow: context.fomraCardShadow,
-            ),
-            child: Row(
-              children: [
-                CircleAvatar(
-                  radius: 16,
-                  backgroundColor: AppColors.primary.withValues(alpha: 0.12),
-                  child: const Icon(Icons.person_outline,
-                      size: 16, color: AppColors.primary),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                              color: context.fomraTextPrimary)),
-                      if (email.isNotEmpty)
-                        Text(email,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                                fontSize: 11,
-                                color: context.fomraTextSecondary)),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(width: 10),
-        SizedBox(
-          height: 52,
-          child: ElevatedButton.icon(
-            onPressed: onSettings,
-            icon: const Icon(Icons.settings_outlined, size: 16),
-            label: const Text('Settings'),
-            style: ElevatedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
 
 // ── Notifications Sheet ───────────────────────────────────────────────────────
 
