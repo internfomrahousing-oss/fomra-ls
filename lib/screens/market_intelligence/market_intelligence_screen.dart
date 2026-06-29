@@ -965,7 +965,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
               Text(
                 'Area: ${city.isEmpty ? 'Chennai' : city}'
                 '${_activeLatLng != null ? ' · ${_selectedRadius}km radius' : ''}',
-                style: const TextStyle(fontSize: 12, color: AppColors.textPrimary),
+                style: TextStyle(fontSize: 12, color: context.fomraTextPrimary),
               ),
             ]),
           ),
@@ -5423,7 +5423,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
   }
 
   Widget _buildGiNoResult([String message = 'No result found for this plot.']) {
-    return Text(message, style: TextStyle(fontSize: 11, color: Colors.grey.shade600));
+    return Text(message, style: TextStyle(fontSize: 11, color: context.fomraTextSecondary));
   }
 
   Widget _buildGiFmbDetail() {
@@ -5489,60 +5489,32 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
       final sub = _resolvedMapSub() ?? widget.subDivision?.trim();
       final survey = widget.surveyNumber?.trim();
       final fileName = 'FMB${survey != null ? '-$survey' : ''}${sub != null ? '-Sub-$sub' : ''}.pdf';
+      final title = sub != null && sub.isNotEmpty && sub != '-'
+          ? 'FMB Sketch · Survey ${survey ?? ''} · Sub $sub'
+          : 'FMB Sketch · Survey ${survey ?? ''} (general)';
+      final subtitle = sub != null && sub.isNotEmpty && sub != '-'
+          ? 'Official TSLR/FMB sketch with government seal · ${(pdfBytes.length / 1024).round()} KB'
+          : 'General survey FMB (no sub-division) · ${(pdfBytes.length / 1024).round()} KB';
       return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: const Color(0xFFE8EAF6),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: const Color(0xFF3949AB).withValues(alpha: 0.35)),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1A237E).withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(Icons.picture_as_pdf_outlined, color: Color(0xFF1A237E), size: 28),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      sub != null && sub.isNotEmpty && sub != '-'
-                          ? 'FMB Sketch · Survey ${survey ?? ''} · Sub $sub'
-                          : 'FMB Sketch · Survey ${survey ?? ''} (general)',
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      sub != null && sub.isNotEmpty && sub != '-'
-                          ? 'Official TSLR/FMB sketch with government seal · ${(pdfBytes.length / 1024).round()} KB'
-                          : 'General survey FMB (no sub-division) · ${(pdfBytes.length / 1024).round()} KB',
-                      style: TextStyle(fontSize: 10, color: Colors.grey.shade700),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
+        _buildFmbSketchButton(
+          title: title,
+          subtitle: subtitle,
+          onTap: () => _openFmbPdfInNewTab(pdfBytes!, fileName: fileName),
         ),
         const SizedBox(height: 10),
         SizedBox(
           width: double.infinity,
-          child: FilledButton.icon(
+          child: OutlinedButton.icon(
             onPressed: () => _openFmbPdfInNewTab(pdfBytes!, fileName: fileName),
-            icon: const Icon(Icons.open_in_new_rounded, size: 18),
-            label: const Text('View FMB Sketch', style: TextStyle(fontSize: 12)),
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFF1A237E),
+            icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
+            label: const Text('View as PDF', style: TextStyle(fontSize: 12)),
+            style: OutlinedButton.styleFrom(
               padding: const EdgeInsets.symmetric(vertical: 12),
+              side: BorderSide(
+                color: context.isDarkMode
+                    ? AppColors.primaryLight.withValues(alpha: 0.5)
+                    : const Color(0xFF3949AB).withValues(alpha: 0.45),
+              ),
             ),
           ),
         ),
@@ -5664,6 +5636,80 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
     } finally {
       setState(() => _fetchingEc = false);
     }
+  }
+
+  Widget _buildFmbSketchButton({
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    final cardBg = context.isDarkMode
+        ? const Color(0xFF1A237E).withValues(alpha: 0.22)
+        : const Color(0xFFE8EAF6);
+    final cardBorder = context.isDarkMode
+        ? AppColors.primaryLight.withValues(alpha: 0.35)
+        : const Color(0xFF3949AB).withValues(alpha: 0.35);
+    final iconBg = context.isDarkMode
+        ? AppColors.primaryLight.withValues(alpha: 0.14)
+        : const Color(0xFF1A237E).withValues(alpha: 0.12);
+    final iconColor =
+        context.isDarkMode ? AppColors.primaryLight : const Color(0xFF1A237E);
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: cardBg,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: cardBorder),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: iconBg,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(Icons.picture_as_pdf_outlined, color: iconColor, size: 28),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                        color: context.fomraTextPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: context.fomraTextSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right_rounded,
+                  color: context.fomraTextSecondary, size: 22),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _buildPattaDocPreview(Map<String, dynamic>? patta, {String? title, bool pdfOnly = false}) {
@@ -5939,24 +5985,29 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
       width: double.infinity,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.fomraSurface,
         borderRadius: BorderRadius.circular(10),
         border: Border.all(
           color: row.containsPoint
-              ? const Color(0xFF1565C0).withValues(alpha: 0.5)
+              ? (context.isDarkMode
+                      ? AppColors.primaryLight
+                      : const Color(0xFF1565C0))
+                  .withValues(alpha: 0.5)
               : color.withValues(alpha: 0.25),
           width: row.containsPoint ? 2 : 1,
         ),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         if (row.containsPoint)
-          const Padding(
-            padding: EdgeInsets.only(bottom: 6),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 6),
             child: Text('Selected plot',
                 style: TextStyle(
                     fontSize: 10,
                     fontWeight: FontWeight.w700,
-                    color: Color(0xFF1565C0))),
+                    color: context.isDarkMode
+                        ? AppColors.primaryLight
+                        : const Color(0xFF1565C0))),
           ),
         _kv('Survey Number', row.surveyNumber),
         _kv('Sub Division', row.subLabel),
@@ -5988,11 +6039,14 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
 
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.fomraSurface,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: row.containsPoint
-              ? const Color(0xFF1565C0).withValues(alpha: 0.45)
+              ? (context.isDarkMode
+                      ? AppColors.primaryLight
+                      : const Color(0xFF1565C0))
+                  .withValues(alpha: 0.45)
               : color.withValues(alpha: 0.25),
           width: row.containsPoint ? 2 : 1,
         ),
@@ -6000,13 +6054,15 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
       padding: const EdgeInsets.all(12),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         if (row.containsPoint)
-          const Padding(
-            padding: EdgeInsets.only(bottom: 6),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 6),
             child: Text('Selected plot',
                 style: TextStyle(
                     fontSize: 10,
                     fontWeight: FontWeight.w700,
-                    color: Color(0xFF1565C0))),
+                    color: context.isDarkMode
+                        ? AppColors.primaryLight
+                        : const Color(0xFF1565C0))),
           ),
         _kv('Survey Number', row.surveyNumber),
         _kv('Sub Division', row.subLabel),
@@ -6106,19 +6162,31 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
                     height: 22,
                     child: CircularProgressIndicator(strokeWidth: 2)),
               ))
-            else if (bundle.fmbPdf != null)
-              FilledButton.icon(
-                onPressed: () => _openFmbPdfInNewTab(
+            else if (bundle.fmbPdf != null) ...[
+              _buildFmbSketchButton(
+                title: 'FMB Sketch · Survey ${row.surveyNumber} · Sub ${row.subLabel}',
+                subtitle:
+                    'Tap to open sketch · ${(bundle.fmbPdf!.length / 1024).round()} KB',
+                onTap: () => _openFmbPdfInNewTab(
                   bundle.fmbPdf!,
-                  fileName: 'FMB Survey ${row.surveyNumber} Sub ${row.subLabel}.pdf',
+                  fileName:
+                      'FMB Survey ${row.surveyNumber} Sub ${row.subLabel}.pdf',
                 ),
-                icon: const Icon(Icons.open_in_new_rounded, size: 16),
-                label: const Text('View as PDF', style: TextStyle(fontSize: 11)),
-                style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFF1A237E),
-                  minimumSize: const Size(double.infinity, 40),
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () => _openFmbPdfInNewTab(
+                    bundle.fmbPdf!,
+                    fileName:
+                        'FMB Survey ${row.surveyNumber} Sub ${row.subLabel}.pdf',
+                  ),
+                  icon: const Icon(Icons.picture_as_pdf_outlined, size: 16),
+                  label: const Text('View as PDF', style: TextStyle(fontSize: 11)),
                 ),
-              )
+              ),
+            ]
             else if (bundle.fmbError != null)
               Text(bundle.fmbError!,
                   style: TextStyle(fontSize: 11, color: Colors.orange.shade900))
@@ -6172,8 +6240,9 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
                 child: Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: context.fomraSurface,
                     borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: context.fomraBorder),
                   ),
                   child: Column(children: owner.entries.map((e) => _kv(e.key, e.value)).toList()),
                 ),
@@ -6255,9 +6324,22 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
           ),
         ));
       } else if (_fmbPdfBytes != null) {
-        fmbChildren.add(PattaDocumentPreview(
-          pdfBytes: _fmbPdfBytes,
-          fileName: (fmb['fileName'] as String?) ?? 'FMB Sketch.pdf',
+        final fmbFileName = (fmb['fileName'] as String?) ?? 'FMB Sketch.pdf';
+        final sizeKb = (_fmbPdfBytes!.length / 1024).round();
+        fmbChildren.add(_buildFmbSketchButton(
+          title: fmbFileName,
+          subtitle: 'Tap to open sketch · $sizeKb KB',
+          onTap: () => _openFmbPdfInNewTab(_fmbPdfBytes!, fileName: fmbFileName),
+        ));
+        fmbChildren.add(const SizedBox(height: 8));
+        fmbChildren.add(SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: () =>
+                _openFmbPdfInNewTab(_fmbPdfBytes!, fileName: fmbFileName),
+            icon: const Icon(Icons.picture_as_pdf_outlined, size: 16),
+            label: const Text('View as PDF', style: TextStyle(fontSize: 11)),
+          ),
         ));
       } else if (_fmbLoadError != null) {
         fmbChildren.add(Text(_fmbLoadError!,
@@ -6471,14 +6553,14 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
           SizedBox(
             width: 120,
             child: Text(key,
-                style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                style: TextStyle(fontSize: 11, color: context.fomraTextSecondary)),
           ),
           const SizedBox(width: 6),
           Expanded(
             child: Text(value,
-                style: const TextStyle(
+                style: TextStyle(
                     fontSize: 11,
-                    color: AppColors.textPrimary,
+                    color: context.fomraTextPrimary,
                     fontWeight: FontWeight.w600)),
           ),
         ]),

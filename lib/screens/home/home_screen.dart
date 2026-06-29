@@ -339,7 +339,7 @@ class _HeroBannerState extends State<_HeroBanner>
 
     return Container(
       width: double.infinity,
-      decoration: const BoxDecoration(gradient: AppColors.heroGradient),
+      decoration: BoxDecoration(gradient: context.fomraHeroGradient),
       child: AnimatedBuilder(
         animation: _controller,
         builder: (_, __) => Stack(children: [

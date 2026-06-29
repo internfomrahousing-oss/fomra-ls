@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
+import '../theme/fomra_theme_context.dart';
 
 class _MenuItem {
   final String title;
@@ -66,6 +67,8 @@ class AppDrawer extends StatelessWidget {
 class _DrawerHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
+    final isDark = context.isDarkMode;
+
     return GestureDetector(
       onTap: () {
         Navigator.pop(context);
@@ -74,7 +77,12 @@ class _DrawerHeader extends StatelessWidget {
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.fromLTRB(20, 56, 20, 20),
-        color: AppColors.primaryDark,
+        decoration: BoxDecoration(
+          color: isDark ? AppColors.darkSurfaceVar : AppColors.primaryDark,
+          border: isDark
+              ? Border(bottom: BorderSide(color: context.fomraBorder))
+              : null,
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -82,25 +90,33 @@ class _DrawerHeader extends StatelessWidget {
               width: 52,
               height: 52,
               decoration: BoxDecoration(
-                color: AppColors.accent,
+                color: isDark
+                    ? AppColors.primaryLight.withValues(alpha: 0.18)
+                    : AppColors.accent,
                 borderRadius: BorderRadius.circular(12),
+                border: isDark
+                    ? Border.all(
+                        color: AppColors.primaryLight.withValues(alpha: 0.35))
+                    : null,
               ),
-              child: const Icon(Icons.domain, color: Colors.white, size: 28),
+              child: Icon(Icons.domain,
+                  color: isDark ? AppColors.primaryLight : Colors.white,
+                  size: 28),
             ),
             const SizedBox(height: 12),
-            const Text(
+            Text(
               'FomraLS',
               style: TextStyle(
-                color: Colors.white,
+                color: isDark ? context.fomraTextPrimary : Colors.white,
                 fontSize: 22,
                 fontWeight: FontWeight.bold,
                 letterSpacing: 1,
               ),
             ),
-            const Text(
+            Text(
               'Fomra Housing',
               style: TextStyle(
-                color: Color(0xFFB0BEC5),
+                color: isDark ? context.fomraTextSecondary : const Color(0xFFB0BEC5),
                 fontSize: 13,
               ),
             ),
@@ -119,22 +135,33 @@ class _DrawerTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = context.isDarkMode;
+    final activeColor = isDark ? AppColors.primaryLight : AppColors.accentLight;
+    final inactiveIcon = isDark ? context.fomraTextSecondary : const Color(0xFFB0BEC5);
+    final inactiveText = isDark ? context.fomraTextSecondary : const Color(0xFFCFD8DC);
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
       decoration: BoxDecoration(
-        color: isActive ? AppColors.accent.withValues(alpha: 0.2) : Colors.transparent,
+        color: isActive
+            ? (isDark
+                ? AppColors.primaryLight.withValues(alpha: 0.12)
+                : AppColors.accent.withValues(alpha: 0.2))
+            : Colors.transparent,
         borderRadius: BorderRadius.circular(10),
       ),
       child: ListTile(
         leading: Icon(
           item.icon,
-          color: isActive ? AppColors.accentLight : const Color(0xFFB0BEC5),
+          color: isActive ? activeColor : inactiveIcon,
           size: 22,
         ),
         title: Text(
           item.title,
           style: TextStyle(
-            color: isActive ? Colors.white : const Color(0xFFCFD8DC),
+            color: isActive
+                ? (isDark ? context.fomraTextPrimary : Colors.white)
+                : inactiveText,
             fontSize: 14,
             fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
           ),
@@ -159,21 +186,24 @@ class _DrawerFooter extends StatelessWidget {
     final name = user?.fullName ?? 'User';
     final email = user?.email ?? '';
     final initial = name.trim().isNotEmpty ? name.trim()[0].toUpperCase() : '?';
+    final isDark = context.isDarkMode;
 
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: const BoxDecoration(
-        border: Border(top: BorderSide(color: Color(0xFF1A2E4A), width: 1)),
+      decoration: BoxDecoration(
+        border: Border(top: BorderSide(color: context.fomraBorder, width: 1)),
       ),
       child: Row(
         children: [
           CircleAvatar(
             radius: 18,
-            backgroundColor: AppColors.accent,
+            backgroundColor: isDark
+                ? AppColors.primaryLight.withValues(alpha: 0.22)
+                : AppColors.accent,
             child: Text(
               initial,
-              style: const TextStyle(
-                color: Colors.white,
+              style: TextStyle(
+                color: isDark ? AppColors.primaryLight : Colors.white,
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
               ),
@@ -186,8 +216,8 @@ class _DrawerFooter extends StatelessWidget {
               children: [
                 Text(
                   name,
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: isDark ? context.fomraTextPrimary : Colors.white,
                     fontSize: 13,
                     fontWeight: FontWeight.w500,
                   ),
@@ -196,8 +226,8 @@ class _DrawerFooter extends StatelessWidget {
                 ),
                 Text(
                   email,
-                  style: const TextStyle(
-                    color: Color(0xFF90A4AE),
+                  style: TextStyle(
+                    color: isDark ? context.fomraTextSecondary : const Color(0xFF90A4AE),
                     fontSize: 11,
                   ),
                   maxLines: 1,
@@ -207,7 +237,9 @@ class _DrawerFooter extends StatelessWidget {
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.logout, color: Color(0xFF90A4AE), size: 20),
+            icon: Icon(Icons.logout,
+                color: isDark ? context.fomraTextSecondary : const Color(0xFF90A4AE),
+                size: 20),
             tooltip: 'Sign Out',
             onPressed: () {
               Navigator.pop(context);

@@ -3,6 +3,7 @@ import '../../services/auth_service.dart';
 import '../../services/api_client.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_input.dart';
+import '../../theme/fomra_theme_context.dart';
 
 class PortalLoginScreen extends StatefulWidget {
   const PortalLoginScreen({super.key, required this.portal});
@@ -67,11 +68,19 @@ class _PortalLoginScreenState extends State<PortalLoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = context.isDarkMode;
+
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: LinearGradient(
-            colors: [AppColors.primaryDark, AppColors.primary],
+            colors: isDark
+                ? const [
+                    AppColors.darkBackground,
+                    Color(0xFF0F2447),
+                    Color(0xFF152A52),
+                  ]
+                : const [AppColors.primaryDark, AppColors.primary],
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
           ),
@@ -145,27 +154,32 @@ class _PortalLoginScreenState extends State<PortalLoginScreen> {
                         Container(
                           padding: const EdgeInsets.all(24),
                           decoration: BoxDecoration(
-                            color: Colors.white,
+                            color: isDark ? context.fomraSurface : Colors.white,
                             borderRadius: BorderRadius.circular(20),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.15),
-                                blurRadius: 24,
-                                offset: const Offset(0, 8),
-                              ),
-                            ],
+                            border: isDark
+                                ? Border.all(color: context.fomraBorder)
+                                : null,
+                            boxShadow: isDark
+                                ? context.fomraCardShadow
+                                : [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(alpha: 0.15),
+                                      blurRadius: 24,
+                                      offset: const Offset(0, 8),
+                                    ),
+                                  ],
                           ),
                           child: Form(
                             key: _formKey,
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text(
+                                Text(
                                   'Sign In',
                                   style: TextStyle(
                                     fontSize: 20,
                                     fontWeight: FontWeight.w700,
-                                    color: AppColors.textPrimary,
+                                    color: context.fomraTextPrimary,
                                   ),
                                 ),
                                 const SizedBox(height: 4),
@@ -174,8 +188,7 @@ class _PortalLoginScreenState extends State<PortalLoginScreen> {
                                   style: TextStyle(
                                       fontSize: 13,
                                       fontWeight: FontWeight.w500,
-                                      color: AppColors.textSecondary
-                                          .withValues(alpha: 0.8)),
+                                      color: context.fomraTextSecondary),
                                 ),
                                 const SizedBox(height: 22),
 
@@ -214,7 +227,7 @@ class _PortalLoginScreenState extends State<PortalLoginScreen> {
                                             ? Icons.visibility_off_outlined
                                             : Icons.visibility_outlined,
                                         size: 20,
-                                        color: AppColors.textSecondary,
+                                        color: context.fomraTextSecondary,
                                       ),
                                       onPressed: () =>
                                           setState(() => _obscure = !_obscure),
@@ -259,7 +272,9 @@ class _PortalLoginScreenState extends State<PortalLoginScreen> {
                                   child: ElevatedButton(
                                     onPressed: _loading ? null : _login,
                                     style: ElevatedButton.styleFrom(
-                                      backgroundColor: AppColors.primary,
+                                      backgroundColor: isDark
+                                          ? AppColors.primaryLight
+                                          : AppColors.primary,
                                       foregroundColor: Colors.white,
                                       shape: RoundedRectangleBorder(
                                           borderRadius:

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../screens/home/home_screen.dart';
 import '../theme/app_theme.dart';
+import '../theme/fomra_theme_context.dart';
 
 class FomraAppBar extends StatelessWidget implements PreferredSizeWidget {
   final String? moduleName;
@@ -13,7 +14,7 @@ class FomraAppBar extends StatelessWidget implements PreferredSizeWidget {
   Widget build(BuildContext context) {
     return AppBar(
       flexibleSpace: Container(
-        decoration: const BoxDecoration(gradient: AppColors.heroGradient),
+        decoration: BoxDecoration(gradient: context.fomraHeroGradient),
       ),
       backgroundColor: Colors.transparent,
       surfaceTintColor: Colors.transparent,
