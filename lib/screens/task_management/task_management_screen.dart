@@ -588,7 +588,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
 
     if (widget.isTab) {
       return Scaffold(
-        backgroundColor: const Color(0xFFF6F8FC),
+        backgroundColor: context.fomraPageBg,
         body: Column(children: [
           _buildTaskTabBar(),
           Expanded(child: taskListView),
@@ -598,7 +598,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F8FC),
+      backgroundColor: context.fomraPageBg,
       appBar: FomraAppBar(
         moduleName: 'Task Management',
         actions: [
@@ -717,7 +717,7 @@ class _TaskList extends StatelessWidget {
     this.onPrimaryAction,
   });
 
-  Widget _buildEmptyState() => Center(
+  Widget _buildEmptyState(BuildContext context) => Center(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 32),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -742,8 +742,8 @@ class _TaskList extends StatelessWidget {
             const SizedBox(height: 18),
             Text(
               tabIndex == 0 ? 'No tasks yet' : 'No tasks in this tab',
-              style: const TextStyle(
-                color: AppColors.textPrimary,
+              style: TextStyle(
+                color: context.fomraTextPrimary,
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
               ),
@@ -754,8 +754,8 @@ class _TaskList extends StatelessWidget {
                   ? 'Create your first task to start tracking assignments and progress.'
                   : 'Try another status tab or create a new task to continue.',
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: AppColors.textSecondary,
+              style: TextStyle(
+                color: context.fomraTextSecondary,
                 fontSize: 13,
               ),
             ),
@@ -774,7 +774,7 @@ class _TaskList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (tasks.isEmpty) {
-      return _buildEmptyState();
+      return _buildEmptyState(context);
     }
     return ListView.builder(
       padding: const EdgeInsets.all(16),
@@ -846,8 +846,8 @@ class _TaskCard extends StatelessWidget {
                     Text(task.description,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                            fontSize: 12, color: AppColors.textSecondary)),
+                        style: TextStyle(
+                            fontSize: 12, color: context.fomraTextSecondary)),
                     const SizedBox(height: 8),
 
                     // Completion progress bar
@@ -857,7 +857,7 @@ class _TaskCard extends StatelessWidget {
                           borderRadius: BorderRadius.circular(4),
                           child: LinearProgressIndicator(
                             value: task.completionPercent / 100,
-                            backgroundColor: const Color(0xFFE5E7EB),
+                            backgroundColor: context.fomraSurfaceVar,
                             color: task.status == TaskStatus.done
                                 ? AppColors.success
                                 : task.status == TaskStatus.overdue
@@ -869,9 +869,9 @@ class _TaskCard extends StatelessWidget {
                       ),
                       const SizedBox(width: 8),
                       Text('${task.completionPercent}%',
-                          style: const TextStyle(
+                          style: TextStyle(
                               fontSize: 10,
-                              color: AppColors.textSecondary,
+                              color: context.fomraTextSecondary,
                               fontWeight: FontWeight.w600)),
                     ]),
                     const SizedBox(height: 8),
@@ -996,7 +996,7 @@ class _SlaBar extends StatelessWidget {
           borderRadius: BorderRadius.circular(3),
           child: LinearProgressIndicator(
             value: progress,
-            backgroundColor: const Color(0xFFE5E7EB),
+            backgroundColor: context.fomraSurfaceVar,
             color: color,
             minHeight: 4,
           ),

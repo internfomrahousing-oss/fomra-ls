@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../theme/fomra_theme_context.dart';
 import '../../widgets/app_drawer.dart';
 import '../../widgets/fomra_app_bar.dart';
 import '../../widgets/fomra_bottom_nav.dart';
@@ -43,6 +44,7 @@ class _LandWorkspaceScreenState extends State<LandWorkspaceScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: context.fomraPageBg,
       appBar: FomraAppBar(
         moduleName: 'Land Workspace',
         bottom: PreferredSize(

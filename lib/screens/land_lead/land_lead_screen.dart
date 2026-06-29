@@ -100,7 +100,11 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
     );
 
     if (widget.isTab) {
-      return Scaffold(body: body, floatingActionButton: fab);
+      return Scaffold(
+        backgroundColor: context.fomraPageBg,
+        body: body,
+        floatingActionButton: fab,
+      );
     }
     return Scaffold(
       appBar: FomraAppBar(
@@ -618,9 +622,9 @@ class _LeadCard extends StatelessWidget {
                     Row(children: [
                       Expanded(
                         child: Text(lead.leadId,
-                            style: const TextStyle(
+                            style: TextStyle(
                                 fontSize: 18,
-                                color: AppColors.textPrimary,
+                                color: context.fomraTextPrimary,
                                 fontWeight: FontWeight.w800,
                                 letterSpacing: 0.2)),
                       ),

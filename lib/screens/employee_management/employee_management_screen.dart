@@ -5,6 +5,8 @@ import '../../services/app_store.dart';
 import '../../services/auth_service.dart';
 import '../../services/employee_service.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/fomra_input.dart';
+import '../../theme/fomra_theme_context.dart';
 import 'add_employee_screen.dart';
 
 class EmployeeManagementScreen extends StatefulWidget {
@@ -143,20 +145,11 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
               Expanded(
                 child: TextField(
                   onChanged: (v) => setState(() => _search = v),
-                  decoration: InputDecoration(
-                    hintText: 'Search employees…',
-                    prefixIcon: const Icon(Icons.search, size: 20),
-                    isDense: true,
-                    filled: true,
-                    fillColor: const Color(0xFFF3F4F6),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: BorderSide.none,
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 10,
-                    ),
+                  style: TextStyle(color: context.fomraTextPrimary),
+                  decoration: FomraInput.decoration(
+                    context: context,
+                    hint: 'Search employees…',
+                    icon: Icons.search,
                   ),
                 ),
               ),
@@ -272,7 +265,7 @@ class _EmployeeCard extends StatelessWidget {
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: Colors.grey.shade200),
+        side: BorderSide(color: context.fomraBorder),
       ),
       child: Padding(
         padding: const EdgeInsets.all(14),
@@ -303,9 +296,10 @@ class _EmployeeCard extends StatelessWidget {
                       Expanded(
                         child: Text(
                           employee.fullName,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.w700,
+                            color: context.fomraTextPrimary,
                           ),
                         ),
                       ),

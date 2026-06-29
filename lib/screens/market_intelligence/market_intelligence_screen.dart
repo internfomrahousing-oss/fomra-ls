@@ -1037,9 +1037,15 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: const Color(0xFFFFFBEB),
+              color: context.isDarkMode
+                  ? AppColors.warning.withValues(alpha: 0.14)
+                  : const Color(0xFFFFFBEB),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: const Color(0xFFFCD34D)),
+              border: Border.all(
+                color: context.isDarkMode
+                    ? AppColors.warning.withValues(alpha: 0.4)
+                    : const Color(0xFFFCD34D),
+              ),
             ),
             child: Row(children: [
               const Icon(Icons.info_outline, color: Color(0xFFD97706), size: 16),
@@ -1105,7 +1111,8 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                     selectedColor: mbColor,
                     labelStyle: TextStyle(
                       color: _compFilter == (f == 'Old Projects' ? 'Old' : f)
-                          ? Colors.white : AppColors.textPrimary,
+                          ? Colors.white
+                          : context.fomraTextPrimary,
                       fontWeight: FontWeight.w600,
                     ),
                     onSelected: (_) => setState(() {
@@ -1128,7 +1135,9 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                     selected: _oldYearsFilter == yrs,
                     selectedColor: AppColors.primary,
                     labelStyle: TextStyle(
-                      color: _oldYearsFilter == yrs ? Colors.white : AppColors.textPrimary,
+                      color: _oldYearsFilter == yrs
+                          ? Colors.white
+                          : context.fomraTextPrimary,
                       fontWeight: FontWeight.w600,
                     ),
                     onSelected: (_) => setState(() => _oldYearsFilter = yrs),
@@ -1162,7 +1171,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
               decoration: BoxDecoration(
                 color: context.fomraSurface,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFE5E7EB)),
+                border: Border.all(color: context.fomraBorder),
                 boxShadow: [
                   BoxShadow(
                       color: Colors.black.withValues(alpha: 0.04),
@@ -1174,9 +1183,10 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                   Expanded(
                     child: Text(
                       name.isNotEmpty ? name : locality,
-                      style: const TextStyle(
-                          fontSize: 13, fontWeight: FontWeight.w700,
-                          color: AppColors.textPrimary),
+                      style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: context.fomraTextPrimary),
                       maxLines: 2, overflow: TextOverflow.ellipsis,
                     ),
                   ),
@@ -1215,26 +1225,28 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                 if (distKm != null) ...[
                   const SizedBox(height: 4),
                   Text('${distKm.toStringAsFixed(1)} km away',
-                      style: const TextStyle(fontSize: 10, color: AppColors.textSecondary)),
+                      style: TextStyle(
+                          fontSize: 10, color: context.fomraTextSecondary)),
                 ],
                 if (developer.isNotEmpty && isTnrera) ...[
                   const SizedBox(height: 3),
                   Text(developer,
-                      style: const TextStyle(
-                          fontSize: 11, color: AppColors.textSecondary,
+                      style: TextStyle(
+                          fontSize: 11,
+                          color: context.fomraTextSecondary,
                           fontStyle: FontStyle.italic),
                       maxLines: 1, overflow: TextOverflow.ellipsis),
                 ],
                 if (locality.isNotEmpty) ...[
                   const SizedBox(height: 4),
                   Row(children: [
-                    const Icon(Icons.location_on_outlined, size: 12,
-                        color: AppColors.textSecondary),
+                    Icon(Icons.location_on_outlined,
+                        size: 12, color: context.fomraTextSecondary),
                     const SizedBox(width: 4),
                     Expanded(
                       child: Text(locality,
-                          style: const TextStyle(
-                              fontSize: 11, color: AppColors.textSecondary),
+                          style: TextStyle(
+                              fontSize: 11, color: context.fomraTextSecondary),
                           maxLines: 1, overflow: TextOverflow.ellipsis),
                     ),
                   ]),
@@ -4978,14 +4990,25 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
           width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
-            color: const Color(0xFFEFF6FF),
+            color: context.isDarkMode
+                ? AppColors.primary.withValues(alpha: 0.16)
+                : const Color(0xFFEFF6FF),
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: const Color(0xFFBFDBFE)),
+            border: Border.all(
+              color: context.isDarkMode
+                  ? AppColors.primary.withValues(alpha: 0.35)
+                  : const Color(0xFFBFDBFE),
+            ),
           ),
-          child: const Text(
+          child: Text(
             'Quick access: Patta, FMB, EC, G-Value and Crop details from Tamil Nilam.',
             style: TextStyle(
-                fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF1D4ED8)),
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: context.isDarkMode
+                  ? AppColors.primaryLight
+                  : const Color(0xFF1D4ED8),
+            ),
           ),
         ),
         const SizedBox(height: 10),
@@ -5003,10 +5026,10 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: context.fomraBorder),
             ),
-            child: const Text(
+            child: Text(
               'Tap Patta, FMB, EC, G-Value, or Crop above to load details from Tamil Nilam.',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+              style: TextStyle(fontSize: 11, color: context.fomraTextSecondary),
             ),
           ),
         ],
@@ -5043,8 +5066,11 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
         ],
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('Land Parcel Information',
-            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Color(0xFF1565C0))),
+        Text('Land Parcel Information',
+            style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
+                color: context.fomraTextPrimary)),
         const SizedBox(height: 10),
         Wrap(
           spacing: 8,
@@ -5081,21 +5107,26 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
       width: 180,
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.7),
+        color: context.fomraSurface,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.9)),
+        border: Border.all(color: context.fomraBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(label,
-              style: const TextStyle(
-                  fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.textSecondary)),
+              style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  color: context.fomraTextSecondary)),
           const SizedBox(height: 2),
           Text(value,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+              style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: context.fomraTextPrimary)),
         ],
       ),
     );
