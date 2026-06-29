@@ -77,14 +77,6 @@ const _kInfraCategoryOrder = [
   'Transport',
 ];
 
-const _kInfraWeights = <String, double>{
-  'Education': 0.25,
-  'Healthcare': 0.20,
-  'Road Connectivity': 0.25,
-  'Commercial': 0.15,
-  'Transport': 0.15,
-};
-
 // â”€â”€ Valuation result â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _AreaPriceStats {
@@ -1728,26 +1720,47 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
 
   Widget _buildMapLayerChip(_MarketMapLayer layer, String label, IconData icon) {
     final selected = _mapLayer == layer;
+    final isDark = context.isDarkMode;
+    final selectedBg = isDark
+        ? AppColors.primaryLight.withValues(alpha: 0.2)
+        : AppColors.primary;
+    final unselectedBg = context.fomraSurface.withValues(alpha: isDark ? 0.88 : 0.92);
+    final selectedFg = isDark ? AppColors.primaryLight : Colors.white;
+    final unselectedFg =
+        isDark ? context.fomraTextPrimary : AppColors.primary;
+
     return Material(
-      color: selected ? AppColors.primary : context.fomraSurface.withValues(alpha: 0.92),
+      color: selected ? selectedBg : unselectedBg,
       elevation: selected ? 2 : 1,
+      shadowColor: Colors.black.withValues(alpha: isDark ? 0.45 : 0.2),
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
         onTap: () => _setMapLayer(layer),
         borderRadius: BorderRadius.circular(12),
-        child: Padding(
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: selected
+                  ? (isDark
+                      ? AppColors.primaryLight.withValues(alpha: 0.45)
+                      : Colors.transparent)
+                  : context.fomraBorder.withValues(alpha: 0.85),
+            ),
+          ),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 14, color: selected ? Colors.white : AppColors.primary),
+              Icon(icon,
+                  size: 14, color: selected ? selectedFg : unselectedFg),
               const SizedBox(width: 4),
               Text(
                 label,
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
-                  color: selected ? Colors.white : AppColors.primary,
+                  color: selected ? selectedFg : unselectedFg,
                 ),
               ),
             ],
@@ -2505,7 +2518,6 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                 child: _ScoreRow(
                   label: e.key,
                   score: e.value,
-                  weight: _kInfraWeights[e.key],
                 ),
               ),
             ),
@@ -3110,8 +3122,7 @@ class _ErrorBanner extends StatelessWidget {
 class _ScoreRow extends StatelessWidget {
   final String label;
   final double score;
-  final double? weight;
-  const _ScoreRow({required this.label, required this.score, this.weight});
+  const _ScoreRow({required this.label, required this.score});
 
   @override
   Widget build(BuildContext context) {
@@ -3121,10 +3132,9 @@ class _ScoreRow extends StatelessWidget {
             ? AppColors.warning
             : AppColors.error;
     final isWide = MediaQuery.of(context).size.width > 600;
-    final weightLabel = weight != null ? ' (${(weight! * 100).round()}%)' : '';
     return Row(children: [
       Expanded(
-          child: Text('$label$weightLabel',
+          child: Text(label,
               style: TextStyle(
                   fontSize: isWide ? 15 : 12, color: AppColors.textSecondary))),
       SizedBox(

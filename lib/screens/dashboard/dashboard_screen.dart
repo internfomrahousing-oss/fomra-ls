@@ -105,6 +105,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final maxPipeline = [newLeads, contacted, negotiation, acquired]
         .fold<int>(1, (a, b) => a > b ? a : b);
 
+    final accentBlue =
+        context.isDarkMode ? const Color(0xFF4A6FA5) : AppColors.primaryDark;
+    final infoBlue =
+        context.isDarkMode ? const Color(0xFF3D5F8F) : const Color(0xFF1E4A8C);
+
     return Scaffold(
       appBar: const FomraAppBar(moduleName: 'Dashboard'),
       drawer: const AppDrawer(currentRoute: '/dashboard'),
@@ -115,10 +120,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const _Header(
+            _Header(
               title: 'Management Dashboard',
               subtitle: 'Real-time overview of your land acquisition pipeline',
               icon: Icons.dashboard_outlined,
+              accentColor: accentBlue,
             ),
             const SizedBox(height: 16),
             _kpiGrid(context, [
@@ -126,7 +132,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 'Total Leads',
                 '$totalLeads',
                 Icons.location_on_outlined,
-                AppColors.info,
+                infoBlue,
                 '+$totalLeads total',
                 '+18%',
                 weeklyTrend,
@@ -137,7 +143,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 'Active Leads',
                 '$activeLeads',
                 Icons.trending_up_outlined,
-                AppColors.primary,
+                accentBlue,
                 'In pipeline',
                 '+8%',
                 [newLeads.toDouble(), contacted.toDouble(), negotiation.toDouble(), activeLeads.toDouble()],
@@ -211,7 +217,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       children: _recentLeads
                           .map((lead) => Padding(
                                 padding: const EdgeInsets.only(bottom: 10),
-                                child: _ActivityRow(lead: lead),
+                                child: _ActivityRow(
+                                  lead: lead,
+                                  accentColor: accentBlue,
+                                ),
                               ))
                           .toList(),
                     ),
@@ -245,17 +254,23 @@ class _Header extends StatelessWidget {
   final String title;
   final String subtitle;
   final IconData icon;
-  const _Header({required this.title, required this.subtitle, required this.icon});
+  final Color accentColor;
+  const _Header({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.accentColor,
+  });
 
   @override
   Widget build(BuildContext context) => Row(children: [
         Container(
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
-            color: AppColors.primary.withValues(alpha: 0.12),
+            color: accentColor.withValues(alpha: 0.12),
             borderRadius: BorderRadius.circular(10),
           ),
-          child: Icon(icon, color: AppColors.primary, size: 22),
+          child: Icon(icon, color: accentColor, size: 22),
         ),
         const SizedBox(width: 12),
         Expanded(
@@ -504,7 +519,8 @@ class _FunnelRow extends StatelessWidget {
 
 class _ActivityRow extends StatelessWidget {
   final LandLead lead;
-  const _ActivityRow({required this.lead});
+  final Color accentColor;
+  const _ActivityRow({required this.lead, required this.accentColor});
 
   @override
   Widget build(BuildContext context) {
@@ -515,9 +531,9 @@ class _ActivityRow extends StatelessWidget {
       children: [
         CircleAvatar(
           radius: 16,
-          backgroundColor: AppColors.primary.withValues(alpha: 0.12),
-          child: const Icon(Icons.location_on_outlined,
-              size: 16, color: AppColors.primary),
+          backgroundColor: accentColor.withValues(alpha: 0.12),
+          child: Icon(Icons.location_on_outlined,
+              size: 16, color: accentColor),
         ),
         const SizedBox(width: 10),
         Expanded(
@@ -651,6 +667,9 @@ class _KpiLeadTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final statusColor = lead.status.color;
+    final accentColor = context.isDarkMode
+        ? const Color(0xFF4A6FA5)
+        : AppColors.primaryDark;
     final location = [lead.location, lead.village, lead.district]
         .where((s) => s.isNotEmpty)
         .join(', ');
@@ -735,10 +754,10 @@ class _KpiLeadTile extends StatelessWidget {
               ),
               const SizedBox(height: 6),
               Row(children: [
-                const Text('Tap for full details',
+                Text('Tap for full details',
                     style: TextStyle(
                         fontSize: 10,
-                        color: AppColors.primary,
+                        color: accentColor,
                         fontWeight: FontWeight.w600)),
                 const Spacer(),
                 Icon(Icons.chevron_right,

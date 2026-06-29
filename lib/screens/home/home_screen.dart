@@ -263,7 +263,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           sub: 'Open',
                           route: '/dashboard',
                           gradient: LinearGradient(
-                            colors: [Color(0xFF1D4ED8), Color(0xFF60A5FA)],
+                            colors: [Color(0xFF0A2348), Color(0xFF1A3A7A)],
                             begin: Alignment.topLeft, end: Alignment.bottomRight,
                           ),
                         ),
@@ -336,6 +336,8 @@ class _HeroBannerState extends State<_HeroBanner>
     final time = _formattedTime(_now);
     final greeting = _greetingFor(_now);
     final greetIcon = _greetIconFor(_now);
+    final isDark = context.isDarkMode;
+    final greetColor = _greetingAccent(_now);
 
     return Container(
       width: double.infinity,
@@ -346,18 +348,32 @@ class _HeroBannerState extends State<_HeroBanner>
           Positioned(
             right: -35 + (_controller.value * 18),
             top: -32,
-            child: const _Blob(170, Colors.white, 0.05),
+            child: _Blob(
+              170,
+              isDark ? AppColors.primaryLight : Colors.white,
+              isDark ? 0.14 : 0.05,
+            ),
           ),
           Positioned(
             right: 48,
             bottom: -30 + (_controller.value * 12),
-            child: const _Blob(118, Colors.white, 0.04),
+            child: _Blob(
+              118,
+              isDark ? AppColors.secondary : Colors.white,
+              isDark ? 0.12 : 0.04,
+            ),
           ),
           Positioned(
             left: -24 + (_controller.value * 10),
             bottom: 4,
-            child: const _Blob(84, AppColors.accent, 0.09),
+            child: _Blob(84, AppColors.accent, isDark ? 0.16 : 0.09),
           ),
+          if (isDark)
+            Positioned(
+              left: 120 + (_controller.value * 8),
+              top: 8,
+              child: const _Blob(56, Color(0xFF22D3EE), 0.1),
+            ),
           Padding(
             padding: const EdgeInsets.fromLTRB(24, 16, 24, 18),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -368,14 +384,25 @@ class _HeroBannerState extends State<_HeroBanner>
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'Welcome to FomraLS',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 28,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: -0.4,
-                            height: 1.05,
+                        ShaderMask(
+                          shaderCallback: (bounds) => LinearGradient(
+                            colors: isDark
+                                ? [
+                                    Colors.white,
+                                    AppColors.primaryLight,
+                                    const Color(0xFFC4B5FD),
+                                  ]
+                                : [Colors.white, Colors.white],
+                          ).createShader(bounds),
+                          child: const Text(
+                            'Welcome to FomraLS',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 28,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: -0.4,
+                              height: 1.05,
+                            ),
                           ),
                         ),
                         const SizedBox(height: 4),
@@ -400,9 +427,21 @@ class _HeroBannerState extends State<_HeroBanner>
                         height: 44,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: Colors.white.withValues(alpha: 0.18),
+                          gradient: isDark
+                              ? LinearGradient(
+                                  colors: [
+                                    AppColors.primaryLight.withValues(alpha: 0.28),
+                                    AppColors.secondary.withValues(alpha: 0.22),
+                                  ],
+                                )
+                              : null,
+                          color: isDark
+                              ? null
+                              : Colors.white.withValues(alpha: 0.18),
                           border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.24),
+                            color: isDark
+                                ? AppColors.primaryLight.withValues(alpha: 0.45)
+                                : Colors.white.withValues(alpha: 0.24),
                           ),
                         ),
                         child: const Icon(Icons.person_outline,
@@ -417,18 +456,41 @@ class _HeroBannerState extends State<_HeroBanner>
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.12),
+                  gradient: isDark
+                      ? LinearGradient(
+                          colors: [
+                            AppColors.primaryLight.withValues(alpha: 0.14),
+                            AppColors.secondary.withValues(alpha: 0.1),
+                          ],
+                          begin: Alignment.centerLeft,
+                          end: Alignment.centerRight,
+                        )
+                      : null,
+                  color: isDark
+                      ? null
+                      : Colors.white.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+                  border: Border.all(
+                    color: isDark
+                        ? greetColor.withValues(alpha: 0.35)
+                        : Colors.white.withValues(alpha: 0.2),
+                  ),
                 ),
                 child: Row(
                   children: [
-                    Icon(greetIcon, color: AppColors.accentLight, size: 17),
+                    Container(
+                      padding: const EdgeInsets.all(5),
+                      decoration: BoxDecoration(
+                        color: greetColor.withValues(alpha: 0.18),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(greetIcon, color: greetColor, size: 15),
+                    ),
                     const SizedBox(width: 8),
                     Text(
                       greeting,
-                      style: const TextStyle(
-                        color: AppColors.accentLight,
+                      style: TextStyle(
+                        color: greetColor,
                         fontWeight: FontWeight.w700,
                         fontSize: 13,
                       ),
@@ -465,6 +527,13 @@ class _HeroBannerState extends State<_HeroBanner>
     if (hour < 12) return Icons.wb_sunny_outlined;
     if (hour < 17) return Icons.wb_cloudy_outlined;
     return Icons.nights_stay_outlined;
+  }
+
+  Color _greetingAccent(DateTime dt) {
+    final hour = dt.hour;
+    if (hour < 12) return const Color(0xFFFBBF24);
+    if (hour < 17) return const Color(0xFF38BDF8);
+    return const Color(0xFFC4B5FD);
   }
 
   String _formattedTime(DateTime dt) {
