@@ -68,6 +68,9 @@ class _HomeScreenState extends State<HomeScreen> {
     final greeting = hour < 12 ? 'Good Morning' : hour < 17 ? 'Good Afternoon' : 'Good Evening';
     final greetIcon = hour < 12 ? Icons.wb_sunny_outlined
         : hour < 17 ? Icons.wb_cloudy_outlined : Icons.nights_stay_outlined;
+    final user = AuthService.instance.currentUser;
+    final userName = user?.fullName ?? 'User';
+    final userEmail = user?.email ?? '';
 
     return Scaffold(
       appBar: FomraAppBar(
@@ -141,18 +144,24 @@ class _HomeScreenState extends State<HomeScreen> {
 
                   const _SectionHeader('Quick Actions'),
                   const SizedBox(height: 16),
+                  _UserInfoSettingsButton(
+                    name: userName,
+                    email: userEmail,
+                    onSettings: () => Navigator.pushNamed(context, '/settings'),
+                  ),
+                  const SizedBox(height: 12),
                   GridView.count(
                     crossAxisCount: 2,
-                    crossAxisSpacing: 16,
-                    mainAxisSpacing: 16,
-                    childAspectRatio: 1.15,
+                    crossAxisSpacing: 10,
+                    mainAxisSpacing: 10,
+                    childAspectRatio: 2.8,
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
                     children: [
                       const _ActionCard(
                         icon: Icons.space_dashboard_outlined,
                         label: 'Land Workspace',
-                        sub: 'Leads & tasks',
+                        sub: 'Open',
                         route: '/land-lead',
                         gradient: LinearGradient(
                           colors: [Color(0xFF091D55), Color(0xFF1A4DC9)],
@@ -162,7 +171,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       const _ActionCard(
                         icon: Icons.insights_outlined,
                         label: 'Market Intel',
-                        sub: 'Maps, POI & Patta',
+                        sub: 'Open',
                         route: '/market-intelligence',
                         gradient: LinearGradient(
                           colors: [Color(0xFF0D2E8A), Color(0xFF1A56DB)],
@@ -173,23 +182,14 @@ class _HomeScreenState extends State<HomeScreen> {
                         const _ActionCard(
                           icon: Icons.dashboard_outlined,
                           label: 'Dashboard',
-                          sub: 'Pipeline KPI overview',
+                          sub: 'Open',
                           route: '/dashboard',
                           gradient: LinearGradient(
                             colors: [Color(0xFF1D4ED8), Color(0xFF3B82F6)],
                             begin: Alignment.topLeft, end: Alignment.bottomRight,
                           ),
                         ),
-                      const _ActionCard(
-                        icon: Icons.settings_outlined,
-                        label: 'Settings',
-                        sub: 'Theme & password',
-                        route: '/settings',
-                        gradient: LinearGradient(
-                          colors: [Color(0xFF0B3D91), Color(0xFF2563EB)],
-                          begin: Alignment.topLeft, end: Alignment.bottomRight,
-                        ),
-                      ),
+                      const SizedBox.shrink(),
                     ],
                   ),
                   const SizedBox(height: 28),
@@ -522,76 +522,55 @@ class _HoverActionCardState extends State<_HoverActionCard> {
       onExit: (_) => setState(() => _hovered = false),
       child: AnimatedScale(
         duration: const Duration(milliseconds: 220),
-        scale: _hovered ? 1.015 : 1,
+        scale: _hovered ? 1.01 : 1,
         child: Material(
           color: Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(14),
           child: Ink(
             decoration: BoxDecoration(
               gradient: widget.gradient,
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(14),
               boxShadow: AppColors.coloredShadow(widget.gradient.colors.first),
             ),
             child: InkWell(
               onTap: widget.onTap,
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(14),
               child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                child: Row(
                   children: [
                     Container(
-                      padding: const EdgeInsets.all(10),
+                      padding: const EdgeInsets.all(7),
                       decoration: BoxDecoration(
                         color: Colors.white.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(8),
                       ),
-                      child: Icon(widget.icon, color: Colors.white, size: 24),
+                      child: Icon(widget.icon, color: Colors.white, size: 16),
                     ),
-                    const Spacer(),
-                    Text(
-                      widget.label,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        widget.label,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    const SizedBox(height: 4),
                     Text(
                       widget.sub,
                       style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.75),
-                        fontSize: 13,
+                        color: Colors.white.withValues(alpha: 0.85),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 7),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.18),
-                            borderRadius: BorderRadius.circular(999),
-                            border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.3),
-                            ),
-                          ),
-                          child: const Text(
-                            'Open',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                        const Spacer(),
-                        Icon(Icons.arrow_forward_rounded,
-                            color: Colors.white.withValues(alpha: 0.86), size: 18),
-                      ],
-                    ),
+                    const SizedBox(width: 4),
+                    Icon(Icons.chevron_right_rounded,
+                        color: Colors.white.withValues(alpha: 0.9), size: 18),
                   ],
                 ),
               ),
@@ -599,6 +578,83 @@ class _HoverActionCardState extends State<_HoverActionCard> {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _UserInfoSettingsButton extends StatelessWidget {
+  final String name;
+  final String email;
+  final VoidCallback onSettings;
+  const _UserInfoSettingsButton({
+    required this.name,
+    required this.email,
+    required this.onSettings,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: context.fomraSurface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: context.fomraBorder),
+              boxShadow: context.fomraCardShadow,
+            ),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 16,
+                  backgroundColor: AppColors.primary.withValues(alpha: 0.12),
+                  child: const Icon(Icons.person_outline,
+                      size: 16, color: AppColors.primary),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: context.fomraTextPrimary)),
+                      if (email.isNotEmpty)
+                        Text(email,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                fontSize: 11,
+                                color: context.fomraTextSecondary)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        SizedBox(
+          height: 52,
+          child: ElevatedButton.icon(
+            onPressed: onSettings,
+            icon: const Icon(Icons.settings_outlined, size: 16),
+            label: const Text('Settings'),
+            style: ElevatedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

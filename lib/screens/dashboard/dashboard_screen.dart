@@ -4,7 +4,6 @@ import '../../services/app_store.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../land_lead/lead_detail_screen.dart';
-import '../settings/change_password_screen.dart';
 import '../../widgets/app_drawer.dart';
 import '../../widgets/fomra_app_bar.dart';
 import '../../widgets/fomra_bottom_nav.dart';
@@ -64,13 +63,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
         color: kpi.color,
         leads: leads,
       ),
-    );
-  }
-
-  void _openChangePassword() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const ChangePasswordScreen()),
     );
   }
 
@@ -224,21 +216,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           .toList(),
                     ),
             ),
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: _openChangePassword,
-                icon: const Icon(Icons.lock_outline, size: 18),
-                label: const Text('Change Password',
-                    style: TextStyle(fontWeight: FontWeight.w600)),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  side: BorderSide(color: AppColors.primary.withValues(alpha: 0.5)),
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
           ],
         ),
       ),

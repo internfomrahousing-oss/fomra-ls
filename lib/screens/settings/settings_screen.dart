@@ -206,7 +206,7 @@ class _ChangePasswordButtonSection extends StatelessWidget {
         child: OutlinedButton.icon(
           onPressed: onTap,
           icon: const Icon(Icons.lock_open_outlined, size: 18),
-          label: const Text('Go to Change Password'),
+          label: const Text('Change Password'),
         ),
       ),
     );
