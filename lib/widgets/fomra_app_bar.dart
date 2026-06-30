@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../screens/home/home_screen.dart';
-import '../theme/app_theme.dart';
 import '../theme/fomra_theme_context.dart';
+import 'fomra_theme_toggle.dart';
 
 class FomraAppBar extends StatelessWidget implements PreferredSizeWidget {
   final String? moduleName;
@@ -62,7 +62,10 @@ class FomraAppBar extends StatelessWidget implements PreferredSizeWidget {
           ],
         ),
       ),
-      actions: actions,
+      actions: [
+        ...?actions,
+        const FomraThemeToggle(),
+      ],
       bottom: bottom,
     );
   }

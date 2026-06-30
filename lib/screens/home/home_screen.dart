@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../../models/land_lead.dart';
 import '../../services/auth_service.dart';
 import '../../services/app_store.dart';
-import '../../widgets/fomra_theme_toggle.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../models/app_notification.dart';
@@ -177,7 +176,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
           ]),
-          const FomraThemeToggle(),
         ],
       ),
       drawer: const AppDrawer(currentRoute: '/home'),
