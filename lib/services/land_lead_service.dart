@@ -96,13 +96,6 @@ class LandLeadService {
     return _db.storage.from(_photoBucket).getPublicUrl(path);
   }
 
-  static Future<void> updateGps(String leadId, String gpsCoordinates) async {
-    await _db.from('land_leads').update({
-      'gps_coordinates': gpsCoordinates,
-      'updated_at': DateTime.now().toUtc().toIso8601String(),
-    }).eq('id', leadId);
-  }
-
   static Future<void> updateStatus(String leadId, LeadStatus status) async {
     await _db.from('land_leads').update({
       'status': status.name,

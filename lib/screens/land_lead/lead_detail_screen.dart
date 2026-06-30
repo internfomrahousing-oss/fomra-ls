@@ -1,76 +1,16 @@
 import 'package:flutter/material.dart';
-import 'package:latlong2/latlong.dart';
 import '../../models/land_lead.dart';
-import '../../services/app_store.dart';
-import '../../services/land_lead_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_theme_context.dart';
-import '../../utils/lead_location_parser.dart';
 import '../market_intelligence/market_intelligence_screen.dart';
-import 'lead_location_picker.dart';
 
-class LeadDetailScreen extends StatefulWidget {
+class LeadDetailScreen extends StatelessWidget {
   final LandLead lead;
 
   const LeadDetailScreen({super.key, required this.lead});
 
   @override
-  State<LeadDetailScreen> createState() => _LeadDetailScreenState();
-}
-
-class _LeadDetailScreenState extends State<LeadDetailScreen> {
-  LandLead get lead => widget.lead;
-  bool _savingGps = false;
-
-  Future<void> _editLocation() async {
-    final result = await Navigator.push<LatLng>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => LeadLocationPickerScreen(
-          initial: parseLeadGps(lead.gpsCoordinates),
-        ),
-      ),
-    );
-    if (result == null) return;
-
-    final gps =
-        '${result.latitude.toStringAsFixed(6)}° N, ${result.longitude.toStringAsFixed(6)}° E';
-    final previous = lead.gpsCoordinates;
-
-    setState(() {
-      _savingGps = true;
-      lead.gpsCoordinates = gps;
-    });
-    AppStore.instance.updateLeadGps(lead.leadId, gps);
-
-    try {
-      await LandLeadService.updateGps(lead.leadId, gps);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Land location saved')),
-        );
-      }
-    } catch (e) {
-      // Revert on failure
-      AppStore.instance.updateLeadGps(lead.leadId, previous);
-      if (mounted) {
-        setState(() => lead.gpsCoordinates = previous);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-                'Failed to save location: ${e.toString().replaceAll('Exception: ', '')}'),
-            backgroundColor: AppColors.error,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _savingGps = false);
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final hasGps = parseLeadGps(lead.gpsCoordinates) != null;
     return Scaffold(
       backgroundColor: context.fomraPageBg,
       appBar: AppBar(
@@ -105,38 +45,8 @@ class _LeadDetailScreenState extends State<LeadDetailScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _LeadDetailsCard(lead: lead),
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: _savingGps ? null : _editLocation,
-                icon: _savingGps
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : Icon(hasGps ? Icons.edit_location_alt_outlined
-                        : Icons.add_location_alt_outlined, size: 18),
-                label: Text(_savingGps
-                    ? 'Saving location…'
-                    : hasGps
-                        ? 'Update land location'
-                        : 'Set land location on map'),
-                style: OutlinedButton.styleFrom(
-                  minimumSize: const Size.fromHeight(46),
-                  foregroundColor: AppColors.primary,
-                  side: const BorderSide(color: AppColors.primary),
-                ),
-              ),
-            ),
             const SizedBox(height: 20),
-            MarketIntelligenceScreen(
-              // Re-mount when GPS changes so the map re-centres on the new pin.
-              key: ValueKey(lead.gpsCoordinates),
-              lead: lead,
-              embeddedInLead: true,
-            ),
+            MarketIntelligenceScreen(lead: lead, embeddedInLead: true),
           ],
         ),
       ),
