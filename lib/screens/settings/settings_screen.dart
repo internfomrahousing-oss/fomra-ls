@@ -159,7 +159,7 @@ class _ThemeOption extends StatelessWidget {
       borderRadius: BorderRadius.circular(12),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.fromLTRB(8, 8, 8, 10),
+        padding: const EdgeInsets.fromLTRB(6, 6, 6, 8),
         decoration: BoxDecoration(
           color: selected
               ? cs.primary.withValues(alpha: 0.12)
@@ -173,8 +173,14 @@ class _ThemeOption extends StatelessWidget {
           ),
         ),
         child: Column(children: [
-          _ThemeMiniPreview(isDark: previewDark),
-          const SizedBox(height: 6),
+          Align(
+            alignment: Alignment.center,
+            child: SizedBox(
+              width: 56,
+              child: _ThemeMiniPreview(isDark: previewDark),
+            ),
+          ),
+          const SizedBox(height: 5),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -222,18 +228,18 @@ class _ThemeMiniPreview extends StatelessWidget {
     final accent = isDark ? AppColors.primaryLight : AppColors.primary;
 
     return AspectRatio(
-      aspectRatio: 1.65,
+      aspectRatio: 1.9,
       child: Container(
         decoration: BoxDecoration(
           color: pageBg,
-          borderRadius: BorderRadius.circular(7),
+          borderRadius: BorderRadius.circular(5),
           border: Border.all(color: border),
         ),
         clipBehavior: Clip.antiAlias,
         child: Column(
           children: [
             Container(
-              height: 18,
+              height: 12,
               width: double.infinity,
               decoration: BoxDecoration(
                 gradient: isDark
@@ -248,21 +254,21 @@ class _ThemeMiniPreview extends StatelessWidget {
                       )
                     : AppColors.heroGradient,
               ),
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
               child: Row(
                 children: [
                   Container(
-                    width: 8,
-                    height: 8,
+                    width: 5,
+                    height: 5,
                     decoration: BoxDecoration(
                       color: Colors.white.withValues(alpha: 0.22),
-                      borderRadius: BorderRadius.circular(3),
+                      borderRadius: BorderRadius.circular(2),
                     ),
                   ),
-                  const SizedBox(width: 4),
+                  const SizedBox(width: 3),
                   Expanded(
                     child: Container(
-                      height: 3,
+                      height: 2,
                       decoration: BoxDecoration(
                         color: Colors.white.withValues(alpha: 0.75),
                         borderRadius: BorderRadius.circular(2),
@@ -274,25 +280,25 @@ class _ThemeMiniPreview extends StatelessWidget {
             ),
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.all(5),
+                padding: const EdgeInsets.all(3),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Expanded(
                       flex: 3,
                       child: Container(
-                        padding: const EdgeInsets.all(4),
+                        padding: const EdgeInsets.all(3),
                         decoration: BoxDecoration(
                           color: surface,
-                          borderRadius: BorderRadius.circular(5),
+                          borderRadius: BorderRadius.circular(3),
                           border: Border.all(color: border),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Container(
-                              width: 20,
-                              height: 3,
+                              width: 14,
+                              height: 2,
                               decoration: BoxDecoration(
                                 color: text,
                                 borderRadius: BorderRadius.circular(2),
@@ -301,16 +307,16 @@ class _ThemeMiniPreview extends StatelessWidget {
                             const Spacer(),
                             Container(
                               width: double.infinity,
-                              height: 2.5,
+                              height: 2,
                               decoration: BoxDecoration(
                                 color: subtext.withValues(alpha: 0.55),
                                 borderRadius: BorderRadius.circular(2),
                               ),
                             ),
-                            const SizedBox(height: 2),
+                            const SizedBox(height: 1),
                             Container(
-                              width: 14,
-                              height: 2.5,
+                              width: 10,
+                              height: 2,
                               decoration: BoxDecoration(
                                 color: subtext.withValues(alpha: 0.4),
                                 borderRadius: BorderRadius.circular(2),
@@ -320,7 +326,7 @@ class _ThemeMiniPreview extends StatelessWidget {
                         ),
                       ),
                     ),
-                    const SizedBox(width: 4),
+                    const SizedBox(width: 2),
                     Expanded(
                       flex: 2,
                       child: Column(
@@ -329,18 +335,18 @@ class _ThemeMiniPreview extends StatelessWidget {
                             child: Container(
                               decoration: BoxDecoration(
                                 color: accent.withValues(alpha: 0.18),
-                                borderRadius: BorderRadius.circular(5),
+                                borderRadius: BorderRadius.circular(3),
                                 border: Border.all(
                                     color: accent.withValues(alpha: 0.35)),
                               ),
                             ),
                           ),
-                          const SizedBox(height: 4),
+                          const SizedBox(height: 2),
                           Expanded(
                             child: Container(
                               decoration: BoxDecoration(
                                 color: surface,
-                                borderRadius: BorderRadius.circular(5),
+                                borderRadius: BorderRadius.circular(3),
                                 border: Border.all(color: border),
                               ),
                             ),
