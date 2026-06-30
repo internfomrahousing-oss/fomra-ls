@@ -1271,7 +1271,7 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
                         label: Text(name,
                             style: TextStyle(
                                 fontSize: 12,
-                                color: selected
+                                color: selected || context.isDarkMode
                                     ? Colors.white
                                     : context.fomraTextPrimary)),
                         avatar: CircleAvatar(
@@ -1315,7 +1315,7 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
                         label: Text(e.key,
                             style: TextStyle(
                                 fontSize: 12,
-                                color: selected
+                                color: selected || context.isDarkMode
                                     ? Colors.white
                                     : context.fomraTextPrimary)),
                         selected: selected,
