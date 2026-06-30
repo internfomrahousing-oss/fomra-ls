@@ -1323,6 +1323,8 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
           ),
         if (loc != null) ...[
           const SizedBox(height: 20),
+          _buildLeadMapSection(loc),
+          const SizedBox(height: 20),
           _buildInfrastructureSection(),
           const SizedBox(height: 20),
           _buildMagicBricksSection(),
@@ -1332,6 +1334,42 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
         const SizedBox(height: 20),
         _buildLeadValuationSection(),
       ],
+    );
+  }
+
+  Widget _buildLeadMapSection(LatLng loc) {
+    return _SectionCard(
+      title: 'Land Location',
+      icon: Icons.location_on_outlined,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(18),
+            child: SizedBox(
+              height: 260,
+              child: _mapFullScreen
+                  ? _buildMapFullscreenPlaceholder()
+                  : _buildMapStack(showMaximize: true),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: context.fomraSurfaceVar,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              '${loc.latitude.toStringAsFixed(5)}° N, ${loc.longitude.toStringAsFixed(5)}° E',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                  fontSize: 12, color: context.fomraTextSecondary),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
