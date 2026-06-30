@@ -62,6 +62,9 @@ void main() {
     await tester.pumpWidget(_app());
     await tester.pumpAndSettle();
 
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Change Password'));
+    await tester.pumpAndSettle();
+
     // Empty submit -> field validators fire.
     await tester.tap(find.text('Update Password'));
     await tester.pumpAndSettle();
@@ -69,7 +72,7 @@ void main() {
     expect(find.text('Enter a new password'), findsOneWidget);
 
     // Mismatched confirmation.
-    final fields = find.byType(TextField);
+    final fields = find.byType(TextFormField);
     await tester.enterText(fields.at(0), 'fomra@2024');
     await tester.enterText(fields.at(1), 'newpass123');
     await tester.enterText(fields.at(2), 'different99');
@@ -87,7 +90,10 @@ void main() {
     await tester.pumpWidget(_app());
     await tester.pumpAndSettle();
 
-    final fields = find.byType(TextField);
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Change Password'));
+    await tester.pumpAndSettle();
+
+    final fields = find.byType(TextFormField);
     await tester.enterText(fields.at(0), 'fomra@2024');
     await tester.enterText(fields.at(1), 'brandnew99');
     await tester.enterText(fields.at(2), 'brandnew99');
