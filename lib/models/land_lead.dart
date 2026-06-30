@@ -10,7 +10,7 @@ class LandLead {
   final String leadId;
   final InputSource inputSource;
   final String location;
-  final String gpsCoordinates;
+  String gpsCoordinates;
   final String village;
   final String taluk;
   final String district;

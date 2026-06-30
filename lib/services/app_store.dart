@@ -21,6 +21,13 @@ class AppStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  void updateLeadGps(String leadId, String gpsCoordinates) {
+    final idx = leads.indexWhere((l) => l.leadId == leadId);
+    if (idx == -1) return;
+    leads[idx].gpsCoordinates = gpsCoordinates;
+    notifyListeners();
+  }
+
   void removeLead(String leadId) {
     leads.removeWhere((l) => l.leadId == leadId);
     notifyListeners();
