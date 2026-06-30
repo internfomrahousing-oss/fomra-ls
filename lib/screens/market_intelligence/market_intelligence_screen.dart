@@ -214,6 +214,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
 
   // Lead detail mode — location from saved lead GPS
   LatLng? _leadLocation;
+  bool _geocodingLead = false;
 
   // Default center shown before GPS resolves
   static const _kDefaultCenter = LatLng(13.0827, 80.2707);
@@ -287,6 +288,51 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
       _fetchTngisParcelDetails(loc);
       _collectPois();
       _fetchMagicBricksProjects();
+    } else {
+      _geocodeLeadLocation(lead);
+    }
+  }
+
+  /// Falls back to geocoding the lead's address text (village/taluk/district)
+  /// when no GPS coordinates were saved, so the map can still show the area.
+  Future<void> _geocodeLeadLocation(LandLead lead) async {
+    final parts = [
+      lead.village,
+      lead.taluk,
+      lead.district,
+      lead.pincode,
+    ].where((p) => p.trim().isNotEmpty).toList();
+    final query = (parts.isNotEmpty ? parts.join(', ') : lead.location).trim();
+    if (query.isEmpty) return;
+
+    setState(() => _geocodingLead = true);
+    try {
+      final response = await http.get(
+        Uri.parse(
+            'https://nominatim.openstreetmap.org/search?format=json&q=${Uri.encodeComponent('$query, Tamil Nadu, India')}&limit=1'),
+        headers: {
+          'User-Agent': 'FomraLS/1.0 (in.fomrahousing)',
+          'Accept-Language': 'en',
+        },
+      );
+      if (response.statusCode == 200) {
+        final results = jsonDecode(response.body) as List;
+        if (results.isNotEmpty) {
+          final r = results.first as Map<String, dynamic>;
+          final lat = double.tryParse(r['lat'] as String? ?? '');
+          final lon = double.tryParse(r['lon'] as String? ?? '');
+          if (lat != null && lon != null && mounted) {
+            final loc = LatLng(lat, lon);
+            setState(() => _leadLocation = loc);
+            _collectPois();
+            _fetchMagicBricksProjects();
+          }
+        }
+      }
+    } catch (_) {
+      // Leave the "no location" message in place on failure.
+    } finally {
+      if (mounted) setState(() => _geocodingLead = false);
     }
   }
 
@@ -1312,12 +1358,33 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (loc == null)
+        if (loc == null && _geocodingLead)
+          const _SectionCard(
+            title: 'Land Location',
+            icon: Icons.location_on_outlined,
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Locating this lead on the map…',
+                    style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        if (loc == null && !_geocodingLead)
           const _SectionCard(
             title: 'Location',
             icon: Icons.location_off_outlined,
             child: Text(
-              'This lead has no GPS coordinates. Add GPS when creating the lead to load infrastructure score and AI valuation.',
+              'This lead has no GPS coordinates and its address could not be located. Add GPS when creating the lead to load infrastructure score and AI valuation.',
               style: TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.4),
             ),
           ),
