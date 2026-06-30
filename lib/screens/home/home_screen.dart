@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../../models/land_lead.dart';
 import '../../services/auth_service.dart';
 import '../../services/app_store.dart';
-import '../../services/theme_controller.dart';
+import '../../widgets/fomra_theme_toggle.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../models/app_notification.dart';
@@ -177,23 +177,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
           ]),
-          ValueListenableBuilder<ThemeMode>(
-            valueListenable: ThemeController.instance.mode,
-            builder: (context, mode, _) {
-              final isDark = mode == ThemeMode.dark;
-              return IconButton(
-                tooltip: isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode',
-                icon: Icon(
-                  isDark
-                      ? Icons.light_mode_outlined
-                      : Icons.dark_mode_outlined,
-                  size: 21,
-                ),
-                onPressed: ThemeController.instance.toggle,
-              );
-            },
-          ),
-          const SizedBox(width: 4),
+          const FomraThemeToggle(),
         ],
       ),
       drawer: const AppDrawer(currentRoute: '/home'),
