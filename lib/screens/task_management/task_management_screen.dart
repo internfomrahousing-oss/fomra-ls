@@ -1934,7 +1934,7 @@ class _SheetHandle extends StatelessWidget {
 
 class _SectionLabel extends StatelessWidget {
   final String text;
-  _SectionLabel(this.text);
+  const _SectionLabel(this.text);
 
   @override
   Widget build(BuildContext context) => Padding(
