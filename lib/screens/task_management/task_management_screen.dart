@@ -24,14 +24,12 @@ enum TaskStatus { todo, inProgress, done, overdue }
 const _kTeam = [
   'Fomra Admin',
   'Site Manager',
-  'Legal Officer',
   'Field Agent',
   'Data Analyst',
 ];
 
 const _kModules = [
   'Land Lead',
-  'Legal Verification',
   'Market Intelligence',
   'Documents',
   'General',
@@ -1088,8 +1086,11 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
             child: Column(
               children: [
                 Row(children: [
-                  const Text('Create Task',
-                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+                  Text('Create Task',
+                      style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                          color: context.fomraTextPrimary)),
                   const Spacer(),
                   TextButton(
                     onPressed: _save,
@@ -1112,7 +1113,7 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
               ],
             ),
           ),
-          const Divider(height: 1),
+          Divider(height: 1, color: context.fomraBorder),
           Expanded(
             child: Form(
               key: _formKey,
@@ -1132,14 +1133,22 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
                     ),
-                    child: const Row(
+                    child: Row(
                       children: [
-                        Icon(Icons.auto_awesome, color: AppColors.primary, size: 16),
-                        SizedBox(width: 8),
+                        Icon(Icons.auto_awesome,
+                            color: context.isDarkMode
+                                ? AppColors.primaryLight
+                                : AppColors.primary,
+                            size: 16),
+                        const SizedBox(width: 8),
                         Expanded(
                           child: Text(
                             'Create clear tasks with priority, assignees and reminders.',
-                            style: TextStyle(fontSize: 12, color: AppColors.primary),
+                            style: TextStyle(
+                                fontSize: 12,
+                                color: context.isDarkMode
+                                    ? AppColors.primaryLight
+                                    : AppColors.primary),
                           ),
                         ),
                       ],
@@ -1147,7 +1156,7 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
                   ),
                   const SizedBox(height: 16),
                   // Title
-                  const _SectionLabel('Task Title'),
+                  _SectionLabel('Task Title'),
                   TextFormField(
                     controller: _titleCtrl,
                     decoration: _dec(context, 'Enter task title'),
@@ -1157,7 +1166,7 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
                   const SizedBox(height: 14),
 
                   // Description
-                  const _SectionLabel('Description'),
+                  _SectionLabel('Description'),
                   TextFormField(
                     controller: _descCtrl,
                     decoration: _dec(context, 'Brief description'),
@@ -1171,7 +1180,7 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
                       child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const _SectionLabel('Priority'),
+                            _SectionLabel('Priority'),
                             DropdownButtonFormField<TaskPriority>(
                               initialValue: _priority,
                               decoration: _dec(context, null),
@@ -1200,7 +1209,7 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
                       child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const _SectionLabel('Module'),
+                            _SectionLabel('Module'),
                             DropdownButtonFormField<String>(
                               initialValue: _module,
                               decoration: _dec(context, null),
@@ -1217,7 +1226,7 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
                   const SizedBox(height: 14),
 
                   // Due date
-                  const _SectionLabel('Due Date'),
+                  _SectionLabel('Due Date'),
                   InkWell(
                     onTap: _pickDueDate,
                     borderRadius: BorderRadius.circular(12),
@@ -1225,30 +1234,34 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 14, vertical: 14),
                       decoration: BoxDecoration(
-                        border:
-                            Border.all(color: const Color(0xFFE5E7EB)),
+                        color: context.fomraSurfaceVar,
+                        border: Border.all(color: context.fomraBorder),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Row(children: [
-                        const Icon(Icons.calendar_today,
-                            size: 18, color: AppColors.primary),
+                        Icon(Icons.calendar_today,
+                            size: 18,
+                            color: context.isDarkMode
+                                ? AppColors.primaryLight
+                                : AppColors.primary),
                         const SizedBox(width: 10),
                         Text(
                             '${_dueDate.day}/${_dueDate.month}/${_dueDate.year}',
-                            style: const TextStyle(fontSize: 14)),
+                            style: TextStyle(
+                                fontSize: 14, color: context.fomraTextPrimary)),
                         const Spacer(),
                         Text(
                             _slaLabel(_priority),
-                            style: const TextStyle(
+                            style: TextStyle(
                                 fontSize: 11,
-                                color: AppColors.textSecondary)),
+                                color: context.fomraTextSecondary)),
                       ]),
                     ),
                   ),
                   const SizedBox(height: 18),
 
                   // Assign Users
-                  const _SectionLabel('Assign Users'),
+                  _SectionLabel('Assign Users'),
                   Wrap(
                     spacing: 8,
                     runSpacing: 8,
@@ -1260,7 +1273,7 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
                                 fontSize: 12,
                                 color: selected
                                     ? Colors.white
-                                    : AppColors.textPrimary)),
+                                    : context.fomraTextPrimary)),
                         avatar: CircleAvatar(
                           backgroundColor: selected
                               ? Colors.white.withValues(alpha: 0.3)
@@ -1270,7 +1283,9 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
                                   fontSize: 11,
                                   color: selected
                                       ? Colors.white
-                                      : AppColors.primary,
+                                      : (context.isDarkMode
+                                          ? AppColors.primaryLight
+                                          : AppColors.primary),
                                   fontWeight: FontWeight.bold)),
                         ),
                         selected: selected,
@@ -1282,7 +1297,7 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
                         side: BorderSide(
                             color: selected
                                 ? AppColors.primary
-                                : const Color(0xFFE5E7EB)),
+                                : context.fomraBorder),
                         showCheckmark: false,
                       );
                     }).toList(),
@@ -1290,7 +1305,7 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
                   const SizedBox(height: 18),
 
                   // Reminders
-                  const _SectionLabel('Reminder System'),
+                  _SectionLabel('Reminder System'),
                   Wrap(
                     spacing: 8,
                     runSpacing: 8,
@@ -1302,7 +1317,7 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
                                 fontSize: 12,
                                 color: selected
                                     ? Colors.white
-                                    : AppColors.textPrimary)),
+                                    : context.fomraTextPrimary)),
                         selected: selected,
                         onSelected: (v) => setState(() => v
                             ? _reminders.add(e.value)
@@ -1312,7 +1327,7 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
                         side: BorderSide(
                             color: selected
                                 ? AppColors.info
-                                : const Color(0xFFE5E7EB)),
+                                : context.fomraBorder),
                         avatar: Icon(Icons.alarm,
                             size: 14,
                             color: selected
@@ -1326,7 +1341,7 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
 
                   // Escalation Rules
                   Row(children: [
-                    const _SectionLabel('Escalation Rules'),
+                    _SectionLabel('Escalation Rules'),
                     const Spacer(),
                     TextButton.icon(
                       onPressed: _addEscalationRule,
@@ -1340,20 +1355,20 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: AppColors.warning.withValues(alpha: 0.05),
+                        color: AppColors.warning.withValues(alpha: 0.08),
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(
                             color:
-                                AppColors.warning.withValues(alpha: 0.2)),
+                                AppColors.warning.withValues(alpha: 0.25)),
                       ),
-                      child: const Row(children: [
-                        Icon(Icons.escalator_warning,
+                      child: Row(children: [
+                        const Icon(Icons.escalator_warning,
                             size: 16, color: AppColors.warning),
-                        SizedBox(width: 8),
+                        const SizedBox(width: 8),
                         Text('No escalation rules set.',
                             style: TextStyle(
                                 fontSize: 12,
-                                color: AppColors.textSecondary)),
+                                color: context.fomraTextSecondary)),
                       ]),
                     )
                   else
@@ -1371,7 +1386,7 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
                   const SizedBox(height: 18),
 
                   // Notes
-                  const _SectionLabel('Notes'),
+                  _SectionLabel('Notes'),
                   TextFormField(
                     controller: _notesCtrl,
                     decoration: _dec(context, 'Additional notes…'),
@@ -1467,8 +1482,9 @@ class _AddEscalationDialogState extends State<_AddEscalationDialog> {
     return AlertDialog(
       title: const Text('Add Escalation Rule'),
       content: Column(mainAxisSize: MainAxisSize.min, children: [
-        const Text('Escalate if overdue by:',
-            style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+        Text('Escalate if overdue by:',
+            style: TextStyle(
+                fontSize: 13, color: context.fomraTextSecondary)),
         const SizedBox(height: 8),
         DropdownButtonFormField<int>(
           initialValue: _hours,
@@ -1480,8 +1496,9 @@ class _AddEscalationDialogState extends State<_AddEscalationDialog> {
           onChanged: (v) => setState(() => _hours = v!),
         ),
         const SizedBox(height: 12),
-        const Text('Escalate to:',
-            style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+        Text('Escalate to:',
+            style: TextStyle(
+                fontSize: 13, color: context.fomraTextSecondary)),
         const SizedBox(height: 8),
         DropdownButtonFormField<String>(
           initialValue: _escalateTo,
@@ -1908,7 +1925,7 @@ class _SheetHandle extends StatelessWidget {
           width: 36,
           height: 4,
           decoration: BoxDecoration(
-            color: const Color(0xFFE5E7EB),
+            color: context.fomraBorder,
             borderRadius: BorderRadius.circular(2),
           ),
         ),
@@ -1917,16 +1934,16 @@ class _SheetHandle extends StatelessWidget {
 
 class _SectionLabel extends StatelessWidget {
   final String text;
-  const _SectionLabel(this.text);
+  _SectionLabel(this.text);
 
   @override
   Widget build(BuildContext context) => Padding(
         padding: const EdgeInsets.only(bottom: 6),
         child: Text(text,
-            style: const TextStyle(
+            style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
-                color: AppColors.textSecondary,
+                color: context.fomraTextSecondary,
                 letterSpacing: 0.3)),
       );
 }
@@ -1938,17 +1955,19 @@ class _TaskStepChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final accent =
+        context.isDarkMode ? AppColors.primaryLight : AppColors.primary;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: AppColors.primary.withValues(alpha: 0.08),
+        color: accent.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+        border: Border.all(color: accent.withValues(alpha: 0.28)),
       ),
       child: Text(
         '$step · $label',
-        style: const TextStyle(
-            fontSize: 11, color: AppColors.primary, fontWeight: FontWeight.w700),
+        style: TextStyle(
+            fontSize: 11, color: accent, fontWeight: FontWeight.w700),
       ),
     );
   }
@@ -2013,8 +2032,7 @@ class _EscalationTile extends StatelessWidget {
           Expanded(
               child: Text(
             'After ${rule.hoursAfterDue}h overdue → ${rule.escalateTo}',
-            style: const TextStyle(
-                fontSize: 12, color: AppColors.textPrimary),
+            style: TextStyle(fontSize: 12, color: context.fomraTextPrimary),
           )),
           if (rule.triggered)
             const _MicroChip(Icons.warning, 'Triggered', AppColors.error),
