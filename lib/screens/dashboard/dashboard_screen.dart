@@ -18,6 +18,9 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
+  static const _kRecentCollapsedCount = 6;
+  bool _showAllRecent = false;
+
   @override
   void initState() {
     super.initState();
@@ -69,10 +72,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
   int _countByStatus(LeadStatus status) =>
       AppStore.instance.leads.where((l) => l.status == status).length;
 
-  List<LandLead> get _recentLeads {
+  List<LandLead> get _sortedLeads {
     final leads = List<LandLead>.from(AppStore.instance.leads);
     leads.sort((a, b) => b.addedOn.compareTo(a.addedOn));
-    return leads.take(6).toList();
+    return leads;
+  }
+
+  List<LandLead> get _recentLeads {
+    final leads = _sortedLeads;
+    if (_showAllRecent) return leads;
+    return leads.take(_kRecentCollapsedCount).toList();
   }
 
   List<double> _trendByDays(int days) {
@@ -214,15 +223,32 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ? Text('No lead activity yet.',
                       style: TextStyle(color: context.fomraTextSecondary))
                   : Column(
-                      children: _recentLeads
-                          .map((lead) => Padding(
-                                padding: const EdgeInsets.only(bottom: 10),
-                                child: _ActivityRow(
-                                  lead: lead,
-                                  accentColor: accentBlue,
-                                ),
-                              ))
-                          .toList(),
+                      children: [
+                        ..._recentLeads.map((lead) => Padding(
+                              padding: const EdgeInsets.only(bottom: 10),
+                              child: _ActivityRow(
+                                lead: lead,
+                                accentColor: accentBlue,
+                              ),
+                            )),
+                        if (_sortedLeads.length > _kRecentCollapsedCount)
+                          Align(
+                            alignment: Alignment.center,
+                            child: TextButton.icon(
+                              onPressed: () => setState(
+                                  () => _showAllRecent = !_showAllRecent),
+                              icon: Icon(
+                                _showAllRecent
+                                    ? Icons.expand_less
+                                    : Icons.expand_more,
+                                size: 18,
+                              ),
+                              label: Text(_showAllRecent
+                                  ? 'Show less'
+                                  : 'Show all (${_sortedLeads.length})'),
+                            ),
+                          ),
+                      ],
                     ),
             ),
           ],
