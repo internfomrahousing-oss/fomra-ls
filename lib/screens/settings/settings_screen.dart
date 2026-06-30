@@ -236,130 +236,174 @@ class _ThemeMiniPreview extends StatelessWidget {
           border: Border.all(color: border),
         ),
         clipBehavior: Clip.antiAlias,
-        child: Column(
-          children: [
-            Container(
-              height: 12,
-              width: double.infinity,
-              decoration: BoxDecoration(
-                gradient: isDark
-                    ? const LinearGradient(
-                        colors: [
-                          Color(0xFF152A52),
-                          Color(0xFF1E293B),
-                          Color(0xFF231B4A),
-                        ],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      )
-                    : AppColors.heroGradient,
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-              child: Row(
-                children: [
-                  Container(
-                    width: 5,
-                    height: 5,
+        child: FittedBox(
+          fit: BoxFit.contain,
+          alignment: Alignment.topCenter,
+          child: SizedBox(
+            width: 88,
+            height: 88 / 1.9,
+            child: _ThemeMiniPreviewContent(
+              isDark: isDark,
+              pageBg: pageBg,
+              surface: surface,
+              border: border,
+              text: text,
+              subtext: subtext,
+              accent: accent,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ThemeMiniPreviewContent extends StatelessWidget {
+  final bool isDark;
+  final Color pageBg;
+  final Color surface;
+  final Color border;
+  final Color text;
+  final Color subtext;
+  final Color accent;
+
+  const _ThemeMiniPreviewContent({
+    required this.isDark,
+    required this.pageBg,
+    required this.surface,
+    required this.border,
+    required this.text,
+    required this.subtext,
+    required this.accent,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ColoredBox(
+      color: pageBg,
+      child: Column(
+        children: [
+          Container(
+            height: 14,
+            width: double.infinity,
+            decoration: BoxDecoration(
+              gradient: isDark
+                  ? const LinearGradient(
+                      colors: [
+                        Color(0xFF152A52),
+                        Color(0xFF1E293B),
+                        Color(0xFF231B4A),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    )
+                  : AppColors.heroGradient,
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+            child: Row(
+              children: [
+                Container(
+                  width: 6,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.22),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Container(
+                    height: 3,
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.22),
+                      color: Colors.white.withValues(alpha: 0.75),
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
-                  const SizedBox(width: 3),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.all(5),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
                   Expanded(
+                    flex: 3,
                     child: Container(
-                      height: 2,
+                      padding: const EdgeInsets.all(4),
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.75),
-                        borderRadius: BorderRadius.circular(2),
+                        color: surface,
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: border),
                       ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            width: 18,
+                            height: 3,
+                            decoration: BoxDecoration(
+                              color: text,
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                          ),
+                          const Spacer(),
+                          Container(
+                            width: double.infinity,
+                            height: 3,
+                            decoration: BoxDecoration(
+                              color: subtext.withValues(alpha: 0.55),
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Container(
+                            width: 12,
+                            height: 3,
+                            decoration: BoxDecoration(
+                              color: subtext.withValues(alpha: 0.4),
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    flex: 2,
+                    child: Column(
+                      children: [
+                        Expanded(
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: accent.withValues(alpha: 0.18),
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(
+                                  color: accent.withValues(alpha: 0.35)),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Expanded(
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: surface,
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(color: border),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
             ),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.all(3),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Expanded(
-                      flex: 3,
-                      child: Container(
-                        padding: const EdgeInsets.all(3),
-                        decoration: BoxDecoration(
-                          color: surface,
-                          borderRadius: BorderRadius.circular(3),
-                          border: Border.all(color: border),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Container(
-                              width: 14,
-                              height: 2,
-                              decoration: BoxDecoration(
-                                color: text,
-                                borderRadius: BorderRadius.circular(2),
-                              ),
-                            ),
-                            const Spacer(),
-                            Container(
-                              width: double.infinity,
-                              height: 2,
-                              decoration: BoxDecoration(
-                                color: subtext.withValues(alpha: 0.55),
-                                borderRadius: BorderRadius.circular(2),
-                              ),
-                            ),
-                            const SizedBox(height: 1),
-                            Container(
-                              width: 10,
-                              height: 2,
-                              decoration: BoxDecoration(
-                                color: subtext.withValues(alpha: 0.4),
-                                borderRadius: BorderRadius.circular(2),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 2),
-                    Expanded(
-                      flex: 2,
-                      child: Column(
-                        children: [
-                          Expanded(
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: accent.withValues(alpha: 0.18),
-                                borderRadius: BorderRadius.circular(3),
-                                border: Border.all(
-                                    color: accent.withValues(alpha: 0.35)),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Expanded(
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: surface,
-                                borderRadius: BorderRadius.circular(3),
-                                border: Border.all(color: border),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
