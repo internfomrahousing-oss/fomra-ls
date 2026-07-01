@@ -4104,15 +4104,24 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
   bool _hasFmbSubdivision(_TngisSubdivisionRow row) =>
       row.effectiveSubDivision != null;
 
-  void _openFmbPdfInNewTab(Uint8List pdfBytes, {String? fileName}) {
-    final survey = widget.surveyNumber?.trim();
-    final sub = _resolvedMapSub() ?? widget.subDivision?.trim();
+  void _showFmbSketch(
+    Uint8List pdfBytes, {
+    String? fileName,
+    String? survey,
+    String? sub,
+  }) {
+    final s = survey ?? widget.surveyNumber?.trim();
+    final sd = sub ?? _resolvedMapSub() ?? widget.subDivision?.trim();
     final name = fileName ??
-        'FMB${survey != null ? '-$survey' : ''}${sub != null ? '-Sub-$sub' : ''}.pdf';
-    FmbSketchViewer.openInNewTab(
-      pdfBytes,
-      context: context,
+        'FMB${s != null ? '-$s' : ''}${sd != null ? '-Sub-$sd' : ''}.pdf';
+    // Show the sketch inline — opening a new browser tab gets popup-blocked,
+    // so the PDF appeared to "not show". The dialog still has an Open button.
+    FmbSketchViewer.show(
+      context,
+      pdfBytes: pdfBytes,
       fileName: name,
+      survey: s,
+      subDivision: sd,
     );
   }
 
@@ -5654,7 +5663,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
       return _buildFmbSketchButton(
         title: title,
         subtitle: subtitle,
-        onTap: () => _openFmbPdfInNewTab(pdfBytes!, fileName: fileName),
+        onTap: () => _showFmbSketch(pdfBytes!, fileName: fileName),
       );
     }
 
@@ -5846,7 +5855,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.open_in_new_rounded, color: iconColor, size: 18),
+                    Icon(Icons.visibility_outlined, color: iconColor, size: 18),
                     const SizedBox(height: 2),
                     Text(
                       'View as PDF',
@@ -6321,10 +6330,12 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
                 title: 'FMB Sketch · Survey ${row.surveyNumber} · Sub ${row.subLabel}',
                 subtitle:
                     'Official TSLR/FMB sketch · ${(bundle.fmbPdf!.length / 1024).round()} KB',
-                onTap: () => _openFmbPdfInNewTab(
+                onTap: () => _showFmbSketch(
                   bundle.fmbPdf!,
                   fileName:
                       'FMB Survey ${row.surveyNumber} Sub ${row.subLabel}.pdf',
+                  survey: row.surveyNumber,
+                  sub: row.subLabel,
                 ),
               )
             else if (bundle.fmbError != null)
@@ -6469,7 +6480,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
         fmbChildren.add(_buildFmbSketchButton(
           title: fmbFileName,
           subtitle: 'Official TSLR/FMB sketch · $sizeKb KB',
-          onTap: () => _openFmbPdfInNewTab(_fmbPdfBytes!, fileName: fmbFileName),
+          onTap: () => _showFmbSketch(_fmbPdfBytes!, fileName: fmbFileName),
         ));
       } else if (_fmbLoadError != null) {
         fmbChildren.add(Text(_fmbLoadError!,
