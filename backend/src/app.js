@@ -13,6 +13,7 @@ const tnlandsRoutes      = require('./routes/tnlands');
 const poiRoutes          = require('./routes/poi');
 const ninetyNineAcresRoutes = require('./routes/ninetyninacres');
 const housingRoutes      = require('./routes/housing');
+const squareYardsRoutes  = require('./routes/squareyards');
 const competitorsRoutes  = require('./routes/competitors');
 
 const app = express();
@@ -32,6 +33,7 @@ app.use('/api/tnlands',     tnlandsRoutes);
 app.use('/api/poi',         poiRoutes);
 app.use('/api/99acres',     ninetyNineAcresRoutes);
 app.use('/api/housing',     housingRoutes);
+app.use('/api/squareyards', squareYardsRoutes);
 app.use('/api/competitors', competitorsRoutes);
 
 // Local dev: serve the compiled Flutter web build from the same server.

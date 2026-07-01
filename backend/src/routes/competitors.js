@@ -2,6 +2,7 @@ const express = require('express');
 const magicbricksRouter = require('./magicbricks');
 const ninetyNineRouter  = require('./ninetyninacres');
 const housingRouter     = require('./housing');
+const squareYardsRouter = require('./squareyards');
 const {
   applyRadiusFilter,
   applyNearestListings,
@@ -151,11 +152,17 @@ router.get('/', async (req, res) => {
   const mbTimeoutMs = onServerless ? 95000 : 150000;
   const altTimeoutMs = onServerless ? 12000 : 35000;
 
-  const mbQuery = hasRadiusFilter
+  const radiusQuery = hasRadiusFilter
     ? { ...fetchQuery, lat, lng: centerLng, radius }
     : fetchQuery;
 
-  const mbResult = await callRouterWithTimeout(magicbricksRouter, mbQuery, mbTimeoutMs);
+  // SquareYards is reachable from datacenter/serverless IPs and returns priced
+  // projects with map coordinates — it is the primary competitor source.
+  const syTimeoutMs = onServerless ? 20000 : 35000;
+  const [mbResult, syResult] = await Promise.all([
+    callRouterWithTimeout(magicbricksRouter, radiusQuery, mbTimeoutMs),
+    callRouterWithTimeout(squareYardsRouter, radiusQuery, syTimeoutMs),
+  ]);
 
   const altResults = onServerless
     ? []
@@ -167,6 +174,7 @@ router.get('/', async (req, res) => {
   const naResult = altResults[0] || { statusCode: 504, data: null, error: 'skipped on serverless' };
   const hoResult = altResults[1] || { statusCode: 504, data: null, error: 'skipped on serverless' };
 
+  ingestBatch({ status: 'fulfilled', value: syResult }, 'SquareYards', allListings, sources, errors);
   ingestBatch({ status: 'fulfilled', value: mbResult }, 'MagicBricks', allListings, sources, errors);
   ingestBatch({ status: 'fulfilled', value: naResult }, '99acres', allListings, sources, errors);
   ingestBatch({ status: 'fulfilled', value: hoResult }, 'Housing.com', allListings, sources, errors);
@@ -185,14 +193,16 @@ router.get('/', async (req, res) => {
   const pricedAll = listings.filter(isPriced);
 
   if (hasRadiusFilter) {
-    const mbPriced = mbResult.statusCode === 200
-      ? dedupeListings((mbResult.data?.listings || []).filter(isPriced))
-      : [];
+    // SquareYards + MagicBricks both apply their own radius / nearest-priced
+    // fallback and return priced listings with map coordinates — trust them.
+    const primaryRaw = [];
+    if (syResult.statusCode === 200) primaryRaw.push(...(syResult.data?.listings || []));
+    if (mbResult.statusCode === 200) primaryRaw.push(...(mbResult.data?.listings || []));
+    const primaryPriced = dedupeListings(primaryRaw.filter(isPriced));
 
-    // MagicBricks already applies radius / nearest-priced fallback — trust it when priced.
-    if (mbPriced.length > 0) {
-      listings = sortListings(mbPriced).slice(0, 30);
-      radiusNote = mbResult.data?.radiusNote || radiusNote;
+    if (primaryPriced.length > 0) {
+      listings = sortListings(primaryPriced).slice(0, 30);
+      radiusNote = syResult.data?.radiusNote || mbResult.data?.radiusNote || radiusNote;
     } else {
       const latN = parseFloat(lat);
       const lngN = parseFloat(centerLng);
