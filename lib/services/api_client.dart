@@ -6,7 +6,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 class ApiClient {
   static String get baseUrl => _baseUrl;
 
-  // Web production: same origin. Local dev: always hit the API on :3000.
+  // Mobile/desktop builds talk to the deployed backend so every feature works
+  // like the website. Override for local testing with:
+  //   flutter run --dart-define=API_BASE_URL=http://10.0.2.2:3000
+  static const _prodBaseUrl = 'https://fomra-ls.vercel.app';
+  static const _envBaseUrl = String.fromEnvironment('API_BASE_URL');
+
+  // Web production: same origin. Local dev web: hit the API on :3000.
   static String get _baseUrl {
     if (kIsWeb) {
       final host = Uri.base.host;
@@ -15,7 +21,7 @@ class ApiClient {
       }
       return Uri.base.origin;
     }
-    return 'http://localhost:3000';
+    return _envBaseUrl.isNotEmpty ? _envBaseUrl : _prodBaseUrl;
   }
 
   static const String _tokenKey = 'auth_token';

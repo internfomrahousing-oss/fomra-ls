@@ -1,4 +1,4 @@
-allprojects {
+howallprojects {
     repositories {
         google()
         mavenCentral()
@@ -16,6 +16,14 @@ subprojects {
     project.layout.buildDirectory.value(newSubprojectBuildDir)
 }
 subprojects {
+    // Some plugins (e.g. flutter_plugin_android_lifecycle) require API 36; force
+    // every Android module (including plugin subprojects like file_picker) to
+    // compile against 36 so their AAR metadata check passes. Register this before
+    // evaluationDependsOn so the project isn't already evaluated.
+    afterEvaluate {
+        val androidExt = extensions.findByName("android") as? com.android.build.gradle.BaseExtension
+        androidExt?.compileSdkVersion(36)
+    }
     project.evaluationDependsOn(":app")
 }
 

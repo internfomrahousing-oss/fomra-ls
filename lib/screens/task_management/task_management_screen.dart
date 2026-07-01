@@ -1091,17 +1091,6 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
                             color: AppColors.primary, fontWeight: FontWeight.bold)),
                   ),
                 ]),
-                const SizedBox(height: 6),
-                const Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    _TaskStepChip('Step 1', 'Basics'),
-                    _TaskStepChip('Step 2', 'Assignment'),
-                    _TaskStepChip('Step 3', 'Rules'),
-                    _TaskStepChip('Step 4', 'Save'),
-                  ],
-                ),
               ],
             ),
           ),
@@ -1787,31 +1776,6 @@ class _SectionLabel extends StatelessWidget {
                 color: context.fomraTextSecondary,
                 letterSpacing: 0.3)),
       );
-}
-
-class _TaskStepChip extends StatelessWidget {
-  final String step;
-  final String label;
-  const _TaskStepChip(this.step, this.label);
-
-  @override
-  Widget build(BuildContext context) {
-    final accent =
-        context.isDarkMode ? AppColors.primaryLight : AppColors.primary;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: accent.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: accent.withValues(alpha: 0.28)),
-      ),
-      child: Text(
-        '$step · $label',
-        style: TextStyle(
-            fontSize: 11, color: accent, fontWeight: FontWeight.w700),
-      ),
-    );
-  }
 }
 
 class _DetailSection extends StatelessWidget {

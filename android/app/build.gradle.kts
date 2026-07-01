@@ -6,7 +6,8 @@ plugins {
 
 android {
     namespace = "in.fomrahousing.fomra_ls"
-    compileSdk = flutter.compileSdkVersion
+    // Some plugins (flutter_plugin_android_lifecycle) now require API 36.
+    compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
     compileOptions {

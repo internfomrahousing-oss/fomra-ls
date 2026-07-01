@@ -15,6 +15,11 @@ class AuthService {
   static const _localSessionKey = 'local_auth_session';
   static const _loginEmailKey = 'login_email';
   static const _loginNameKey = 'login_display_name';
+  static const _loginAtKey = 'login_at';
+
+  /// After a successful login the session is kept alive for at least this long,
+  /// even across reloads, regardless of whether the Supabase session rehydrates.
+  static const _sessionGrace = Duration(minutes: 5);
 
   static String _passwordKey(LoginPortal portal) =>
       'portal_password_${portal.name}';
@@ -97,14 +102,29 @@ class AuthService {
     }
 
     final local = prefs.getBool(_localSessionKey) ?? false;
-    if (!local && _client.auth.currentUser == null) {
+    // Keep the session while the Supabase session is missing only if it's a
+    // local login or we're still inside the post-login grace window. This stops
+    // a reload from bouncing the user back to the login screen.
+    if (!local &&
+        !_withinLoginGrace(prefs) &&
+        _client.auth.currentUser == null) {
       _portal = null;
       _loginEmail = null;
       _loginDisplayName = null;
       await prefs.remove(_portalKey);
       await prefs.remove(_loginEmailKey);
       await prefs.remove(_loginNameKey);
+      await prefs.remove(_loginAtKey);
     }
+  }
+
+  /// Whether the last login was recent enough to keep the session alive.
+  bool _withinLoginGrace(SharedPreferences prefs) {
+    final raw = prefs.getString(_loginAtKey);
+    if (raw == null) return false;
+    final at = DateTime.tryParse(raw);
+    if (at == null) return false;
+    return DateTime.now().difference(at) < _sessionGrace;
   }
 
   static String _defaultNameForEmail(String email) {
@@ -131,7 +151,10 @@ class AuthService {
     await restoreSession();
     if (_client.auth.currentUser != null) return true;
     final prefs = await SharedPreferences.getInstance();
-    return (prefs.getBool(_localSessionKey) ?? false) && _portal != null;
+    if ((prefs.getBool(_localSessionKey) ?? false) && _portal != null) {
+      return true;
+    }
+    return _withinLoginGrace(prefs) && _portal != null;
   }
 
   Future<void> loginWithPortal(
@@ -186,6 +209,7 @@ class AuthService {
     await prefs.setString(_loginEmailKey, normalizedEmail);
     await prefs.setString(_loginNameKey, _loginDisplayName!);
     await prefs.setBool(_localSessionKey, !supabaseOk);
+    await prefs.setString(_loginAtKey, DateTime.now().toIso8601String());
   }
 
   Future<void> login(String email, String password) async {
@@ -244,6 +268,7 @@ class AuthService {
     await prefs.remove(_localSessionKey);
     await prefs.remove(_loginEmailKey);
     await prefs.remove(_loginNameKey);
+    await prefs.remove(_loginAtKey);
   }
 
   /// Changes the password for the currently signed-in portal. Verifies the

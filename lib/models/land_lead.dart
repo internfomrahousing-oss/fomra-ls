@@ -27,6 +27,7 @@ class LandLead {
   final String sitePhotoUrl;
   final List<String> sitePhotoUrls;
   final DateTime addedOn;
+  final String createdByName;
   LeadStatus status;
 
   LandLead({
@@ -50,6 +51,7 @@ class LandLead {
     this.sitePhotoUrl = '',
     this.sitePhotoUrls = const [],
     required this.addedOn,
+    this.createdByName = '',
     this.status = LeadStatus.new_,
   });
 

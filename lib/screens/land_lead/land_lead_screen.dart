@@ -679,6 +679,22 @@ class _LeadCard extends StatelessWidget {
                                       fontWeight: FontWeight.w700)),
                             ]),
                       ),
+                      if (lead.createdByName.isNotEmpty) ...[
+                        const SizedBox(width: 8),
+                        Icon(Icons.person_outline,
+                            size: 12, color: context.fomraTextSecondary),
+                        const SizedBox(width: 4),
+                        Flexible(
+                          child: Text(
+                            lead.createdByName,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                fontSize: 11,
+                                color: context.fomraTextSecondary,
+                                fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      ],
                       const Spacer(),
                       Icon(Icons.calendar_today,
                           size: 12, color: context.fomraTextSecondary),

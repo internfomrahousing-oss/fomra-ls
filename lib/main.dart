@@ -98,11 +98,21 @@ class _StartupScreenState extends State<_StartupScreen> {
     } catch (e) {
       error = e.toString();
     }
+    bool loggedIn = false;
+    if (error == null) {
+      try {
+        loggedIn = await AuthService.instance.checkSession();
+      } catch (_) {
+        loggedIn = false;
+      }
+    }
+
     if (!mounted) return;
     if (error != null) {
       setState(() => _error = error);
     } else {
-      Navigator.of(context).pushReplacementNamed('/login');
+      Navigator.of(context)
+          .pushReplacementNamed(loggedIn ? '/home' : '/login');
     }
   }
 

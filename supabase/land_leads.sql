@@ -31,9 +31,13 @@ CREATE TABLE IF NOT EXISTS land_leads (
   status TEXT NOT NULL DEFAULT 'new_',
   added_on TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   created_by UUID,
+  created_by_name TEXT DEFAULT '',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- For databases created before created_by_name existed.
+ALTER TABLE land_leads ADD COLUMN IF NOT EXISTS created_by_name TEXT DEFAULT '';
 
 -- Lead IDs: mmyyyy00001 (e.g. 06202600001). Counter resets every calendar year.
 CREATE OR REPLACE FUNCTION generate_land_lead_id()

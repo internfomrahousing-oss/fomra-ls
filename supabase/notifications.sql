@@ -30,8 +30,11 @@ CREATE POLICY "anyone can manage notifications"
   USING (true)
   WITH CHECK (true);
 
--- Notify management whenever a new land lead is uploaded. Runs with definer
--- rights so it fires regardless of which role inserted the lead.
+-- Make sure the uploader-name column exists (see land_leads.sql).
+ALTER TABLE land_leads ADD COLUMN IF NOT EXISTS created_by_name TEXT DEFAULT '';
+
+-- Notify management whenever a new land lead is uploaded, naming the employee
+-- who uploaded it. Runs with definer rights so it fires regardless of role.
 CREATE OR REPLACE FUNCTION notify_management_on_new_lead()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -39,7 +42,9 @@ BEGIN
   VALUES (
     'management',
     'lead',
-    'New lead uploaded',
+    'New lead uploaded'
+      || CASE WHEN COALESCE(NEW.created_by_name, '') <> ''
+              THEN ' by ' || NEW.created_by_name ELSE '' END,
     COALESCE(NULLIF(NEW.owner_name, ''), 'A new land lead')
       || CASE WHEN COALESCE(NEW.location, '') <> ''
               THEN ' — ' || NEW.location ELSE '' END

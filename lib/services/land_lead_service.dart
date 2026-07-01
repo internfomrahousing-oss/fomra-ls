@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/land_lead.dart';
 import '../utils/image_compressor.dart';
+import 'auth_service.dart';
 
 class LandLeadService {
   static SupabaseClient get _db => Supabase.instance.client;
@@ -21,6 +22,7 @@ class LandLeadService {
     List<Uint8List> sitePhotoBytes = const [],
   }) async {
     final userId = _db.auth.currentUser?.id;
+    final createdByName = AuthService.instance.currentUser?.fullName ?? '';
     final leadId = await _db.rpc('generate_land_lead_id') as String;
 
     var sitePhotoUrls = List<String>.from(lead.sitePhotoUrls);
@@ -49,6 +51,7 @@ class LandLeadService {
           'status': lead.status.name,
           'added_on': lead.addedOn.toUtc().toIso8601String(),
           if (userId != null) 'created_by': userId,
+          if (createdByName.isNotEmpty) 'created_by_name': createdByName,
         })
         .select()
         .single();
@@ -145,6 +148,7 @@ class LandLeadService {
       sitePhotoUrl: photoUrls.isNotEmpty ? photoUrls.first : single,
       sitePhotoUrls: photoUrls,
       addedOn: DateTime.parse(r['added_on'] as String),
+      createdByName: r['created_by_name'] as String? ?? '',
       status: LeadStatus.values.firstWhere(
         (e) => e.name == r['status'],
         orElse: () => LeadStatus.new_,

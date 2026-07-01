@@ -1510,24 +1510,13 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
             style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
           ),
           const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: _LeadValuationAmountTile(
-                  label: 'Purchase Value',
-                  amount: _fmtIndianRupee(v.recommendedPurchasePrice),
-                  color: AppColors.info,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _LeadValuationAmountTile(
-                  label: 'Selling Value',
-                  amount: _fmtIndianRupee(v.recommendedSellingPrice),
-                  color: AppColors.success,
-                ),
-              ),
-            ],
+          SizedBox(
+            width: double.infinity,
+            child: _LeadValuationAmountTile(
+              label: 'Expected Buying Price',
+              amount: _fmtIndianRupee(v.recommendedPurchasePrice),
+              color: AppColors.info,
+            ),
           ),
           const SizedBox(height: 12),
           Row(
@@ -1542,17 +1531,17 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
               const SizedBox(width: 8),
               Expanded(
                 child: _BenchmarkTile(
-                  'Sell / sqft',
-                  '₹${v.sellPerSqft.round()}',
+                  'Investment',
+                  '${v.investmentScore}/100',
                   AppColors.success,
                 ),
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: _BenchmarkTile(
-                  'Margin',
-                  '${v.expectedMargin.toStringAsFixed(1)}%',
-                  AppColors.accent,
+                  'Risk',
+                  '${v.riskScore}/100',
+                  AppColors.warning,
                 ),
               ),
             ],
