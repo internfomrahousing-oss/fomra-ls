@@ -120,18 +120,20 @@ router.get('/projects', async (req, res) => {
   const all    = [];
   const errors = [];
 
-  // Start from CURRENT_YEAR-1 — current year file often 404s until TNRERA publishes it
+  // Start from CURRENT_YEAR-1 — current year file often 404s until TNRERA publishes it.
+  // Fetch every (year, type) file in parallel so the whole call stays well within
+  // serverless time limits (sequential fetches could take ~100s).
+  const jobs = [];
   for (const yr of [CURRENT_YEAR - 1, CURRENT_YEAR - 2]) {
     for (const type of VALID_TYPES) {
-      try {
-        const html = await fetchHtml(type, yr);
-        const rows = parseProjectTable(html);
-        all.push(...rows);
-      } catch (e) {
-        errors.push(`${type}/${yr}: ${e.message}`);
-      }
+      jobs.push(
+        fetchHtml(type, yr)
+          .then((html) => parseProjectTable(html))
+          .catch((e) => { errors.push(`${type}/${yr}: ${e.message}`); return []; }),
+      );
     }
   }
+  for (const rows of await Promise.all(jobs)) all.push(...rows);
 
   // Deduplicate by RERA number
   const seen = new Map();

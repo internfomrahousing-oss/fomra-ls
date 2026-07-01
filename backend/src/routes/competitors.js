@@ -3,6 +3,7 @@ const magicbricksRouter = require('./magicbricks');
 const ninetyNineRouter  = require('./ninetyninacres');
 const housingRouter     = require('./housing');
 const squareYardsRouter = require('./squareyards');
+const tnreraRouter      = require('./tnrera');
 const {
   applyRadiusFilter,
   applyNearestListings,
@@ -11,11 +12,11 @@ const { geocodeListings } = require('../lib/listingGeocode');
 
 const router = express.Router();
 
-function callRouter(subRouter, query) {
+function callRouter(subRouter, query, path = '/') {
   return new Promise((resolve) => {
     const req = {
       method:  'GET',
-      url:     '/',
+      url:     path,
       query,
       params:  {},
       headers: {},
@@ -38,9 +39,9 @@ function callRouter(subRouter, query) {
   });
 }
 
-function callRouterWithTimeout(subRouter, query, timeoutMs) {
+function callRouterWithTimeout(subRouter, query, timeoutMs, path = '/') {
   return Promise.race([
-    callRouter(subRouter, query),
+    callRouter(subRouter, query, path),
     new Promise((resolve) => {
       setTimeout(
         () => resolve({ statusCode: 504, data: null, error: `timeout after ${timeoutMs}ms` }),
@@ -91,6 +92,40 @@ function ingestBatch(result, defaultSource, allListings, sources, errors) {
   if (!sources.includes(src)) sources.push(src);
   for (const l of data.listings) {
     allListings.push({ ...l, source: l.source || src });
+  }
+}
+
+// TNRERA /projects returns a bare array of registered projects (no price/coords).
+// Map them into the listing shape so they broaden coverage beyond SquareYards.
+function ingestTnrera(result, allListings, sources, errors) {
+  if (result.status !== 'fulfilled') {
+    errors.push(`TNRERA: ${result.reason?.message || 'failed'}`);
+    return;
+  }
+  const { statusCode, data, error } = result.value;
+  const rows = Array.isArray(data) ? data : (data?.listings || null);
+  if (statusCode !== 200 || !rows?.length) {
+    errors.push(`TNRERA: ${error || data?.error || `HTTP ${statusCode}`}`);
+    return;
+  }
+  if (!sources.includes('TNRERA')) sources.push('TNRERA');
+  for (const r of rows) {
+    const key = (r.reraNo || r.projectName || '').replace(/[^a-zA-Z0-9]/g, '_').slice(0, 30);
+    allListings.push({
+      id:           r.id || `rera_${key}`,
+      projectName:  r.projectName || r.reraNo || 'RERA Project',
+      locality:     '',
+      developer:    r.developer || '',
+      reraNo:       r.reraNo || '',
+      status:       r.status || 'Registered',
+      priceRupees:  0,
+      pricePerSqft: 0,
+      area:         0,
+      lat:          null,
+      lng:          null,
+      projectType:  'Building',
+      source:       'TNRERA',
+    });
   }
 }
 
@@ -158,10 +193,14 @@ router.get('/', async (req, res) => {
 
   // SquareYards is reachable from datacenter/serverless IPs and returns priced
   // projects with map coordinates — it is the primary competitor source.
+  // TNRERA (official Tamil Nadu RERA registry) is reachable from serverless IPs
+  // and adds many registered projects that SquareYards alone misses.
   const syTimeoutMs = onServerless ? 20000 : 35000;
-  const [mbResult, syResult] = await Promise.all([
+  const reraTimeoutMs = onServerless ? 30000 : 40000;
+  const [mbResult, syResult, reraResult] = await Promise.all([
     callRouterWithTimeout(magicbricksRouter, radiusQuery, mbTimeoutMs),
     callRouterWithTimeout(squareYardsRouter, radiusQuery, syTimeoutMs),
+    callRouterWithTimeout(tnreraRouter, { district: city }, reraTimeoutMs, '/projects'),
   ]);
 
   const altResults = onServerless
@@ -176,6 +215,7 @@ router.get('/', async (req, res) => {
 
   ingestBatch({ status: 'fulfilled', value: syResult }, 'SquareYards', allListings, sources, errors);
   ingestBatch({ status: 'fulfilled', value: mbResult }, 'MagicBricks', allListings, sources, errors);
+  ingestTnrera({ status: 'fulfilled', value: reraResult }, allListings, sources, errors);
   ingestBatch({ status: 'fulfilled', value: naResult }, '99acres', allListings, sources, errors);
   ingestBatch({ status: 'fulfilled', value: hoResult }, 'Housing.com', allListings, sources, errors);
 
@@ -197,31 +237,36 @@ router.get('/', async (req, res) => {
     const lngN = parseFloat(centerLng);
     const rKm  = parseFloat(radius);
 
-    // Build a pool of projects that carry map coordinates. The fast primary
-    // sources (SquareYards, MagicBricks) already return coords; only geocode
-    // the rest if we have nothing to work with.
-    const primaryRaw = [];
-    if (syResult.statusCode === 200) primaryRaw.push(...(syResult.data?.listings || []));
-    if (mbResult.statusCode === 200) primaryRaw.push(...(mbResult.data?.listings || []));
-    let pool = dedupeListings(primaryRaw);
-    if (pool.length === 0) {
-      await geocodeListings(listings, city, onServerless ? 20 : 80);
-      pool = listings;
-    }
+    // The fast primary sources (SquareYards, MagicBricks) already return coords;
+    // other sources (TNRERA) don't, so geocode the coordinate-less ones and let
+    // every source with a resolved position take part in the radius filter.
+    await geocodeListings(listings, city, onServerless ? 40 : 100);
+    const hasCoords = (l) => {
+      const la = parseFloat(l.lat);
+      const lo = parseFloat(l.lng ?? l.lon);
+      return Number.isFinite(la) && Number.isFinite(lo);
+    };
+    let pool = listings.filter(hasCoords);
+    if (pool.length === 0) pool = listings;
 
     // The aggregator is authoritative about the radius: re-apply it here rather
-    // than trusting each sub-router's own nearest-project fallback.
+    // than trusting each sub-router's own nearest-project fallback. Filter the
+    // full pool (priced + registered) so every in-radius project can be shown.
     const pricedPool = pool.filter(isPriced);
-    const filtered = applyRadiusFilter(pricedPool.length ? pricedPool : pool, latN, lngN, rKm);
+    const filtered = applyRadiusFilter(pool, latN, lngN, rKm);
     const inRadius = filtered.listings;                 // distance-sorted, has distanceKm
     const pricedInRadius = inRadius.filter(isPriced);
+    const unpricedInRadius = inRadius.filter((l) => !isPriced(l));
 
     if (pricedInRadius.length >= 1) {
-      // Priced projects genuinely within the radius — nearest first.
-      listings = pricedInRadius.slice(0, 30);
-      radiusNote = undefined;
+      // Priced projects first, then registered projects (e.g. TNRERA) also inside
+      // the radius — so results aren't limited to the handful of priced ones.
+      listings = [...pricedInRadius, ...unpricedInRadius].slice(0, 40);
+      radiusNote = unpricedInRadius.length
+        ? 'Priced projects first; registered projects (e.g. TNRERA) shown with approximate location.'
+        : undefined;
     } else if (inRadius.length > 0) {
-      listings = inRadius.slice(0, 30);
+      listings = inRadius.slice(0, 40);
       radiusNote = 'Projects within radius — online prices unavailable for these.';
     } else {
       // Nothing inside the radius: show only a few nearest, clearly flagged.
@@ -231,10 +276,13 @@ router.get('/', async (req, res) => {
         : `No competitor projects near this point. Try a larger radius.`;
     }
   } else if (pricedAll.length > 0) {
-    listings = sortListings(pricedAll);
+    // Priced projects first, then registered/unpriced ones (TNRERA etc.) so the
+    // city list is as complete as possible instead of dropping unpriced projects.
+    const unpriced = listings.filter((l) => !isPriced(l));
+    listings = [...sortListings(pricedAll), ...unpriced];
     if (listings.length > 50) {
       listings = listings.slice(0, 50);
-      radiusNote = 'Showing top 50 priced city projects.';
+      radiusNote = 'Showing top 50 city projects (priced first).';
     }
   } else if (listings.length > 50) {
     listings = sortListings(listings).slice(0, 50);
