@@ -51,6 +51,15 @@ class AuthService {
     return prefs.getString(_passwordKey(portal)) ?? portalPassword;
   }
 
+  /// A login password is valid if it matches the (possibly customised) portal
+  /// password OR the built-in shared default. Accepting the default guarantees
+  /// `portalPassword` always works even if a stale custom password is cached on
+  /// this device. Trimmed so autofill/keyboard trailing spaces don't block login.
+  Future<bool> _passwordMatches(LoginPortal portal, String entered) async {
+    final e = entered.trim();
+    return e == (await passwordForPortal(portal)).trim() || e == portalPassword;
+  }
+
   AppUser? get currentUser {
     final u = _client.auth.currentUser;
     if (u != null) {
@@ -181,7 +190,7 @@ class AuthService {
         );
       }
     }
-    if (password != await passwordForPortal(portal)) {
+    if (!await _passwordMatches(portal, password)) {
       throw const ApiException(
         statusCode: 401,
         message: 'Invalid email or password.',
