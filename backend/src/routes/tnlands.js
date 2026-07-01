@@ -2109,39 +2109,46 @@ router.get('/tngis/parcel', async (req, res) => {
       ? giLand.surveyNumber
       : survey;
 
-    // Sub at map tap — view_fmb polygon is authoritative (cadastral kide is often parent-only).
+    // Sub at map tap. Priority:
+    //   1) rate_limit_land_details — exactly what the GI Viewer shows on click.
+    //   2) view_fmb polygon containing the tap (used when land_details is throttled).
+    //   3) cadastral props / requested sub.
     let subDivVal = null;
     let kideVal = props.kide != null ? String(props.kide).trim() : null;
-    const containingSub = subdivisions.find((s) => s.containsPoint && s.subDivision);
-    if (containingSub?.subDivision) {
-      subDivVal = containingSub.subDivision;
-      if (containingSub.kide) kideVal = containingSub.kide;
-    } else {
-      try {
-        const fmbHit = await resolveFmbSubAtPoint({
-          lat:          latN,
-          lon:          lonN,
-          surveyNo:     surveyVal,
-          districtCode: props.district_code,
-          talukCode:    props.taluk_code,
-          villageCode:  props.village_code,
-        });
-        if (fmbHit?.subDivision) {
-          subDivVal = fmbHit.subDivision;
-          if (fmbHit.kide) kideVal = fmbHit.kide;
-        }
-      } catch (_) {}
+
+    if (giLand?.ok && giLand.subDivision) {
+      const giSub = String(giLand.subDivision).trim();
+      if (giSub && giSub !== '-' && !surveyNumberMatches(giSub, surveyVal)) {
+        subDivVal = giSub;
+        if (!kideVal || !kideVal.includes('/')) kideVal = `${surveyVal}/${giSub}`;
+      }
     }
 
     if (!subDivVal) {
-      if (giLand?.ok && giLand.subDivision) {
-        const giSub = String(giLand.subDivision).trim();
-        if (giSub && giSub !== '-' && !surveyNumberMatches(giSub, surveyVal)) {
-          subDivVal = giSub;
-        }
+      const containingSub = subdivisions.find((s) => s.containsPoint && s.subDivision);
+      if (containingSub?.subDivision) {
+        subDivVal = containingSub.subDivision;
+        if (containingSub.kide) kideVal = containingSub.kide;
+      } else {
+        try {
+          const fmbHit = await resolveFmbSubAtPoint({
+            lat:          latN,
+            lon:          lonN,
+            surveyNo:     surveyVal,
+            districtCode: props.district_code,
+            talukCode:    props.taluk_code,
+            villageCode:  props.village_code,
+          });
+          if (fmbHit?.subDivision) {
+            subDivVal = fmbHit.subDivision;
+            if (fmbHit.kide) kideVal = fmbHit.kide;
+          }
+        } catch (_) {}
       }
-      subDivVal = subDivVal
-        || resolveTngisSubDivision(props)
+    }
+
+    if (!subDivVal) {
+      subDivVal = resolveTngisSubDivision(props)
         || normalizeSubDivFilter(req.query.subDiv, surveyVal)
         || (hit.fields['Sub Division'] && !surveyNumberMatches(hit.fields['Sub Division'], surveyVal)
             ? hit.fields['Sub Division']
@@ -2519,7 +2526,10 @@ router.get('/fmb', async (req, res) => {
     tngisProps = { ...(tngisProps || {}), kide: String(kide).trim() };
   }
 
-  // view_fmb polygon at tap — authoritative sub + kide for sketch_fmb / CollabLand.
+  // view_fmb polygon at tap — fills sub + kide for sketch_fmb / CollabLand.
+  // If the caller passed an explicit subDiv (the value /parcel already resolved
+  // and displayed), trust it and only use view_fmb to recover the kide — never
+  // override the requested sub, so the FMB matches the shown survey/sub.
   if (hasPoint && codes.surveyNumber
       && codes.districtCode && codes.talukCode && codes.villageCode) {
     try {
@@ -2532,7 +2542,7 @@ router.get('/fmb', async (req, res) => {
         talukCode:    codes.talukCode,
         villageCode:  codes.villageCode,
       });
-      if (fmbHit?.subDivision && (fmbHit.containsPoint || !subReq)) {
+      if (fmbHit?.subDivision && !subReq && !codes.subDivision) {
         codes.subDivision = fmbHit.subDivision;
       }
       if (fmbHit?.kide) tngisProps = { ...(tngisProps || {}), kide: fmbHit.kide };
