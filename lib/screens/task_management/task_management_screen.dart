@@ -1156,7 +1156,7 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
                   ),
                   const SizedBox(height: 16),
                   // Title
-                  _SectionLabel('Task Title'),
+                  const _SectionLabel('Task Title'),
                   TextFormField(
                     controller: _titleCtrl,
                     decoration: _dec(context, 'Enter task title'),
@@ -1166,7 +1166,7 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
                   const SizedBox(height: 14),
 
                   // Description
-                  _SectionLabel('Description'),
+                  const _SectionLabel('Description'),
                   TextFormField(
                     controller: _descCtrl,
                     decoration: _dec(context, 'Brief description'),
@@ -1180,7 +1180,7 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
                       child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            _SectionLabel('Priority'),
+                            const _SectionLabel('Priority'),
                             DropdownButtonFormField<TaskPriority>(
                               initialValue: _priority,
                               decoration: _dec(context, null),
@@ -1209,7 +1209,7 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
                       child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            _SectionLabel('Module'),
+                            const _SectionLabel('Module'),
                             DropdownButtonFormField<String>(
                               initialValue: _module,
                               decoration: _dec(context, null),
@@ -1226,7 +1226,7 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
                   const SizedBox(height: 14),
 
                   // Due date
-                  _SectionLabel('Due Date'),
+                  const _SectionLabel('Due Date'),
                   InkWell(
                     onTap: _pickDueDate,
                     borderRadius: BorderRadius.circular(12),
@@ -1261,7 +1261,7 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
                   const SizedBox(height: 18),
 
                   // Assign Users
-                  _SectionLabel('Assign Users'),
+                  const _SectionLabel('Assign Users'),
                   Wrap(
                     spacing: 8,
                     runSpacing: 8,
@@ -1305,7 +1305,7 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
                   const SizedBox(height: 18),
 
                   // Reminders
-                  _SectionLabel('Reminder System'),
+                  const _SectionLabel('Reminder System'),
                   Wrap(
                     spacing: 8,
                     runSpacing: 8,
@@ -1341,7 +1341,7 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
 
                   // Escalation Rules
                   Row(children: [
-                    _SectionLabel('Escalation Rules'),
+                    const _SectionLabel('Escalation Rules'),
                     const Spacer(),
                     TextButton.icon(
                       onPressed: _addEscalationRule,
@@ -1386,7 +1386,7 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
                   const SizedBox(height: 18),
 
                   // Notes
-                  _SectionLabel('Notes'),
+                  const _SectionLabel('Notes'),
                   TextFormField(
                     controller: _notesCtrl,
                     decoration: _dec(context, 'Additional notes…'),
