@@ -39,6 +39,11 @@ CREATE TABLE IF NOT EXISTS land_leads (
 -- For databases created before created_by_name existed.
 ALTER TABLE land_leads ADD COLUMN IF NOT EXISTS created_by_name TEXT DEFAULT '';
 
+-- Backfill leads uploaded before per-user tracking existed. Safe to re-run:
+-- only touches rows with no recorded uploader; new leads always set a name.
+UPDATE land_leads SET created_by_name = 'Management'
+WHERE created_by_name IS NULL OR created_by_name = '';
+
 -- Lead IDs: mmyyyy00001 (e.g. 06202600001). Counter resets every calendar year.
 CREATE OR REPLACE FUNCTION generate_land_lead_id()
 RETURNS TEXT AS $$
