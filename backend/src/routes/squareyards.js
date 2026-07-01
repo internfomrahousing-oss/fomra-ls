@@ -205,18 +205,19 @@ router.get('/', async (req, res) => {
       (l) => (l.priceRupees || 0) > 0 || (l.pricePerSqft || 0) > 0,
     );
 
-    if (pricedInRadius.length >= 3) {
+    // Prefer projects that are genuinely inside the radius — show them even if
+    // there are only one or two. Only fall back to nearby projects when the
+    // radius is truly empty, and clearly flag that they are outside it.
+    if (pricedInRadius.length >= 1) {
       listings = pricedInRadius;
       radiusNote = filtered.radiusNote;
     } else if (priced.length > 0) {
-      listings = applyNearestListings(priced, userLat, userLng, 30);
-      radiusNote = pricedInRadius.length > 0
-        ? `Showing nearest priced projects (${listings.length}; only ${pricedInRadius.length} strictly within ${radius}km).`
-        : `Showing nearest priced projects (${listings.length}; none strictly within ${radius}km).`;
+      listings = applyNearestListings(priced, userLat, userLng, 12);
+      radiusNote = `No priced projects within ${radius}km — showing the ${listings.length} nearest instead.`;
     } else {
       listings = filtered.listings.length > 0
         ? filtered.listings
-        : applyNearestListings(listings, userLat, userLng, 20);
+        : applyNearestListings(listings, userLat, userLng, 12);
       radiusNote = filtered.radiusNote;
     }
 

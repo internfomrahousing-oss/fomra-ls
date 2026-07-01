@@ -167,7 +167,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
   bool _showSearchResults = false;
 
   // POI
-  int _selectedRadius = 2;
+  int _selectedRadius = 5;
   Map<String, int> _poiCounts = {};
   Map<String, List<Map<String, dynamic>>> _poiPlaces = {};
   bool _collectingPois = false;

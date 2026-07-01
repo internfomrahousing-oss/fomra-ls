@@ -193,48 +193,42 @@ router.get('/', async (req, res) => {
   const pricedAll = listings.filter(isPriced);
 
   if (hasRadiusFilter) {
-    // SquareYards + MagicBricks both apply their own radius / nearest-priced
-    // fallback and return priced listings with map coordinates — trust them.
+    const latN = parseFloat(lat);
+    const lngN = parseFloat(centerLng);
+    const rKm  = parseFloat(radius);
+
+    // Build a pool of projects that carry map coordinates. The fast primary
+    // sources (SquareYards, MagicBricks) already return coords; only geocode
+    // the rest if we have nothing to work with.
     const primaryRaw = [];
     if (syResult.statusCode === 200) primaryRaw.push(...(syResult.data?.listings || []));
     if (mbResult.statusCode === 200) primaryRaw.push(...(mbResult.data?.listings || []));
-    const primaryPriced = dedupeListings(primaryRaw.filter(isPriced));
-
-    if (primaryPriced.length > 0) {
-      listings = sortListings(primaryPriced).slice(0, 30);
-      radiusNote = syResult.data?.radiusNote || mbResult.data?.radiusNote || radiusNote;
-    } else {
-      const latN = parseFloat(lat);
-      const lngN = parseFloat(centerLng);
-      const rKm = parseFloat(radius);
-
+    let pool = dedupeListings(primaryRaw);
+    if (pool.length === 0) {
       await geocodeListings(listings, city, onServerless ? 20 : 80);
+      pool = listings;
+    }
 
-      const pool = pricedAll.length > 0 ? pricedAll : listings;
-      const filtered = applyRadiusFilter(pool, latN, lngN, rKm);
-      const pricedInRadius = filtered.listings.filter(isPriced);
+    // The aggregator is authoritative about the radius: re-apply it here rather
+    // than trusting each sub-router's own nearest-project fallback.
+    const pricedPool = pool.filter(isPriced);
+    const filtered = applyRadiusFilter(pricedPool.length ? pricedPool : pool, latN, lngN, rKm);
+    const inRadius = filtered.listings;                 // distance-sorted, has distanceKm
+    const pricedInRadius = inRadius.filter(isPriced);
 
-      if (pricedInRadius.length >= 3) {
-        listings = sortListings(pricedInRadius).slice(0, 30);
-        radiusNote = filtered.radiusNote;
-      } else if (pricedAll.length > 0) {
-        listings = applyNearestListings(pricedAll, latN, lngN, 30);
-        radiusNote =
-          pricedInRadius.length > 0
-            ? `Showing nearest priced projects (${listings.length} found; only ${pricedInRadius.length} strictly within ${rKm}km).`
-            : `Showing nearest priced projects (${listings.length} found; none strictly within ${rKm}km).`;
-      } else if (filtered.listings.length > 0) {
-        listings = filtered.listings.slice(0, 30);
-        radiusNote =
-          filtered.radiusNote
-          || 'RERA projects in radius — online prices not available for these listings.';
-      } else {
-        listings = applyNearestListings(listings, latN, lngN, 20);
-        radiusNote =
-          listings.length > 0
-            ? `Showing nearest projects (${listings.length}); price data may be limited.`
-            : filtered.radiusNote;
-      }
+    if (pricedInRadius.length >= 1) {
+      // Priced projects genuinely within the radius — nearest first.
+      listings = pricedInRadius.slice(0, 30);
+      radiusNote = undefined;
+    } else if (inRadius.length > 0) {
+      listings = inRadius.slice(0, 30);
+      radiusNote = 'Projects within radius — online prices unavailable for these.';
+    } else {
+      // Nothing inside the radius: show only a few nearest, clearly flagged.
+      listings = applyNearestListings(pricedPool.length ? pricedPool : pool, latN, lngN, 12);
+      radiusNote = listings.length
+        ? `No projects within ${rKm}km — showing the ${listings.length} nearest instead.`
+        : `No competitor projects near this point. Try a larger radius.`;
     }
   } else if (pricedAll.length > 0) {
     listings = sortListings(pricedAll);
