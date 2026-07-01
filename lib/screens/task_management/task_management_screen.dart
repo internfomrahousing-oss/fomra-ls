@@ -28,13 +28,6 @@ const _kTeam = [
   'Data Analyst',
 ];
 
-const _kModules = [
-  'Land Lead',
-  'Market Intelligence',
-  'Documents',
-  'General',
-];
-
 // ── Models ────────────────────────────────────────────────────────────────────
 
 class EscalationRule {
@@ -672,8 +665,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
       builder: (_) => _AddTaskSheet(
         onSave: (task) => setState(() {
           _tasks.insert(0, task);
-          _pushNotification(task,
-              '✅ Task "${task.title}" created and assigned to ${task.assignedTo.join(', ')}.');
+          _pushNotification(task, '✅ Task "${task.title}" created.');
         }),
       ),
     );
@@ -1053,9 +1045,7 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
   final _notesCtrl = TextEditingController();
 
   TaskPriority _priority = TaskPriority.medium;
-  String _module = _kModules.first;
   DateTime _dueDate = DateTime.now().add(const Duration(days: 3));
-  final Set<String> _assignedTo = {};
   final List<EscalationRule> _escalationRules = [];
   final Set<Duration> _reminders = {};
 
@@ -1174,55 +1164,28 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
                   ),
                   const SizedBox(height: 14),
 
-                  // Priority + Module row
-                  Row(children: [
-                    Expanded(
-                      child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const _SectionLabel('Priority'),
-                            DropdownButtonFormField<TaskPriority>(
-                              initialValue: _priority,
-                              decoration: _dec(context, null),
-                              items: TaskPriority.values
-                                  .map((p) => DropdownMenuItem(
-                                        value: p,
-                                        child: Row(children: [
-                                          Container(
-                                              width: 8,
-                                              height: 8,
-                                              decoration: BoxDecoration(
-                                                  color: _priorityColor(p),
-                                                  shape: BoxShape.circle)),
-                                          const SizedBox(width: 6),
-                                          Text(_priorityLabel(p)),
-                                        ]),
-                                      ))
-                                  .toList(),
-                              onChanged: (v) =>
-                                  setState(() => _priority = v!),
-                            ),
-                          ]),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const _SectionLabel('Module'),
-                            DropdownButtonFormField<String>(
-                              initialValue: _module,
-                              decoration: _dec(context, null),
-                              items: _kModules
-                                  .map((m) => DropdownMenuItem(
-                                      value: m, child: Text(m)))
-                                  .toList(),
-                              onChanged: (v) =>
-                                  setState(() => _module = v!),
-                            ),
-                          ]),
-                    ),
-                  ]),
+                  // Priority
+                  const _SectionLabel('Priority'),
+                  DropdownButtonFormField<TaskPriority>(
+                    initialValue: _priority,
+                    decoration: _dec(context, null),
+                    items: TaskPriority.values
+                        .map((p) => DropdownMenuItem(
+                              value: p,
+                              child: Row(children: [
+                                Container(
+                                    width: 8,
+                                    height: 8,
+                                    decoration: BoxDecoration(
+                                        color: _priorityColor(p),
+                                        shape: BoxShape.circle)),
+                                const SizedBox(width: 6),
+                                Text(_priorityLabel(p)),
+                              ]),
+                            ))
+                        .toList(),
+                    onChanged: (v) => setState(() => _priority = v!),
+                  ),
                   const SizedBox(height: 14),
 
                   // Due date
@@ -1257,50 +1220,6 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
                                 color: context.fomraTextSecondary)),
                       ]),
                     ),
-                  ),
-                  const SizedBox(height: 18),
-
-                  // Assign Users
-                  const _SectionLabel('Assign Users'),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: _kTeam.map((name) {
-                      final selected = _assignedTo.contains(name);
-                      return FilterChip(
-                        label: Text(name,
-                            style: TextStyle(
-                                fontSize: 12,
-                                color: selected || context.isDarkMode
-                                    ? Colors.white
-                                    : context.fomraTextPrimary)),
-                        avatar: CircleAvatar(
-                          backgroundColor: selected
-                              ? Colors.white.withValues(alpha: 0.3)
-                              : AppColors.primary.withValues(alpha: 0.1),
-                          child: Text(name[0],
-                              style: TextStyle(
-                                  fontSize: 11,
-                                  color: selected
-                                      ? Colors.white
-                                      : (context.isDarkMode
-                                          ? AppColors.primaryLight
-                                          : AppColors.primary),
-                                  fontWeight: FontWeight.bold)),
-                        ),
-                        selected: selected,
-                        onSelected: (v) => setState(() => v
-                            ? _assignedTo.add(name)
-                            : _assignedTo.remove(name)),
-                        selectedColor: AppColors.primary,
-                        backgroundColor: context.fomraSurfaceVar,
-                        side: BorderSide(
-                            color: selected
-                                ? AppColors.primary
-                                : context.fomraBorder),
-                        showCheckmark: false,
-                      );
-                    }).toList(),
                   ),
                   const SizedBox(height: 18),
 
@@ -1438,12 +1357,6 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
 
   void _save() {
     if (!_formKey.currentState!.validate()) return;
-    if (_assignedTo.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Please assign at least one user.'),
-          backgroundColor: AppColors.error));
-      return;
-    }
     final task = Task(
       id: Task.generateId(),
       title: _titleCtrl.text.trim(),
@@ -1452,8 +1365,8 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
       status: TaskStatus.todo,
       dueDate: _dueDate,
       createdAt: DateTime.now(),
-      assignedTo: _assignedTo.toList(),
-      module: _module,
+      assignedTo: const [],
+      module: '',
       escalationRules: _escalationRules,
       reminderOffsets: _reminders.toList(),
       notes: _notesCtrl.text.trim(),
@@ -1684,17 +1597,18 @@ class _TaskDetailSheet extends StatelessWidget {
                 ),
 
                 // Assigned Users
-                _DetailSection(
-                  icon: Icons.group_outlined,
-                  title: 'Assigned Users',
-                  child: Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: task.assignedTo
-                        .map((name) => _AvatarChip(name: name, large: true))
-                        .toList(),
+                if (task.assignedTo.isNotEmpty)
+                  _DetailSection(
+                    icon: Icons.group_outlined,
+                    title: 'Assigned Users',
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: task.assignedTo
+                          .map((name) => _AvatarChip(name: name, large: true))
+                          .toList(),
+                    ),
                   ),
-                ),
 
                 // Escalation Rules
                 _DetailSection(
@@ -1772,15 +1686,16 @@ class _TaskDetailSheet extends StatelessWidget {
                             height: 1.5)),
                   ),
 
-                _DetailSection(
-                  icon: Icons.folder_outlined,
-                  title: 'Module',
-                  child: Text(task.module,
-                      style: const TextStyle(
-                          fontSize: 13,
-                          color: AppColors.primary,
-                          fontWeight: FontWeight.w600)),
-                ),
+                if (task.module.isNotEmpty)
+                  _DetailSection(
+                    icon: Icons.folder_outlined,
+                    title: 'Module',
+                    child: Text(task.module,
+                        style: const TextStyle(
+                            fontSize: 13,
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.w600)),
+                  ),
 
                 const SizedBox(height: 40),
               ],
