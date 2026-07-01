@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../models/land_lead.dart';
 import '../../services/auth_service.dart';
 import '../../services/app_store.dart';
+import '../../services/notifications_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../models/app_notification.dart';
@@ -18,7 +20,11 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  final List<AppNotification> _notifications = [];
+  List<AppNotification> _notifications = [];
+  RealtimeChannel? _notifChannel;
+
+  String get _notifAudience =>
+      AuthService.instance.isManagement ? 'management' : 'employee';
 
   int get _totalLeads  => AppStore.instance.leads.length;
   int get _activeLeads => AppStore.instance.leads
@@ -36,15 +42,30 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     AppStore.instance.addListener(_onStoreUpdate);
+    _loadNotifications();
+    _notifChannel = NotificationsService.subscribe(
+      audience: _notifAudience,
+      onChange: _loadNotifications,
+    );
   }
 
   @override
   void dispose() {
     AppStore.instance.removeListener(_onStoreUpdate);
+    _notifChannel?.unsubscribe();
     super.dispose();
   }
 
   void _onStoreUpdate() => setState(() {});
+
+  Future<void> _loadNotifications() async {
+    try {
+      final list = await NotificationsService.getAll(audience: _notifAudience);
+      if (mounted) setState(() => _notifications = list);
+    } catch (_) {
+      // Keep the current list if the fetch fails (e.g. table not created yet).
+    }
+  }
 
   void _showNotifications() {
     showModalBottomSheet(
@@ -53,12 +74,19 @@ class _HomeScreenState extends State<HomeScreen> {
       backgroundColor: Colors.transparent,
       builder: (_) => _NotificationsSheet(
         notifications: _notifications,
-        onMarkRead: (id) => setState(() {
-          _notifications.firstWhere((n) => n.id == id).isRead = true;
-        }),
-        onMarkAllRead: () => setState(() {
-          for (final n in _notifications) { n.isRead = true; }
-        }),
+        onMarkRead: (id) {
+          setState(() {
+            _notifications.firstWhere((n) => n.id == id).isRead = true;
+          });
+          NotificationsService.markRead(id).catchError((_) {});
+        },
+        onMarkAllRead: () {
+          setState(() {
+            for (final n in _notifications) { n.isRead = true; }
+          });
+          NotificationsService.markAllRead(audience: _notifAudience)
+              .catchError((_) {});
+        },
       ),
     );
   }
