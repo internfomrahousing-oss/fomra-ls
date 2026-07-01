@@ -51,13 +51,11 @@ class AuthService {
     return prefs.getString(_passwordKey(portal)) ?? portalPassword;
   }
 
-  /// A login password is valid if it matches the (possibly customised) portal
-  /// password OR the built-in shared default. Accepting the default guarantees
-  /// `portalPassword` always works even if a stale custom password is cached on
-  /// this device. Trimmed so autofill/keyboard trailing spaces don't block login.
+  /// A login password is valid if it matches the active portal password.
+  /// Trimmed so autofill/keyboard trailing spaces don't block login. (A changed
+  /// password still invalidates the old one — the default is not a backdoor.)
   Future<bool> _passwordMatches(LoginPortal portal, String entered) async {
-    final e = entered.trim();
-    return e == (await passwordForPortal(portal)).trim() || e == portalPassword;
+    return entered.trim() == (await passwordForPortal(portal)).trim();
   }
 
   AppUser? get currentUser {
