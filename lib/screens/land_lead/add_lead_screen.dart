@@ -571,16 +571,14 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
                       ctrl: _villageCtrl,
                       label: 'Village',
                       hint: 'Village name',
-                      icon: Icons.home_outlined,
-                      expand: true)),
+                      icon: Icons.home_outlined)),
               const SizedBox(width: 10),
               Expanded(
                   child: _Field(
                       ctrl: _talukCtrl,
                       label: 'Taluk',
                       hint: 'Taluk',
-                      icon: Icons.account_balance_outlined,
-                      expand: true)),
+                      icon: Icons.account_balance_outlined)),
             ]),
             const SizedBox(height: 12),
 
@@ -608,7 +606,6 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
                   hint: 'e.g. 42/3A',
                   icon: Icons.tag,
                   required: true,
-                  expand: true,
                 ),
               ),
               const SizedBox(width: 10),
@@ -618,7 +615,6 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
                   label: 'Sub Division',
                   hint: 'e.g. 1  (optional)',
                   icon: Icons.call_split_outlined,
-                  expand: true,
                 ),
               ),
             ]),
@@ -741,23 +737,19 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
 
 // ── Terms Dropdown ──────────────────────────────────────────────────────────
 
-double _compactFieldWidth(BuildContext context) {
+double _compactDropdownWidth(BuildContext context) {
   final screenW = MediaQuery.sizeOf(context).width;
   return screenW > 520 ? 380.0 : screenW - 48;
 }
 
-Widget _compactFieldShell({
+Widget _compactDropdownShell({
   required BuildContext context,
   required Widget child,
-  bool expand = false,
 }) {
-  if (expand) {
-    return SizedBox(width: double.infinity, child: child);
-  }
   return Align(
     alignment: Alignment.centerLeft,
     child: SizedBox(
-      width: _compactFieldWidth(context),
+      width: _compactDropdownWidth(context),
       child: child,
     ),
   );
@@ -811,7 +803,7 @@ class _TermsDropdown extends StatelessWidget {
         ? AppColors.primaryLight
         : AppColors.primary;
 
-    return _compactFieldShell(
+    return _compactDropdownShell(
       context: context,
       child: DropdownButtonFormField<String>(
         isExpanded: true,
@@ -890,12 +882,10 @@ class _MultiPhotoUpload extends StatelessWidget {
   Widget build(BuildContext context) {
     final canAdd = photos.length < maxPhotos;
 
-    return _compactFieldShell(
-      context: context,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (photos.isNotEmpty)
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (photos.isNotEmpty)
           Wrap(
             spacing: 10,
             runSpacing: 10,
@@ -1031,8 +1021,7 @@ class _MultiPhotoUpload extends StatelessWidget {
               ),
             ),
           ),
-        ],
-      ),
+      ],
     );
   }
 }
@@ -1068,12 +1057,10 @@ class _LocationPinMap extends StatelessWidget {
   Widget build(BuildContext context) {
     final filled = status != null && status!.contains('✓');
 
-    return _compactFieldShell(
-      context: context,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(children: [
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(children: [
           const Icon(Icons.map_outlined, size: 16, color: AppColors.primary),
           const SizedBox(width: 6),
           const Expanded(
@@ -1201,7 +1188,6 @@ class _LocationPinMap extends StatelessWidget {
           ),
         ],
       ],
-      ),
     );
   }
 }
@@ -1215,30 +1201,26 @@ class _LocationModeToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _compactFieldShell(
-      context: context,
-      child: Container(
-        decoration: BoxDecoration(
-          color: context.fomraSurfaceVar,
-          borderRadius: BorderRadius.circular(FomraInput.borderRadius),
-          border: Border.all(color: context.fomraBorder),
-        ),
-        padding: const EdgeInsets.all(4),
-        child: Row(children: [
-          _Tab(
-            icon: Icons.edit_outlined,
-            label: 'Fill Manually',
-            active: mode == _LocationMode.manual,
-            onTap: () => onChanged(_LocationMode.manual),
-          ),
-          _Tab(
-            icon: Icons.my_location,
-            label: 'Live Location',
-            active: mode == _LocationMode.live,
-            onTap: () => onChanged(_LocationMode.live),
-          ),
-        ]),
+    return Container(
+      decoration: BoxDecoration(
+        color: context.fomraSurfaceVar,
+        borderRadius: BorderRadius.circular(12),
       ),
+      padding: const EdgeInsets.all(4),
+      child: Row(children: [
+        _Tab(
+          icon: Icons.edit_outlined,
+          label: 'Fill Manually',
+          active: mode == _LocationMode.manual,
+          onTap: () => onChanged(_LocationMode.manual),
+        ),
+        _Tab(
+          icon: Icons.my_location,
+          label: 'Live Location',
+          active: mode == _LocationMode.live,
+          onTap: () => onChanged(_LocationMode.live),
+        ),
+      ]),
     );
   }
 }
@@ -1315,87 +1297,85 @@ class _LiveLocationButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final bool filled = status != null && status!.contains('✓');
 
-    return _compactFieldShell(
-      context: context,
-      child: Material(
-        color: filled
-            ? AppColors.success.withValues(alpha: 0.08)
-            : AppColors.primary.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(FomraInput.borderRadius),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(FomraInput.borderRadius),
-          child: Container(
-            padding: FomraInput.contentPadding,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(FomraInput.borderRadius),
-              border: Border.all(
-                color: filled
-                    ? AppColors.success.withValues(alpha: 0.4)
-                    : AppColors.primary.withValues(alpha: 0.3),
+    return Material(
+      color: filled
+          ? AppColors.success.withValues(alpha: 0.08)
+          : AppColors.primary.withValues(alpha: 0.06),
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: filled
+                  ? AppColors.success.withValues(alpha: 0.4)
+                  : AppColors.primary.withValues(alpha: 0.3),
+            ),
+          ),
+          child: Row(children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: filled ? AppColors.success : AppColors.primary,
+                shape: BoxShape.circle,
+              ),
+              child: fetching
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                          color: Colors.white, strokeWidth: 2))
+                  : Icon(
+                      filled ? Icons.location_on : Icons.my_location,
+                      color: Colors.white,
+                      size: 18,
+                    ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    fetching
+                        ? 'Getting live location…'
+                        : 'Get Live Location',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color:
+                          filled ? AppColors.success : AppColors.primary,
+                    ),
+                  ),
+                  if (status != null) ...[
+                    const SizedBox(height: 2),
+                    Text(status!,
+                        style: TextStyle(
+                            fontSize: 11,
+                            color: filled
+                                ? AppColors.success
+                                : AppColors.textSecondary)),
+                  ] else
+                    const Text(
+                      'Auto-fills GPS, location, village, taluk, district & survey',
+                      style: TextStyle(
+                          fontSize: 11, color: AppColors.textSecondary),
+                    ),
+                ],
               ),
             ),
-            child: Row(children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: filled ? AppColors.success : AppColors.primary,
-                  shape: BoxShape.circle,
-                ),
-                child: fetching
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(
-                            color: Colors.white, strokeWidth: 2))
-                    : Icon(
-                        filled ? Icons.location_on : Icons.my_location,
-                        color: Colors.white,
-                        size: 18,
-                      ),
+            if (!fetching)
+              Icon(
+                filled ? Icons.check_circle : Icons.chevron_right,
+                color: filled
+                    ? AppColors.success
+                    : AppColors.textSecondary,
               ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      fetching
-                          ? 'Getting live location…'
-                          : 'Get Live Location',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color:
-                            filled ? AppColors.success : AppColors.primary,
-                      ),
-                    ),
-                    if (status != null) ...[
-                      const SizedBox(height: 2),
-                      Text(status!,
-                          style: TextStyle(
-                              fontSize: 11,
-                              color: filled
-                                  ? AppColors.success
-                                  : AppColors.textSecondary)),
-                    ] else
-                      const Text(
-                        'Auto-fills GPS, location, village, taluk, district & survey',
-                        style: TextStyle(
-                            fontSize: 11, color: AppColors.textSecondary),
-                      ),
-                  ],
-                ),
-              ),
-              if (!fetching)
-                Icon(
-                  filled ? Icons.check_circle : Icons.chevron_right,
-                  color: filled
-                      ? AppColors.success
-                      : AppColors.textSecondary,
-                ),
-            ]),
-          ),
+          ]),
         ),
       ),
     );
@@ -1473,7 +1453,7 @@ class _InputSourceDropdown extends StatelessWidget {
         ? AppColors.primaryLight
         : AppColors.primary;
 
-    return _compactFieldShell(
+    return _compactDropdownShell(
       context: context,
       child: DropdownButtonFormField<InputSource>(
         isExpanded: true,
@@ -1526,23 +1506,27 @@ class _ReadOnlyField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _compactFieldShell(
-      context: context,
-      child: InputDecorator(
-        decoration: FomraInput.decoration(
-          context: context,
-          label: label,
-          icon: Icons.tag,
-        ),
-        child: Text(
-          value,
-          style: TextStyle(
-            fontSize: 14,
-            color: context.fomraTextSecondary,
-            fontStyle: FontStyle.italic,
-          ),
-        ),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: context.fomraSurfaceVar,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: context.fomraBorder),
       ),
+      child: Row(children: [
+        const Icon(Icons.tag, size: 18, color: AppColors.textSecondary),
+        const SizedBox(width: 10),
+        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(label,
+              style: const TextStyle(
+                  fontSize: 11, color: AppColors.textSecondary)),
+          Text(value,
+              style: const TextStyle(
+                  fontSize: 13,
+                  color: AppColors.textSecondary,
+                  fontStyle: FontStyle.italic)),
+        ]),
+      ]),
     );
   }
 }
@@ -1557,7 +1541,6 @@ class _Field extends StatelessWidget {
   final bool required;
   final int maxLines;
   final TextInputType keyboardType;
-  final bool expand;
 
   const _Field({
     required this.ctrl,
@@ -1567,30 +1550,24 @@ class _Field extends StatelessWidget {
     this.required = false,
     this.maxLines = 1,
     this.keyboardType = TextInputType.text,
-    this.expand = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    return _compactFieldShell(
-      context: context,
-      expand: expand,
-      child: TextFormField(
-        controller: ctrl,
-        maxLines: maxLines,
-        keyboardType: keyboardType,
-        style: TextStyle(fontSize: 14, color: context.fomraTextPrimary),
-        validator: required
-            ? (v) =>
-                (v == null || v.trim().isEmpty) ? '$label is required' : null
-            : null,
-        decoration: FomraInput.decoration(
-          context: context,
-          label: label,
-          hint: hint,
-          icon: icon,
-          required: required,
-        ),
+    return TextFormField(
+      controller: ctrl,
+      maxLines: maxLines,
+      keyboardType: keyboardType,
+      validator: required
+          ? (v) =>
+              (v == null || v.trim().isEmpty) ? '$label is required' : null
+          : null,
+      decoration: FomraInput.decoration(
+        context: context,
+        label: label,
+        hint: hint,
+        icon: icon,
+        required: required,
       ),
     );
   }
@@ -1610,7 +1587,7 @@ class _LandTypeDropdown extends StatelessWidget {
         ? AppColors.primaryLight
         : AppColors.primary;
 
-    return _compactFieldShell(
+    return _compactDropdownShell(
       context: context,
       child: DropdownButtonFormField<LandType>(
         isExpanded: true,
