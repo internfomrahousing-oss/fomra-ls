@@ -87,6 +87,12 @@ class _HomeScreenState extends State<HomeScreen> {
           NotificationsService.markAllRead(audience: _notifAudience)
               .catchError((_) {});
         },
+        onOpen: (n) {
+          Navigator.pop(context); // close the notifications sheet
+          if (n.type == NotificationType.lead) {
+            Navigator.pushNamed(context, '/land-lead');
+          }
+        },
       ),
     );
   }
@@ -807,10 +813,12 @@ class _NotificationsSheet extends StatelessWidget {
   final List<AppNotification> notifications;
   final void Function(String id) onMarkRead;
   final VoidCallback onMarkAllRead;
+  final void Function(AppNotification n) onOpen;
   const _NotificationsSheet({
     required this.notifications,
     required this.onMarkRead,
     required this.onMarkAllRead,
+    required this.onOpen,
   });
 
   @override
@@ -906,7 +914,10 @@ class _NotificationsSheet extends StatelessWidget {
                                     color: AppColors.primary,
                                     shape: BoxShape.circle),
                               ),
-                        onTap: () => onMarkRead(n.id),
+                        onTap: () {
+                          onMarkRead(n.id);
+                          onOpen(n);
+                        },
                         tileColor: n.isRead
                             ? null
                             : AppColors.primary.withValues(alpha: 0.03),
