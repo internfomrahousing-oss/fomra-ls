@@ -72,7 +72,9 @@ class _DrawerHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = context.isDarkMode;
 
-    return GestureDetector(
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
       onTap: () {
         Navigator.pop(context);
         Navigator.of(context).pushNamedAndRemoveUntil('/home', (_) => false);
@@ -154,6 +156,7 @@ class _DrawerHeader extends StatelessWidget {
           ],
         ),
       ),
+    ),
     );
   }
 }
