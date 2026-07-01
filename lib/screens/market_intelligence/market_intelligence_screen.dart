@@ -10,6 +10,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../config/maptiler_tiles.dart';
 import '../../models/land_lead.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_input.dart';
@@ -40,10 +41,6 @@ const _kTransportPoiNames = [
 ];
 
 enum _MarketMapLayer { standard, transport }
-
-const _kOsmTileUrl = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
-const _kOsmTransportRailUrl =
-    'https://tiles.openrailwaymap.org/standard/{z}/{x}/{y}.png';
 
 const _kCategories = [
   _PoiCategory('Schools', Icons.school_outlined, Color(0xFF1565C0), 'amenity', 'school'),
@@ -1913,16 +1910,11 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
               onTap: (_, point) => _handleMapTap(point),
             ),
             children: [
-              TileLayer(
-                urlTemplate: _kOsmTileUrl,
-                userAgentPackageName: 'in.fomrahousing.fomrals',
-              ),
-              if (_mapLayer == _MarketMapLayer.transport)
-                TileLayer(
-                  urlTemplate: _kOsmTransportRailUrl,
-                  userAgentPackageName: 'in.fomrahousing.fomrals',
-                  tileDisplay: const TileDisplay.instantaneous(opacity: 0.72),
+              MapTilerTiles.tileLayer(
+                urlTemplate: MapTilerTiles.urlFor(
+                  transportLayer: _mapLayer == _MarketMapLayer.transport,
                 ),
+              ),
               CircleLayer(circles: [
                 if (activeLoc != null)
                   CircleMarker(
@@ -2023,6 +2015,35 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
             child: _buildMapOverlayButton(
               Icons.fullscreen_exit,
               () => setState(() => _mapFullScreen = false),
+            ),
+          ),
+        Positioned(
+          right: 6,
+          bottom: 6,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.88),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: const Text(
+              MapTilerTiles.attribution,
+              style: TextStyle(fontSize: 9, color: Colors.black87),
+            ),
+          ),
+        ),
+        if (!MapTilerTiles.isConfigured)
+          Positioned.fill(
+            child: Container(
+              color: Colors.black38,
+              alignment: Alignment.center,
+              padding: const EdgeInsets.all(24),
+              child: const Text(
+                'Add your MapTiler API key at build time:\n'
+                '--dart-define=MAPTILER_API_KEY=your_key',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.white, fontSize: 12),
+              ),
             ),
           ),
       ],
@@ -2185,8 +2206,8 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
             const SizedBox(height: 6),
             Text(
               _collectingPois
-                  ? 'Loading transport POIs from OpenStreetMap…'
-                  : 'OpenStreetMap transport layer — railways, stations & bus terminals.',
+                  ? 'Loading transport POIs…'
+                  : 'MapTiler transport map — railways, stations & bus terminals.',
               style: const TextStyle(fontSize: 10, color: AppColors.textSecondary),
             ),
           ],

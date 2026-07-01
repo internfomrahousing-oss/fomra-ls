@@ -9,6 +9,7 @@ import 'package:latlong2/latlong.dart';
 import '../../models/add_lead_result.dart';
 import '../../models/land_lead.dart';
 import '../../theme/app_theme.dart';
+import '../../config/maptiler_tiles.dart';
 import '../../theme/fomra_input.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../services/api_client.dart';
@@ -66,7 +67,7 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
   bool _mapReady = false;
 
   static const _kDefaultMapCenter = LatLng(13.0827, 80.2707);
-  static const _kOsmTileUrl = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+  static final _kMapTileUrl = MapTilerTiles.standard;
 
   // Terms
   String? _termsType;
@@ -522,7 +523,7 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
             if (_locationMode == _LocationMode.manual) ...[
               _LocationPinMap(
                 mapController: _mapController,
-                tileUrl: _kOsmTileUrl,
+                tileUrl: _kMapTileUrl,
                 defaultCenter: _kDefaultMapCenter,
                 pinnedPoint: _pinnedPoint,
                 resolving: _resolvingPin,
@@ -1105,10 +1106,7 @@ class _LocationPinMap extends StatelessWidget {
                     onTap: (_, point) => onTap(point),
                   ),
                   children: [
-                    TileLayer(
-                      urlTemplate: tileUrl,
-                      userAgentPackageName: 'in.fomrahousing.fomrals',
-                    ),
+                    MapTilerTiles.tileLayer(urlTemplate: tileUrl),
                     if (pinnedPoint != null)
                       MarkerLayer(markers: [
                         Marker(
