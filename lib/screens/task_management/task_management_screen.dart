@@ -1046,8 +1046,10 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
 
   TaskPriority _priority = TaskPriority.medium;
   DateTime _dueDate = DateTime.now().add(const Duration(days: 3));
-  final List<EscalationRule> _escalationRules = [];
+  final Set<String> _assignedTo = {};
   final Set<Duration> _reminders = {};
+
+  bool get _isManagement => AuthService.instance.isManagement;
 
   @override
   void dispose() {
@@ -1258,51 +1260,51 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
                   ),
                   const SizedBox(height: 18),
 
-                  // Escalation Rules
-                  Row(children: [
-                    const _SectionLabel('Escalation Rules'),
-                    const Spacer(),
-                    TextButton.icon(
-                      onPressed: _addEscalationRule,
-                      icon: const Icon(Icons.add, size: 16),
-                      label: const Text('Add Rule'),
-                      style: TextButton.styleFrom(
-                          foregroundColor: AppColors.warning),
+                  // Assign Users (management only)
+                  if (_isManagement) ...[
+                    const _SectionLabel('Assign Users'),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: _kTeam.map((name) {
+                        final selected = _assignedTo.contains(name);
+                        return FilterChip(
+                          label: Text(name,
+                              style: TextStyle(
+                                  fontSize: 12,
+                                  color: selected || context.isDarkMode
+                                      ? Colors.white
+                                      : context.fomraTextPrimary)),
+                          avatar: CircleAvatar(
+                            backgroundColor: selected
+                                ? Colors.white.withValues(alpha: 0.3)
+                                : AppColors.primary.withValues(alpha: 0.1),
+                            child: Text(name[0],
+                                style: TextStyle(
+                                    fontSize: 11,
+                                    color: selected
+                                        ? Colors.white
+                                        : (context.isDarkMode
+                                            ? AppColors.primaryLight
+                                            : AppColors.primary),
+                                    fontWeight: FontWeight.bold)),
+                          ),
+                          selected: selected,
+                          onSelected: (v) => setState(() => v
+                              ? _assignedTo.add(name)
+                              : _assignedTo.remove(name)),
+                          selectedColor: AppColors.primary,
+                          backgroundColor: context.fomraSurfaceVar,
+                          side: BorderSide(
+                              color: selected
+                                  ? AppColors.primary
+                                  : context.fomraBorder),
+                          showCheckmark: false,
+                        );
+                      }).toList(),
                     ),
-                  ]),
-                  if (_escalationRules.isEmpty)
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: AppColors.warning.withValues(alpha: 0.08),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                            color:
-                                AppColors.warning.withValues(alpha: 0.25)),
-                      ),
-                      child: Row(children: [
-                        const Icon(Icons.escalator_warning,
-                            size: 16, color: AppColors.warning),
-                        const SizedBox(width: 8),
-                        Text('No escalation rules set.',
-                            style: TextStyle(
-                                fontSize: 12,
-                                color: context.fomraTextSecondary)),
-                      ]),
-                    )
-                  else
-                    Column(
-                      children: _escalationRules
-                          .asMap()
-                          .entries
-                          .map((e) => _EscalationTile(
-                                rule: e.value,
-                                onDelete: () => setState(
-                                    () => _escalationRules.removeAt(e.key)),
-                              ))
-                          .toList(),
-                    ),
-                  const SizedBox(height: 18),
+                    const SizedBox(height: 18),
+                  ],
 
                   // Notes
                   const _SectionLabel('Notes'),
@@ -1346,15 +1348,6 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
     if (picked != null) setState(() => _dueDate = picked);
   }
 
-  void _addEscalationRule() {
-    showDialog(
-      context: context,
-      builder: (_) => _AddEscalationDialog(
-        onAdd: (rule) => setState(() => _escalationRules.add(rule)),
-      ),
-    );
-  }
-
   void _save() {
     if (!_formKey.currentState!.validate()) return;
     final task = Task(
@@ -1365,81 +1358,14 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
       status: TaskStatus.todo,
       dueDate: _dueDate,
       createdAt: DateTime.now(),
-      assignedTo: const [],
+      assignedTo: _isManagement ? _assignedTo.toList() : const [],
       module: '',
-      escalationRules: _escalationRules,
+      escalationRules: const [],
       reminderOffsets: _reminders.toList(),
       notes: _notesCtrl.text.trim(),
     );
     widget.onSave(task);
     Navigator.pop(context);
-  }
-}
-
-// ── Add Escalation Dialog ─────────────────────────────────────────────────────
-
-class _AddEscalationDialog extends StatefulWidget {
-  final void Function(EscalationRule) onAdd;
-  const _AddEscalationDialog({required this.onAdd});
-
-  @override
-  State<_AddEscalationDialog> createState() => _AddEscalationDialogState();
-}
-
-class _AddEscalationDialogState extends State<_AddEscalationDialog> {
-  int _hours = 2;
-  String _escalateTo = _kTeam.first;
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Add Escalation Rule'),
-      content: Column(mainAxisSize: MainAxisSize.min, children: [
-        Text('Escalate if overdue by:',
-            style: TextStyle(
-                fontSize: 13, color: context.fomraTextSecondary)),
-        const SizedBox(height: 8),
-        DropdownButtonFormField<int>(
-          initialValue: _hours,
-          decoration: _dec(context, 'Hours after due'),
-          items: [1, 2, 4, 8, 12, 24, 48]
-              .map((h) => DropdownMenuItem(
-                  value: h, child: Text('$h hour${h > 1 ? 's' : ''}')))
-              .toList(),
-          onChanged: (v) => setState(() => _hours = v!),
-        ),
-        const SizedBox(height: 12),
-        Text('Escalate to:',
-            style: TextStyle(
-                fontSize: 13, color: context.fomraTextSecondary)),
-        const SizedBox(height: 8),
-        DropdownButtonFormField<String>(
-          initialValue: _escalateTo,
-          decoration: _dec(context, 'Select person'),
-          items: _kTeam
-              .map((t) =>
-                  DropdownMenuItem(value: t, child: Text(t)))
-              .toList(),
-          onChanged: (v) => setState(() => _escalateTo = v!),
-        ),
-      ]),
-      actions: [
-        TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel')),
-        ElevatedButton(
-          onPressed: () {
-            widget.onAdd(EscalationRule(
-                hoursAfterDue: _hours, escalateTo: _escalateTo));
-            Navigator.pop(context);
-          },
-          style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.warning,
-              foregroundColor: Colors.white),
-          child: const Text('Add'),
-        ),
-      ],
-    );
   }
 }
 
@@ -1920,9 +1846,8 @@ class _DetailSection extends StatelessWidget {
 
 class _EscalationTile extends StatelessWidget {
   final EscalationRule rule;
-  final VoidCallback? onDelete;
 
-  const _EscalationTile({required this.rule, this.onDelete});
+  const _EscalationTile({required this.rule});
 
   @override
   Widget build(BuildContext context) => Container(
@@ -1951,14 +1876,6 @@ class _EscalationTile extends StatelessWidget {
           )),
           if (rule.triggered)
             const _MicroChip(Icons.warning, 'Triggered', AppColors.error),
-          if (onDelete != null)
-            IconButton(
-              icon: const Icon(Icons.close, size: 14),
-              color: AppColors.error,
-              onPressed: onDelete,
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(),
-            ),
         ]),
       );
 }
