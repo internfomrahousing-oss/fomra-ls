@@ -86,8 +86,14 @@ function toNum(v) {
 function mapProperty(p) {
   const price = toNum(p.price);
   // Prefer carpet area; fall back to super-built-up (propertySize).
-  const area  = toNum(p.carpetArea) > 0 ? toNum(p.carpetArea) : toNum(p.propertySize);
-  const ppsf  = price > 0 && area > 0 ? Math.round(price / area) : 0;
+  let area  = toNum(p.carpetArea) > 0 ? toNum(p.carpetArea) : toNum(p.propertySize);
+  // Some listings carry a junk area (0/1 or a non-sqft unit), which would yield
+  // a nonsensical ₹/sqft and wreck the aggregate price stats. Treat an
+  // implausible area as unknown so the listing keeps its total price but is
+  // excluded from ₹/sqft maths.
+  if (area < 100) area = 0;
+  let ppsf = price > 0 && area > 0 ? Math.round(price / area) : 0;
+  if (ppsf > 100000) { ppsf = 0; area = 0; } // area almost certainly wrong-unit
   const bhkM  = String(p.type || '').match(/BHK\s*(\d+)/i);
   const bhk   = bhkM ? `${bhkM[1]} BHK` : '';
   const title = p.propertyTitle || p.title || p.society || 'NoBroker listing';
