@@ -133,7 +133,7 @@ function fetchRaw(urlStr, opts = {}, _depth = 0) {
       res.on('error', reject);
     });
 
-    req.setTimeout(25000, () => { req.destroy(); reject(new Error('Request timed out')); });
+    req.setTimeout(opts.timeoutMs || 25000, () => { req.destroy(); reject(new Error('Request timed out')); });
     req.on('error', reject);
     if (method === 'POST' && opts.body) req.write(opts.body);
     req.end();
@@ -539,6 +539,18 @@ const TNGIS_GI_VIEWER_URL =
 const TNGIS_CADASTRAL_LAYER = 'cadastral_analysis:view_cadastral';
 const TNGIS_FMB_LAYER         = 'cadastral_analysis:view_fmb';
 
+// A single WFS GetFeature that hasn't answered in 12s is effectively dead; fail
+// fast so the expanding-radius ladder can move on instead of hanging 25s each.
+const WFS_TIMEOUT_MS = 12000;
+// The parcel route fires many sequential WFS calls; if TNGIS is slow the whole
+// request can exceed Vercel's 120s function limit and return a crash page. The
+// radius loops check this deadline and stop expanding, returning best-effort
+// data so the caller always gets JSON well within the limit.
+const PARCEL_DEADLINE_MS = 85000;
+function deadlinePassed(deadline) {
+  return typeof deadline === 'number' && Date.now() > deadline;
+}
+
 function tngisGiViewerUrl(lat, lon) {
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) return TNGIS_GI_VIEWER_URL;
   return `${TNGIS_GI_VIEWER_URL}?lat=${lat}&lon=${lon}`;
@@ -719,13 +731,14 @@ function pickBestFmbFeatureAtPoint(features, lat, lon, maxNearestMeters = 120) {
   return pickNearestBoundaryFeature(features, lat, lon, maxNearestMeters);
 }
 
-async function lookupTngisParcelAtPoint({ lat, lon, surveyNo, subDiv }) {
+async function lookupTngisParcelAtPoint({ lat, lon, surveyNo, subDiv, deadline }) {
   const surveyFilter = normalizeSurveyNo(surveyNo);
   const subFilter = normalizeSubDivFilter(subDiv, surveyFilter);
 
   if (surveyFilter) {
     const radii = [120, 300, 800, 2000, 5000, 10000, 25000];
     for (const radiusMeters of radii) {
+      if (deadlinePassed(deadline)) break;
       const features = await fetchTngisLayerFeatures({
         layer:        TNGIS_CADASTRAL_LAYER,
         surveyNo:       surveyFilter,
@@ -745,6 +758,7 @@ async function lookupTngisParcelAtPoint({ lat, lon, surveyNo, subDiv }) {
   const radii = [120, 250, 450, 800, 1200, 2000, 3500, 5000];
   let lastFeatures = [];
   for (const radiusMeters of radii) {
+    if (deadlinePassed(deadline)) break;
     const features = await fetchTngisParcelsNear(lat, lon, radiusMeters, 500);
     if (!features.length) continue;
     lastFeatures = features;
@@ -763,12 +777,13 @@ async function lookupTngisParcelAtPoint({ lat, lon, surveyNo, subDiv }) {
   return null;
 }
 
-async function listTngisSubdivisionsAtPoint({ lat, lon, surveyNo }) {
+async function listTngisSubdivisionsAtPoint({ lat, lon, surveyNo, deadline }) {
   const surveyFilter = surveyNo ? normalizeSurveyNo(surveyNo) : null;
   const radii = [300, 800, 1500, 3000, 6000, 10000];
   const seenIds = new Set();
   let features = [];
   for (const radiusMeters of radii) {
+    if (deadlinePassed(deadline)) break;
     const batch = await fetchTngisParcelsNear(lat, lon, radiusMeters, 400);
     for (const f of batch) {
       const p = f.properties || {};
@@ -812,6 +827,7 @@ async function listTngisSubdivisionsAtPoint({ lat, lon, surveyNo }) {
   const vc = anchor?.fields?.['Village Code'] || null;
   if (surveyFilter && dc && tc && vc && Number.isFinite(lat) && Number.isFinite(lon)) {
     for (const radiusMeters of [500, 2000, 5000, 10000]) {
+      if (deadlinePassed(deadline)) break;
       const cql = buildFmbLookupCql({
         surveyNo:     surveyFilter,
         districtCode: dc,
@@ -957,6 +973,7 @@ async function queryTngisLayerFeatures(layer, cql, count = 25) {
   const url = tngisLayerWfsUrl(layer, cql, count);
   const res = await fetchRaw(url, {
     headers: { Accept: 'application/json', Referer: 'https://tngis.tn.gov.in/' },
+    timeoutMs: WFS_TIMEOUT_MS,
   });
   if (res.status !== 200) return [];
   try {
@@ -973,13 +990,14 @@ async function queryTngisCadastralFeatures(cql, count = 25) {
 
 /** Pick FMB sub-division at map point — cadastral layer often has kide without /sub. */
 async function resolveFmbSubAtPoint({
-  lat, lon, surveyNo, subDiv, districtCode, talukCode, villageCode,
+  lat, lon, surveyNo, subDiv, districtCode, talukCode, villageCode, deadline,
 }) {
   const survey = normalizeSurveyNo(surveyNo);
   if (!survey || !Number.isFinite(lat) || !Number.isFinite(lon)) return null;
   const subFilter = normalizeSubDivFilter(subDiv, survey);
   const radii = [120, 300, 500, 2000, 5000, 10000];
   for (const radiusMeters of radii) {
+    if (deadlinePassed(deadline)) break;
     const cql = buildFmbLookupCql({
       surveyNo: survey,
       districtCode,
@@ -1072,6 +1090,7 @@ async function fetchTngisLayerFeatures({ layer, surveyNo, subDiv, lat, lon, radi
   const url = tngisLayerWfsUrl(layer, cql, count);
   const res = await fetchRaw(url, {
     headers: { Accept: 'application/json', Referer: 'https://tngis.tn.gov.in/' },
+    timeoutMs: WFS_TIMEOUT_MS,
   });
   if (res.status !== 200) throw new Error(`TNGIS WFS returned HTTP ${res.status}`);
 
@@ -2044,12 +2063,15 @@ router.get('/tngis/parcel', async (req, res) => {
     });
   }
 
+  const deadline = Date.now() + PARCEL_DEADLINE_MS;
+
   try {
     let hit = await lookupTngisParcelAtPoint({
       lat: latN,
       lon: lonN,
       surveyNo,
       subDiv,
+      deadline,
     });
     // Sub filter can be too strict (kide-only subs) — retry without sub, then lat/lon only.
     if (!hit && subDiv) {
@@ -2058,6 +2080,7 @@ router.get('/tngis/parcel', async (req, res) => {
         lon: lonN,
         surveyNo,
         subDiv: null,
+        deadline,
       });
     }
     if (!hit && surveyNo) {
@@ -2066,6 +2089,7 @@ router.get('/tngis/parcel', async (req, res) => {
         lon: lonN,
         surveyNo: null,
         subDiv: null,
+        deadline,
       });
     }
     const giViewerUrl = tngisGiViewerUrl(latN, lonN);
@@ -2094,16 +2118,17 @@ router.get('/tngis/parcel', async (req, res) => {
       });
     }
 
-    const subdivisions = await listTngisSubdivisionsAtPoint({
-      lat: latN,
-      lon: lonN,
-      surveyNo: survey || surveyNo,
-    });
-
-    let giLand = null;
-    try {
-      giLand = await fetchGiLandDetails(latN, lonN);
-    } catch (_) {}
+    // Subdivisions (WFS) and land_details (GI API) are independent — run them
+    // concurrently so the slower one, not their sum, bounds the response time.
+    const [subdivisions, giLand] = await Promise.all([
+      listTngisSubdivisionsAtPoint({
+        lat: latN,
+        lon: lonN,
+        surveyNo: survey || surveyNo,
+        deadline,
+      }).catch(() => []),
+      fetchGiLandDetails(latN, lonN).catch(() => null),
+    ]);
 
     const surveyVal = giLand?.ok && giLand.surveyNumber
       ? giLand.surveyNumber
@@ -2138,6 +2163,7 @@ router.get('/tngis/parcel', async (req, res) => {
             districtCode: props.district_code,
             talukCode:    props.taluk_code,
             villageCode:  props.village_code,
+            deadline,
           });
           if (fmbHit?.subDivision) {
             subDivVal = fmbHit.subDivision;
