@@ -156,6 +156,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
   final _searchCtrl = TextEditingController();
   List<Map<String, dynamic>> _searchResults = [];
   bool _showSearchResults = false;
+  Timer? _searchDebounce;
 
   // POI
   int _selectedRadius = 5;
@@ -226,6 +227,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
   void dispose() {
     _roadWidthCtrl.dispose();
     _landSizeCtrl.dispose();
+    _searchDebounce?.cancel();
     _searchCtrl.dispose();
     super.dispose();
   }
@@ -380,7 +382,65 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
 
   // â”€â”€ Location Search (Nominatim) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
+  // Live suggestions as the user types — even a single character. Debounced so
+  // we don't hit Nominatim on every keystroke.
+  void _onSearchChanged(String value) {
+    _searchDebounce?.cancel();
+    final q = value.trim();
+    if (q.isEmpty) {
+      setState(() {
+        _searchResults = [];
+        _showSearchResults = false;
+        _searchError = null;
+      });
+      return;
+    }
+    _searchDebounce = Timer(const Duration(milliseconds: 300), () {
+      _suggestLocations(q);
+    });
+  }
+
+  Future<void> _suggestLocations(String query) async {
+    final q = query.trim();
+    if (q.isEmpty) return;
+
+    // Bias results to the area currently in view (or Tamil Nadu) so short
+    // queries surface nearby places first, without hard-restricting them.
+    final center = _activeLatLng ?? _searchedLocation;
+    String viewbox = '';
+    if (center != null) {
+      const d = 0.75; // ~80km box around the current centre
+      viewbox = '&viewbox=${center.longitude - d},${center.latitude + d},'
+          '${center.longitude + d},${center.latitude - d}';
+    }
+
+    try {
+      final response = await http.get(
+        Uri.parse(
+            'https://nominatim.openstreetmap.org/search?format=json&q=${Uri.encodeComponent(q)}'
+            '&limit=8&addressdetails=1&countrycodes=in$viewbox'),
+        headers: {
+          'User-Agent': 'FomraLS/1.0 (in.fomrahousing)',
+          'Accept-Language': 'en',
+        },
+      );
+      // Ignore stale responses if the box has been cleared/changed meanwhile.
+      if (!mounted || _searchCtrl.text.trim() != q) return;
+      if (response.statusCode == 200) {
+        final results = (jsonDecode(response.body) as List).cast<Map<String, dynamic>>();
+        setState(() {
+          _searchResults = results;
+          _showSearchResults = results.isNotEmpty;
+          _searchError = null;
+        });
+      }
+    } catch (_) {
+      // Silent for live suggestions — the Search button surfaces hard errors.
+    }
+  }
+
   Future<void> _searchLocation(String query) async {
+    _searchDebounce?.cancel();
     if (query.trim().isEmpty) return;
     setState(() {
       _searchingLocation = true;
@@ -1747,6 +1807,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                     prefixIconConstraints: const BoxConstraints(),
                   ),
                   textInputAction: TextInputAction.search,
+                  onChanged: _onSearchChanged,
                   onSubmitted: _searchLocation,
                 ),
               ),
