@@ -1,6 +1,13 @@
 const https = require('https');
 const zlib = require('zlib');
-const { getCachedLandDetails, putCachedLandDetails } = require('./tngisCache');
+
+let getCachedLandDetails = async () => null;
+let putCachedLandDetails = async () => {};
+try {
+  ({ getCachedLandDetails, putCachedLandDetails } = require('./tngisCache'));
+} catch (_) {
+  // tngisCache is optional in dev; production should ship backend/src/lib/tngisCache.js.
+}
 
 const GI_VIEWER_API = 'https://tngis.tn.gov.in/apps/gi_viewer_api/api';
 const IGR_URL = 'https://tngis.tn.gov.in/apps/thematic_viewer_api/v1/getfeatureInfo';
