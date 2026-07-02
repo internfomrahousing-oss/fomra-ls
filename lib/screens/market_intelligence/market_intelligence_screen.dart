@@ -998,6 +998,22 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
     return RegExp(r'\b(plot|plots|plotted|layout|land)\b').hasMatch(name);
   }
 
+  // Flat (apartment) vs individual House (independent house / villa) vs Plot.
+  // NoBroker supplies homeType; other sources (apartment projects) default Flat.
+  static String _homeType(Map<String, dynamic> item) {
+    final ht = (item['homeType'] as String? ?? '').trim();
+    if (ht.isNotEmpty) return ht;
+    if (_isPlot(item)) return 'Plot';
+    final name = (item['projectName'] as String? ?? '').toLowerCase();
+    if (RegExp(r'\b(independent house|individual house|villa)\b').hasMatch(name)) {
+      return 'House';
+    }
+    return 'Flat';
+  }
+
+  static bool _isFlat(Map<String, dynamic> item) => _homeType(item) == 'Flat';
+  static bool _isHouse(Map<String, dynamic> item) => _homeType(item) == 'House';
+
   // Age in years from the registration/completion year, or null if unknown.
   static int? _ageYears(Map<String, dynamic> item) {
     final y = _registeredYear(item);
@@ -1055,6 +1071,10 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
     if (_compFilter == 'All') return _mbListings;
     return _mbListings.where((item) {
       switch (_compFilter) {
+        case 'Flat':
+          return _isFlat(item);
+        case 'House':
+          return _isHouse(item);
         case 'Ongoing':
           return _isOngoing(item);
         case 'Completed':
@@ -1279,7 +1299,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(children: [
-              for (final f in ['All', 'Ongoing', 'Completed', 'Plot', 'Old Projects'])
+              for (final f in ['All', 'Flat', 'House', 'Plot', 'Ongoing', 'Completed', 'Old Projects'])
                 Padding(
                   padding: const EdgeInsets.only(right: 6),
                   child: ChoiceChip(

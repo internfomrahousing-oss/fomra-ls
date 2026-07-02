@@ -103,6 +103,12 @@ function mapProperty(p) {
   const isPlot = /^(PL|LA|PLOT|LAND)$/.test(propType)
     || /\b(plot|plots|land|residential\s*land)\b/i.test(title)
     || /plot|land/i.test(String(p.typeDesc || ''));
+  // Flat (apartment) vs individual house (independent house / villa) vs plot.
+  const homeType = isPlot
+    ? 'Plot'
+    : (/^(IH|VI)$/.test(propType) || /\b(independent\s*house|villa|individual\s*house)\b/i.test(title))
+      ? 'House'
+      : 'Flat';
 
   // propertyAge is the age in years (-1 = unknown). Convert to a registration
   // year so the "Old projects" filter can bucket resale homes by age.
@@ -123,6 +129,7 @@ function mapProperty(p) {
     reraNo:         '',
     developer:      String(p.society || '').trim(),
     projectType:    isPlot ? 'Layout' : 'Building',
+    homeType,
     registeredYear,
     // NoBroker snaps lat/lng to near the search centre for privacy, so the
     // returned coords are NOT the property's real position — the real place is
