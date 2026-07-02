@@ -52,26 +52,56 @@ class ApiClient {
     return h;
   }
 
+  // Some responses aren't JSON at all — a serverless crash/timeout returns a
+  // plain-text page like "A server error has occurred" (HTTP 500) or a gateway
+  // HTML page (HTTP 502/504). jsonDecode would throw a FormatException that
+  // surfaces to the user as "Unexpected token 'A'…", so parse defensively.
+  static dynamic _tryJsonDecode(String body) {
+    try {
+      return jsonDecode(body);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static String _plainErrorMessage(http.Response res) {
+    final raw = res.body.trim();
+    // Vercel's serverless crash/timeout page — transient, worth retrying.
+    if (raw.toLowerCase().contains('a server error has occurred') ||
+        res.statusCode == 408 || res.statusCode == 504) {
+      return 'The server was busy or took too long. Please tap the plot again.';
+    }
+    if (raw.isNotEmpty && raw.length < 200 && !raw.startsWith('<')) {
+      return raw; // short plain-text server message
+    }
+    return 'Server error (HTTP ${res.statusCode}). Please try again.';
+  }
+
   static Map<String, dynamic> _decode(http.Response res) {
-    final body = jsonDecode(res.body);
+    final body = _tryJsonDecode(res.body);
     if (res.statusCode >= 400) {
       throw ApiException(
         statusCode: res.statusCode,
-        message: (body is Map ? body['error'] as String? : null) ?? 'Request failed',
+        message: (body is Map ? body['error'] as String? : null) ?? _plainErrorMessage(res),
       );
+    }
+    if (body == null) {
+      // 2xx but not JSON — upstream proxy/error page slipped through.
+      throw ApiException(statusCode: res.statusCode, message: _plainErrorMessage(res));
     }
     return body is Map<String, dynamic> ? body : {'data': body};
   }
 
   static List<dynamic> _decodeList(http.Response res) {
+    final body = _tryJsonDecode(res.body);
     if (res.statusCode >= 400) {
-      final body = jsonDecode(res.body);
       throw ApiException(
         statusCode: res.statusCode,
-        message: (body is Map ? body['error'] as String? : null) ?? 'Request failed',
+        message: (body is Map ? body['error'] as String? : null) ?? _plainErrorMessage(res),
       );
     }
-    return jsonDecode(res.body) as List<dynamic>;
+    if (body is List) return body;
+    throw ApiException(statusCode: res.statusCode, message: _plainErrorMessage(res));
   }
 
   static Future<Map<String, dynamic>> get(
@@ -190,10 +220,10 @@ class ApiClient {
       headers: await _headers(),
     );
     if (res.statusCode >= 400) {
-      final body = jsonDecode(res.body);
+      final body = _tryJsonDecode(res.body);
       throw ApiException(
         statusCode: res.statusCode,
-        message: (body is Map ? body['error'] as String? : null) ?? 'Delete failed',
+        message: (body is Map ? body['error'] as String? : null) ?? _plainErrorMessage(res),
       );
     }
   }
