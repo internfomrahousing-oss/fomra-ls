@@ -2589,7 +2589,19 @@ router.get('/fmb', async (req, res) => {
         villageCode:  codes.villageCode,
         deadline,
       });
-      if (fmbHit?.subDivision && !subReq && !codes.subDivision) {
+      // When the view_fmb polygon actually contains the tap point, it is the
+      // exact parcel the user clicked — adopt its OWN survey + sub + admin codes
+      // together so sketch_fmb gets one internally-consistent record and returns
+      // this plot's sketch, not the general survey sheet. Respect an explicit
+      // subReq (a sub the user picked) over the geometry.
+      if (fmbHit?.containsPoint && fmbHit.tngisProps) {
+        const fp = fmbHit.tngisProps;
+        codes.districtCode = fp.district_code || codes.districtCode;
+        codes.talukCode    = fp.taluk_code    || codes.talukCode;
+        codes.villageCode  = fp.village_code  || codes.villageCode;
+        codes.surveyNumber = fp.survey_number || codes.surveyNumber;
+        if (!subReq && fmbHit.subDivision) codes.subDivision = fmbHit.subDivision;
+      } else if (fmbHit?.subDivision && !subReq && !codes.subDivision) {
         codes.subDivision = fmbHit.subDivision;
       }
       if (fmbHit?.kide) tngisProps = { ...(tngisProps || {}), kide: fmbHit.kide };
