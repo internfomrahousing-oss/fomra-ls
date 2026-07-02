@@ -794,7 +794,10 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
   }
 
   _AreaPriceStats _areaPriceStats() {
+    // Benchmark follows the selected property type — House/Plot/Flat averages
+    // its own ₹/sqft; "All" uses everything. Drives the AI valuation buy price.
     final rates = _mbListings
+        .where(_matchesTypeFilter)
         .map(_listingPricePerSqft)
         .whereType<double>()
         .toList()
@@ -1325,7 +1328,13 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                           : context.fomraTextPrimary,
                       fontWeight: FontWeight.w600,
                     ),
-                    onSelected: (_) => setState(() => _typeFilter = f),
+                    onSelected: (_) => setState(() {
+                      _typeFilter = f;
+                      // Re-price the valuation against the selected type's average.
+                      if (_valuationResult != null) {
+                        _valuationResult = _computeValuation();
+                      }
+                    }),
                   ),
                 ),
             ]),
