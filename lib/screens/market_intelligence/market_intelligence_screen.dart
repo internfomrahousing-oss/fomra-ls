@@ -1086,6 +1086,30 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
     }).toList();
   }
 
+  // Open a competitor listing on its source website (NoBroker/SquareYards…).
+  Future<void> _openListingUrl(String url, String source) async {
+    final uri = Uri.tryParse(url.trim());
+    if (uri == null || !(uri.isScheme('http') || uri.isScheme('https'))) return;
+    try {
+      final opened = await launchUrl(
+        uri,
+        mode: LaunchMode.externalApplication,
+        webOnlyWindowName: '_blank',
+      );
+      if (!opened && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not open ${source.isNotEmpty ? source : 'listing'} page.')),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not open the listing page.')),
+        );
+      }
+    }
+  }
+
   Widget _buildMagicBricksSection() {
     const mbColor = Color(0xFFE65100);
     final city = (_detectedDistrict ?? '')
@@ -1338,26 +1362,30 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
             final rera      = item['reraNo']      as String? ?? '';
             final developer = item['developer']   as String? ?? '';
             final source    = item['source']      as String? ?? '';
+            final detailUrl = item['detailUrl']   as String? ?? '';
             final ppsfStr   = fmtPricePerSqft(item);
             final totalStr  = fmtTotalPrice(item);
             final priceLabel = fmtPriceLabel(item);
             final hasPrice  = ppsfStr.isNotEmpty || totalStr.isNotEmpty;
             final distKm    = (item['distanceKm'] as num?)?.toDouble();
             final isTnrera  = source == 'TNRERA';
-            return Container(
-              margin: const EdgeInsets.only(bottom: 12),
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Material(
                 color: context.fomraSurface,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: context.fomraBorder),
-                boxShadow: [
-                  BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.04),
-                      blurRadius: 8, offset: const Offset(0, 3))
-                ],
-              ),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(16),
+                  onTap: detailUrl.isEmpty
+                      ? null
+                      : () => _openListingUrl(detailUrl, source),
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: context.fomraBorder),
+                    ),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Row(children: [
                   Expanded(
                     child: Text(
@@ -1441,7 +1469,22 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                     if (rera.isNotEmpty) chip('RERA ✓', AppColors.primary),
                   ]),
                 ],
-              ]),
+                if (detailUrl.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Row(children: [
+                    Icon(Icons.open_in_new, size: 13, color: mbColor),
+                    const SizedBox(width: 4),
+                    Text(
+                      'View on ${source.isNotEmpty ? source : 'website'}',
+                      style: TextStyle(
+                          fontSize: 11, fontWeight: FontWeight.w700, color: mbColor),
+                    ),
+                  ]),
+                ],
+                    ]),
+                  ),
+                ),
+              ),
             );
           }),
         ] else if (!_fetchingMb && _mbError == null) ...[
