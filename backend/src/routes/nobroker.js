@@ -1,6 +1,7 @@
 const express = require('express');
 const https   = require('https');
 const { applyRadiusFilter } = require('../lib/listingRadius');
+const { geocodeListings } = require('../lib/listingGeocode');
 const router  = express.Router();
 
 // NoBroker exposes a public buy-listing API that (unlike Housing/99acres/MB) is
@@ -123,8 +124,11 @@ function mapProperty(p) {
     developer:      String(p.society || '').trim(),
     projectType:    isPlot ? 'Layout' : 'Building',
     registeredYear,
-    lat:            Number.isFinite(Number(p.latitude))  ? Number(p.latitude)  : null,
-    lng:            Number.isFinite(Number(p.longitude)) ? Number(p.longitude) : null,
+    // NoBroker snaps lat/lng to near the search centre for privacy, so the
+    // returned coords are NOT the property's real position — the real place is
+    // `locality`. Leave coords null and geocode the locality for distance.
+    lat:            null,
+    lng:            null,
     detailUrl:      p.detailUrl
       ? `https://www.nobroker.in${p.detailUrl}`
       : (p.shortUrl || ''),
@@ -165,17 +169,27 @@ router.get('/', async (req, res) => {
 
   let listings = result.json.data.map(mapProperty).filter((l) => l.priceRupees > 0);
 
-  if (hasPin && radius) {
-    const filtered = applyRadiusFilter(listings, userLat, userLng, radius);
-    listings = filtered.listings;
-  }
+  // De-duplicate obvious repeats (same building + BHK + price) so one society's
+  // many units don't crowd out variety.
+  const seen = new Set();
+  listings = listings.filter((l) => {
+    const key = `${l.developer}|${l.locality}|${l.bhkType}|${l.priceRupees}`.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 
-  listings = listings
-    .sort((a, b) => {
-      if (a.distanceKm != null && b.distanceKm != null) return a.distanceKm - b.distanceKm;
-      return (b.pricePerSqft || 0) - (a.pricePerSqft || 0);
-    })
-    .slice(0, 50);
+  if (hasPin && radius) {
+    // Coords are null (NoBroker snaps them) — geocode each locality to a real
+    // position, then keep only those genuinely within the radius.
+    await geocodeListings(listings, req.query.city || citySlug, 45);
+    const filtered = applyRadiusFilter(listings, userLat, userLng, radius);
+    listings = filtered.listings.slice(0, 50);   // distance-sorted
+  } else {
+    listings = listings
+      .sort((a, b) => (b.pricePerSqft || 0) - (a.pricePerSqft || 0))
+      .slice(0, 50);
+  }
 
   if (listings.length === 0) {
     return res.status(502).json({

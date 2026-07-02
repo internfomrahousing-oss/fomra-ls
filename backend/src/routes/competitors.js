@@ -158,7 +158,9 @@ router.get('/', async (req, res) => {
   // fallback scrapes TNRERA (registered, unpriced) which this endpoint doesn't
   // want — only priced projects within the radius are shown.
   const syTimeoutMs = onServerless ? 20000 : 35000;
-  const nbTimeoutMs = onServerless ? 22000 : 35000;
+  // NoBroker geocodes each listing's locality (its coords are unreliable), so
+  // give it more headroom; it runs in-process within the 120s competitors fn.
+  const nbTimeoutMs = onServerless ? 40000 : 45000;
   const [syResult, nbResult] = await Promise.all([
     callRouterWithTimeout(squareYardsRouter, radiusQuery, syTimeoutMs),
     callRouterWithTimeout(nobrokerRouter, radiusQuery, nbTimeoutMs),
