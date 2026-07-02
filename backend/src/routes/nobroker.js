@@ -6,8 +6,9 @@ const router  = express.Router();
 
 // NoBroker exposes a public buy-listing API that (unlike Housing/99acres/MB) is
 // reachable from datacenter IPs. It takes a base64 searchParam carrying the
-// search centre (lat/lon) + radius and returns priced resale homes with coords.
-const NB_API = 'https://www.nobroker.in/api/v3/multi/property/BUY/filter';
+// search centre (lat/lon) + radius. Flats/houses come from the BUY endpoint;
+// empty plots/land are a separate category served by the PLOT endpoint.
+const NB_BASE = 'https://www.nobroker.in/api/v3/multi/property';
 
 const BROWSER_UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
@@ -84,25 +85,27 @@ function toNum(v) {
   return Number.isFinite(n) ? n : 0;
 }
 
-function mapProperty(p) {
+function mapProperty(p, isPlotSource = false) {
   const price = toNum(p.price);
-  // Prefer carpet area; fall back to super-built-up (propertySize).
-  let area  = toNum(p.carpetArea) > 0 ? toNum(p.carpetArea) : toNum(p.propertySize);
-  // Some listings carry a junk area (0/1 or a non-sqft unit), which would yield
-  // a nonsensical ₹/sqft and wreck the aggregate price stats. Treat an
-  // implausible area as unknown so the listing keeps its total price but is
-  // excluded from ₹/sqft maths.
+  const title = p.propertyTitle || p.title || p.society || 'NoBroker listing';
+  // propType: AP=apartment, IH=independent house, VI=villa. Whether a row is a
+  // plot is decided by which endpoint it came from (BUY vs PLOT) — NOT by
+  // plotArea, since independent houses also carry a plotArea (their land).
+  const propType = String(p.propType || p.propertyType || '').toUpperCase();
+  const isPlot = isPlotSource || /^(PL|LA|PLOT|LAND)$/.test(propType);
+
+  // Area: plot area for land, else carpet area, else super-built-up.
+  let area = isPlot
+    ? toNum(p.plotArea)
+    : (toNum(p.carpetArea) > 0 ? toNum(p.carpetArea) : toNum(p.propertySize));
+  // Junk area (0/1 or a non-sqft unit) would produce a nonsensical ₹/sqft and
+  // wreck the aggregate stats — treat an implausible area as unknown.
   if (area < 100) area = 0;
   let ppsf = price > 0 && area > 0 ? Math.round(price / area) : 0;
   if (ppsf > 100000) { ppsf = 0; area = 0; } // area almost certainly wrong-unit
+
   const bhkM  = String(p.type || '').match(/BHK\s*(\d+)/i);
-  const bhk   = bhkM ? `${bhkM[1]} BHK` : '';
-  const title = p.propertyTitle || p.title || p.society || 'NoBroker listing';
-  // propType: AP=apartment, IH=independent house, VI=villa, PL/LA=plot/land.
-  const propType = String(p.propType || p.propertyType || '').toUpperCase();
-  const isPlot = /^(PL|LA|PLOT|LAND)$/.test(propType)
-    || /\b(plot|plots|land|residential\s*land)\b/i.test(title)
-    || /plot|land/i.test(String(p.typeDesc || ''));
+  const bhk   = isPlot ? '' : (bhkM ? `${bhkM[1]} BHK` : '');
   // Flat (apartment) vs individual house (independent house / villa) vs plot.
   const homeType = isPlot
     ? 'Plot'
@@ -157,24 +160,26 @@ router.get('/', async (req, res) => {
   const sp = buildSearchParam(center.lat, center.lon, req.query.city || citySlug);
   // Give NoBroker a generous radius; the aggregator/here re-applies the strict one.
   const nbRadius = radius && radius > 0 ? Math.max(radius, 3) : 8;
-  const url = `${NB_API}?searchParam=${sp}&radius=${nbRadius}&sortBy=nbRank&pageNo=1&pageSize=100`;
+  const qs = `searchParam=${sp}&radius=${nbRadius}&sortBy=nbRank&pageNo=1`;
+  // BUY = flats/houses/villas; PLOT = empty land/plots (separate category).
+  const buyUrl  = `${NB_BASE}/BUY/filter?${qs}&pageSize=100`;
+  const plotUrl = `${NB_BASE}/PLOT/filter?${qs}&pageSize=60`;
 
-  let result;
-  try {
-    result = await fetchJson(url);
-  } catch (err) {
-    return res.status(502).json({ error: `NoBroker unreachable: ${err.message}` });
-  }
-  if (result.status !== 200 || !result.json) {
-    return res.status(502).json({ error: `NoBroker returned HTTP ${result.status}` });
-  }
-  if (result.json.status !== 'success' || !Array.isArray(result.json.data)) {
+  const [buyRes, plotRes] = await Promise.all([
+    fetchJson(buyUrl).catch(() => null),
+    fetchJson(plotUrl).catch(() => null),
+  ]);
+
+  const ok = (r) => r?.status === 200 && r.json?.status === 'success' && Array.isArray(r.json.data);
+  let listings = [];
+  if (ok(buyRes)) listings.push(...buyRes.json.data.map((p) => mapProperty(p, false)));
+  if (ok(plotRes)) listings.push(...plotRes.json.data.map((p) => mapProperty(p, true)));
+  listings = listings.filter((l) => l.priceRupees > 0);
+  if (listings.length === 0) {
     return res.status(502).json({
-      error: result.json.error_message || 'No NoBroker listings for this location.',
+      error: buyRes?.json?.error_message || 'No NoBroker listings for this location.',
     });
   }
-
-  let listings = result.json.data.map(mapProperty).filter((l) => l.priceRupees > 0);
 
   // De-duplicate obvious repeats (same building + BHK + price) so one society's
   // many units don't crowd out variety.
