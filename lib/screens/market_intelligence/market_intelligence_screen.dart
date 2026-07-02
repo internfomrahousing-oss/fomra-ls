@@ -1275,6 +1275,18 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
               ),
             )
           else ...[
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: () => setState(() => _showProjects = false),
+              icon: const Icon(Icons.expand_less, size: 18),
+              label: const Text('Hide Projects', style: TextStyle(fontSize: 12)),
+              style: TextButton.styleFrom(
+                foregroundColor: mbColor,
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              ),
+            ),
+          ),
           // ── Project type filters ────────────────────────────────────────
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
@@ -1464,14 +1476,6 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
               ),
             );
           }),
-          const SizedBox(height: 4),
-          Center(
-            child: TextButton.icon(
-              onPressed: () => setState(() => _showProjects = false),
-              icon: const Icon(Icons.expand_less, size: 18),
-              label: const Text('Hide Projects', style: TextStyle(fontSize: 12)),
-            ),
-          ),
           ],
         ] else if (!_fetchingMb && _mbError == null) ...[
           const SizedBox(height: 16),
