@@ -817,54 +817,18 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
     final areaStats = _areaPriceStats();
     if (!areaStats.hasData) return null;
 
+    // Only Land Size is asked. Buy price = area average ₹/sqft (from nearby
+    // priced projects) × land size. Investment/Risk come from the auto-collected
+    // infrastructure score around the pinned point.
     final benchmarkPrice = areaStats.avgPerSqft;
     final infraScore = _infraScores['Overall Location'] ?? 50;
-    final roadWidth = double.tryParse(_roadWidthCtrl.text) ?? 20;
     final landSize = double.tryParse(_landSizeCtrl.text) ?? 1000;
 
-    final locationMultiplier = switch (_locationCategory) {
-      'Premium' => 1.35,
-      'Urban' => 1.15,
-      'Semi-Urban' => 1.0,
-      'Rural' => 0.8,
-      _ => 1.0,
-    };
-    final potentialMultiplier = switch (_developmentPotential) {
-      'Very High' => 1.25,
-      'High' => 1.15,
-      'Medium' => 1.0,
-      'Low' => 0.85,
-      _ => 1.0,
-    };
-
-    final roadBonus = (roadWidth / 60).clamp(0.9, 1.2);
-    final sizeDiscount = landSize > 10000 ? 0.95 : 1.0;
-
-    final basePerSqft = benchmarkPrice *
-        locationMultiplier *
-        potentialMultiplier *
-        roadBonus *
-        sizeDiscount;
-    final buyPerSqft = basePerSqft * (1 - infraScore / 500);
-    final sellPerSqft = basePerSqft * 1.18;
+    final buyPerSqft = benchmarkPrice;
     final purchaseTotal = buyPerSqft * landSize;
-    final sellingTotal = sellPerSqft * landSize;
-    final margin = buyPerSqft > 0
-        ? ((sellPerSqft - buyPerSqft) / buyPerSqft * 100)
-        : 0.0;
 
-    final investmentScore = ((infraScore * 0.55 +
-                (potentialMultiplier - 0.8) / 0.45 * 100 * 0.45) *
-            1)
-        .clamp(0, 100)
-        .toInt();
-
-    final riskScore = (100 -
-            investmentScore * 0.5 -
-            (infraScore * 0.3) -
-            10)
-        .clamp(0, 100)
-        .toInt();
+    final investmentScore = infraScore.clamp(0, 100).toInt();
+    final riskScore = (100 - investmentScore * 0.6 - 15).clamp(0, 100).toInt();
 
     final recommendation = investmentScore > 70
         ? 'Strong Buy'
@@ -879,10 +843,10 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
       pricedListingCount: areaStats.pricedCount,
       landSizeSqft: landSize,
       buyPerSqft: buyPerSqft,
-      sellPerSqft: sellPerSqft,
+      sellPerSqft: buyPerSqft * 1.18,
       recommendedPurchasePrice: purchaseTotal,
-      recommendedSellingPrice: sellingTotal,
-      expectedMargin: margin,
+      recommendedSellingPrice: purchaseTotal * 1.18,
+      expectedMargin: 18,
       investmentScore: investmentScore,
       riskScore: riskScore,
       recommendation: recommendation,
@@ -1665,89 +1629,22 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
       );
     }
 
-    final recColor = switch (v.recommendation) {
-      'Strong Buy' => AppColors.success,
-      'Buy' => const Color(0xFF00838F),
-      'Hold' => AppColors.warning,
-      _ => AppColors.error,
-    };
-
     return _SectionCard(
       title: 'AI Land Valuation Engine',
       icon: Icons.auto_awesome_outlined,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Based on ₹${v.areaAvgPerSqft.round()}/sqft area average · ${v.landSizeSqft.round()} sqft',
-            style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
+          const _FieldLabel('Land Size (sqft)'),
+          TextField(
+            controller: _landSizeCtrl,
+            keyboardType: TextInputType.number,
+            decoration: _inputDec(context, 'e.g. 5000'),
+            onChanged: (_) =>
+                setState(() => _valuationResult = _computeValuation()),
           ),
           const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            child: _LeadValuationAmountTile(
-              label: 'Expected Buying Price',
-              amount: _fmtIndianRupee(v.recommendedPurchasePrice),
-              color: AppColors.info,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: _BenchmarkTile(
-                  'Buy / sqft',
-                  '₹${v.buyPerSqft.round()}',
-                  AppColors.info,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _BenchmarkTile(
-                  'Investment',
-                  '${v.investmentScore}/100',
-                  AppColors.success,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _BenchmarkTile(
-                  'Risk',
-                  '${v.riskScore}/100',
-                  AppColors.warning,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              color: recColor.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: recColor.withValues(alpha: 0.3)),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.recommend_outlined, size: 18, color: recColor),
-                const SizedBox(width: 8),
-                Text(
-                  v.recommendation,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w800,
-                    color: recColor,
-                  ),
-                ),
-                const Spacer(),
-                Text(
-                  'Score ${v.investmentScore}/100',
-                  style: TextStyle(fontSize: 11, color: recColor),
-                ),
-              ],
-            ),
-          ),
+          _simpleValuationOutput(v),
         ],
       ),
     );
@@ -2802,112 +2699,17 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
         title: 'AI Land Valuation Engine',
         icon: Icons.auto_awesome_outlined,
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          // Row 1: Road Width + Land Size
-          Row(children: [
-            Expanded(
-              child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const _FieldLabel('Road Width (ft)'),
-                    TextField(
-                      controller: _roadWidthCtrl,
-                      keyboardType: TextInputType.number,
-                      decoration: _inputDec(context, 'e.g. 30'),
-                    ),
-                  ]),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const _FieldLabel('Land Size (sqft)'),
-                    TextField(
-                      controller: _landSizeCtrl,
-                      keyboardType: TextInputType.number,
-                      decoration: _inputDec(context, 'e.g. 5000'),
-                    ),
-                  ]),
-            ),
-          ]),
-          const SizedBox(height: 12),
-          Builder(builder: (context) {
-            final stats = _areaPriceStats();
-            String message;
-            if (_activeLatLng == null) {
-              message = 'Tap the map to pin a location';
-            } else if (_fetchingMb) {
-              message = 'Loading ${_selectedRadius}km competitor prices…';
-            } else if (!stats.hasData) {
-              message =
-                  'No priced projects in ${_selectedRadius}km — try 10km or Fetch Projects';
-            } else {
-              message =
-                  '₹${stats.avgPerSqft.round()}/sqft avg · ${stats.pricedCount} projects · ${_selectedRadius}km from pin';
-            }
-            final warn = _activeLatLng != null && !_fetchingMb && !stats.hasData;
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _AutoChip(
-                  'Area Avg Price',
-                  message,
-                  tone: warn ? Colors.orange.shade800 : null,
-                ),
-                if (stats.hasData) ...[
-                  const SizedBox(height: 6),
-                  Text(
-                    'Median ₹${stats.medianPerSqft.round()}/sqft in this radius',
-                    style: TextStyle(fontSize: 10, color: Colors.grey.shade600),
-                  ),
-                ],
-              ],
-            );
-          }),
-          const SizedBox(height: 12),
-          // Row 3: Location Category + Development Potential
-          Row(children: [
-            Expanded(
-              child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const _FieldLabel('Location Category'),
-                    DropdownButtonFormField<String>(
-                      initialValue: _locationCategory,
-                      decoration: _inputDec(context, null),
-                      items: ['Premium', 'Urban', 'Semi-Urban', 'Rural']
-                          .map((v) =>
-                              DropdownMenuItem(value: v, child: Text(v)))
-                          .toList(),
-                      onChanged: (v) =>
-                          setState(() => _locationCategory = v!),
-                    ),
-                  ]),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const _FieldLabel('Development Potential'),
-                    DropdownButtonFormField<String>(
-                      initialValue: _developmentPotential,
-                      decoration: _inputDec(context, null),
-                      items: ['Very High', 'High', 'Medium', 'Low']
-                          .map((v) =>
-                              DropdownMenuItem(value: v, child: Text(v)))
-                          .toList(),
-                      onChanged: (v) =>
-                          setState(() => _developmentPotential = v!),
-                    ),
-                  ]),
-            ),
-          ]),
-          const SizedBox(height: 8),
-          // Auto-filled chip
-          if (_poisCollected)
-            _AutoChip('Infrastructure Score',
-                '${(_infraScores['Overall Location'] ?? 0).toInt()}/100'),
+          const _FieldLabel('Land Size (sqft)'),
+          TextField(
+            controller: _landSizeCtrl,
+            keyboardType: TextInputType.number,
+            decoration: _inputDec(context, 'e.g. 5000'),
+            onChanged: (_) {
+              if (_valuationResult != null) {
+                setState(() => _valuationResult = _computeValuation());
+              }
+            },
+          ),
           const SizedBox(height: 16),
           SizedBox(
             width: double.infinity,
@@ -2938,89 +2740,34 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
           ],
           if (_valuationResult != null) ...[
             const SizedBox(height: 20),
-            _buildValuationOutput(_valuationResult!),
+            _simpleValuationOutput(_valuationResult!),
           ],
         ]),
       );
 
-  Widget _buildValuationOutput(_ValuationResult v) {
-    final recColor = switch (v.recommendation) {
-      'Strong Buy' => AppColors.success,
-      'Buy' => const Color(0xFF00838F),
-      'Hold' => AppColors.warning,
-      _ => AppColors.error,
-    };
-
+  // The only outputs: expected buy price, investment score, risk score.
+  Widget _simpleValuationOutput(_ValuationResult v) {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       const Divider(),
       const SizedBox(height: 12),
-      const Text('Valuation Results',
-          style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-              color: AppColors.textPrimary)),
-      const SizedBox(height: 8),
-      Text(
-        'Based on ₹${v.areaAvgPerSqft.round()}/sqft area average · ${v.landSizeSqft.round()} sqft land',
-        style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
+      SizedBox(
+        width: double.infinity,
+        child: _LeadValuationAmountTile(
+          label: 'Expected Buying Price',
+          amount: _fmtIndianRupee(v.recommendedPurchasePrice),
+          color: AppColors.info,
+        ),
       ),
       const SizedBox(height: 12),
-      GridView.count(
-        crossAxisCount: 4,
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        crossAxisSpacing: 8,
-        mainAxisSpacing: 8,
-        childAspectRatio: 0.95,
-        children: [
-          _BenchmarkTile('Buy (total)',
-              _fmtIndianRupee(v.recommendedPurchasePrice), AppColors.info),
-          _BenchmarkTile('Sell (total)',
-              _fmtIndianRupee(v.recommendedSellingPrice), AppColors.success),
-          _BenchmarkTile('Buy / sqft',
-              '₹${v.buyPerSqft.round()}', AppColors.info),
-          _BenchmarkTile('Sell / sqft',
-              '₹${v.sellPerSqft.round()}', AppColors.success),
-        ],
-      ),
-      const SizedBox(height: 10),
-      GridView.count(
-        crossAxisCount: 3,
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        crossAxisSpacing: 8,
-        mainAxisSpacing: 8,
-        childAspectRatio: 1.4,
-        children: [
-          _BenchmarkTile('Margin',
-              '${v.expectedMargin.toStringAsFixed(1)}%', AppColors.warning),
-          _BenchmarkTile(
-              'Inv. Score', '${v.investmentScore}/100', AppColors.primary),
-          _BenchmarkTile('Area avg',
-              '₹${v.areaAvgPerSqft.round()}/sqft', const Color(0xFFE65100)),
-        ],
-      ),
       Row(children: [
         Expanded(
-          child: _OutputCard(
-            label: 'Risk Score',
-            value: '${v.riskScore}/100',
-            color: v.riskScore > 60
-                ? AppColors.error
-                : v.riskScore > 35
-                    ? AppColors.warning
-                    : AppColors.success,
-            icon: Icons.shield_outlined,
-          ),
+          child: _BenchmarkTile(
+              'Investment', '${v.investmentScore}/100', AppColors.success),
         ),
-        const SizedBox(width: 10),
+        const SizedBox(width: 8),
         Expanded(
-          child: _OutputCard(
-            label: 'Acquisition',
-            value: v.recommendation,
-            color: recColor,
-            icon: Icons.recommend_outlined,
-          ),
+          child:
+              _BenchmarkTile('Risk', '${v.riskScore}/100', AppColors.warning),
         ),
       ]),
     ]);
