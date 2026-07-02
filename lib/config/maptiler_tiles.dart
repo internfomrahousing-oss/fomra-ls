@@ -14,8 +14,8 @@ class MapTilerTiles {
   /// Clean base map for standard view.
   static const standardStyle = 'basic-v2';
 
-  /// Streets style — highlights roads, rail, and transit (OMT transport layer).
-  static const transportStyle = 'streets-v4';
+  /// Satellite imagery.
+  static const satelliteStyle = 'satellite-v2';
 
   static bool get isConfigured => apiKey.isNotEmpty;
 
@@ -23,10 +23,10 @@ class MapTilerTiles {
       '$_base/$styleId/256/{z}/{x}/{y}.png?key=$apiKey';
 
   static String get standard => rasterUrl(standardStyle);
-  static String get transport => rasterUrl(transportStyle);
+  static String get satellite => rasterUrl(satelliteStyle);
 
-  static String urlFor({required bool transportLayer}) =>
-      transportLayer ? transport : standard;
+  static String urlFor({required bool satelliteLayer}) =>
+      satelliteLayer ? satellite : standard;
 
   static const attribution = '© MapTiler © OpenStreetMap contributors';
 

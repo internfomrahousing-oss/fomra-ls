@@ -34,13 +34,7 @@ class _PoiCategory {
   const _PoiCategory(this.name, this.icon, this.color, this.tag, this.value);
 }
 
-const _kTransportPoiNames = [
-  'Railway Stations',
-  'Metro Stations',
-  'Bus Terminals',
-];
-
-enum _MarketMapLayer { standard, transport }
+enum _MarketMapLayer { standard, satellite }
 
 const _kCategories = [
   _PoiCategory('Schools', Icons.school_outlined, Color(0xFF1565C0), 'amenity', 'school'),
@@ -1801,12 +1795,6 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
 
   void _setMapLayer(_MarketMapLayer layer) {
     setState(() => _mapLayer = layer);
-    if (layer == _MarketMapLayer.transport &&
-        _activeLatLng != null &&
-        !_poisCollected &&
-        !_collectingPois) {
-      _collectPois();
-    }
   }
 
   Widget _buildMapLayerChip(_MarketMapLayer layer, String label, IconData icon) {
@@ -1861,41 +1849,6 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
     );
   }
 
-  List<Marker> _buildTransportPoiMarkers() {
-    if (_mapLayer != _MarketMapLayer.transport) return [];
-    final markers = <Marker>[];
-    for (final cat in _kCategories) {
-      if (!_kTransportPoiNames.contains(cat.name)) continue;
-      final places = _poiPlaces[cat.name] ?? [];
-      for (final place in places) {
-        final lat = place['lat'] as double?;
-        final lon = place['lon'] as double?;
-        if (lat == null || lon == null) continue;
-        final name = place['name']?.toString() ?? cat.name;
-        markers.add(Marker(
-          point: LatLng(lat, lon),
-          width: 32,
-          height: 32,
-          child: Tooltip(
-            message: name,
-            child: Container(
-              decoration: BoxDecoration(
-                color: cat.color.withValues(alpha: 0.92),
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white, width: 1.5),
-                boxShadow: const [
-                  BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 1)),
-                ],
-              ),
-              child: Icon(cat.icon, color: Colors.white, size: 16),
-            ),
-          ),
-        ));
-      }
-    }
-    return markers;
-  }
-
   Widget _buildMapStack({bool showMaximize = false, bool showMinimize = false}) {
     final activeLoc = _activeLatLng;
     return Stack(
@@ -1912,7 +1865,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
             children: [
               MapTilerTiles.tileLayer(
                 urlTemplate: MapTilerTiles.urlFor(
-                  transportLayer: _mapLayer == _MarketMapLayer.transport,
+                  satelliteLayer: _mapLayer == _MarketMapLayer.satellite,
                 ),
               ),
               CircleLayer(circles: [
@@ -1926,8 +1879,6 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                     borderStrokeWidth: 2,
                   ),
               ]),
-              if (_mapLayer == _MarketMapLayer.transport)
-                MarkerLayer(markers: _buildTransportPoiMarkers()),
               MarkerLayer(markers: [
                 if (activeLoc != null)
                   Marker(
@@ -1992,9 +1943,9 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
               ),
               const SizedBox(width: 6),
               _buildMapLayerChip(
-                _MarketMapLayer.transport,
-                'Transport',
-                Icons.directions_transit_outlined,
+                _MarketMapLayer.satellite,
+                'Satellite',
+                Icons.satellite_alt_outlined,
               ),
             ],
           ),
@@ -2197,18 +2148,16 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
             ),
             const SizedBox(width: 6),
             _buildMapLayerChip(
-              _MarketMapLayer.transport,
-              'Transport',
-              Icons.directions_transit_outlined,
+              _MarketMapLayer.satellite,
+              'Satellite',
+              Icons.satellite_alt_outlined,
             ),
           ]),
-          if (_mapLayer == _MarketMapLayer.transport) ...[
+          if (_mapLayer == _MarketMapLayer.satellite) ...[
             const SizedBox(height: 6),
-            Text(
-              _collectingPois
-                  ? 'Loading transport POIs…'
-                  : 'MapTiler transport map — railways, stations & bus terminals.',
-              style: const TextStyle(fontSize: 10, color: AppColors.textSecondary),
+            const Text(
+              'MapTiler satellite imagery.',
+              style: TextStyle(fontSize: 10, color: AppColors.textSecondary),
             ),
           ],
           const SizedBox(height: 10),
