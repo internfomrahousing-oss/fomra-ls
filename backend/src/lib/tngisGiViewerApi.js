@@ -1,4 +1,6 @@
 const https = require('https');
+const zlib = require('zlib');
+const { getCachedLandDetails, putCachedLandDetails } = require('./tngisCache');
 
 const GI_VIEWER_API = 'https://tngis.tn.gov.in/apps/gi_viewer_api/api';
 const IGR_URL = 'https://tngis.tn.gov.in/apps/thematic_viewer_api/v1/getfeatureInfo';
@@ -12,19 +14,58 @@ function padTalukCode(code) {
   return s.length >= 2 ? s : s.padStart(2, '0');
 }
 
-/** TNGIS sometimes returns a PDF error page instead of a real FMB sketch. */
+// Scan a chunk of decoded PDF text for the known TNGIS/CollabLand error strings.
+function textHasFmbError(text) {
+  const t = text.toLowerCase();
+  if (t.includes('does not exist in this fmb')) return true;
+  if (t.includes('does not exist') && t.includes('survey number')) return true;
+  if (t.includes('requested survey number') && t.includes('does not exist')) return true;
+  if (t.includes('not available') && t.includes('fmb')) return true;
+  if (t.includes('no sketch') || t.includes('not digitized')) return true;
+  return false;
+}
+
+/**
+ * TNGIS sometimes returns a PDF "error page" (e.g. "The requested survey number
+ * X does not exist in this FMB") instead of a real sketch. These are tricky:
+ * the error text is drawn as vector glyph outlines, not selectable text, so a
+ * plain string scan of the raw bytes can't see it. We therefore combine three
+ * signals:
+ *   1. raw-byte text scan   — catches PDFs whose error text is real text (Tj),
+ *   2. inflated-stream scan  — catches FlateDecode-compressed text error pages,
+ *   3. size heuristic        — the TNGIS error/blank template is a ~13KB page;
+ *                              a genuine cadastral FMB sketch (survey outline,
+ *                              subdivision lines, corner coords, title block) is
+ *                              always far larger (100KB+). Small PDFs are errors.
+ */
 function isInvalidFmbPdfBase64(pdfBase64) {
   if (!pdfBase64 || String(pdfBase64).length < 100) return true;
+  let buf;
   try {
-    const text = Buffer.from(String(pdfBase64), 'base64').toString('latin1').toLowerCase();
-    if (text.includes('does not exist in this fmb')) return true;
-    if (text.includes('does not exist') && text.includes('survey number')) return true;
-    if (text.includes('requested survey number') && text.includes('does not exist')) return true;
-    if (text.includes('not available') && text.includes('fmb')) return true;
-    if (text.includes('no sketch') || text.includes('not digitized')) return true;
+    buf = Buffer.from(String(pdfBase64), 'base64');
   } catch (_) {
     return true;
   }
+
+  // 1) raw-byte text scan
+  const raw = buf.toString('latin1');
+  if (textHasFmbError(raw)) return true;
+
+  // 2) inflate every FlateDecode stream and scan the decoded content
+  try {
+    const re = /stream\r?\n([\s\S]*?)\r?\nendstream/g;
+    let m;
+    while ((m = re.exec(raw)) !== null) {
+      try {
+        const out = zlib.inflateSync(Buffer.from(m[1], 'latin1')).toString('latin1');
+        if (textHasFmbError(out)) return true;
+      } catch (_) { /* not a zlib stream — skip */ }
+    }
+  } catch (_) { /* fall through to size check */ }
+
+  // 3) size heuristic — real FMB sketches are large; the error template is tiny.
+  if (buf.length < 20000) return true;
+
   return false;
 }
 
@@ -127,11 +168,26 @@ function rememberLandDetails(key, result) {
   }
 }
 
+// Land parcels don't move — the shared DB cache can serve resolved points for
+// a long time (survey/sub only change on re-survey, which is rare).
+const LAND_DETAILS_DB_TTL = 90 * 24 * 60 * 60 * 1000; // 90 days
+
 async function fetchGiLandDetails(lat, lon) {
   const key = landDetailsKey(lat, lon);
   const cached = _landDetailsCache.get(key);
   if (cached && Date.now() - cached.time < LAND_DETAILS_TTL) {
     return { ...cached.result, cached: true };
+  }
+
+  // Shared persistent cache — another user/instance may have already resolved
+  // this exact point, so we can skip the throttled upstream entirely.
+  let dbRow = null;
+  try { dbRow = await getCachedLandDetails(key); } catch (_) {}
+  if (dbRow?.data && dbRow.updatedAt
+      && Date.now() - new Date(dbRow.updatedAt).getTime() < LAND_DETAILS_DB_TTL) {
+    const result = { ...dbRow.data, ok: true };
+    rememberLandDetails(key, result);
+    return { ...result, cached: true };
   }
 
   const { status, json } = await postForm(
@@ -157,11 +213,20 @@ async function fetchGiLandDetails(lat, lon) {
       raw: d,
     };
     rememberLandDetails(key, result);
+    // Persist for everyone (drop the bulky raw payload). Fire-and-forget.
+    const { raw, ...toStore } = result;
+    putCachedLandDetails(key, toStore).catch(() => {});
     return result;
   }
 
-  // Upstream failed or rate-limited — fall back to last-known good result.
+  // Upstream failed or rate-limited — fall back to any last-known good result,
+  // preferring the in-memory copy then the shared DB copy (even if stale).
   if (cached) return { ...cached.result, cached: true, stale: true };
+  if (dbRow?.data) {
+    const result = { ...dbRow.data, ok: true };
+    rememberLandDetails(key, result);
+    return { ...result, cached: true, stale: true };
+  }
 
   if (!json) return { ok: false, error: `HTTP ${status}` };
   const msg = json.message || json.error || 'Land details unavailable';
