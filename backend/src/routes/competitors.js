@@ -3,6 +3,7 @@ const magicbricksRouter = require('./magicbricks');
 const ninetyNineRouter  = require('./ninetyninacres');
 const housingRouter     = require('./housing');
 const squareYardsRouter = require('./squareyards');
+const nobrokerRouter    = require('./nobroker');
 const { applyRadiusFilter } = require('../lib/listingRadius');
 const { geocodeListings } = require('../lib/listingGeocode');
 
@@ -153,14 +154,16 @@ router.get('/', async (req, res) => {
     ? { ...fetchQuery, lat, lng: centerLng, radius }
     : fetchQuery;
 
-  // SquareYards is reachable from datacenter/serverless IPs and returns priced
-  // projects with map coordinates — it is the primary competitor source.
+  // SquareYards and NoBroker are both reachable from datacenter/serverless IPs
+  // and return priced listings with map coordinates — the primary sources.
   // TNRERA is intentionally NOT used here: it only yields registered (unpriced)
   // projects, and this endpoint shows only priced projects within the radius.
   const syTimeoutMs = onServerless ? 20000 : 35000;
-  const [mbResult, syResult] = await Promise.all([
+  const nbTimeoutMs = onServerless ? 22000 : 35000;
+  const [mbResult, syResult, nbResult] = await Promise.all([
     callRouterWithTimeout(magicbricksRouter, radiusQuery, mbTimeoutMs),
     callRouterWithTimeout(squareYardsRouter, radiusQuery, syTimeoutMs),
+    callRouterWithTimeout(nobrokerRouter, radiusQuery, nbTimeoutMs),
   ]);
 
   // 99acres and Housing.com hard-block datacenter IPs (HTTP 403/406) so they
@@ -177,6 +180,7 @@ router.get('/', async (req, res) => {
   const hoResult = altResults[1] || { statusCode: 504, data: null, error: 'skipped on serverless' };
 
   ingestBatch({ status: 'fulfilled', value: syResult }, 'SquareYards', allListings, sources, errors);
+  ingestBatch({ status: 'fulfilled', value: nbResult }, 'NoBroker', allListings, sources, errors);
   ingestBatch({ status: 'fulfilled', value: mbResult }, 'MagicBricks', allListings, sources, errors);
   ingestBatch({ status: 'fulfilled', value: naResult }, '99acres', allListings, sources, errors);
   ingestBatch({ status: 'fulfilled', value: hoResult }, 'Housing.com', allListings, sources, errors);
