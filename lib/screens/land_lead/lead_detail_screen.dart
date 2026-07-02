@@ -140,14 +140,17 @@ class _LeadDetailsCard extends StatelessWidget {
             if (lead.sitePhotoUrls.length == 1)
               Align(
                 alignment: Alignment.centerLeft,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Image.network(
-                    lead.sitePhotoUrls.first,
-                    width: 140,
-                    height: 140,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => _photoError(),
+                child: GestureDetector(
+                  onTap: () => _showFullPhoto(context, lead.sitePhotoUrls.first),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Image.network(
+                      lead.sitePhotoUrls.first,
+                      width: 140,
+                      height: 140,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => _photoError(),
+                    ),
                   ),
                 ),
               )
@@ -162,12 +165,15 @@ class _LeadDetailsCard extends StatelessWidget {
                   childAspectRatio: 1.2,
                 ),
                 itemCount: lead.sitePhotoUrls.length,
-                itemBuilder: (_, i) => ClipRRect(
-                  borderRadius: BorderRadius.circular(10),
-                  child: Image.network(
-                    lead.sitePhotoUrls[i],
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => _photoError(),
+                itemBuilder: (_, i) => GestureDetector(
+                  onTap: () => _showFullPhoto(context, lead.sitePhotoUrls[i]),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: Image.network(
+                      lead.sitePhotoUrls[i],
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => _photoError(),
+                    ),
                   ),
                 ),
               ),
@@ -184,14 +190,17 @@ class _LeadDetailsCard extends StatelessWidget {
             const SizedBox(height: 8),
             Align(
               alignment: Alignment.centerLeft,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: Image.network(
-                  lead.sitePhotoUrl,
-                  width: 140,
-                  height: 140,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => _photoError(),
+              child: GestureDetector(
+                onTap: () => _showFullPhoto(context, lead.sitePhotoUrl),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.network(
+                    lead.sitePhotoUrl,
+                    width: 140,
+                    height: 140,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => _photoError(),
+                  ),
                 ),
               ),
             ),
@@ -208,6 +217,41 @@ class _LeadDetailsCard extends StatelessWidget {
       ),
     );
   }
+}
+
+void _showFullPhoto(BuildContext context, String url) {
+  showDialog<void>(
+    context: context,
+    barrierColor: Colors.black87,
+    builder: (ctx) => Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.all(12),
+      child: Stack(
+        alignment: Alignment.topRight,
+        children: [
+          InteractiveViewer(
+            minScale: 0.8,
+            maxScale: 4,
+            child: Center(
+              child: Image.network(
+                url,
+                fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) => _photoError(),
+              ),
+            ),
+          ),
+          Material(
+            color: Colors.black54,
+            shape: const CircleBorder(),
+            child: IconButton(
+              icon: const Icon(Icons.close, color: Colors.white),
+              onPressed: () => Navigator.of(ctx).pop(),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
 }
 
 Widget _photoError() {
