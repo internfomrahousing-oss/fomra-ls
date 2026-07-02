@@ -159,7 +159,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
   Timer? _searchDebounce;
 
   // POI
-  int _selectedRadius = 5;
+  int _selectedRadius = 2;
   Map<String, int> _poiCounts = {};
   Map<String, List<Map<String, dynamic>>> _poiPlaces = {};
   bool _collectingPois = false;
@@ -1188,49 +1188,6 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
             ),
           ),
         ]),
-
-        if (_activeLatLng != null) ...[
-          const SizedBox(height: 10),
-          Row(children: [
-            const Text('Radius:',
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600,
-                    color: AppColors.textSecondary)),
-            const SizedBox(width: 10),
-            ...([2, 5, 10]).map((km) {
-              final selected = _selectedRadius == km;
-              return Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: GestureDetector(
-                  onTap: () {
-                    if (selected) return;
-                    setState(() {
-                      _selectedRadius = km;
-                      _valuationResult = null;
-                    });
-                    if (_mapReady && _activeLatLng != null) {
-                      _mapController.move(_activeLatLng!, _zoomForRadius(km));
-                    }
-                    _fetchMagicBricksProjects();
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: selected ? mbColor : const Color(0xFFF3F4F6),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                          color: selected ? mbColor : const Color(0xFFD1D5DB)),
-                    ),
-                    child: Text('${km}km',
-                        style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: selected ? Colors.white : AppColors.textSecondary)),
-                  ),
-                ),
-              );
-            }),
-          ]),
-        ],
 
         if (_mbPartialWarning != null && _mbPartialWarning!.isNotEmpty) ...[
           const SizedBox(height: 10),
