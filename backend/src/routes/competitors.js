@@ -166,23 +166,20 @@ router.get('/', async (req, res) => {
     callRouterWithTimeout(nobrokerRouter, radiusQuery, nbTimeoutMs),
   ]);
 
-  // 99acres and Housing.com hard-block datacenter IPs (HTTP 403/406) so they
-  // return nothing from Vercel; only attempt them off-serverless where the
-  // request originates from a residential-style IP.
-  const altResults = onServerless
-    ? []
-    : await Promise.all([
-        callRouterWithTimeout(ninetyNineRouter, fetchQuery, altTimeoutMs),
-        callRouterWithTimeout(housingRouter, fetchQuery, altTimeoutMs),
-      ]);
-
-  const naResult = altResults[0] || { statusCode: 504, data: null, error: 'skipped on serverless' };
-  const hoResult = altResults[1] || { statusCode: 504, data: null, error: 'skipped on serverless' };
-
   ingestBatch({ status: 'fulfilled', value: syResult }, 'SquareYards', allListings, sources, errors);
   ingestBatch({ status: 'fulfilled', value: nbResult }, 'NoBroker', allListings, sources, errors);
-  ingestBatch({ status: 'fulfilled', value: naResult }, '99acres', allListings, sources, errors);
-  ingestBatch({ status: 'fulfilled', value: hoResult }, 'Housing.com', allListings, sources, errors);
+
+  // 99acres and Housing.com hard-block datacenter IPs (HTTP 403/406) so they
+  // return nothing from Vercel — only attempt them off-serverless (residential
+  // IP), and never on serverless, so no "skipped on serverless" noise surfaces.
+  if (!onServerless) {
+    const [naResult, hoResult] = await Promise.all([
+      callRouterWithTimeout(ninetyNineRouter, fetchQuery, altTimeoutMs),
+      callRouterWithTimeout(housingRouter, fetchQuery, altTimeoutMs),
+    ]);
+    ingestBatch({ status: 'fulfilled', value: naResult }, '99acres', allListings, sources, errors);
+    ingestBatch({ status: 'fulfilled', value: hoResult }, 'Housing.com', allListings, sources, errors);
+  }
 
   if (allListings.length === 0) {
     return res.status(502).json({
