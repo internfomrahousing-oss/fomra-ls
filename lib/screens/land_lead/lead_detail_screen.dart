@@ -34,7 +34,7 @@ class LeadDetailScreen extends StatelessWidget {
             ),
             Text(
               lead.leadId,
-              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w400),
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
             ),
           ],
         ),
