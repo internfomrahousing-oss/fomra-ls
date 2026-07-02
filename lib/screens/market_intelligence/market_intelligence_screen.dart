@@ -2802,43 +2802,6 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
         title: 'AI Land Valuation Engine',
         icon: Icons.auto_awesome_outlined,
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  AppColors.primaryDark.withValues(alpha: 0.08),
-                  AppColors.primary.withValues(alpha: 0.04),
-                ],
-              ),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                  color: AppColors.primary.withValues(alpha: 0.15)),
-            ),
-            child: const Row(children: [
-              Icon(Icons.info_outline, size: 14, color: AppColors.primary),
-              SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Inputs: Area avg ₹/sqft (from pinned point) · Infrastructure · Road Width · Land Size · Development Potential · Location Category',
-                  style: TextStyle(
-                      fontSize: 11, color: AppColors.primary, height: 1.4),
-                ),
-              ),
-            ]),
-          ),
-          const SizedBox(height: 12),
-          const Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _ValuationStepChip('Step 1', 'Location'),
-              _ValuationStepChip('Step 2', 'Land Details'),
-              _ValuationStepChip('Step 3', 'Infrastructure'),
-              _ValuationStepChip('Step 4', 'Prediction'),
-            ],
-          ),
-          const SizedBox(height: 16),
           // Row 1: Road Width + Land Size
           Row(children: [
             Expanded(
@@ -3282,33 +3245,6 @@ class _SectionCard extends StatelessWidget {
         ]),
       );
 }
-
-class _ValuationStepChip extends StatelessWidget {
-  final String step;
-  final String label;
-  const _ValuationStepChip(this.step, this.label);
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: AppColors.primary.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
-      ),
-      child: Text(
-        '$step · $label',
-        style: const TextStyle(
-          fontSize: 11,
-          color: AppColors.primary,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
-  }
-}
-
 
 class _ErrorBanner extends StatelessWidget {
   final String message;
