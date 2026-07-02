@@ -182,6 +182,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
   String _mbSource = 'Property Portals';
   String _compFilter = 'All';   // All | Ongoing | Completed | Plot | Old
   int _oldYearsFilter = 5;       // 2 | 5 | 10
+  bool _showProjects = false;    // list is hidden until "View Projects" tapped
   int _mbFetchSeq = 0;
 
   // EC & Patta – location data passed to the section widget
@@ -924,6 +925,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
       _mbError = null;
       _mbPartialWarning = null;
       _mbListings = [];
+      _showProjects = false;
       _valuationResult = null;
     });
 
@@ -1255,6 +1257,24 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
               ),
             ),
           if (_areaPriceStats().hasData) const SizedBox(height: 10),
+          if (!_showProjects)
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () => setState(() => _showProjects = true),
+                icon: const Icon(Icons.list_alt_outlined, size: 18),
+                label: Text('View Projects (${_mbListings.length})',
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: mbColor,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  elevation: 0,
+                ),
+              ),
+            )
+          else ...[
           // ── Project type filters ────────────────────────────────────────
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
@@ -1444,6 +1464,15 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
               ),
             );
           }),
+          const SizedBox(height: 4),
+          Center(
+            child: TextButton.icon(
+              onPressed: () => setState(() => _showProjects = false),
+              icon: const Icon(Icons.expand_less, size: 18),
+              label: const Text('Hide Projects', style: TextStyle(fontSize: 12)),
+            ),
+          ),
+          ],
         ] else if (!_fetchingMb && _mbError == null) ...[
           const SizedBox(height: 16),
           Center(
