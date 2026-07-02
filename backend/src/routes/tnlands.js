@@ -1800,12 +1800,10 @@ async function tryFmbSourcesForCodes(codes, ctx = {}) {
     return null;
   };
 
-  // Urban/TSLR — CollabLand often succeeds when sketch_fmb returns error PDFs.
-  if (types[0] === 'urban') {
-    const collabHit = await tryCollab();
-    if (collabHit) return collabHit;
-  }
-
+  // Prefer the official government-sealed TNGIS sketch_fmb (rural FMB / urban
+  // TSLR, Tahsildar seal) for BOTH types — error PDFs are now detected and
+  // skipped, so we only fall back to CollabLand when the sealed sketch is
+  // genuinely unavailable.
   for (const landType of types) {
     try {
       const fmb = await fetchGiFmbSketch({ ...codes, landType });
