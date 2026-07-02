@@ -97,8 +97,16 @@ function mapProperty(p) {
   const bhkM  = String(p.type || '').match(/BHK\s*(\d+)/i);
   const bhk   = bhkM ? `${bhkM[1]} BHK` : '';
   const title = p.propertyTitle || p.title || p.society || 'NoBroker listing';
-  const isPlot = /\b(plot|plots|land|residential\s*land)\b/i.test(title)
+  // propType: AP=apartment, IH=independent house, VI=villa, PL/LA=plot/land.
+  const propType = String(p.propType || p.propertyType || '').toUpperCase();
+  const isPlot = /^(PL|LA|PLOT|LAND)$/.test(propType)
+    || /\b(plot|plots|land|residential\s*land)\b/i.test(title)
     || /plot|land/i.test(String(p.typeDesc || ''));
+
+  // propertyAge is the age in years (-1 = unknown). Convert to a registration
+  // year so the "Old projects" filter can bucket resale homes by age.
+  const age = toNum(p.propertyAge);
+  const registeredYear = age >= 0 ? (new Date().getFullYear() - age) : null;
 
   return {
     id:             `nb_${p.id || p.propertyCode || Math.random().toString(36).slice(2)}`,
@@ -109,12 +117,12 @@ function mapProperty(p) {
     pricePerSqft:   ppsf,
     area:           Math.round(area),
     status:         'Resale',
-    possession:     'N/A',
+    possession:     'Ready to Move',
     completionYear: null,
     reraNo:         '',
     developer:      String(p.society || '').trim(),
     projectType:    isPlot ? 'Layout' : 'Building',
-    registeredYear: null,
+    registeredYear,
     lat:            Number.isFinite(Number(p.latitude))  ? Number(p.latitude)  : null,
     lng:            Number.isFinite(Number(p.longitude)) ? Number(p.longitude) : null,
     detailUrl:      p.detailUrl

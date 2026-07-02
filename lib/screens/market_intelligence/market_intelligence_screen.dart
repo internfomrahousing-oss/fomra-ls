@@ -1010,11 +1010,16 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
 
   static bool _isCompleted(Map<String, dynamic> item) {
     final status = (item['status'] as String? ?? '').toLowerCase();
+    final possession = (item['possession'] as String? ?? '').toLowerCase();
+    // Resale homes (NoBroker) are existing, ready-to-move properties.
     return status.contains('complet') ||
         status.contains('ready') ||
         status.contains('move') ||
+        status.contains('resale') ||
+        status.contains('occupied') ||
         status.contains('possession given') ||
-        status.contains('occupied');
+        possession.contains('ready') ||
+        possession.contains('move');
   }
 
   static bool _isOngoing(Map<String, dynamic> item) {
