@@ -1008,10 +1008,16 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
     return RegExp(r'\b(plot|plots|plotted|layout|land)\b').hasMatch(name);
   }
 
-  static bool _isCompleted(Map<String, dynamic> item) {
+  // Age in years from the registration/completion year, or null if unknown.
+  static int? _ageYears(Map<String, dynamic> item) {
+    final y = _registeredYear(item);
+    return y == null ? null : DateTime.now().year - y;
+  }
+
+  // An existing, ready-to-occupy property (resale / ready-to-move / completed).
+  static bool _isReady(Map<String, dynamic> item) {
     final status = (item['status'] as String? ?? '').toLowerCase();
     final possession = (item['possession'] as String? ?? '').toLowerCase();
-    // Resale homes (NoBroker) are existing, ready-to-move properties.
     return status.contains('complet') ||
         status.contains('ready') ||
         status.contains('move') ||
@@ -1022,8 +1028,16 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
         possession.contains('move');
   }
 
+  // Completed = a ready property that is recently completed (under 2 years old).
+  // Older ready properties fall under the "Old projects" age buckets instead.
+  static bool _isCompleted(Map<String, dynamic> item) {
+    if (_isPlot(item) || !_isReady(item)) return false;
+    final age = _ageYears(item);
+    return age == null || age < 2;
+  }
+
   static bool _isOngoing(Map<String, dynamic> item) {
-    if (_isPlot(item) || _isCompleted(item)) return false;
+    if (_isPlot(item) || _isReady(item)) return false;
     final status = (item['status'] as String? ?? '').toLowerCase();
     // Anything actively selling/building that isn't finished counts as ongoing:
     // covers "Under Construction", "New Launch", "Registered", "Nearing
@@ -1052,7 +1066,6 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
 
   List<Map<String, dynamic>> get _filteredMbListings {
     if (_compFilter == 'All') return _mbListings;
-    final curYear = DateTime.now().year;
     return _mbListings.where((item) {
       switch (_compFilter) {
         case 'Ongoing':
@@ -1062,9 +1075,14 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
         case 'Plot':
           return _isPlot(item);
         case 'Old':
-          final regYear = _registeredYear(item);
-          if (regYear == null) return false;
-          return (curYear - regYear) >= _oldYearsFilter;
+          final age = _ageYears(item);
+          if (age == null) return false;
+          switch (_oldYearsFilter) {
+            case 2:  return age >= 2 && age < 5;   // 2–5 years
+            case 5:  return age >= 5 && age < 10;  // 5–10 years
+            case 10: return age >= 10;             // 10+ years
+            default: return age >= _oldYearsFilter;
+          }
         default:
           return true;
       }
@@ -1286,13 +1304,16 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
           if (_compFilter == 'Old') ...[
             const SizedBox(height: 8),
             Row(children: [
-              const Text('Min age:', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+              const Text('Age:', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
               const SizedBox(width: 8),
               for (final yrs in [2, 5, 10])
                 Padding(
                   padding: const EdgeInsets.only(right: 6),
                   child: ChoiceChip(
-                    label: Text('$yrs+ yrs', style: const TextStyle(fontSize: 11)),
+                    label: Text(
+                      yrs == 2 ? '2–5 yrs' : yrs == 5 ? '5–10 yrs' : '10+ yrs',
+                      style: const TextStyle(fontSize: 11),
+                    ),
                     selected: _oldYearsFilter == yrs,
                     selectedColor: AppColors.primary,
                     labelStyle: TextStyle(
