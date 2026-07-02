@@ -1867,6 +1867,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                 urlTemplate: MapTilerTiles.urlFor(
                   satelliteLayer: _mapLayer == _MarketMapLayer.satellite,
                 ),
+                satelliteLayer: _mapLayer == _MarketMapLayer.satellite,
               ),
               CircleLayer(circles: [
                 if (activeLoc != null)
