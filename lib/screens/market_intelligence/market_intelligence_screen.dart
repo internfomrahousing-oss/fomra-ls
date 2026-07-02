@@ -1034,12 +1034,12 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
         possession.contains('move');
   }
 
-  // Completed = a ready property that is recently completed (under 2 years old).
+  // Completed = a ready property that is recently completed (under 1 year old).
   // Older ready properties fall under the "Old projects" age buckets instead.
   static bool _isCompleted(Map<String, dynamic> item) {
     if (_isPlot(item) || !_isReady(item)) return false;
     final age = _ageYears(item);
-    return age == null || age < 2;
+    return age == null || age < 1;
   }
 
   // Ongoing = under construction: a project still being built and not yet
@@ -1085,7 +1085,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
           final age = _ageYears(item);
           if (age == null) return false;
           switch (_oldYearsFilter) {
-            case 2:  return age >= 2 && age < 5;   // 2–5 years
+            case 2:  return age >= 1 && age < 5;   // 1–5 years
             case 5:  return age >= 5 && age < 10;  // 5–10 years
             case 10: return age >= 10;             // 10+ years
             default: return age >= _oldYearsFilter;
@@ -1329,7 +1329,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                   padding: const EdgeInsets.only(right: 6),
                   child: ChoiceChip(
                     label: Text(
-                      yrs == 2 ? '2–5 yrs' : yrs == 5 ? '5–10 yrs' : '10+ yrs',
+                      yrs == 2 ? '1–5 yrs' : yrs == 5 ? '5–10 yrs' : '10+ yrs',
                       style: const TextStyle(fontSize: 11),
                     ),
                     selected: _oldYearsFilter == yrs,

@@ -31509,7 +31509,7 @@ return B.e.n(s,"complet")||B.e.n(s,"ready")||B.e.n(s,"move")||B.e.n(s,"resale")|
 bz8(a){var s
 if(A.aXZ(a)||!A.bj6(a))return!1
 s=A.bj4(a)
-return s==null||s<2},
+return s==null||s<1},
 bz9(a){var s,r
 if(A.aXZ(a)||A.bj6(a))return!1
 s=A.aj(J.h(a,"status"))
@@ -114399,7 +114399,7 @@ g.toString
 g=A.p(g).ax.k3}n.push(new A.aq(B.kV,A.b8e(i,new A.A(!0,g,c,c,c,c,c,B.P,c,c,c,c,c,c,c,c,c,c,c,c,c,c,c,c,c,c),new A.aX0(d,j),h===f,B.b_),c))}o=A.b([new A.cE(B.cz,c,c,o,c),A.o9(A.aM(n,B.m,B.h,B.j,0),c,B.R,c,c,B.an)],m)
 if(d.p4==="Old"){n=A.b([B.akG,B.aL],m)
 for(l=[2,5,10],k=0;k<3;++k){e=l[k]
-if(e===2)i="2\u20135 yrs"
+if(e===2)i="1\u20135 yrs"
 else i=e===5?"5\u201310 yrs":"10+ yrs"
 i=A.M(i,c,c,c,c,B.fv,c,c,c)
 h=d.R8===e
@@ -114941,7 +114941,7 @@ case"Plot":return A.aXZ(a)
 case"Old":s=A.bj4(a)
 if(s==null)return!1
 r=r.R8
-switch(r){case 2:return s>=2&&s<5
+switch(r){case 2:return s>=1&&s<5
 case 5:return s>=5&&s<10
 case 10:return s>=10
 default:return s>=r}default:return!0}},
