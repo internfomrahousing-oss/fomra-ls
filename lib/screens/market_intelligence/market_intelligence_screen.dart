@@ -184,7 +184,8 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
   String? _mbError;
   String? _mbPartialWarning;
   String _mbSource = 'Property Portals';
-  String _compFilter = 'All';   // All | Ongoing | Completed | Plot | Old
+  String _typeFilter = 'All';   // Layer 1: All | House | Plot | Flat
+  String _stageFilter = 'All';  // Layer 2: All | Ongoing | Completed | Old
   int _oldYearsFilter = 5;       // 2 | 5 | 10
   bool _showProjects = false;    // list is hidden until "View Projects" tapped
   int _mbFetchSeq = 0;
@@ -1067,33 +1068,45 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
     return m != null ? int.tryParse(m.group(1)!) : null;
   }
 
+  bool _matchesTypeFilter(Map<String, dynamic> item) {
+    switch (_typeFilter) {
+      case 'House':
+        return _isHouse(item);
+      case 'Plot':
+        return _isPlot(item);
+      case 'Flat':
+        return _isFlat(item);
+      default:
+        return true;
+    }
+  }
+
+  bool _matchesStageFilter(Map<String, dynamic> item) {
+    switch (_stageFilter) {
+      case 'Ongoing':
+        return _isOngoing(item);
+      case 'Completed':
+        return _isCompleted(item);
+      case 'Old':
+        final age = _ageYears(item);
+        if (age == null) return false;
+        switch (_oldYearsFilter) {
+          case 2:  return age >= 1 && age < 5;   // 1–5 years
+          case 5:  return age >= 5 && age < 10;  // 5–10 years
+          case 10: return age >= 10;             // 10+ years
+          default: return age >= _oldYearsFilter;
+        }
+      default:
+        return true;
+    }
+  }
+
+  // Two independent layers combine (AND): property type + project stage.
   List<Map<String, dynamic>> get _filteredMbListings {
-    if (_compFilter == 'All') return _mbListings;
-    return _mbListings.where((item) {
-      switch (_compFilter) {
-        case 'Flat':
-          return _isFlat(item);
-        case 'House':
-          return _isHouse(item);
-        case 'Ongoing':
-          return _isOngoing(item);
-        case 'Completed':
-          return _isCompleted(item);
-        case 'Plot':
-          return _isPlot(item);
-        case 'Old':
-          final age = _ageYears(item);
-          if (age == null) return false;
-          switch (_oldYearsFilter) {
-            case 2:  return age >= 1 && age < 5;   // 1–5 years
-            case 5:  return age >= 5 && age < 10;  // 5–10 years
-            case 10: return age >= 10;             // 10+ years
-            default: return age >= _oldYearsFilter;
-          }
-        default:
-          return true;
-      }
-    }).toList();
+    if (_typeFilter == 'All' && _stageFilter == 'All') return _mbListings;
+    return _mbListings
+        .where((item) => _matchesTypeFilter(item) && _matchesStageFilter(item))
+        .toList();
   }
 
   // Open a competitor listing on its source website (NoBroker/SquareYards…).
@@ -1295,31 +1308,54 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
               ),
             ),
           ),
-          // ── Project type filters ────────────────────────────────────────
+          // ── Layer 1: Property type ──────────────────────────────────────
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(children: [
-              for (final f in ['All', 'Flat', 'House', 'Plot', 'Ongoing', 'Completed', 'Old Projects'])
+              for (final f in ['All', 'House', 'Plot', 'Flat'])
                 Padding(
                   padding: const EdgeInsets.only(right: 6),
                   child: ChoiceChip(
                     label: Text(f, style: const TextStyle(fontSize: 11)),
-                    selected: _compFilter == (f == 'Old Projects' ? 'Old' : f),
+                    selected: _typeFilter == f,
                     selectedColor: mbColor,
                     labelStyle: TextStyle(
-                      color: _compFilter == (f == 'Old Projects' ? 'Old' : f)
+                      color: _typeFilter == f
+                          ? Colors.white
+                          : context.fomraTextPrimary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    onSelected: (_) => setState(() => _typeFilter = f),
+                  ),
+                ),
+            ]),
+          ),
+          const SizedBox(height: 8),
+          // ── Layer 2: Project stage ──────────────────────────────────────
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(children: [
+              for (final f in ['All', 'Ongoing', 'Completed', 'Old Projects'])
+                Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: ChoiceChip(
+                    label: Text(f, style: const TextStyle(fontSize: 11)),
+                    selected: _stageFilter == (f == 'Old Projects' ? 'Old' : f),
+                    selectedColor: AppColors.primary,
+                    labelStyle: TextStyle(
+                      color: _stageFilter == (f == 'Old Projects' ? 'Old' : f)
                           ? Colors.white
                           : context.fomraTextPrimary,
                       fontWeight: FontWeight.w600,
                     ),
                     onSelected: (_) => setState(() {
-                      _compFilter = f == 'Old Projects' ? 'Old' : f;
+                      _stageFilter = f == 'Old Projects' ? 'Old' : f;
                     }),
                   ),
                 ),
             ]),
           ),
-          if (_compFilter == 'Old') ...[
+          if (_stageFilter == 'Old') ...[
             const SizedBox(height: 8),
             Row(children: [
               const Text('Age:', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
