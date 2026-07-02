@@ -513,15 +513,35 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
       final query = params.entries
           .map((e) => '${e.key}=${Uri.encodeComponent(e.value)}')
           .join('&');
-      final result = await ApiClient.get(
-        '/api/tnlands/tngis/parcel?$query',
-        timeout: const Duration(seconds: 90),
-      );
-      final fields = (result['fields'] as Map<String, dynamic>? ?? {})
+      final path = '/api/tnlands/tngis/parcel?$query';
+      Map<String, dynamic>? result;
+      ApiException? lastError;
+      for (var attempt = 0; attempt < 3; attempt++) {
+        try {
+          result = await ApiClient.get(
+            path,
+            timeout: const Duration(seconds: 90),
+          );
+          lastError = null;
+          break;
+        } on ApiException catch (e) {
+          lastError = e;
+          final retryable = e.statusCode == 408 ||
+              e.statusCode == 500 ||
+              e.statusCode == 502 ||
+              e.statusCode == 503 ||
+              e.statusCode == 504;
+          if (!retryable || attempt == 2) rethrow;
+          await Future<void>.delayed(Duration(seconds: 2 * (attempt + 1)));
+        }
+      }
+      if (result == null) throw lastError ?? Exception('TNGIS lookup failed');
+      final data = result;
+      final fields = (data['fields'] as Map<String, dynamic>? ?? {})
           .map((k, v) => MapEntry(k, v.toString()));
-      final survey = (result['surveyNumber'] ?? fields['Survey Number'])?.toString();
-      final kideRaw = result['kide']?.toString() ?? fields['Kide'];
-      final subdivisions = ((result['subdivisions'] as List<dynamic>? ?? [])
+      final survey = (data['surveyNumber'] ?? fields['Survey Number'])?.toString();
+      final kideRaw = data['kide']?.toString() ?? fields['Kide'];
+      final subdivisions = ((data['subdivisions'] as List<dynamic>? ?? [])
           .map((e) => _TngisSubdivisionRow.fromJson(e as Map<String, dynamic>))
           .where((r) => r.surveyNumber.isNotEmpty)
           .toList());
@@ -537,34 +557,34 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
         }
       }
       resolvedSub ??= _parseTngisSubDivision(
-        (result['subDivision'] ?? fields['Sub Division'])?.toString(),
+        (data['subDivision'] ?? fields['Sub Division'])?.toString(),
         resolvedKide,
         survey,
       );
 
       setState(() {
-        _tngisGiViewerUrl = result['giViewerUrl'] as String?;
-        _tngisGiServices = (result['giServices'] as Map?)?.cast<String, dynamic>();
-        _tngisUlpin = result['ulpin']?.toString();
-        _tngisCentroid = result['centroid']?.toString();
+        _tngisGiViewerUrl = data['giViewerUrl'] as String?;
+        _tngisGiServices = (data['giServices'] as Map?)?.cast<String, dynamic>();
+        _tngisUlpin = data['ulpin']?.toString();
+        _tngisCentroid = data['centroid']?.toString();
         _tngisSurvey = survey?.isNotEmpty == true ? survey : null;
         _tngisSubDiv = resolvedSub;
         _tngisDc = fields['District Code'];
         _tngisTc = fields['Taluk Code'];
         _tngisVc = fields['Village Code'];
-        _detectedDistrict = (result['district'] as String?)?.trim().isNotEmpty == true
-            ? result['district'] as String
+        _detectedDistrict = (data['district'] as String?)?.trim().isNotEmpty == true
+            ? data['district'] as String
             : (fields['District']?.isNotEmpty == true ? fields['District'] : _detectedDistrict);
-        _detectedTaluk = (result['taluk'] as String?)?.trim().isNotEmpty == true
-            ? result['taluk'] as String
+        _detectedTaluk = (data['taluk'] as String?)?.trim().isNotEmpty == true
+            ? data['taluk'] as String
             : (fields['Taluk']?.isNotEmpty == true ? fields['Taluk'] : _detectedTaluk);
-        _detectedVillage = (result['village'] as String?)?.trim().isNotEmpty == true
-            ? result['village'] as String
+        _detectedVillage = (data['village'] as String?)?.trim().isNotEmpty == true
+            ? data['village'] as String
             : (fields['Village']?.isNotEmpty == true ? fields['Village'] : _detectedVillage);
         _tngisParcelPreview = fields.isNotEmpty ? fields : null;
         _tngisParcelError = null;
-        _tngisFmbAvailable = result['fmbAvailable'] == true;
-        _tngisFmbNote = result['fmbNote']?.toString();
+        _tngisFmbAvailable = data['fmbAvailable'] == true;
+        _tngisFmbNote = data['fmbNote']?.toString();
         _tngisSubdivisions = _TngisSubdivisionRow.filterForTap(
           subdivisions,
           resolvedSub,
@@ -579,8 +599,8 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                   ? resolvedKide
                   : null,
               fields: fields,
-              containsPoint: result['containsPoint'] == true || _tngisSubDiv != null,
-              fmbAvailable: result['fmbAvailable'] == true,
+              containsPoint: data['containsPoint'] == true || _tngisSubDiv != null,
+              fmbAvailable: data['fmbAvailable'] == true,
             ),
           ];
         }
@@ -2016,6 +2036,32 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
             ),
           ),
         Positioned(
+          right: 8,
+          bottom: 28,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildZoomButton(Icons.add, () {
+                if (_mapReady) {
+                  _mapController.move(
+                    _mapController.camera.center,
+                    (_mapController.camera.zoom + 1).clamp(3.0, 18.0),
+                  );
+                }
+              }),
+              const SizedBox(height: 6),
+              _buildZoomButton(Icons.remove, () {
+                if (_mapReady) {
+                  _mapController.move(
+                    _mapController.camera.center,
+                    (_mapController.camera.zoom - 1).clamp(3.0, 18.0),
+                  );
+                }
+              }),
+            ],
+          ),
+        ),
+        Positioned(
           right: 6,
           bottom: 6,
           child: Container(
@@ -2180,67 +2226,6 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
             _ErrorBanner(_locationError!),
             const SizedBox(height: 10),
           ],
-
-          Row(children: [
-            const Text('Layer:',
-                style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textSecondary)),
-            const SizedBox(width: 8),
-            _buildMapLayerChip(
-              _MarketMapLayer.standard,
-              'Standard',
-              Icons.map_outlined,
-            ),
-            const SizedBox(width: 6),
-            _buildMapLayerChip(
-              _MarketMapLayer.satellite,
-              'Satellite',
-              Icons.satellite_alt_outlined,
-            ),
-          ]),
-          if (_mapLayer == _MarketMapLayer.satellite) ...[
-            const SizedBox(height: 6),
-            const Text(
-              'MapTiler satellite imagery.',
-              style: TextStyle(fontSize: 10, color: AppColors.textSecondary),
-            ),
-          ],
-          const SizedBox(height: 10),
-
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            decoration: BoxDecoration(
-              color: context.fomraSurfaceVar,
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Row(children: [
-              const Text('Zoom:',
-                  style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textSecondary)),
-              const Spacer(),
-              _buildZoomButton(Icons.remove, () {
-                if (_mapReady) {
-                  _mapController.move(
-                    _mapController.camera.center,
-                    (_mapController.camera.zoom - 1).clamp(3.0, 18.0),
-                  );
-                }
-              }),
-              const SizedBox(width: 8),
-              _buildZoomButton(Icons.add, () {
-                if (_mapReady) {
-                  _mapController.move(
-                    _mapController.camera.center,
-                    (_mapController.camera.zoom + 1).clamp(3.0, 18.0),
-                  );
-                }
-              }),
-            ]),
-          ),
       ]),
     );
   }
