@@ -2502,6 +2502,9 @@ router.get('/fmb', async (req, res) => {
     isFmb:        true,
   };
 
+  // Bound TNGIS resolution time like /tngis/parcel and /patta so the FMB route
+  // can't hang past Vercel's 120s limit.
+  const deadline = Date.now() + PARCEL_DEADLINE_MS;
   let tngisProps = null;
 
   async function finalizeAndFetchFmb() {
@@ -2532,6 +2535,7 @@ router.get('/fmb', async (req, res) => {
         lon: lonN,
         surveyNo: surveyReq || undefined,
         subDiv:   subReq || undefined,
+        deadline,
       });
       if (hit?.tngisProps) {
         tngisProps = { ...hit.tngisProps };
@@ -2583,6 +2587,7 @@ router.get('/fmb', async (req, res) => {
         districtCode: codes.districtCode,
         talukCode:    codes.talukCode,
         villageCode:  codes.villageCode,
+        deadline,
       });
       if (fmbHit?.subDivision && !subReq && !codes.subDivision) {
         codes.subDivision = fmbHit.subDivision;
@@ -2607,6 +2612,7 @@ router.get('/fmb', async (req, res) => {
         lat: latN,
         lon: lonN,
         surveyNo: codes.surveyNumber,
+        deadline,
       });
       const containing = subs.find((s) => s.containsPoint && s.subDivision);
       if (containing?.subDivision) {
