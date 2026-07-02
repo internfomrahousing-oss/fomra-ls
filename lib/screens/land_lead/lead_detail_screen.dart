@@ -220,35 +220,49 @@ class _LeadDetailsCard extends StatelessWidget {
 }
 
 void _showFullPhoto(BuildContext context, String url) {
-  showDialog<void>(
-    context: context,
-    barrierColor: Colors.black87,
-    builder: (ctx) => Dialog(
-      backgroundColor: Colors.transparent,
-      insetPadding: const EdgeInsets.all(12),
-      child: Stack(
-        alignment: Alignment.topRight,
-        children: [
-          InteractiveViewer(
-            minScale: 0.8,
-            maxScale: 4,
-            child: Center(
-              child: Image.network(
-                url,
-                fit: BoxFit.contain,
-                errorBuilder: (_, __, ___) => _photoError(),
+  Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      fullscreenDialog: true,
+      builder: (ctx) => Scaffold(
+        backgroundColor: Colors.black,
+        body: SafeArea(
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: InteractiveViewer(
+                  minScale: 0.8,
+                  maxScale: 5,
+                  child: Center(
+                    child: Image.network(
+                      url,
+                      fit: BoxFit.contain,
+                      loadingBuilder: (_, child, progress) => progress == null
+                          ? child
+                          : const Center(
+                              child: CircularProgressIndicator(color: Colors.white)),
+                      errorBuilder: (_, __, ___) => const Center(
+                        child: Text('Photo unavailable',
+                            style: TextStyle(color: Colors.white70)),
+                      ),
+                    ),
+                  ),
+                ),
               ),
-            ),
+              Positioned(
+                top: 8,
+                right: 8,
+                child: Material(
+                  color: Colors.black54,
+                  shape: const CircleBorder(),
+                  child: IconButton(
+                    icon: const Icon(Icons.close, color: Colors.white),
+                    onPressed: () => Navigator.of(ctx).pop(),
+                  ),
+                ),
+              ),
+            ],
           ),
-          Material(
-            color: Colors.black54,
-            shape: const CircleBorder(),
-            child: IconButton(
-              icon: const Icon(Icons.close, color: Colors.white),
-              onPressed: () => Navigator.of(ctx).pop(),
-            ),
-          ),
-        ],
+        ),
       ),
     ),
   );
