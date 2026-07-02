@@ -31509,7 +31509,7 @@ if(A.baH(a)||A.bj7(a))return!1
 s=A.ak(J.h(a,"status"))
 if(s==null)s=""
 r=s.toLowerCase()
-return r.length===0||B.e.n(r,"construct")||B.e.n(r,"ongoing")||B.e.n(r,"register")||B.e.n(r,"launch")||B.e.n(r,"nearing")||B.e.n(r,"possession")||B.e.n(r,"available")||B.e.n(r,"progress")},
+return B.e.n(r,"construct")||B.e.n(r,"ongoing")||B.e.n(r,"launch")||B.e.n(r,"nearing")||B.e.n(r,"progress")||B.e.n(r,"under const")},
 bza(a){var s,r,q=J.ad(a),p=q.h(a,"registeredYear")
 if(A.lX(p))return p
 if(typeof p=="number")return B.c.B(p)

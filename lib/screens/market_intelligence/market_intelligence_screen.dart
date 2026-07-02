@@ -1036,21 +1036,18 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
     return age == null || age < 2;
   }
 
+  // Ongoing = under construction: a project still being built and not yet
+  // ready to move in. Covers "Under Construction", "New Launch", "Nearing
+  // Possession" and work-in-progress statuses — not ready/resale, not plots.
   static bool _isOngoing(Map<String, dynamic> item) {
     if (_isPlot(item) || _isReady(item)) return false;
     final status = (item['status'] as String? ?? '').toLowerCase();
-    // Anything actively selling/building that isn't finished counts as ongoing:
-    // covers "Under Construction", "New Launch", "Registered", "Nearing
-    // Possession", "Available", and unknown/blank statuses.
-    return status.isEmpty ||
-        status.contains('construct') ||
+    return status.contains('construct') ||
         status.contains('ongoing') ||
-        status.contains('register') ||
         status.contains('launch') ||
         status.contains('nearing') ||
-        status.contains('possession') ||
-        status.contains('available') ||
-        status.contains('progress');
+        status.contains('progress') ||
+        status.contains('under const');
   }
 
   // Registration year, derived from the RERA number's trailing year when the
