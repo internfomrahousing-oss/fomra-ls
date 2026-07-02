@@ -15,6 +15,11 @@ const TAMIL_NILAM_API = 'https://tngis.tn.gov.in/apps/tamilnilam_api/v1';
 const FMB_SKETCH_URL = 'https://tngis.tn.gov.in/apps/generic_api/v1/sketch_fmb';
 const GI_REFERER = 'https://tngis.tn.gov.in/apps/gi_viewer/map-viewer/index.html';
 
+// Upstream TNGIS POSTs (land_details, AREG, pattacopy, FMB) must fail fast — a
+// hung request would otherwise block until Vercel kills the function at 120s
+// (FUNCTION_INVOCATION_TIMEOUT), so callers get a 504 instead of a JSON error.
+const TNGIS_POST_TIMEOUT_MS = 18000;
+
 function padTalukCode(code) {
   const s = String(code ?? '').trim();
   if (!s) return '';
@@ -103,6 +108,7 @@ function postJson(url, payload, headers = {}) {
         }
       });
     });
+    req.setTimeout(TNGIS_POST_TIMEOUT_MS, () => { req.destroy(new Error('TNGIS request timed out')); });
     req.on('error', reject);
     req.write(body);
     req.end();
@@ -139,6 +145,7 @@ function postForm(url, fields, headers = {}) {
         }
       });
     });
+    req.setTimeout(TNGIS_POST_TIMEOUT_MS, () => { req.destroy(new Error('TNGIS request timed out')); });
     req.on('error', reject);
     req.write(body);
     req.end();
