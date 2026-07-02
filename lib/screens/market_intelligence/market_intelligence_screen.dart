@@ -96,6 +96,8 @@ class _ValuationResult {
   final int investmentScore;
   final int riskScore;
   final String recommendation;
+  final String investmentReason;
+  final String riskReason;
 
   _ValuationResult({
     required this.areaAvgPerSqft,
@@ -109,6 +111,8 @@ class _ValuationResult {
     required this.investmentScore,
     required this.riskScore,
     required this.recommendation,
+    this.investmentReason = '',
+    this.riskReason = '',
   });
 }
 
@@ -827,8 +831,10 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
     final buyPerSqft = benchmarkPrice;
     final purchaseTotal = buyPerSqft * landSize;
 
-    final investmentScore = infraScore.clamp(0, 100).toInt();
-    final riskScore = (100 - investmentScore * 0.6 - 15).clamp(0, 100).toInt();
+    // Investment reflects the auto infrastructure score; risk is its complement
+    // so the two always add up to 100.
+    final investmentScore = infraScore.round().clamp(0, 100);
+    final riskScore = 100 - investmentScore;
 
     final recommendation = investmentScore > 70
         ? 'Strong Buy'
@@ -837,6 +843,22 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
             : investmentScore > 35
                 ? 'Hold'
                 : 'Avoid';
+
+    final band = investmentScore >= 70
+        ? 'strong'
+        : investmentScore >= 45
+            ? 'moderate'
+            : 'limited';
+    final n = areaStats.pricedCount;
+    final investmentReason =
+        'Investment $investmentScore/100 reflects the $band infrastructure around this '
+        'point — nearby schools, hospitals, transport and markets score '
+        '${infraScore.round()}/100 — plus $n priced project${n == 1 ? '' : 's'} within the '
+        'search radius. A higher score means better amenities and more market activity.';
+    final riskReason =
+        'Risk $riskScore/100 is the mirror of the investment score — the two add up to '
+        '100. It goes up where infrastructure and market activity are sparse, and down '
+        'where amenities and nearby projects are strong.';
 
     return _ValuationResult(
       areaAvgPerSqft: benchmarkPrice,
@@ -850,6 +872,8 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
       investmentScore: investmentScore,
       riskScore: riskScore,
       recommendation: recommendation,
+      investmentReason: investmentReason,
+      riskReason: riskReason,
     );
   }
 
@@ -2761,16 +2785,55 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
       const SizedBox(height: 12),
       Row(children: [
         Expanded(
-          child: _BenchmarkTile(
-              'Investment', '${v.investmentScore}/100', AppColors.success),
+          child: GestureDetector(
+            onTap: () => _showScoreExplanation(
+                'Investment Score', '${v.investmentScore}/100',
+                v.investmentReason, AppColors.success),
+            child: _BenchmarkTile('Investment ⓘ', '${v.investmentScore}/100',
+                AppColors.success),
+          ),
         ),
         const SizedBox(width: 8),
         Expanded(
-          child:
-              _BenchmarkTile('Risk', '${v.riskScore}/100', AppColors.warning),
+          child: GestureDetector(
+            onTap: () => _showScoreExplanation(
+                'Risk Score', '${v.riskScore}/100', v.riskReason,
+                AppColors.warning),
+            child: _BenchmarkTile(
+                'Risk ⓘ', '${v.riskScore}/100', AppColors.warning),
+          ),
         ),
       ]),
+      const SizedBox(height: 6),
+      Text('Tap Investment or Risk to see why.',
+          style: TextStyle(fontSize: 10, color: Colors.grey.shade600)),
     ]);
+  }
+
+  void _showScoreExplanation(
+      String title, String value, String reason, Color color) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Row(children: [
+          Icon(Icons.info_outline, color: color, size: 20),
+          const SizedBox(width: 8),
+          Expanded(child: Text(title, style: const TextStyle(fontSize: 16))),
+          Text(value,
+              style: TextStyle(
+                  fontSize: 16, fontWeight: FontWeight.w800, color: color)),
+        ]),
+        content: Text(
+          reason.isNotEmpty ? reason : 'No details available for this score.',
+          style: const TextStyle(fontSize: 13, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Got it')),
+        ],
+      ),
+    );
   }
 
   // â”€â”€ Section: Competitor Intelligence â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
