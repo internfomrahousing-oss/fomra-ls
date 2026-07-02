@@ -1,5 +1,4 @@
 const express = require('express');
-const magicbricksRouter = require('./magicbricks');
 const ninetyNineRouter  = require('./ninetyninacres');
 const housingRouter     = require('./housing');
 const squareYardsRouter = require('./squareyards');
@@ -147,7 +146,6 @@ router.get('/', async (req, res) => {
   const errors = [];
 
   const onServerless = !!process.env.VERCEL || !!process.env.NETLIFY;
-  const mbTimeoutMs = onServerless ? 95000 : 150000;
   const altTimeoutMs = onServerless ? 12000 : 35000;
 
   const radiusQuery = hasRadiusFilter
@@ -156,12 +154,12 @@ router.get('/', async (req, res) => {
 
   // SquareYards and NoBroker are both reachable from datacenter/serverless IPs
   // and return priced listings with map coordinates — the primary sources.
-  // TNRERA is intentionally NOT used here: it only yields registered (unpriced)
-  // projects, and this endpoint shows only priced projects within the radius.
+  // MagicBricks is deliberately excluded: it WAF-blocks datacenter IPs and its
+  // fallback scrapes TNRERA (registered, unpriced) which this endpoint doesn't
+  // want — only priced projects within the radius are shown.
   const syTimeoutMs = onServerless ? 20000 : 35000;
   const nbTimeoutMs = onServerless ? 22000 : 35000;
-  const [mbResult, syResult, nbResult] = await Promise.all([
-    callRouterWithTimeout(magicbricksRouter, radiusQuery, mbTimeoutMs),
+  const [syResult, nbResult] = await Promise.all([
     callRouterWithTimeout(squareYardsRouter, radiusQuery, syTimeoutMs),
     callRouterWithTimeout(nobrokerRouter, radiusQuery, nbTimeoutMs),
   ]);
@@ -181,7 +179,6 @@ router.get('/', async (req, res) => {
 
   ingestBatch({ status: 'fulfilled', value: syResult }, 'SquareYards', allListings, sources, errors);
   ingestBatch({ status: 'fulfilled', value: nbResult }, 'NoBroker', allListings, sources, errors);
-  ingestBatch({ status: 'fulfilled', value: mbResult }, 'MagicBricks', allListings, sources, errors);
   ingestBatch({ status: 'fulfilled', value: naResult }, '99acres', allListings, sources, errors);
   ingestBatch({ status: 'fulfilled', value: hoResult }, 'Housing.com', allListings, sources, errors);
 
