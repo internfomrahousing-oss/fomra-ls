@@ -2218,6 +2218,8 @@ router.get('/tngis/parcel', async (req, res) => {
       taluk:        hit.fields.Taluk || props.taluk_name || null,
       village:      hit.fields.Village || props.village_name || null,
       pattaNumber:  hit.fields['Patta Number'] || props.patta_no || null,
+      // rural = FMB (survey no + sub-division); urban = TSLR (T.S. no + block).
+      ruralUrban:   (giLand?.ok ? giLand.ruralUrban : null) || props.rural_urban || null,
       fmbAvailable,
       fmbNote,
       containsPoint: hit.pickMeta?.containsPoint ?? false,

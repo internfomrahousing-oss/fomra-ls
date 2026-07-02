@@ -199,6 +199,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
   String? _tngisDc;
   String? _tngisTc;
   String? _tngisVc;
+  String? _tngisRuralUrban;
   String? _tngisGiViewerUrl;
   Map<String, dynamic>? _tngisGiServices;
   String? _tngisUlpin;
@@ -498,6 +499,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
       _valuationResult = null;
       _tngisSurvey = null;
       _tngisSubDiv = null;
+      _tngisRuralUrban = null;
       _tngisDc = null;
       _tngisTc = null;
       _tngisVc = null;
@@ -528,6 +530,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
       _valuationResult = null;
       _tngisSurvey = null;
       _tngisSubDiv = null;
+      _tngisRuralUrban = null;
       _tngisDc = null;
       _tngisTc = null;
       _tngisVc = null;
@@ -638,6 +641,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
         _tngisDc = fields['District Code'];
         _tngisTc = fields['Taluk Code'];
         _tngisVc = fields['Village Code'];
+        _tngisRuralUrban = data['ruralUrban']?.toString();
         _detectedDistrict = (data['district'] as String?)?.trim().isNotEmpty == true
             ? data['district'] as String
             : (fields['District']?.isNotEmpty == true ? fields['District'] : _detectedDistrict);
@@ -1563,6 +1567,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
       districtCode: _tngisDc,
       talukCode: _tngisTc,
       villageCode: _tngisVc,
+      ruralUrban: _tngisRuralUrban,
       lat: loc?.latitude,
       lon: loc?.longitude,
       tngisGiViewerUrl: _tngisGiViewerUrl,
@@ -3517,6 +3522,7 @@ class _GovtDocsSection extends StatefulWidget {
   final String? districtCode;
   final String? talukCode;
   final String? villageCode;
+  final String? ruralUrban; // 'rural' (FMB) | 'urban' (TSLR) — drives labels
   final double? lat; // active map location — enables the TNGIS patta fallback
   final double? lon;
   final String? tngisGiViewerUrl;
@@ -3536,6 +3542,7 @@ class _GovtDocsSection extends StatefulWidget {
     this.districtCode,
     this.talukCode,
     this.villageCode,
+    this.ruralUrban,
     this.lat,
     this.lon,
     this.tngisGiViewerUrl,
@@ -3553,6 +3560,15 @@ class _GovtDocsSection extends StatefulWidget {
 }
 
 class _GovtDocsSectionState extends State<_GovtDocsSection> {
+  // Urban land uses the TSLR system (Town Survey No. + block) rather than the
+  // rural FMB survey-number/sub-division, so relabel the fields accordingly.
+  bool get _isUrban {
+    final ru = (widget.ruralUrban ?? '').toLowerCase();
+    return ru.contains('urban') || ru == 'u';
+  }
+  String get _surveyLabel => _isUrban ? 'T.S. Number' : 'Survey Number';
+  String get _subLabel => _isUrban ? 'Block / Sub-div' : 'Sub Division';
+
   // ── Patta state ──
   bool   _initingPatta = false;
   List<_Option> _districts = _kStaticDistricts;
@@ -5172,8 +5188,10 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
           children: [
             _buildGiDataCard('ULPIN', widget.ulpin?.isNotEmpty == true ? widget.ulpin! : '-'),
             _buildGiDataCard('Centroid', centroid),
-            _buildGiDataCard('Survey Number', survey?.isNotEmpty == true ? survey! : '-'),
-            _buildGiDataCard('Sub Division', sub != null && sub.isNotEmpty && sub != '-' ? sub : '-'),
+            if (widget.ruralUrban != null && widget.ruralUrban!.isNotEmpty)
+              _buildGiDataCard('Land Type', _isUrban ? 'Urban (TSLR)' : 'Rural (FMB)'),
+            _buildGiDataCard(_surveyLabel, survey?.isNotEmpty == true ? survey! : '-'),
+            _buildGiDataCard(_subLabel, sub != null && sub.isNotEmpty && sub != '-' ? sub : '-'),
           ],
         ),
         if (widget.village != null && widget.village!.isNotEmpty) ...[
@@ -6089,8 +6107,8 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
                         ? AppColors.primaryLight
                         : const Color(0xFF1565C0))),
           ),
-        _kv('Survey Number', row.surveyNumber),
-        _kv('Sub Division', row.subLabel),
+        _kv(_surveyLabel, row.surveyNumber),
+        _kv(_subLabel, row.subLabel),
         if (row.fields['Patta Number']?.isNotEmpty == true)
           _kv('Patta Number', row.fields['Patta Number']!),
         const SizedBox(height: 8),
@@ -6144,8 +6162,8 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
                         ? AppColors.primaryLight
                         : const Color(0xFF1565C0))),
           ),
-        _kv('Survey Number', row.surveyNumber),
-        _kv('Sub Division', row.subLabel),
+        _kv(_surveyLabel, row.surveyNumber),
+        _kv(_subLabel, row.subLabel),
         const SizedBox(height: 10),
         Row(
           children: [
