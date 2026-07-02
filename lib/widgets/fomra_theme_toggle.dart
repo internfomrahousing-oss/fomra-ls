@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../services/theme_controller.dart';
 
-/// Single flash button for the hero app bar: full flash in dark mode,
-/// flash off in light mode.
+/// Single flashlight button for the hero app bar: torch on in dark mode,
+/// torch off in light mode.
 class FomraThemeToggle extends StatelessWidget {
   const FomraThemeToggle({super.key});
 
@@ -21,7 +21,7 @@ class FomraThemeToggle extends StatelessWidget {
             visualDensity: VisualDensity.compact,
             iconSize: 20,
             icon: Icon(
-              isDark ? Icons.flash_on : Icons.flash_off,
+              isDark ? Icons.flashlight_on : Icons.flashlight_off,
               color: Colors.white.withValues(alpha: isDark ? 0.95 : 0.55),
             ),
             onPressed: () => ThemeController.instance.setDark(!isDark),
