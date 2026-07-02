@@ -5836,29 +5836,17 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
             ),
           ),
           const SizedBox(width: 8),
-          Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: onTap,
-              borderRadius: BorderRadius.circular(8),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.visibility_outlined, color: iconColor, size: 18),
-                    const SizedBox(height: 2),
-                    Text(
-                      'View as PDF',
-                      style: TextStyle(
-                        fontSize: 9,
-                        fontWeight: FontWeight.w700,
-                        color: iconColor,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+          ElevatedButton.icon(
+            onPressed: onTap,
+            icon: const Icon(Icons.visibility_outlined, size: 16),
+            label: const Text('View as PDF'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: iconColor,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              elevation: 0,
             ),
           ),
         ],
