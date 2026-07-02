@@ -138,14 +138,17 @@ class _LeadDetailsCard extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             if (lead.sitePhotoUrls.length == 1)
-              ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: Image.network(
-                  lead.sitePhotoUrls.first,
-                  width: double.infinity,
-                  height: 200,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => _photoError(),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.network(
+                    lead.sitePhotoUrls.first,
+                    width: 140,
+                    height: 140,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => _photoError(),
+                  ),
                 ),
               )
             else
@@ -179,14 +182,17 @@ class _LeadDetailsCard extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 8),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: Image.network(
-                lead.sitePhotoUrl,
-                width: double.infinity,
-                height: 200,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => _photoError(),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image.network(
+                  lead.sitePhotoUrl,
+                  width: 140,
+                  height: 140,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => _photoError(),
+                ),
               ),
             ),
           ],
@@ -206,12 +212,14 @@ class _LeadDetailsCard extends StatelessWidget {
 
 Widget _photoError() {
   return Container(
-    height: 120,
+    width: 140,
+    height: 140,
     color: AppColors.surfaceVar,
     alignment: Alignment.center,
     child: const Text(
-      'Photo unavailable',
-      style: TextStyle(color: AppColors.textSecondary),
+      'Photo\nunavailable',
+      textAlign: TextAlign.center,
+      style: TextStyle(color: AppColors.textSecondary, fontSize: 11),
     ),
   );
 }
