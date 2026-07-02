@@ -114525,7 +114525,7 @@ if(k===2)k=14.5
 else k=k===5?13:12
 k=A.bgb(l,k,new A.aXa(p),new A.aXb(p))
 l=p.y===B.KR
-l=A.bgc(l,l?"https://api.maptiler.com/maps/satellite-v2/256/{z}/{x}/{y}.jpg?key=MHsQC3BsvXE332lr3wT7":u.F)
+l=A.bgc(l,l?"https://api.maptiler.com/maps/hybrid/256/{z}/{x}/{y}.jpg?key=MHsQC3BsvXE332lr3wT7":u.F)
 s=A.b([],t.UE)
 r=!m
 if(r)s.push(new A.A5(n,p.cx*1000,B.u.S(0.1),2,B.u,!0,t.ex))

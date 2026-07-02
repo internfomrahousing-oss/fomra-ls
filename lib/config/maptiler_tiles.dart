@@ -15,8 +15,8 @@ class MapTilerTiles {
   /// Current MapTiler streets style (PNG).
   static const standardStyle = 'streets-v4';
 
-  /// Satellite imagery (MapTiler serves this tileset as JPG).
-  static const satelliteStyle = 'satellite-v2';
+  /// Satellite hybrid imagery (satellite + labels, served as JPG).
+  static const satelliteStyle = 'hybrid';
 
   static bool get isConfigured => apiKey.isNotEmpty;
 
