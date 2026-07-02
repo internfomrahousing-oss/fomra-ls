@@ -1979,18 +1979,24 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
   Widget _buildMapLayerChip(_MarketMapLayer layer, String label, IconData icon) {
     final selected = _mapLayer == layer;
     final isDark = context.isDarkMode;
-    final selectedBg = isDark
-        ? AppColors.primaryLight.withValues(alpha: 0.2)
-        : AppColors.primary;
-    final unselectedBg = context.fomraSurface.withValues(alpha: isDark ? 0.88 : 0.92);
-    final selectedFg = isDark ? AppColors.primaryLight : Colors.white;
-    final unselectedFg =
-        isDark ? context.fomraTextPrimary : AppColors.primary;
+    // Solid, high-contrast pills that clearly follow the theme:
+    //  selected  -> accent fill with white text (both modes)
+    //  unselected-> dark slate (dark mode) / white (light mode)
+    const darkSurface = Color(0xFF1E293B);
+    final selectedBg = isDark ? AppColors.primaryLight : AppColors.primary;
+    final unselectedBg = (isDark ? darkSurface : Colors.white).withValues(alpha: 0.94);
+    final selectedFg = Colors.white;
+    final unselectedFg = isDark ? Colors.white.withValues(alpha: 0.9) : AppColors.primary;
+    final borderColor = selected
+        ? Colors.transparent
+        : (isDark
+            ? Colors.white.withValues(alpha: 0.18)
+            : context.fomraBorder.withValues(alpha: 0.85));
 
     return Material(
       color: selected ? selectedBg : unselectedBg,
       elevation: selected ? 2 : 1,
-      shadowColor: Colors.black.withValues(alpha: isDark ? 0.45 : 0.2),
+      shadowColor: Colors.black.withValues(alpha: isDark ? 0.5 : 0.2),
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
         onTap: () => _setMapLayer(layer),
@@ -1998,13 +2004,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
         child: Container(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: selected
-                  ? (isDark
-                      ? AppColors.primaryLight.withValues(alpha: 0.45)
-                      : Colors.transparent)
-                  : context.fomraBorder.withValues(alpha: 0.85),
-            ),
+            border: Border.all(color: borderColor),
           ),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           child: Row(
