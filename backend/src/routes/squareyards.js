@@ -129,6 +129,15 @@ function parseProjects(html) {
     const locality = attr(tag, 'sublocation') || attr(tag, 'location');
     const coord   = geo[id] || {};
 
+    // Plotted developments/land layouts vs. built apartments. SquareYards may
+    // expose a property-type attribute; otherwise fall back to name/config text.
+    const typeAttr = (attr(tag, 'propertytype') || attr(tag, 'prjtype') || '').toLowerCase();
+    const isPlot   = /plot|plotted|land|residential\s*plot/.test(typeAttr) ||
+                     /\bplot|plotted|land\b/i.test(name) ||
+                     (!units && /plot|layout/i.test(name));
+    const reraNo   = attr(tag, 'rera') || attr(tag, 'reranumber') || '';
+    const reraYrM  = reraNo.match(/(20\d{2})\s*$/);
+
     out.push({
       id:             `sy_${id}`,
       projectName:    name,
@@ -140,10 +149,10 @@ function parseProjects(html) {
       status:         /under\s*construction/i.test(status) ? 'Under Construction' : status,
       possession:     'N/A',
       completionYear: null,
-      reraNo:         '',
+      reraNo,
       developer:      attr(tag, 'developer'),
-      projectType:    'Building',
-      registeredYear: null,
+      projectType:    isPlot ? 'Layout' : 'Building',
+      registeredYear: reraYrM ? parseInt(reraYrM[1], 10) : null,
       lat:            coord.lat ?? null,
       lng:            coord.lng ?? null,
       detailUrl:      attr(tag, 'baseurl') && attr(tag, 'url')

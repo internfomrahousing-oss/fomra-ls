@@ -111,20 +111,22 @@ function ingestTnrera(result, allListings, sources, errors) {
   if (!sources.includes('TNRERA')) sources.push('TNRERA');
   for (const r of rows) {
     const key = (r.reraNo || r.projectName || '').replace(/[^a-zA-Z0-9]/g, '_').slice(0, 30);
+    const yearM = String(r.reraNo || '').match(/(20\d{2})\s*$/);
     allListings.push({
-      id:           r.id || `rera_${key}`,
-      projectName:  r.projectName || r.reraNo || 'RERA Project',
-      locality:     '',
-      developer:    r.developer || '',
-      reraNo:       r.reraNo || '',
-      status:       r.status || 'Registered',
-      priceRupees:  0,
-      pricePerSqft: 0,
-      area:         0,
-      lat:          null,
-      lng:          null,
-      projectType:  'Building',
-      source:       'TNRERA',
+      id:             r.id || `rera_${key}`,
+      projectName:    r.projectName || r.reraNo || 'RERA Project',
+      locality:       '',
+      developer:      r.developer || '',
+      reraNo:         r.reraNo || '',
+      status:         r.status || 'Registered',
+      priceRupees:    0,
+      pricePerSqft:   0,
+      area:           0,
+      lat:            null,
+      lng:            null,
+      projectType:    r.projectType || 'Building',
+      registeredYear: r.registeredYear ?? (yearM ? parseInt(yearM[1], 10) : null),
+      source:         'TNRERA',
     });
   }
 }

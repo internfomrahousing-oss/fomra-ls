@@ -916,22 +916,68 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
     }
   }
 
+  // ── Competitor project classification ──────────────────────────────────────
+  // Sources disagree on wording, so classify from several signals rather than a
+  // single exact-match string. A project can belong to more than one bucket
+  // (e.g. an old completed plot), which is why filters are evaluated per-bucket.
+
+  static bool _isPlot(Map<String, dynamic> item) {
+    final type = (item['projectType'] as String? ?? '').toLowerCase();
+    if (type == 'layout' || type == 'plot') return true;
+    final name = (item['projectName'] as String? ?? '').toLowerCase();
+    return RegExp(r'\b(plot|plots|plotted|layout|land)\b').hasMatch(name);
+  }
+
+  static bool _isCompleted(Map<String, dynamic> item) {
+    final status = (item['status'] as String? ?? '').toLowerCase();
+    return status.contains('complet') ||
+        status.contains('ready') ||
+        status.contains('move') ||
+        status.contains('possession given') ||
+        status.contains('occupied');
+  }
+
+  static bool _isOngoing(Map<String, dynamic> item) {
+    if (_isPlot(item) || _isCompleted(item)) return false;
+    final status = (item['status'] as String? ?? '').toLowerCase();
+    // Anything actively selling/building that isn't finished counts as ongoing:
+    // covers "Under Construction", "New Launch", "Registered", "Nearing
+    // Possession", "Available", and unknown/blank statuses.
+    return status.isEmpty ||
+        status.contains('construct') ||
+        status.contains('ongoing') ||
+        status.contains('register') ||
+        status.contains('launch') ||
+        status.contains('nearing') ||
+        status.contains('possession') ||
+        status.contains('available') ||
+        status.contains('progress');
+  }
+
+  // Registration year, derived from the RERA number's trailing year when the
+  // backend didn't supply one (e.g. "TN/02/Building/011/2024" → 2024).
+  static int? _registeredYear(Map<String, dynamic> item) {
+    final direct = item['registeredYear'];
+    if (direct is int) return direct;
+    if (direct is num) return direct.toInt();
+    final rera = item['reraNo'] as String? ?? '';
+    final m = RegExp(r'(20\d{2})\s*$').firstMatch(rera);
+    return m != null ? int.tryParse(m.group(1)!) : null;
+  }
+
   List<Map<String, dynamic>> get _filteredMbListings {
     if (_compFilter == 'All') return _mbListings;
     final curYear = DateTime.now().year;
     return _mbListings.where((item) {
-      final status      = (item['status'] as String? ?? '').toLowerCase();
-      final projectType = (item['projectType'] as String?) ?? 'Building';
-      final regYear     = item['registeredYear'] as int?;
       switch (_compFilter) {
         case 'Ongoing':
-          return projectType == 'Building' &&
-              (status.contains('register') || status.contains('construct') || status.contains('ongoing'));
+          return _isOngoing(item);
         case 'Completed':
-          return status.contains('complet') || status.contains('ready') || status.contains('move');
+          return _isCompleted(item);
         case 'Plot':
-          return projectType == 'Layout';
+          return _isPlot(item);
         case 'Old':
+          final regYear = _registeredYear(item);
           if (regYear == null) return false;
           return (curYear - regYear) >= _oldYearsFilter;
         default:
@@ -1155,13 +1201,13 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
           if (_compFilter == 'Old') ...[
             const SizedBox(height: 8),
             Row(children: [
-              const Text('Max age:', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+              const Text('Min age:', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
               const SizedBox(width: 8),
               for (final yrs in [2, 5, 10])
                 Padding(
                   padding: const EdgeInsets.only(right: 6),
                   child: ChoiceChip(
-                    label: Text('< ${yrs}yrs', style: const TextStyle(fontSize: 11)),
+                    label: Text('$yrs+ yrs', style: const TextStyle(fontSize: 11)),
                     selected: _oldYearsFilter == yrs,
                     selectedColor: AppColors.primary,
                     labelStyle: TextStyle(

@@ -64,8 +64,16 @@ function stripTags(s) {
     .replace(/\s+/g, ' ').trim();
 }
 
-function parseProjectTable(html) {
+// The registration year is the trailing segment of a RERA number,
+// e.g. "TN/02/Building/011/2024" → 2024. Fall back to the file's year.
+function yearFromRera(reraNo, fallbackYear) {
+  const m = String(reraNo || '').match(/(20\d{2})\s*$/);
+  return m ? parseInt(m[1], 10) : (fallbackYear || null);
+}
+
+function parseProjectTable(html, type, fileYear) {
   const rows = [];
+  const projectType = type === 'Normal_Layout' ? 'Layout' : 'Building';
 
   // TNRERA tables have fixed columns (no reliable <th> district column):
   // 0: S.No.  1: Reg No.  2: Promoter+Address  3: Project Details+Name  4: Approval  5: Completion  6: Other  7: Status
@@ -105,6 +113,8 @@ function parseProjectTable(html) {
       district:    addressText,
       reraNo,
       status:      status || 'Registered',
+      projectType,
+      registeredYear: yearFromRera(reraNo, fileYear),
     });
   }
   return rows;
@@ -128,7 +138,7 @@ router.get('/projects', async (req, res) => {
     for (const type of VALID_TYPES) {
       jobs.push(
         fetchHtml(type, yr)
-          .then((html) => parseProjectTable(html))
+          .then((html) => parseProjectTable(html, type, yr))
           .catch((e) => { errors.push(`${type}/${yr}: ${e.message}`); return []; }),
       );
     }
