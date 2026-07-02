@@ -95,6 +95,20 @@
       }
     }, 12000);
   </script>
+  <script>
+    // Disable the Flutter service worker so every deploy loads immediately.
+    // main.dart.js is served with no-cache headers, but the SW's Cache Storage
+    // otherwise serves a stale bundle "one reload behind" each deploy. Unregister
+    // any existing SW and stop Flutter from registering a new one.
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations()
+        .then(function (regs) { regs.forEach(function (r) { r.unregister(); }); })
+        .catch(function () {});
+      navigator.serviceWorker.register = function () {
+        return Promise.reject(new Error('service worker disabled'));
+      };
+    }
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>
