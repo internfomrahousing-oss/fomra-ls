@@ -1291,13 +1291,14 @@ function tngisFeatureToFields(props) {
 // Query TNGIS for a survey number near a location. Returns { fields, owners }
 // (owners is always [] — the public cadastral layer carries no owner names)
 // or null if nothing is found.
-async function fetchTngisPatta({ surveyNo, subDiv, lat, lon, radiusMeters = 5000 }) {
+async function fetchTngisPatta({ surveyNo, subDiv, lat, lon, radiusMeters = 5000, deadline }) {
   if (Number.isFinite(lat) && Number.isFinite(lon)) {
     const hit = await lookupTngisParcelAtPoint({
       lat,
       lon,
       surveyNo: surveyNo || undefined,
       subDiv:   subDiv   || undefined,
+      deadline,
     });
     if (hit) return hit;
     if (!surveyNo) return null;
@@ -1309,6 +1310,7 @@ async function fetchTngisPatta({ surveyNo, subDiv, lat, lon, radiusMeters = 5000
   const url = tngisWfsUrl(cql, surveyNo ? 50 : 200);
   const res = await fetchRaw(url, {
     headers: { Accept: 'application/json', Referer: 'https://tngis.tn.gov.in/' },
+    timeoutMs: WFS_TIMEOUT_MS,
   });
   if (res.status !== 200) throw new Error(`TNGIS WFS returned HTTP ${res.status}`);
 
@@ -1526,6 +1528,30 @@ async function fetchTngisGiDocuments(tngisProps, ctx = {}) {
   }
   const codes = mergeGiParcelCodes(giLand, tngisProps, ctx);
 
+  // Resolve the sub-division at the tap point BEFORE fetching the patta. The
+  // cadastral kide often lacks a /sub (and land_details may be throttled), so
+  // without this the AREG query runs with an empty sub_division_number and
+  // TNGIS returns the survey-level "common" patta instead of this plot's patta.
+  if (Number.isFinite(ctx.lat) && Number.isFinite(ctx.lon) && codes.surveyNumber
+      && !ctx.subDiv
+      && (!codes.subDivision || surveyNumberMatches(codes.subDivision, codes.surveyNumber))) {
+    try {
+      const fmbHit = await resolveFmbSubAtPoint({
+        lat:          ctx.lat,
+        lon:          ctx.lon,
+        surveyNo:     codes.surveyNumber,
+        districtCode: codes.districtCode,
+        talukCode:    codes.talukCode,
+        villageCode:  codes.villageCode,
+        deadline:     ctx.deadline,
+      });
+      if (fmbHit?.subDivision) {
+        codes.subDivision = fmbHit.subDivision;
+        codes.isFmb = true;
+      }
+    } catch (_) {}
+  }
+
   // ── Patta: Tamil Nilam AREG + NIC pattacopy ──
   try {
     const areg = await fetchGiAregOwnership(codes);
@@ -1589,24 +1615,8 @@ async function fetchTngisGiDocuments(tngisProps, ctx = {}) {
     };
   }
 
-  // FMB sub from view_fmb geometry beats giLand/cadastral (parent kide has no /sub).
-  if (Number.isFinite(ctx.lat) && Number.isFinite(ctx.lon) && codes.surveyNumber && !ctx.subDiv) {
-    try {
-      const fmbHit = await resolveFmbSubAtPoint({
-        lat:          ctx.lat,
-        lon:          ctx.lon,
-        surveyNo:     codes.surveyNumber,
-        districtCode: codes.districtCode,
-        talukCode:    codes.talukCode,
-        villageCode:  codes.villageCode,
-      });
-      if (fmbHit?.subDivision) {
-        codes.subDivision = fmbHit.subDivision;
-        codes.isFmb = true;
-      }
-    } catch (_) {}
-  }
-
+  // codes.subDivision was resolved above (before the patta) so the FMB metadata
+  // points at the same specific sub-division as the patta.
   documents.fmb = buildFmbDocumentMeta(tngisProps, codes, ctx);
   return documents;
 }
@@ -2297,6 +2307,9 @@ router.get('/patta', async (req, res) => {
   const latN = parseFloat(lat);
   const lonN = parseFloat(lon);
   const hasGps = Number.isFinite(latN) && Number.isFinite(lonN);
+  // Same guard as /tngis/parcel: bound total TNGIS time so the patta route
+  // returns JSON before Vercel's 120s function limit (was returning 504s).
+  const deadline = Date.now() + PARCEL_DEADLINE_MS;
   const docCtx = {
     lat:      hasGps ? latN : undefined,
     lon:      hasGps ? lonN : undefined,
@@ -2304,6 +2317,7 @@ router.get('/patta', async (req, res) => {
     subDiv,
     mobile:   mobile || '',
     otp:      otp || '',
+    deadline,
   };
 
   const tryTngis = async () => {
@@ -2311,12 +2325,14 @@ router.get('/patta', async (req, res) => {
         ? (surveyNo ? [500, 2000, 5000, 10000] : [100, 500, 2000, 5000, 10000])
         : [null];
     for (const r of radii) {
+      if (deadlinePassed(deadline)) break;
       const hit = await fetchTngisPatta({
         surveyNo: surveyNo || undefined,
         subDiv:   subDiv   || undefined,
         lat:      hasGps ? latN : undefined,
         lon:      hasGps ? lonN : undefined,
         radiusMeters: r || 5000,
+        deadline,
       });
       if (hit) return hit;
     }
