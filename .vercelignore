@@ -1,0 +1,16 @@
+android/
+ios/
+linux/
+macos/
+windows/
+test/
+.dart_tool/
+.pub-cache/
+.pub/
+coverage/
+backend/scripts/
+backend/node_modules/
+node_modules/
+tmp_*
+*.pdf
+.git/
