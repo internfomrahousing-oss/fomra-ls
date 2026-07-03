@@ -1,25 +1,56 @@
 const https = require('https');
 
-function geocodeOne(query) {
+// Locality → coords cache, persisted across requests. Only successful lookups
+// are cached (misses/timeouts are retried later), so a locality is geocoded at
+// most once ever — greatly reducing dependence on the (flaky) live geocoder.
+const _geoCache = new Map();
+
+function httpGetJson(url, headers, timeoutMs) {
   return new Promise((resolve) => {
-    const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=1&lang=en`;
-    const req = https.get(url, { headers: { 'User-Agent': 'FomraLS/1.0' } }, (res) => {
+    const req = https.get(url, { headers }, (res) => {
       const chunks = [];
       res.on('data', (c) => chunks.push(c));
       res.on('end', () => {
-        try {
-          const d = JSON.parse(Buffer.concat(chunks).toString());
-          const f = d.features?.[0];
-          resolve(f ? { lat: f.geometry.coordinates[1], lng: f.geometry.coordinates[0] } : null);
-        } catch {
-          resolve(null);
-        }
+        try { resolve(JSON.parse(Buffer.concat(chunks).toString())); }
+        catch { resolve(null); }
       });
       res.on('error', () => resolve(null));
     });
-    req.setTimeout(4000, () => { req.destroy(); resolve(null); });
+    req.setTimeout(timeoutMs, () => { req.destroy(); resolve(null); });
     req.on('error', () => resolve(null));
   });
+}
+
+async function geocodeOne(query) {
+  if (_geoCache.has(query)) return _geoCache.get(query);
+
+  // 1) Photon (fast, no rate limit) — primary.
+  const photon = await httpGetJson(
+    `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=1&lang=en`,
+    { 'User-Agent': 'FomraLS/1.0' },
+    2500,
+  );
+  const pf = photon?.features?.[0];
+  if (pf?.geometry?.coordinates) {
+    const g = { lat: pf.geometry.coordinates[1], lng: pf.geometry.coordinates[0] };
+    _geoCache.set(query, g);
+    return g;
+  }
+
+  // 2) Nominatim fallback when Photon is down/misses (rate-limited, so only hit
+  //    when needed; cached results mean we rarely call it in bulk).
+  const nom = await httpGetJson(
+    `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(query)}`,
+    { 'User-Agent': 'FomraLS/1.0 (in.fomrahousing)', 'Accept-Language': 'en' },
+    4500,
+  );
+  if (Array.isArray(nom) && nom[0]?.lat && nom[0]?.lon) {
+    const g = { lat: parseFloat(nom[0].lat), lng: parseFloat(nom[0].lon) };
+    _geoCache.set(query, g);
+    return g;
+  }
+
+  return null; // not cached — retry on a later request
 }
 
 function geocodeQueryForListing(l, city) {

@@ -195,8 +195,23 @@ router.get('/', async (req, res) => {
     // Coords are null (NoBroker snaps them) — geocode each locality to a real
     // position, then keep only those genuinely within the radius.
     await geocodeListings(listings, req.query.city || citySlug, 45);
-    const filtered = applyRadiusFilter(listings, userLat, userLng, radius);
-    listings = filtered.listings.slice(0, 50);   // distance-sorted
+    const geocoded = listings.filter(
+      (l) => Number.isFinite(l.lat) && Number.isFinite(l.lng),
+    );
+    if (geocoded.length === 0) {
+      // Geocoder unavailable — NoBroker already returns results ranked by
+      // proximity (nbRank), so trust that order rather than showing nothing.
+      // Pin them at the search centre so downstream radius filters keep them.
+      listings = listings
+        .slice(0, 30)
+        .map((l) => ({ ...l, lat: userLat, lng: userLng, distanceKm: 0 }));
+    } else {
+      const filtered = applyRadiusFilter(listings, userLat, userLng, radius);
+      // If geocoding worked but nothing is strictly inside the radius, show the
+      // nearest geocoded ones rather than an empty list.
+      listings = (filtered.listings.length ? filtered.listings : geocoded)
+        .slice(0, 50);
+    }
   } else {
     listings = listings
       .sort((a, b) => (b.pricePerSqft || 0) - (a.pricePerSqft || 0))
