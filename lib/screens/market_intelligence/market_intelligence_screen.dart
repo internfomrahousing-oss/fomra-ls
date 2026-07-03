@@ -886,9 +886,26 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
     final buyPerSqft = benchmarkPrice;
     final purchaseTotal = buyPerSqft * landSize;
 
-    // Investment reflects the auto infrastructure score; risk is its complement
-    // so the two always add up to 100.
-    final investmentScore = infraScore.round().clamp(0, 100);
+    // Investment blends THREE signals (so it is not just the infra score):
+    //   • Location quality  — infrastructure/amenities score        (50%)
+    //   • Market activity   — how many priced projects are nearby   (30%)
+    //   • Price headroom    — cheaper areas have more room to grow   (20%)
+    final n = areaStats.pricedCount;
+    final activityScore = (n * 14).clamp(0, 100).toDouble(); // ~7 projects → 100
+    final rate = benchmarkPrice;
+    final headroomScore = rate <= 4000
+        ? 90.0
+        : rate <= 8000
+            ? 75.0
+            : rate <= 12000
+                ? 60.0
+                : rate <= 18000
+                    ? 45.0
+                    : 30.0;
+    final investmentScore =
+        (infraScore * 0.5 + activityScore * 0.3 + headroomScore * 0.2)
+            .round()
+            .clamp(0, 100);
     final riskScore = 100 - investmentScore;
 
     final recommendation = investmentScore > 70
@@ -899,21 +916,18 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                 ? 'Hold'
                 : 'Avoid';
 
-    final band = investmentScore >= 70
-        ? 'strong'
-        : investmentScore >= 45
-            ? 'moderate'
-            : 'limited';
-    final n = areaStats.pricedCount;
     final investmentReason =
-        'Investment $investmentScore/100 reflects the $band infrastructure around this '
-        'point — nearby schools, hospitals, transport and markets score '
-        '${infraScore.round()}/100 — plus $n priced project${n == 1 ? '' : 's'} within the '
-        'search radius. A higher score means better amenities and more market activity.';
+        'Investment $investmentScore/100 blends three signals:\n'
+        '• Location — infrastructure & amenities score ${infraScore.round()}/100 (50%)\n'
+        '• Market activity — $n priced project${n == 1 ? '' : 's'} nearby → '
+        '${activityScore.round()}/100 (30%)\n'
+        '• Price headroom — area rate ₹${rate.round()}/sqft → '
+        '${headroomScore.round()}/100 (20%; cheaper areas have more room to grow)\n'
+        'Higher = well-served, active market, with upside.';
     final riskReason =
         'Risk $riskScore/100 is the mirror of the investment score — the two add up to '
-        '100. It goes up where infrastructure and market activity are sparse, and down '
-        'where amenities and nearby projects are strong.';
+        '100. It rises where infrastructure, market activity or price upside are weak, '
+        'and falls where the location is well-served, active and has room to grow.';
 
     return _ValuationResult(
       areaAvgPerSqft: benchmarkPrice,
