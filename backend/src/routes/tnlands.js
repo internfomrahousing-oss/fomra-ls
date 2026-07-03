@@ -1693,7 +1693,8 @@ async function fetchCollablandFmbByGiscode(giscode, surveyNo, plotno = '') {
   };
 }
 
-async function fetchCollablandFmbPdf(props = {}) {
+async function fetchCollablandFmbPdf(props = {}, opts = {}) {
+  const { strictSubdivision = false } = opts;
   const candidates = giscodeCandidates(props);
   if (candidates.length === 0) return null;
 
@@ -1710,6 +1711,7 @@ async function fetchCollablandFmbPdf(props = {}) {
         return subHit;
       }
       last = subHit;
+      if (strictSubdivision) continue;
       // Sub-division sketch missing — fall back to survey-level FMB.
       const parentHit = await fetchCollablandFmbByGiscode(giscode, props.survey_number, '');
       if (parentHit.available) {
@@ -1767,7 +1769,7 @@ function collablandPropsFromCodes(codes, tngisProps = {}) {
  * TNGIS sketch_fmb (govt seal) first, then CollabLand-TN — maximizes coverage.
  */
 async function tryFmbSourcesForCodes(codes, ctx = {}) {
-  const { lat, lon, tngisProps = {} } = ctx;
+  const { lat, lon, tngisProps = {}, strictSubdivision = false } = ctx;
   let giLand = null;
   if (Number.isFinite(lat) && Number.isFinite(lon)) {
     try {
@@ -1783,7 +1785,7 @@ async function tryFmbSourcesForCodes(codes, ctx = {}) {
   const tryCollab = async () => {
     try {
       const props = collablandPropsFromCodes(codes, tngisProps);
-      const collab = await fetchCollablandFmbPdf(props);
+      const collab = await fetchCollablandFmbPdf(props, { strictSubdivision });
       if (collab?.available && collab.pdfBase64 && !isInvalidFmbPdfBase64(collab.pdfBase64)) {
         return {
           ok:           true,
@@ -1834,7 +1836,7 @@ async function tryFmbSourcesForCodes(codes, ctx = {}) {
 }
 
 async function fetchFmbSketchMultiSource(codes, ctx = {}) {
-  const { tngisProps = {} } = ctx;
+  const { tngisProps = {}, strictSubdivision = false } = ctx;
   const survey = String(codes.surveyNumber ?? '').trim();
   const sub = String(codes.subDivision ?? '').trim();
   const hasSub = sub && !surveyNumberMatches(sub, survey);
@@ -1844,6 +1846,13 @@ async function fetchFmbSketchMultiSource(codes, ctx = {}) {
     const withSub = await tryFmbSourcesForCodes(codes, ctx);
     if (withSub.ok) return { ...withSub, fmbScope: 'subdivision' };
     lastErr = withSub.error || lastErr;
+    if (strictSubdivision) {
+      return {
+        ok: false,
+        error: 'Selected sub-division FMB sketch not available for this parcel. Retap the exact plot and try again.',
+        fmbScope: 'subdivision',
+      };
+    }
   }
 
   if (survey) {
@@ -2522,10 +2531,15 @@ router.get('/fmb', async (req, res) => {
     if (codes.subDivision && surveyNumberMatches(codes.subDivision, codes.surveyNumber)) {
       codes.subDivision = '';
     }
+    const strictSubdivision = Boolean(
+      (subReq && !surveyNumberMatches(subReq, surveyReq || codes.surveyNumber))
+      || (codes.subDivision && !surveyNumberMatches(codes.subDivision, codes.surveyNumber)),
+    );
     const fmb = await fetchFmbSketchMultiSource(codes, {
       lat: hasPoint ? latN : undefined,
       lon: hasPoint ? lonN : undefined,
       tngisProps: tngisProps || {},
+      strictSubdivision,
     });
     if (fmb.ok && fmb.pdfBase64) return sendFmbPdfResponse(res, fmb);
     return res.status(404).json({

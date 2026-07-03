@@ -170,6 +170,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
   String? _poiError;
   bool _poisCollected = false;
   Map<String, double> _infraScoreMap = {};
+  int _poiFetchSeq = 0;
 
   // Valuation inputs
   final _roadWidthCtrl = TextEditingController();
@@ -242,8 +243,8 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
   // â”€â”€ Active location (GPS or searched) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   LatLng? get _activeLatLng =>
-      _leadLocation ??
       _searchedLocation ??
+      _leadLocation ??
       (_position != null
           ? LatLng(_position!.latitude, _position!.longitude)
           : null);
@@ -707,6 +708,10 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
   Future<void> _collectPois() async {
     final loc = _activeLatLng;
     if (loc == null) return;
+    final requestLat = loc.latitude;
+    final requestLon = loc.longitude;
+    final requestRadius = _selectedRadius;
+    final fetchSeq = ++_poiFetchSeq;
     final hadScores = _poisCollected;
     setState(() {
       _collectingPois = true;
@@ -726,13 +731,15 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
       final data = await ApiClient.post(
         '/api/poi/infrastructure',
         {
-          'lat': loc.latitude,
-          'lon': loc.longitude,
-          'radiusKm': _selectedRadius,
+          'lat': requestLat,
+          'lon': requestLon,
+          'radiusKm': requestRadius,
           if (roadFt != null) 'roadWidthFt': roadFt,
         },
         auth: false,
       ).timeout(const Duration(seconds: 35));
+
+      if (!mounted || fetchSeq != _poiFetchSeq) return;
 
       final countsRaw = (data['counts'] as Map?)?.cast<String, dynamic>() ?? {};
       final placesRaw = (data['places'] as Map?)?.cast<String, dynamic>() ?? {};
@@ -769,16 +776,20 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
         _poisCollected = scores.isNotEmpty;
       });
     } on ApiException catch (e) {
+      if (!mounted || fetchSeq != _poiFetchSeq) return;
       final hint = e.statusCode == 404
           ? ' Restart the backend (npm start in backend/) and hard-refresh the page.'
           : '';
       setState(() => _poiError = 'Infrastructure fetch failed: ${e.message}.$hint');
     } catch (e) {
+      if (!mounted || fetchSeq != _poiFetchSeq) return;
       setState(() => _poiError =
           'Infrastructure fetch failed: ${e.toString().replaceAll('Exception: ', '')}');
     } finally {
-      setState(() => _collectingPois = false);
-      _tryAutoValuation();
+      if (mounted && fetchSeq == _poiFetchSeq) {
+        setState(() => _collectingPois = false);
+        _tryAutoValuation();
+      }
     }
   }
 
@@ -4243,13 +4254,14 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
     String? kide,
   }) {
     final parts = <String>[];
-    if (widget.lat != null && widget.lon != null) {
+    final hasPoint = widget.lat != null && widget.lon != null;
+    if (hasPoint) {
       parts.add('lat=${widget.lat}');
       parts.add('lon=${widget.lon}');
     }
 
     final surveyNo = (survey ?? widget.surveyNumber)?.trim();
-    if (surveyNo == null || surveyNo.isEmpty) return null;
+    if ((surveyNo == null || surveyNo.isEmpty) && !hasPoint) return null;
 
     final subDiv = (sub ?? _resolvedMapSub())?.trim();
     final validSub = subDiv != null &&
@@ -4281,8 +4293,10 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
       parts.add('vc=${Uri.encodeComponent(vcVal)}');
     }
 
-    parts.add('surveyNo=${Uri.encodeComponent(surveyNo)}');
-    if (validSub) {
+    if (surveyNo != null && surveyNo.isNotEmpty) {
+      parts.add('surveyNo=${Uri.encodeComponent(surveyNo)}');
+    }
+    if (validSub && surveyNo != null && surveyNo.isNotEmpty) {
       parts.add('subDiv=${Uri.encodeComponent(subDiv)}');
     }
     final kideVal = kide?.trim();
@@ -4310,7 +4324,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
     );
     if (path == null) {
       setState(() => _fmbLoadError =
-          'Survey and map location required. Tap the map on your plot and wait for parcel details.');
+          'Map location required. Tap directly on your plot and wait for parcel details.');
       return;
     }
     setState(() {

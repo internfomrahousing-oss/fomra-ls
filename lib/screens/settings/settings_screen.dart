@@ -112,7 +112,7 @@ class _ThemeSection extends StatelessWidget {
           return Row(children: [
             Expanded(
               child: _ThemeOption(
-                icon: Icons.light_mode_outlined,
+                icon: Icons.wb_sunny_outlined,
                 label: 'Light',
                 previewDark: false,
                 selected: !isDark,
@@ -122,7 +122,7 @@ class _ThemeSection extends StatelessWidget {
             const SizedBox(width: 12),
             Expanded(
               child: _ThemeOption(
-                icon: Icons.dark_mode_outlined,
+                icon: Icons.nightlight_round,
                 label: 'Dark',
                 previewDark: true,
                 selected: isDark,
