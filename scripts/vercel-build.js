@@ -9,3 +9,4 @@ if (!fs.existsSync(index)) {
   process.exit(1);
 }
 console.log('Using committed Flutter web build from build/web');
+console.log('Build version:', require('../build/web/version.json').version, 'build', require('../build/web/version.json').build_number);
