@@ -75,8 +75,8 @@ function isInvalidFmbPdfBase64(pdfBase64) {
     }
   } catch (_) { /* fall through to size check */ }
 
-  // 3) size heuristic — real FMB sketches are large; the error template is tiny.
-  if (buf.length < 20000) return true;
+  // 3) Only reject tiny payloads — not a full sketch PDF.
+  if (buf.length < 500) return true;
 
   return false;
 }
@@ -333,7 +333,7 @@ async function fetchGiAregOwnership({
     {
       district_code: districtCode,
       taluk_code: padTalukCode(talukCode),
-      village_code: villageCode,
+      village_code: padVillageCode(villageCode),
       survey_number: surveyNumber,
       sub_division_number: subDivision || '',
       land_type: landType,
@@ -363,7 +363,7 @@ async function fetchGiPattaCopy({
     {
       district_code: districtCode,
       taluk_code: padTalukCode(talukCode),
-      village_code: villageCode,
+      village_code: padVillageCode(villageCode),
       patta_number: pattaNumber,
     },
     { 'X-APP-USER-ID': '12' },
@@ -420,7 +420,7 @@ async function fetchGiFmbSketch({
       };
     }
     if (isInvalidFmbPdfBase64(pdfBase64)) {
-      return { ok: false, error: 'Survey/sub-division not found in this FMB sheet — trying alternate source.' };
+      return { ok: false, error: 'FMB sketch not available for this survey/sub-division on TNGIS.' };
     }
   }
   return { ok: false, error: json.message || 'FMB sketch not available from TNGIS' };
@@ -433,11 +433,11 @@ async function fetchGiEncumbranceCertificate({
   const { status, json } = await postJson(
     `${GI_VIEWER_API}/encumbrance_certificate`,
     {
-      revDistrictCode: districtCode,
-      revTalukCode: talukCode,
-      revVillageCode: villageCode,
-      survey_number: surveyNumber,
-      sub_division_number: subDivision || 'jjjj',
+      revDistrictCode: String(districtCode ?? '').trim(),
+      revTalukCode: padTalukCode(talukCode),
+      revVillageCode: padVillageCode(villageCode),
+      survey_number: String(surveyNumber ?? '').trim(),
+      sub_division_number: subDivision ? String(subDivision) : 'jjjj',
     },
     { 'X-APP-NAME': 'demo' },
   );
@@ -515,6 +515,7 @@ module.exports = {
   fetchGiEncumbranceCertificate,
   mergeGiParcelCodes,
   padTalukCode,
+  padVillageCode,
   formatIndianRupees,
   isInvalidFmbPdfBase64,
 };

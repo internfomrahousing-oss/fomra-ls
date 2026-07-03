@@ -195,10 +195,11 @@ class _LeadDetailsCard extends StatelessWidget {
             const Divider(height: 24),
             _DetailRow('Notes', lead.notes),
           ],
-          if (lead.sitePhotoUrls.isNotEmpty) ...[
+          if (lead.sitePhotoUrls.isNotEmpty ||
+              lead.sitePhotoUrl.isNotEmpty) ...[
             const Divider(height: 24),
             Text(
-              lead.sitePhotoUrls.length == 1 ? 'Site Photo' : 'Site Photos',
+              _sitePhotoUrls(lead).length == 1 ? 'Site Photo' : 'Site Photos',
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
@@ -206,43 +207,7 @@ class _LeadDetailsCard extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 8),
-            if (lead.sitePhotoUrls.length == 1)
-              _sitePhotoThumb(context, lead.sitePhotoUrls.first)
-            else
-              GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  crossAxisSpacing: 8,
-                  mainAxisSpacing: 8,
-                  childAspectRatio: 1.2,
-                ),
-                itemCount: lead.sitePhotoUrls.length,
-                itemBuilder: (_, i) => GestureDetector(
-                  onTap: () => _showFullPhoto(context, lead.sitePhotoUrls[i]),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
-                    child: Image.network(
-                      lead.sitePhotoUrls[i],
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => _photoError(),
-                    ),
-                  ),
-                ),
-              ),
-          ] else if (lead.sitePhotoUrl.isNotEmpty) ...[
-            const Divider(height: 24),
-            Text(
-              'Site Photo',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: context.fomraTextSecondary,
-              ),
-            ),
-            const SizedBox(height: 8),
-            _sitePhotoThumb(context, lead.sitePhotoUrl),
+            _sitePhotosRow(context, _sitePhotoUrls(lead)),
           ],
           const SizedBox(height: 8),
           Text(
@@ -258,35 +223,38 @@ class _LeadDetailsCard extends StatelessWidget {
   }
 }
 
-// A small square site-photo thumbnail with a guaranteed-tappable "View full
-// size" button below it. On web the image can render as an HTML overlay that
-// swallows taps, so the button (a real Flutter widget) is the reliable target.
-Widget _sitePhotoThumb(BuildContext context, String url) {
-  return Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    mainAxisSize: MainAxisSize.min,
+List<String> _sitePhotoUrls(LandLead lead) {
+  if (lead.sitePhotoUrls.isNotEmpty) return lead.sitePhotoUrls;
+  if (lead.sitePhotoUrl.isNotEmpty) return [lead.sitePhotoUrl];
+  return const [];
+}
+
+/// Up to 4 site photos in one compact row (tap to view full size).
+Widget _sitePhotosRow(BuildContext context, List<String> urls) {
+  const thumbSize = 72.0;
+  const gap = 8.0;
+
+  return Row(
     children: [
-      GestureDetector(
-        onTap: () => _showFullPhoto(context, url),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(12),
-          child: Image.network(
-            url,
-            width: 140,
-            height: 140,
-            fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => _photoError(),
+      for (var i = 0; i < urls.length; i++)
+        Padding(
+          padding: EdgeInsets.only(right: i < urls.length - 1 ? gap : 0),
+          child: GestureDetector(
+            onTap: () => _showFullPhoto(context, urls[i]),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: SizedBox(
+                width: thumbSize,
+                height: thumbSize,
+                child: Image.network(
+                  urls[i],
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => _photoError(),
+                ),
+              ),
+            ),
           ),
         ),
-      ),
-      const SizedBox(height: 4),
-      GestureDetector(
-        onTap: () => _showFullPhoto(context, url),
-        child: const Text(
-          'Tap to view',
-          style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
-        ),
-      ),
     ],
   );
 }

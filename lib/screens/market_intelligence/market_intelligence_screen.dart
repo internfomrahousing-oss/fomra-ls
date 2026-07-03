@@ -5216,7 +5216,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
             ),
           ),
           child: Text(
-            'Quick access: Patta, FMB, EC, G-Value and Crop details from Tamil Nilam.',
+            'Patta, FMB, EC, G-Value and Crop from the official TNGIS GI Viewer (Tamil Nilam).',
             style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w600,
@@ -5226,6 +5226,23 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
             ),
           ),
         ),
+        if (widget.tngisGiViewerUrl != null && widget.tngisGiViewerUrl!.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: () async {
+                final uri = Uri.parse(widget.tngisGiViewerUrl!);
+                if (await canLaunchUrl(uri)) {
+                  await launchUrl(uri, mode: LaunchMode.externalApplication);
+                }
+              },
+              icon: const Icon(Icons.open_in_new, size: 14),
+              label: const Text('Open in TNGIS GI Viewer',
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+            ),
+          ),
+        ],
         const SizedBox(height: 10),
         _buildGiServiceBoxes(),
         if (_selectedGiService != null) ...[
@@ -5242,7 +5259,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
               border: Border.all(color: context.fomraBorder),
             ),
             child: Text(
-              'Tap Patta, FMB, EC, G-Value, or Crop above to load details from Tamil Nilam.',
+              'Tap Patta, FMB, EC, G-Value, or Crop above — data is fetched from TNGIS GI Viewer APIs.',
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 11, color: context.fomraTextSecondary),
             ),
@@ -5689,8 +5706,8 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
           ? 'FMB Sketch · Survey ${survey ?? ''} · Sub $sub'
           : 'FMB Sketch · Survey ${survey ?? ''} (general)';
       final subtitle = sub != null && sub.isNotEmpty && sub != '-'
-          ? 'Official TSLR/FMB sketch with government seal · ${(pdfBytes.length / 1024).round()} KB'
-          : 'General survey FMB (no sub-division) · ${(pdfBytes.length / 1024).round()} KB';
+          ? 'TNGIS GI Viewer sketch (govt seal) · ${(pdfBytes.length / 1024).round()} KB'
+          : 'TNGIS general survey FMB · ${(pdfBytes.length / 1024).round()} KB';
       return _buildFmbSketchButton(
         title: title,
         subtitle: subtitle,

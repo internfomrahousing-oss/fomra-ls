@@ -952,13 +952,11 @@ class _MultiPhotoUpload extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final canAdd = _totalCount < maxPhotos;
-    final hasExisting = existingPhotoUrls.isNotEmpty;
-    final hasNew = photos.isNotEmpty;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (hasExisting) ...[
+        if (existingPhotoUrls.isNotEmpty) ...[
           Text(
             'Current photos',
             style: TextStyle(
@@ -967,25 +965,43 @@ class _MultiPhotoUpload extends StatelessWidget {
               color: context.fomraTextSecondary,
             ),
           ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
+          const SizedBox(height: 8),
+          Column(
             children: [
               for (var i = 0; i < existingPhotoUrls.length; i++)
-                _existingPhotoTile(
-                  context,
-                  url: existingPhotoUrls[i],
-                  label: 'Photo ${i + 1}',
-                  onRemove: onRemoveExisting == null
-                      ? null
-                      : () => onRemoveExisting!(i),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: _verticalPhotoTile(
+                    context,
+                    label: 'Photo ${i + 1}',
+                    child: Image.network(
+                      existingPhotoUrls[i],
+                      fit: BoxFit.cover,
+                      loadingBuilder: (_, child, progress) {
+                        if (progress == null) return child;
+                        return Container(
+                          color: context.fomraSurface,
+                          child: const Center(
+                            child: SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          ),
+                        );
+                      },
+                      errorBuilder: (_, __, ___) => _photoPlaceholder(),
+                    ),
+                    onRemove: onRemoveExisting == null
+                        ? null
+                        : () => onRemoveExisting!(i),
+                  ),
                 ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 8),
         ],
-        if (hasNew) ...[
+        if (photos.isNotEmpty) ...[
           Text(
             'New photos (saved when you tap Save)',
             style: TextStyle(
@@ -994,21 +1010,22 @@ class _MultiPhotoUpload extends StatelessWidget {
               color: context.fomraTextSecondary,
             ),
           ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
+          const SizedBox(height: 8),
+          Column(
             children: [
               for (var i = 0; i < photos.length; i++)
-                _newPhotoTile(
-                  context,
-                  bytes: photos[i].bytes,
-                  label: 'New ${i + 1}',
-                  onRemove: () => onRemove(i),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: _verticalPhotoTile(
+                    context,
+                    label: 'New ${i + 1}',
+                    child: Image.memory(photos[i].bytes, fit: BoxFit.cover),
+                    onRemove: () => onRemove(i),
+                  ),
                 ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 8),
         ],
         if (_totalCount > 0) ...[
           Text(
@@ -1027,92 +1044,50 @@ class _MultiPhotoUpload extends StatelessWidget {
     );
   }
 
-  static Widget _existingPhotoTile(
+  static const _thumbSize = 72.0;
+
+  static Widget _verticalPhotoTile(
     BuildContext context, {
-    required String url,
+    required Widget child,
     required String label,
     VoidCallback? onRemove,
   }) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(12),
-          child: SizedBox(
-            width: 120,
-            height: 96,
-            child: Image.network(
-              url,
-              fit: BoxFit.cover,
-              loadingBuilder: (_, child, progress) {
-                if (progress == null) return child;
-                return Container(
-                  color: context.fomraSurface,
-                  child: const Center(
-                    child: SizedBox(
-                      width: 22,
-                      height: 22,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
+        SizedBox(
+          width: _thumbSize,
+          height: _thumbSize,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: child,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: context.fomraTextSecondary,
+                ),
+              ),
+              if (onRemove != null)
+                TextButton.icon(
+                  onPressed: onRemove,
+                  icon: const Icon(Icons.delete_outline, size: 15),
+                  label: const Text('Remove', style: TextStyle(fontSize: 12)),
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.error,
+                    padding: EdgeInsets.zero,
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
-                );
-              },
-              errorBuilder: (_, __, ___) => _photoPlaceholder(),
-            ),
-          ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          label,
-          style: TextStyle(fontSize: 11, color: context.fomraTextSecondary),
-        ),
-        if (onRemove != null)
-          TextButton.icon(
-            onPressed: onRemove,
-            icon: const Icon(Icons.delete_outline, size: 15),
-            label: const Text('Remove', style: TextStyle(fontSize: 12)),
-            style: TextButton.styleFrom(
-              foregroundColor: AppColors.error,
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              minimumSize: Size.zero,
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            ),
-          ),
-      ],
-    );
-  }
-
-  static Widget _newPhotoTile(
-    BuildContext context, {
-    required Uint8List bytes,
-    required String label,
-    required VoidCallback onRemove,
-  }) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(12),
-          child: SizedBox(
-            width: 120,
-            height: 96,
-            child: Image.memory(bytes, fit: BoxFit.cover),
-          ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          label,
-          style: TextStyle(fontSize: 11, color: context.fomraTextSecondary),
-        ),
-        TextButton.icon(
-          onPressed: onRemove,
-          icon: const Icon(Icons.close, size: 15),
-          label: const Text('Remove', style: TextStyle(fontSize: 12)),
-          style: TextButton.styleFrom(
-            foregroundColor: AppColors.error,
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            minimumSize: Size.zero,
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+            ],
           ),
         ),
       ],

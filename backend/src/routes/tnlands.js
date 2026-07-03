@@ -1764,7 +1764,7 @@ function collablandPropsFromCodes(codes, tngisProps = {}) {
 }
 
 /**
- * TNGIS sketch_fmb (rural + urban/TSLR) then CollabLand — maximizes coverage across TN.
+ * TNGIS GI Viewer sketch_fmb only — same source as tngis.tn.gov.in GI Viewer.
  */
 async function tryFmbSourcesForCodes(codes, ctx = {}) {
   const { lat, lon, tngisProps = {} } = ctx;
@@ -1778,32 +1778,8 @@ async function tryFmbSourcesForCodes(codes, ctx = {}) {
 
   const ruralUrban = giLand?.ruralUrban ?? tngisProps.rural_urban;
   const types = sketchFmbTypeCandidates(ruralUrban, tngisProps);
-  let lastErr = 'FMB sketch not available from TNGIS';
+  let lastErr = 'FMB sketch not available from TNGIS GI Viewer';
 
-  const tryCollab = async () => {
-    try {
-      const props = collablandPropsFromCodes(codes, tngisProps);
-      const collab = await fetchCollablandFmbPdf(props);
-      if (collab?.available && collab.pdfBase64 && !isInvalidFmbPdfBase64(collab.pdfBase64)) {
-        return {
-          ok:           true,
-          source:       collab.source,
-          pdfBase64:    collab.pdfBase64,
-          fileName:     collab.fileName || fmbFileName(props),
-          landTypeUsed: 'collabland',
-        };
-      }
-      if (collab?.error) lastErr = collab.error;
-    } catch (err) {
-      lastErr = err.message;
-    }
-    return null;
-  };
-
-  // Prefer the official government-sealed TNGIS sketch_fmb (rural FMB / urban
-  // TSLR, Tahsildar seal) for BOTH types — error PDFs are now detected and
-  // skipped, so we only fall back to CollabLand when the sealed sketch is
-  // genuinely unavailable.
   for (const landType of types) {
     try {
       const fmb = await fetchGiFmbSketch({ ...codes, landType });
@@ -1815,9 +1791,6 @@ async function tryFmbSourcesForCodes(codes, ctx = {}) {
       lastErr = err.message;
     }
   }
-
-  const collabHit = await tryCollab();
-  if (collabHit) return collabHit;
 
   return { ok: false, error: lastErr };
 }
@@ -2572,7 +2545,7 @@ router.get('/fmb', async (req, res) => {
     tngisProps = { ...(tngisProps || {}), kide: String(kide).trim() };
   }
 
-  // view_fmb polygon at tap — fills sub + kide for sketch_fmb / CollabLand.
+  // view_fmb polygon at tap — fills sub + kide for TNGIS sketch_fmb.
   // If the caller passed an explicit subDiv (the value /parcel already resolved
   // and displayed), trust it and only use view_fmb to recover the kide — never
   // override the requested sub, so the FMB matches the shown survey/sub.
