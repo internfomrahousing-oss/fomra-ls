@@ -1747,9 +1747,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
             borderRadius: BorderRadius.circular(18),
             child: SizedBox(
               height: 260,
-              child: _mapFullScreen
-                  ? _buildMapFullscreenPlaceholder()
-                  : _buildMapStack(showMaximize: true),
+              child: _buildMapStack(),
             ),
           ),
           const SizedBox(height: 10),

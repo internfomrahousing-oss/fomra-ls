@@ -41,6 +41,16 @@ class AppStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  void replaceLead(LandLead updated) {
+    final idx = leads.indexWhere((l) => l.leadId == updated.leadId);
+    if (idx == -1) {
+      leads.insert(0, updated);
+    } else {
+      leads[idx] = updated;
+    }
+    notifyListeners();
+  }
+
   void setLeads(List<LandLead> newLeads) {
     leads.clear();
     leads.addAll(newLeads);

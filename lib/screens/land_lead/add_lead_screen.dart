@@ -30,7 +30,9 @@ const _kTermsOptions = [
 ];
 
 class AddLeadScreen extends StatefulWidget {
-  const AddLeadScreen({super.key});
+  final LandLead? existingLead;
+
+  const AddLeadScreen({super.key, this.existingLead});
 
   @override
   State<AddLeadScreen> createState() => _AddLeadScreenState();
@@ -74,7 +76,41 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
 
   // Photos (max 4)
   final List<_SitePhotoDraft> _photos = [];
+  List<String> _keptPhotoUrls = [];
   bool _compressingPhoto = false;
+
+  bool get _isEdit => widget.existingLead != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final existing = widget.existingLead;
+    if (existing == null) return;
+
+    _inputSource = existing.inputSource;
+    _locationCtrl.text = existing.location;
+    _gpsCtrl.text = existing.gpsCoordinates;
+    _villageCtrl.text = existing.village;
+    _talukCtrl.text = existing.taluk;
+    _districtCtrl.text = existing.district;
+    _pincodeCtrl.text = existing.pincode;
+    _surveyCtrl.text = existing.surveyNumber;
+    _subDivCtrl.text = existing.subDivision;
+    _extentCtrl.text = existing.landExtent;
+    _ownerCtrl.text = existing.ownerName;
+    _contactCtrl.text = existing.contactDetails;
+    _roadWidthCtrl.text = existing.roadWidth;
+    _notesCtrl.text = existing.notes;
+    _landType = existing.landType;
+    if (existing.accessDetails.isNotEmpty) {
+      _termsType = existing.accessDetails;
+    }
+    _pinnedPoint = parseLeadGps(existing.gpsCoordinates);
+    _keptPhotoUrls = List<String>.from(existing.sitePhotoUrls);
+    if (_keptPhotoUrls.isEmpty && existing.sitePhotoUrl.isNotEmpty) {
+      _keptPhotoUrls = [existing.sitePhotoUrl];
+    }
+  }
 
   @override
   void dispose() {
@@ -352,7 +388,7 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
   // ── Photo picker ───────────────────────────────────────────────────────────
 
   Future<void> _pickPhoto() async {
-    if (_photos.length >= _kMaxSitePhotos) {
+    if (_keptPhotoUrls.length + _photos.length >= _kMaxSitePhotos) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Maximum $_kMaxSitePhotos photos per lead'),
@@ -398,6 +434,35 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
     setState(() => _photos.removeAt(index));
   }
 
+  void _removeExistingPhoto(int index) {
+    setState(() => _keptPhotoUrls.removeAt(index));
+  }
+
+  Widget _buildSitePhotosSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _SectionHeader(
+          number: _isEdit ? '1' : '4',
+          title: 'Site Photos',
+          subtitle: _isEdit
+              ? 'Remove existing photos or upload new ones (max 4)'
+              : 'Upload up to 4 photos of the land',
+        ),
+        const SizedBox(height: 14),
+        _MultiPhotoUpload(
+          existingPhotoUrls: _keptPhotoUrls,
+          photos: _photos,
+          maxPhotos: _kMaxSitePhotos,
+          compressing: _compressingPhoto,
+          onPick: _pickPhoto,
+          onRemove: _removePhoto,
+          onRemoveExisting: _isEdit ? _removeExistingPhoto : null,
+        ),
+      ],
+    );
+  }
+
   // ── Build terms details string ─────────────────────────────────────────────
 
   // ── Submit ─────────────────────────────────────────────────────────────────
@@ -416,8 +481,9 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
 
     final combinedNotes = _notesCtrl.text.trim();
 
+    final existing = widget.existingLead;
     final lead = LandLead(
-      leadId: '',
+      leadId: existing?.leadId ?? '',
       inputSource: _inputSource!,
       location: _locationCtrl.text.trim(),
       gpsCoordinates: _gpsCtrl.text.trim(),
@@ -434,7 +500,11 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
       roadWidth: _roadWidthCtrl.text.trim(),
       accessDetails: _termsType ?? '',
       notes: combinedNotes,
-      addedOn: DateTime.now(),
+      addedOn: existing?.addedOn ?? DateTime.now(),
+      createdByName: existing?.createdByName ?? '',
+      status: existing?.status ?? LeadStatus.new_,
+      sitePhotoUrl: _keptPhotoUrls.isNotEmpty ? _keptPhotoUrls.first : '',
+      sitePhotoUrls: List<String>.from(_keptPhotoUrls),
     );
 
     Navigator.pop(
@@ -442,6 +512,7 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
       AddLeadResult(
         lead: lead,
         sitePhotoBytes: _photos.map((p) => p.bytes).toList(),
+        isEdit: _isEdit,
       ),
     );
   }
@@ -458,8 +529,8 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
         ),
         backgroundColor: Colors.transparent,
         surfaceTintColor: Colors.transparent,
-        title: const Text('Add Land Lead',
-            style: TextStyle(fontWeight: FontWeight.w700)),
+        title: Text(_isEdit ? 'Edit Land Lead' : 'Add Land Lead',
+            style: const TextStyle(fontWeight: FontWeight.w700)),
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 10),
@@ -480,9 +551,14 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
         child: ListView(
           padding: const EdgeInsets.all(24),
           children: [
+            if (_isEdit) ...[
+              _buildSitePhotosSection(),
+              const SizedBox(height: 24),
+            ],
+
             // ── Section 1: Input Source ──────────────────────────────
-            const _SectionHeader(
-              number: '1',
+            _SectionHeader(
+              number: _isEdit ? '2' : '1',
               title: 'Input Source',
               subtitle: 'Who brought this lead?',
             ),
@@ -501,8 +577,8 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
             const SizedBox(height: 24),
 
             // ── Section 2: Data Captured ─────────────────────────────
-            const _SectionHeader(
-              number: '2',
+            _SectionHeader(
+              number: _isEdit ? '3' : '2',
               title: 'Data Captured',
               subtitle: 'Pre-survey land details',
             ),
@@ -662,8 +738,8 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
             const SizedBox(height: 20),
 
             // ── Section 3: Terms ─────────────────────────────────────
-            const _SectionHeader(
-              number: '3',
+            _SectionHeader(
+              number: _isEdit ? '4' : '3',
               title: 'Terms',
               subtitle: 'Select the deal terms',
             ),
@@ -685,23 +761,11 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
             ),
             const SizedBox(height: 20),
 
-            // ── Section 4: Photo ─────────────────────────────────────
-            const _SectionHeader(
-              number: '4',
-              title: 'Site Photos',
-              subtitle: 'Upload up to 4 photos of the land',
-            ),
-            const SizedBox(height: 14),
-
-            _MultiPhotoUpload(
-              photos: _photos,
-              maxPhotos: _kMaxSitePhotos,
-              compressing: _compressingPhoto,
-              onPick: _pickPhoto,
-              onRemove: _removePhoto,
-            ),
-
-            const SizedBox(height: 28),
+            if (!_isEdit) ...[
+              _buildSitePhotosSection(),
+              const SizedBox(height: 28),
+            ] else
+              const SizedBox(height: 8),
 
             SizedBox(
               width: double.infinity,
@@ -865,164 +929,290 @@ class _SitePhotoDraft {
 // ── Multi photo upload ───────────────────────────────────────────────────────
 
 class _MultiPhotoUpload extends StatelessWidget {
+  final List<String> existingPhotoUrls;
   final List<_SitePhotoDraft> photos;
   final int maxPhotos;
   final bool compressing;
   final VoidCallback onPick;
   final ValueChanged<int> onRemove;
+  final ValueChanged<int>? onRemoveExisting;
 
   const _MultiPhotoUpload({
+    this.existingPhotoUrls = const [],
     required this.photos,
     required this.maxPhotos,
     required this.compressing,
     required this.onPick,
     required this.onRemove,
+    this.onRemoveExisting,
   });
+
+  int get _totalCount => existingPhotoUrls.length + photos.length;
 
   @override
   Widget build(BuildContext context) {
-    final canAdd = photos.length < maxPhotos;
+    final canAdd = _totalCount < maxPhotos;
+    final hasExisting = existingPhotoUrls.isNotEmpty;
+    final hasNew = photos.isNotEmpty;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (photos.isNotEmpty)
+        if (hasExisting) ...[
+          Text(
+            'Current photos',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: context.fomraTextSecondary,
+            ),
+          ),
+          const SizedBox(height: 10),
           Wrap(
-            spacing: 10,
-            runSpacing: 10,
+            spacing: 12,
+            runSpacing: 12,
             children: [
-              for (var i = 0; i < photos.length; i++)
-                SizedBox(
-                  width: 110,
-                  height: 90,
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: Image.memory(
-                          photos[i].bytes,
-                          fit: BoxFit.cover,
-                        ),
-                      ),
-                      Positioned(
-                        top: 4,
-                        right: 4,
-                        child: GestureDetector(
-                          onTap: () => onRemove(i),
-                          child: Container(
-                            padding: const EdgeInsets.all(4),
-                            decoration: const BoxDecoration(
-                              color: Colors.black54,
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(Icons.close,
-                                color: Colors.white, size: 14),
-                          ),
-                        ),
-                      ),
-                      Positioned(
-                        left: 4,
-                        bottom: 4,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 5, vertical: 1),
-                          decoration: BoxDecoration(
-                            color: Colors.black54,
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            '${i + 1}/$maxPhotos',
-                            style: const TextStyle(
-                                color: Colors.white, fontSize: 9),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+              for (var i = 0; i < existingPhotoUrls.length; i++)
+                _existingPhotoTile(
+                  context,
+                  url: existingPhotoUrls[i],
+                  label: 'Photo ${i + 1}',
+                  onRemove: onRemoveExisting == null
+                      ? null
+                      : () => onRemoveExisting!(i),
                 ),
             ],
           ),
-        if (photos.isNotEmpty) ...[
-          const SizedBox(height: 8),
+          const SizedBox(height: 16),
+        ],
+        if (hasNew) ...[
           Text(
-            '${photos.length} of $maxPhotos photos · max 250 KB each',
-            style: TextStyle(fontSize: 11, color: context.fomraTextSecondary),
+            'New photos (saved when you tap Save)',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: context.fomraTextSecondary,
+            ),
           ),
           const SizedBox(height: 10),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              for (var i = 0; i < photos.length; i++)
+                _newPhotoTile(
+                  context,
+                  bytes: photos[i].bytes,
+                  label: 'New ${i + 1}',
+                  onRemove: () => onRemove(i),
+                ),
+            ],
+          ),
+          const SizedBox(height: 16),
+        ],
+        if (_totalCount > 0) ...[
+          Text(
+            '$_totalCount of $maxPhotos photos · max 250 KB each',
+            style: TextStyle(fontSize: 11, color: context.fomraTextSecondary),
+          ),
+          const SizedBox(height: 12),
         ],
         if (compressing)
-          Container(
-            width: double.infinity,
-            height: 100,
-            decoration: BoxDecoration(
-              color: context.fomraSurface,
-              borderRadius: BorderRadius.circular(FomraInput.borderRadius),
-              border: Border.all(color: AppColors.primary.withValues(alpha: 0.35)),
-            ),
-            child: const Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: CircularProgressIndicator(strokeWidth: 2.5),
-                ),
-                SizedBox(height: 8),
-                Text('Compressing photo to 250 KB…',
-                    style: TextStyle(
-                        color: AppColors.primary, fontWeight: FontWeight.w600)),
-              ],
-            ),
-          )
+          _uploadingIndicator(context)
+        else if (_totalCount == 0)
+          _uploadPrompt(context, onPick: onPick, prominent: true)
         else if (canAdd)
-          GestureDetector(
-            onTap: onPick,
-            child: Container(
-              width: double.infinity,
-              height: photos.isEmpty ? 140 : 100,
-              decoration: BoxDecoration(
-                color: context.fomraSurface,
-                borderRadius: BorderRadius.circular(FomraInput.borderRadius),
-                border: Border.all(
-                  color: AppColors.primary.withValues(alpha: 0.35),
-                  width: 1.5,
-                ),
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: AppColors.primary.withValues(alpha: 0.08),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.add_a_photo_outlined,
-                        color: AppColors.primary, size: 24),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    photos.isEmpty
-                        ? 'Tap to upload site photo'
-                        : 'Add another photo',
-                    style: const TextStyle(
-                      color: AppColors.primary,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 14,
+          _uploadPrompt(context, onPick: onPick, prominent: false),
+      ],
+    );
+  }
+
+  static Widget _existingPhotoTile(
+    BuildContext context, {
+    required String url,
+    required String label,
+    VoidCallback? onRemove,
+  }) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: SizedBox(
+            width: 120,
+            height: 96,
+            child: Image.network(
+              url,
+              fit: BoxFit.cover,
+              loadingBuilder: (_, child, progress) {
+                if (progress == null) return child;
+                return Container(
+                  color: context.fomraSurface,
+                  child: const Center(
+                    child: SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(strokeWidth: 2),
                     ),
                   ),
-                  const SizedBox(height: 3),
-                  Text(
-                    'JPG, PNG · up to $maxPhotos photos',
-                    style: const TextStyle(
-                        color: AppColors.textSecondary, fontSize: 11),
-                  ),
-                ],
-              ),
+                );
+              },
+              errorBuilder: (_, __, ___) => _photoPlaceholder(),
+            ),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          label,
+          style: TextStyle(fontSize: 11, color: context.fomraTextSecondary),
+        ),
+        if (onRemove != null)
+          TextButton.icon(
+            onPressed: onRemove,
+            icon: const Icon(Icons.delete_outline, size: 15),
+            label: const Text('Remove', style: TextStyle(fontSize: 12)),
+            style: TextButton.styleFrom(
+              foregroundColor: AppColors.error,
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
           ),
       ],
+    );
+  }
+
+  static Widget _newPhotoTile(
+    BuildContext context, {
+    required Uint8List bytes,
+    required String label,
+    required VoidCallback onRemove,
+  }) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: SizedBox(
+            width: 120,
+            height: 96,
+            child: Image.memory(bytes, fit: BoxFit.cover),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          label,
+          style: TextStyle(fontSize: 11, color: context.fomraTextSecondary),
+        ),
+        TextButton.icon(
+          onPressed: onRemove,
+          icon: const Icon(Icons.close, size: 15),
+          label: const Text('Remove', style: TextStyle(fontSize: 12)),
+          style: TextButton.styleFrom(
+            foregroundColor: AppColors.error,
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            minimumSize: Size.zero,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+        ),
+      ],
+    );
+  }
+
+  static Widget _uploadPrompt(
+    BuildContext context, {
+    required VoidCallback onPick,
+    required bool prominent,
+  }) {
+    return GestureDetector(
+      onTap: onPick,
+      child: Container(
+        width: double.infinity,
+        height: prominent ? 150 : 88,
+        decoration: BoxDecoration(
+          color: context.fomraSurface,
+          borderRadius: BorderRadius.circular(FomraInput.borderRadius),
+          border: Border.all(
+            color: AppColors.primary.withValues(alpha: prominent ? 0.5 : 0.35),
+            width: prominent ? 2 : 1.5,
+          ),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: EdgeInsets.all(prominent ? 14 : 10),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.08),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.add_a_photo_outlined,
+                color: AppColors.primary,
+                size: prominent ? 28 : 22,
+              ),
+            ),
+            SizedBox(height: prominent ? 10 : 6),
+            Text(
+              prominent ? 'Upload photo' : 'Add another photo',
+              style: TextStyle(
+                color: AppColors.primary,
+                fontWeight: FontWeight.w700,
+                fontSize: prominent ? 15 : 13,
+              ),
+            ),
+            if (prominent) ...[
+              const SizedBox(height: 4),
+              Text(
+                'JPG or PNG · up to 4 photos',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: context.fomraTextSecondary,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  static Widget _uploadingIndicator(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      height: 100,
+      decoration: BoxDecoration(
+        color: context.fomraSurface,
+        borderRadius: BorderRadius.circular(FomraInput.borderRadius),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.35)),
+      ),
+      child: const Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          SizedBox(
+            width: 24,
+            height: 24,
+            child: CircularProgressIndicator(strokeWidth: 2.5),
+          ),
+          SizedBox(height: 8),
+          Text(
+            'Compressing photo to 250 KB…',
+            style: TextStyle(
+              color: AppColors.primary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static Widget _photoPlaceholder() {
+    return Container(
+      color: Colors.black12,
+      child: const Center(
+        child: Icon(Icons.broken_image_outlined, color: Colors.white54),
+      ),
     );
   }
 }

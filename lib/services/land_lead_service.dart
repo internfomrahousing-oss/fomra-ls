@@ -133,6 +133,63 @@ class LandLeadService {
     }).eq('id', leadId);
   }
 
+  static Future<LandLead> update(
+    LandLead lead, {
+    List<Uint8List> sitePhotoBytes = const [],
+  }) async {
+    var sitePhotoUrls = List<String>.from(lead.sitePhotoUrls);
+    var sitePhotoUrl = sitePhotoUrls.isNotEmpty ? sitePhotoUrls.first : '';
+
+    final newPhotos =
+        sitePhotoBytes.where((b) => b.isNotEmpty).take(4).toList();
+    final slotsLeft = 4 - sitePhotoUrls.length;
+    if (newPhotos.isNotEmpty && slotsLeft > 0) {
+      for (var i = 0; i < newPhotos.length && sitePhotoUrls.length < 4; i++) {
+        final url = await _uploadSitePhoto(
+          lead.leadId,
+          newPhotos[i],
+          index: sitePhotoUrls.length + 1,
+        );
+        sitePhotoUrls.add(url);
+      }
+      sitePhotoUrl = sitePhotoUrls.first;
+    }
+
+    final row = await _db
+        .from('land_leads')
+        .update({
+          'input_source': lead.inputSource.name,
+          'location': lead.location,
+          'gps_coordinates': lead.gpsCoordinates,
+          'village': lead.village,
+          'taluk': lead.taluk,
+          'district': lead.district,
+          'pincode': lead.pincode,
+          'survey_number': lead.surveyNumber,
+          'sub_division': lead.subDivision,
+          'land_extent': lead.landExtent,
+          'owner_name': lead.ownerName,
+          'contact_details': lead.contactDetails,
+          'land_type': lead.landType.name,
+          'road_width': lead.roadWidth,
+          'access_details': lead.accessDetails,
+          'notes': lead.notes,
+          'status': lead.status.name,
+          'site_photo_url': sitePhotoUrl,
+          'site_photo_urls': sitePhotoUrls,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('id', lead.leadId)
+        .select()
+        .single();
+
+    return _fromRow({
+      ...row,
+      'site_photo_url': sitePhotoUrl,
+      'site_photo_urls': sitePhotoUrls,
+    });
+  }
+
   static Future<void> delete(String leadId) async {
     await _db.from('land_leads').delete().eq('id', leadId);
   }
