@@ -115,6 +115,24 @@ class LandLeadService {
     }).eq('id', leadId);
   }
 
+  static Future<void> updateLocation(
+    String leadId, {
+    required String location,
+    required String village,
+    required String taluk,
+    required String district,
+    required String pincode,
+  }) async {
+    await _db.from('land_leads').update({
+      'location': location,
+      'village': village,
+      'taluk': taluk,
+      'district': district,
+      'pincode': pincode,
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    }).eq('id', leadId);
+  }
+
   static Future<void> delete(String leadId) async {
     await _db.from('land_leads').delete().eq('id', leadId);
   }

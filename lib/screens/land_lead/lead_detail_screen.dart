@@ -18,6 +18,44 @@ class LeadDetailScreen extends StatefulWidget {
 class _LeadDetailScreenState extends State<LeadDetailScreen> {
   late LandLead lead = widget.lead;
 
+  Future<void> _onLocationEdited({
+    required String location,
+    required String village,
+    required String taluk,
+    required String district,
+    required String pincode,
+  }) async {
+    setState(() => lead = lead.copyWith(
+          location: location,
+          village: village,
+          taluk: taluk,
+          district: district,
+          pincode: pincode,
+        ));
+    AppStore.instance.updateLeadLocation(lead.leadId, lead);
+    try {
+      await LandLeadService.updateLocation(
+        lead.leadId,
+        location: location,
+        village: village,
+        taluk: taluk,
+        district: district,
+        pincode: pincode,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Location updated')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Saved locally; sync failed: $e')),
+        );
+      }
+    }
+  }
+
   Future<void> _onParcelEdited(String survey, String sub) async {
     setState(() => lead = lead.copyWith(surveyNumber: survey, subDivision: sub));
     AppStore.instance.updateLeadParcel(lead.leadId, survey, sub);
@@ -72,7 +110,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _LeadDetailsCard(lead: lead),
+            _LeadDetailsCard(lead: lead, onEditLocation: _onLocationEdited),
             const SizedBox(height: 20),
             MarketIntelligenceScreen(
               lead: lead,
@@ -88,7 +126,66 @@ class _LeadDetailScreenState extends State<LeadDetailScreen> {
 
 class _LeadDetailsCard extends StatelessWidget {
   final LandLead lead;
-  const _LeadDetailsCard({required this.lead});
+  final Future<void> Function({
+    required String location,
+    required String village,
+    required String taluk,
+    required String district,
+    required String pincode,
+  })? onEditLocation;
+  const _LeadDetailsCard({required this.lead, this.onEditLocation});
+
+  Future<void> _editLocation(BuildContext context) async {
+    final locC = TextEditingController(text: lead.location);
+    final vilC = TextEditingController(text: lead.village);
+    final talC = TextEditingController(text: lead.taluk);
+    final disC = TextEditingController(text: lead.district);
+    final pinC = TextEditingController(text: lead.pincode);
+    Widget field(String label, TextEditingController c, {TextInputType? kb}) =>
+        Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: TextField(
+            controller: c,
+            keyboardType: kb,
+            decoration: InputDecoration(labelText: label, isDense: true),
+          ),
+        );
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Edit Land Location', style: TextStyle(fontSize: 16)),
+        content: SingleChildScrollView(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            field('Location', locC),
+            field('Village', vilC),
+            field('Taluk', talC),
+            field('District', disC),
+            field('Pincode', pinC, kb: TextInputType.number),
+          ]),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Cancel')),
+          ElevatedButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('Save')),
+        ],
+      ),
+    );
+    if (ok == true) {
+      await onEditLocation?.call(
+        location: locC.text.trim(),
+        village: vilC.text.trim(),
+        taluk: talC.text.trim(),
+        district: disC.text.trim(),
+        pincode: pinC.text.trim(),
+      );
+    }
+    for (final c in [locC, vilC, talC, disC, pinC]) {
+      c.dispose();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -137,6 +234,27 @@ class _LeadDetailsCard extends StatelessWidget {
           _DetailRow('Land Type', lead.landType.label),
           _DetailRow('Status', lead.status.label),
           const Divider(height: 24),
+          Row(children: [
+            Expanded(
+              child: Text('Land Location',
+                  style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: context.fomraTextSecondary)),
+            ),
+            if (onEditLocation != null)
+              TextButton.icon(
+                onPressed: () => _editLocation(context),
+                icon: const Icon(Icons.edit_outlined, size: 16),
+                label: const Text('Edit', style: TextStyle(fontSize: 12)),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+              ),
+          ]),
+          const SizedBox(height: 4),
           _DetailRow('Location', lead.location),
           if (lead.village.isNotEmpty) _DetailRow('Village', lead.village),
           if (lead.taluk.isNotEmpty) _DetailRow('Taluk', lead.taluk),

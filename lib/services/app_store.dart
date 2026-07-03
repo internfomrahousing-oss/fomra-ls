@@ -34,6 +34,13 @@ class AppStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  void updateLeadLocation(String leadId, LandLead updated) {
+    final idx = leads.indexWhere((l) => l.leadId == leadId);
+    if (idx == -1) return;
+    leads[idx] = updated;
+    notifyListeners();
+  }
+
   void setLeads(List<LandLead> newLeads) {
     leads.clear();
     leads.addAll(newLeads);

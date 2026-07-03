@@ -55,15 +55,24 @@ class LandLead {
     this.status = LeadStatus.new_,
   });
 
-  LandLead copyWith({String? surveyNumber, String? subDivision}) => LandLead(
+  LandLead copyWith({
+    String? surveyNumber,
+    String? subDivision,
+    String? location,
+    String? village,
+    String? taluk,
+    String? district,
+    String? pincode,
+  }) =>
+      LandLead(
         leadId: leadId,
         inputSource: inputSource,
-        location: location,
+        location: location ?? this.location,
         gpsCoordinates: gpsCoordinates,
-        village: village,
-        taluk: taluk,
-        district: district,
-        pincode: pincode,
+        village: village ?? this.village,
+        taluk: taluk ?? this.taluk,
+        district: district ?? this.district,
+        pincode: pincode ?? this.pincode,
         surveyNumber: surveyNumber ?? this.surveyNumber,
         subDivision: subDivision ?? this.subDivision,
         landExtent: landExtent,
