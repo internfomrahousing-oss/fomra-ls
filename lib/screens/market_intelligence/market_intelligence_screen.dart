@@ -129,15 +129,11 @@ String _fmtIndianRupee(double value) {
 class MarketIntelligenceScreen extends StatefulWidget {
   final LandLead? lead;
   final bool embeddedInLead;
-  // Called when the user edits survey number / sub-division in the parcel card,
-  // so the host (lead detail) can persist it and refresh its header.
-  final void Function(String surveyNumber, String subDivision)? onParcelEdited;
 
   const MarketIntelligenceScreen({
     super.key,
     this.lead,
     this.embeddedInLead = false,
-    this.onParcelEdited,
   });
 
   @override
@@ -1190,20 +1186,53 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
       title: 'Competitor Projects',
       icon: Icons.business_center_outlined,
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Sources: $_mbSource',
-                  style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
-              const SizedBox(height: 2),
-              Text(
-                'Area: ${city.isEmpty ? 'Chennai' : city}'
-                '${_activeLatLng != null ? ' · ${_selectedRadius}km radius' : ''}',
-                style: TextStyle(fontSize: 12, color: context.fomraTextPrimary),
+        Text('Sources: $_mbSource',
+            style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+        const SizedBox(height: 2),
+        Text(
+          'Area: ${city.isEmpty ? 'Chennai' : city}'
+          '${_activeLatLng != null ? ' · ${_selectedRadius}km radius' : ''}',
+          style: TextStyle(fontSize: 12, color: context.fomraTextPrimary),
+        ),
+        const SizedBox(height: 10),
+        // Step 1 — pick what to search for.
+        const Text('Property type',
+            style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textSecondary)),
+        const SizedBox(height: 6),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(children: [
+            for (final f in ['All', 'House', 'Plot', 'Flat'])
+              Padding(
+                padding: const EdgeInsets.only(right: 6),
+                child: ChoiceChip(
+                  label: Text(f, style: const TextStyle(fontSize: 11)),
+                  selected: _typeFilter == f,
+                  selectedColor: mbColor,
+                  labelStyle: TextStyle(
+                    color: _typeFilter == f
+                        ? Colors.white
+                        : context.fomraTextPrimary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  onSelected: (_) => setState(() {
+                    _typeFilter = f;
+                    if (_valuationResult != null) {
+                      _valuationResult = _computeValuation();
+                    }
+                  }),
+                ),
               ),
-            ]),
-          ),
-          ElevatedButton.icon(
+          ]),
+        ),
+        const SizedBox(height: 10),
+        // Step 2 — search.
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
             onPressed: _fetchingMb ? null : _fetchMagicBricksProjects,
             icon: _fetchingMb
                 ? const SizedBox(
@@ -1211,17 +1240,18 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                     child: CircularProgressIndicator(
                         color: Colors.white, strokeWidth: 2))
                 : const Icon(Icons.travel_explore, size: 16),
-            label: Text(_fetchingMb ? 'Loading prices (~1 min)...' : 'Fetch Projects',
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+            label: Text(_fetchingMb ? 'Searching…' : 'Search Projects',
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
             style: ElevatedButton.styleFrom(
               backgroundColor: mbColor,
+              foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              padding: const EdgeInsets.symmetric(vertical: 12),
             ),
           ),
-        ]),
+        ),
 
         if (_mbPartialWarning != null && _mbPartialWarning!.isNotEmpty) ...[
           const SizedBox(height: 10),
@@ -1319,36 +1349,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
               ),
             ),
           ),
-          // ── Layer 1: Property type ──────────────────────────────────────
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(children: [
-              for (final f in ['All', 'House', 'Plot', 'Flat'])
-                Padding(
-                  padding: const EdgeInsets.only(right: 6),
-                  child: ChoiceChip(
-                    label: Text(f, style: const TextStyle(fontSize: 11)),
-                    selected: _typeFilter == f,
-                    selectedColor: mbColor,
-                    labelStyle: TextStyle(
-                      color: _typeFilter == f
-                          ? Colors.white
-                          : context.fomraTextPrimary,
-                      fontWeight: FontWeight.w600,
-                    ),
-                    onSelected: (_) => setState(() {
-                      _typeFilter = f;
-                      // Re-price the valuation against the selected type's average.
-                      if (_valuationResult != null) {
-                        _valuationResult = _computeValuation();
-                      }
-                    }),
-                  ),
-                ),
-            ]),
-          ),
-          const SizedBox(height: 8),
-          // ── Layer 2: Project stage ──────────────────────────────────────
+          // ── Project stage (property type is chosen above, before search) ──
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(children: [
@@ -1563,19 +1564,6 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
 
   // â”€â”€ Section: EC & Patta â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-  // User manually corrected the survey number / sub-division in the parcel card.
-  // Update the codes so the govt docs (patta/FMB/EC) refetch for the new values,
-  // and notify the host (lead detail) to persist + refresh its header.
-  void _onEditParcel(String survey, String sub) {
-    final s = survey.trim();
-    final sd = sub.trim();
-    setState(() {
-      _tngisSurvey = s.isNotEmpty ? s : null;
-      _tngisSubDiv = sd.isNotEmpty ? sd : null;
-    });
-    widget.onParcelEdited?.call(s, sd);
-  }
-
   Widget _buildGovtDocsSection() {
     final loc = _activeLatLng;
     return _GovtDocsSection(
@@ -1588,7 +1576,6 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
       talukCode: _tngisTc,
       villageCode: _tngisVc,
       ruralUrban: _tngisRuralUrban,
-      onEditParcel: _onEditParcel,
       lat: loc?.latitude,
       lon: loc?.longitude,
       tngisGiViewerUrl: _tngisGiViewerUrl,
@@ -1976,9 +1963,9 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                           child: Text(name,
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
+                              style: TextStyle(
                                   fontSize: 12,
-                                  color: AppColors.textPrimary)),
+                                  color: context.fomraTextPrimary)),
                         ),
                       ]),
                     ),
@@ -3576,7 +3563,6 @@ class _GovtDocsSection extends StatefulWidget {
   final String? talukCode;
   final String? villageCode;
   final String? ruralUrban; // 'rural' (FMB) | 'urban' (TSLR) — drives labels
-  final void Function(String surveyNumber, String subDivision)? onEditParcel;
   final double? lat; // active map location — enables the TNGIS patta fallback
   final double? lon;
   final String? tngisGiViewerUrl;
@@ -3597,7 +3583,6 @@ class _GovtDocsSection extends StatefulWidget {
     this.talukCode,
     this.villageCode,
     this.ruralUrban,
-    this.onEditParcel,
     this.lat,
     this.lon,
     this.tngisGiViewerUrl,
@@ -3623,47 +3608,6 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
   }
   String get _surveyLabel => _isUrban ? 'T.S. Number' : 'Survey Number';
   String get _subLabel => _isUrban ? 'Block / Sub-div' : 'Sub Division';
-
-  // Manually correct survey number + sub-division; patta/FMB/EC refetch for the
-  // new values (patta number is derived, so it updates automatically).
-  Future<void> _editSurveySub(String? survey, String? sub) async {
-    final surveyC = TextEditingController(text: survey ?? '');
-    final subC = TextEditingController(
-        text: (sub != null && sub != '-') ? sub : '');
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Edit Parcel', style: TextStyle(fontSize: 16)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: surveyC,
-              decoration: InputDecoration(labelText: _surveyLabel),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: subC,
-              decoration: InputDecoration(labelText: _subLabel),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.of(ctx).pop(false),
-              child: const Text('Cancel')),
-          ElevatedButton(
-              onPressed: () => Navigator.of(ctx).pop(true),
-              child: const Text('Save')),
-        ],
-      ),
-    );
-    if (ok == true) {
-      widget.onEditParcel?.call(surveyC.text.trim(), subC.text.trim());
-    }
-    surveyC.dispose();
-    subC.dispose();
-  }
 
   // ── Patta state ──
   bool   _initingPatta = false;
@@ -5272,26 +5216,11 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
         ],
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Expanded(
-            child: Text('Land Parcel Information',
-                style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w800,
-                    color: context.fomraTextPrimary)),
-          ),
-          if (widget.onEditParcel != null)
-            TextButton.icon(
-              onPressed: () => _editSurveySub(survey, sub),
-              icon: const Icon(Icons.edit_outlined, size: 16),
-              label: const Text('Edit', style: TextStyle(fontSize: 12)),
-              style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                minimumSize: Size.zero,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-            ),
-        ]),
+        Text('Land Parcel Information',
+            style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
+                color: context.fomraTextPrimary)),
         const SizedBox(height: 10),
         Wrap(
           spacing: 8,

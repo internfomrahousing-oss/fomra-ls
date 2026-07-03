@@ -56,25 +56,6 @@ class _LeadDetailScreenState extends State<LeadDetailScreen> {
     }
   }
 
-  Future<void> _onParcelEdited(String survey, String sub) async {
-    setState(() => lead = lead.copyWith(surveyNumber: survey, subDivision: sub));
-    AppStore.instance.updateLeadParcel(lead.leadId, survey, sub);
-    try {
-      await LandLeadService.updateSurveySub(lead.leadId, survey, sub);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Survey / sub-division updated')),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Saved locally; sync failed: $e')),
-        );
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -112,11 +93,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen> {
           children: [
             _LeadDetailsCard(lead: lead, onEditLocation: _onLocationEdited),
             const SizedBox(height: 20),
-            MarketIntelligenceScreen(
-              lead: lead,
-              embeddedInLead: true,
-              onParcelEdited: _onParcelEdited,
-            ),
+            MarketIntelligenceScreen(lead: lead, embeddedInLead: true),
           ],
         ),
       ),
