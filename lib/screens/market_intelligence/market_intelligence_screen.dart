@@ -1413,6 +1413,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
             final developer = item['developer']   as String? ?? '';
             final source    = item['source']      as String? ?? '';
             final detailUrl = item['detailUrl']   as String? ?? '';
+            final areaSqft  = (item['area'] as num?)?.toInt() ?? 0;
             final ppsfStr   = fmtPricePerSqft(item);
             final totalStr  = fmtTotalPrice(item);
             final priceLabel = fmtPriceLabel(item);
@@ -1509,10 +1510,12 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                   ]),
                 ],
                 if (bhk.isNotEmpty || (poss.isNotEmpty && poss != 'N/A') ||
-                    rera.isNotEmpty || source.isNotEmpty) ...[
+                    rera.isNotEmpty || source.isNotEmpty || areaSqft > 0) ...[
                   const SizedBox(height: 6),
                   Wrap(spacing: 6, runSpacing: 4, children: [
                     if (source.isNotEmpty) chip(source, const Color(0xFF6A1B9A)),
+                    if (areaSqft > 0)
+                      chip('$areaSqft sqft', const Color(0xFF00695C)),
                     if (bhk.isNotEmpty) chip(bhk, const Color(0xFF1565C0)),
                     if (poss.isNotEmpty && poss != 'N/A')
                       chip(poss, AppColors.success),

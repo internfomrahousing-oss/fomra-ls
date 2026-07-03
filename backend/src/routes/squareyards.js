@@ -94,6 +94,20 @@ function projectIdFromUrl(url) {
   return m ? m[1] : '';
 }
 
+// Build a SquareYards detail link from a project path (falls back to a site
+// search on the project name so every card is still clickable).
+function squareYardsUrl(path, name) {
+  const p = String(path || '').trim();
+  if (p) {
+    if (/^https?:\/\//i.test(p)) return p;
+    return `https://www.squareyards.com/${p.replace(/^\/+/, '')}`;
+  }
+  if (name) {
+    return `https://www.squareyards.com/search?q=${encodeURIComponent(name)}`;
+  }
+  return '';
+}
+
 // Each project card carries two data-rich tags:
 //   <span class="map-cta" data-lat data-long data-url …>       → coordinates
 //   <li class="… charges-popup-btn" data-prjid data-prjname …> → price / area / config
@@ -102,11 +116,16 @@ function parseProjects(html) {
   const geo = {};
   for (const m of html.matchAll(/<[^>]*class="[^"]*map-cta[^"]*"[^>]*>/gi)) {
     const tag = m[0];
-    const id  = projectIdFromUrl(attr(tag, 'url'));
+    const url = attr(tag, 'url');
+    const id  = projectIdFromUrl(url);
     if (!id) continue;
     const lat = parseFloat(attr(tag, 'lat'));
     const lng = parseFloat(attr(tag, 'long'));
-    if (Number.isFinite(lat) && Number.isFinite(lng)) geo[id] = { lat, lng };
+    geo[id] = {
+      lat: Number.isFinite(lat) ? lat : null,
+      lng: Number.isFinite(lng) ? lng : null,
+      url,           // project detail path — used to build the "View on" link
+    };
   }
 
   // 2) project details from the charges popup button
@@ -155,9 +174,7 @@ function parseProjects(html) {
       registeredYear: reraYrM ? parseInt(reraYrM[1], 10) : null,
       lat:            coord.lat ?? null,
       lng:            coord.lng ?? null,
-      detailUrl:      attr(tag, 'baseurl') && attr(tag, 'url')
-        ? `https://www.squareyards.com/${attr(tag, 'url')}`
-        : '',
+      detailUrl:      squareYardsUrl(coord.url || attr(tag, 'url'), name),
       source:         'SquareYards',
     });
   }
