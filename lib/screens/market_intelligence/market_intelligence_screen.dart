@@ -178,12 +178,12 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
   String _developmentPotential = 'Medium';
   _ValuationResult? _valuationResult;
 
-  // Competitor Projects (MagicBricks, 99acres, Housing.com)
+  // Competitor Projects (SquareYards + NoBroker)
   List<Map<String, dynamic>> _mbListings = [];
   bool _fetchingMb = false;
   String? _mbError;
   String? _mbPartialWarning;
-  String _mbSource = 'Property Portals';
+  String _mbSource = 'SquareYards + NoBroker';
   String _typeFilter = 'All';   // Layer 1: All | House | Plot | Flat
   String _stageFilter = 'All';  // Layer 2: All | Ongoing | Completed | Old
   int _oldYearsFilter = 5;       // 2 | 5 | 10
@@ -962,29 +962,17 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
     });
 
     try {
-      Map<String, dynamic>? result;
-      for (final path in ['/api/competitors?$params', '/api/magicbricks?$params']) {
-        try {
-          result = await ApiClient.get(path)
-              .timeout(const Duration(seconds: 120));
-          final count = (result['listings'] as List?)?.length ?? 0;
-          if (count > 0) break;
-        } catch (_) {
-          result = null;
-        }
-      }
+      final result = await ApiClient.get('/api/competitors?$params')
+          .timeout(const Duration(seconds: 120));
 
       if (!mounted || fetchSeq != _mbFetchSeq) return;
 
-      if (result == null) {
-        throw const ApiException(
-          statusCode: 0,
-          message: 'Could not load competitor projects. Start the backend: cd backend && npm start',
-        );
-      }
-
       var listings = ((result['listings'] as List<dynamic>?) ?? [])
           .map((e) => Map<String, dynamic>.from(e as Map))
+          .where((item) {
+            final src = (item['source'] as String? ?? '').toLowerCase();
+            return src.contains('nobroker') || src.contains('squareyards');
+          })
           .toList();
 
       final radiusNote = result['radiusNote'] as String?;
@@ -1002,7 +990,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
       setState(() {
         _mbListings = listings;
         _projectsExpanded = listings.isNotEmpty;
-        _mbSource = (result!['source'] as String?) ?? 'MagicBricks';
+        _mbSource = (result['source'] as String?) ?? 'SquareYards + NoBroker';
         final partial = result['partial'] is List
             ? (result['partial'] as List).join('; ')
             : result['partial'] as String?;
@@ -1178,6 +1166,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
   }
 
   Widget _buildMagicBricksSection() {
+    const mbColor = Color(0xFFE65100);
     final city = (_detectedDistrict ?? '')
         .replaceAll(RegExp(r'\s*[Dd]istrict\s*$'), '').trim();
     final areaLabel = city.isEmpty ? 'Chennai' : city;
@@ -1252,16 +1241,16 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
             label: Text(label, style: const TextStyle(fontSize: 11)),
             selected: selected,
             onSelected: (_) => onSelect(),
-            selectedColor: AppColors.primary.withValues(alpha: 0.14),
-            checkmarkColor: AppColors.primary,
+            selectedColor: mbColor.withValues(alpha: 0.14),
+            checkmarkColor: mbColor,
             showCheckmark: selected,
             labelStyle: TextStyle(
-              color: selected ? AppColors.primary : context.fomraTextPrimary,
+              color: selected ? mbColor : context.fomraTextPrimary,
               fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
             ),
             side: BorderSide(
               color: selected
-                  ? AppColors.primary.withValues(alpha: 0.45)
+                  ? mbColor.withValues(alpha: 0.45)
                   : context.fomraBorder,
             ),
             backgroundColor: context.fomraSurface,
@@ -1324,7 +1313,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                 style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
               ),
               style: FilledButton.styleFrom(
-                backgroundColor: AppColors.primary,
+                backgroundColor: mbColor,
                 foregroundColor: Colors.white,
                 padding:
                     const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -1401,13 +1390,13 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                     Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: AppColors.primary.withValues(alpha: 0.12),
+                        color: mbColor.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: const Icon(
+                      child: Icon(
                         Icons.apartment_outlined,
                         size: 18,
-                        color: AppColors.primary,
+                        color: mbColor,
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -1461,7 +1450,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                   child: ChoiceChip(
                     label: Text(f, style: const TextStyle(fontSize: 11)),
                     selected: _stageFilter == (f == 'Old Projects' ? 'Old' : f),
-                    selectedColor: AppColors.primary,
+                    selectedColor: mbColor,
                     labelStyle: TextStyle(
                       color: _stageFilter == (f == 'Old Projects' ? 'Old' : f)
                           ? Colors.white
@@ -1489,7 +1478,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                       style: const TextStyle(fontSize: 11),
                     ),
                     selected: _oldYearsFilter == yrs,
-                    selectedColor: AppColors.primary,
+                    selectedColor: mbColor,
                     labelStyle: TextStyle(
                       color: _oldYearsFilter == yrs
                           ? Colors.white
@@ -1559,19 +1548,19 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                           decoration: BoxDecoration(
-                            color: AppColors.primary.withValues(alpha: 0.1),
+                            color: mbColor.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(ppsfStr,
                               style: const TextStyle(
-                                  fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.primary)),
+                                  fontSize: 11, fontWeight: FontWeight.w800, color: mbColor)),
                         )
                       else
                         Text(priceLabel,
                             style: TextStyle(
                                 fontSize: 10,
                                 fontWeight: FontWeight.w600,
-                                color: hasPrice ? AppColors.primary : AppColors.textSecondary,
+                                color: hasPrice ? mbColor : AppColors.textSecondary,
                                 fontStyle: hasPrice ? FontStyle.normal : FontStyle.italic)),
                       if (areaSqft > 0) ...[
                         const SizedBox(height: 4),
@@ -1624,18 +1613,18 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                     if (bhk.isNotEmpty) chip(bhk, const Color(0xFF1565C0)),
                     if (poss.isNotEmpty && poss != 'N/A')
                       chip(poss, AppColors.success),
-                    if (rera.isNotEmpty) chip('RERA ✓', AppColors.primary),
+                    if (rera.isNotEmpty) chip('RERA ✓', mbColor),
                   ]),
                 ],
                 if (detailUrl.isNotEmpty) ...[
                   const SizedBox(height: 8),
                   Row(children: [
-                    Icon(Icons.open_in_new, size: 13, color: AppColors.primary),
+                    Icon(Icons.open_in_new, size: 13, color: mbColor),
                     const SizedBox(width: 4),
                     Text(
                       'View on ${source.isNotEmpty ? source : 'website'}',
                       style: TextStyle(
-                          fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.primary),
+                          fontSize: 11, fontWeight: FontWeight.w700, color: mbColor),
                     ),
                   ]),
                 ],
@@ -1651,7 +1640,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
           Center(
             child: Column(children: [
               Icon(Icons.business_outlined, size: 36,
-                  color: AppColors.primary.withValues(alpha: 0.3)),
+                  color: mbColor.withValues(alpha: 0.3)),
               const SizedBox(height: 8),
               const Text(
                 'Pick a property type and tap Search to load\nnearby competitor projects with prices.',
@@ -5209,7 +5198,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
   @override
   Widget build(BuildContext context) {
     return _SectionCard(
-      title: 'Tamil Nilam — Land Records',
+      title: 'Land Records',
       icon: Icons.layers_outlined,
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         _buildGiParcelHeader(),
@@ -5316,17 +5305,6 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
           const SizedBox(height: 8),
           Text('${widget.village}${widget.taluk != null ? ', ${widget.taluk}' : ''}',
               style: const TextStyle(fontSize: 10, color: AppColors.textSecondary)),
-        ],
-        if (widget.tngisGiViewerUrl != null) ...[
-          const SizedBox(height: 8),
-          TextButton.icon(
-            onPressed: () => launchUrl(
-              Uri.parse(widget.tngisGiViewerUrl!),
-              mode: LaunchMode.externalApplication,
-            ),
-            icon: const Icon(Icons.open_in_new, size: 14),
-            label: const Text('Open in Tamil Nilam GI Viewer', style: TextStyle(fontSize: 11)),
-          ),
         ],
       ]),
     );

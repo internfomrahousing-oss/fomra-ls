@@ -1,6 +1,4 @@
 const express = require('express');
-const ninetyNineRouter  = require('./ninetyninacres');
-const housingRouter     = require('./housing');
 const squareYardsRouter = require('./squareyards');
 const nobrokerRouter    = require('./nobroker');
 const { applyRadiusFilter } = require('../lib/listingRadius');
@@ -146,17 +144,12 @@ router.get('/', async (req, res) => {
   const errors = [];
 
   const onServerless = !!process.env.VERCEL || !!process.env.NETLIFY;
-  const altTimeoutMs = onServerless ? 12000 : 35000;
 
   const radiusQuery = hasRadiusFilter
     ? { ...fetchQuery, lat, lng: centerLng, radius }
     : fetchQuery;
 
-  // SquareYards and NoBroker are both reachable from datacenter/serverless IPs
-  // and return priced listings with map coordinates — the primary sources.
-  // MagicBricks is deliberately excluded: it WAF-blocks datacenter IPs and its
-  // fallback scrapes TNRERA (registered, unpriced) which this endpoint doesn't
-  // want — only priced projects within the radius are shown.
+  // SquareYards + NoBroker only — no TNRERA, MagicBricks, 99acres, or Housing.com.
   const syTimeoutMs = onServerless ? 20000 : 35000;
   // NoBroker geocodes each listing's locality (its coords are unreliable), so
   // give it more headroom; it runs in-process within the 120s competitors fn.
@@ -169,19 +162,12 @@ router.get('/', async (req, res) => {
   ingestBatch({ status: 'fulfilled', value: syResult }, 'SquareYards', allListings, sources, errors);
   ingestBatch({ status: 'fulfilled', value: nbResult }, 'NoBroker', allListings, sources, errors);
 
-  // 99acres and Housing.com hard-block datacenter IPs (HTTP 403/406) so they
-  // return nothing from Vercel — only attempt them off-serverless (residential
-  // IP), and never on serverless, so no "skipped on serverless" noise surfaces.
-  if (!onServerless) {
-    const [naResult, hoResult] = await Promise.all([
-      callRouterWithTimeout(ninetyNineRouter, fetchQuery, altTimeoutMs),
-      callRouterWithTimeout(housingRouter, fetchQuery, altTimeoutMs),
-    ]);
-    ingestBatch({ status: 'fulfilled', value: naResult }, '99acres', allListings, sources, errors);
-    ingestBatch({ status: 'fulfilled', value: hoResult }, 'Housing.com', allListings, sources, errors);
-  }
+  const allowedSources = new Set(['SquareYards', 'NoBroker']);
+  const scopedListings = allListings.filter((l) =>
+    allowedSources.has(l.source || ''),
+  );
 
-  if (allListings.length === 0) {
+  if (scopedListings.length === 0) {
     return res.status(502).json({
       error: hasRadiusFilter
         ? `No competitor projects within ${radius}km of this point. Try 10km radius.`
@@ -191,7 +177,7 @@ router.get('/', async (req, res) => {
   }
 
   // Only priced projects are shown — drop registered/unpriced entries entirely.
-  let listings = dedupeListings(allListings).filter(isPriced);
+  let listings = dedupeListings(scopedListings).filter(isPriced);
   let radiusNote;
 
   if (listings.length === 0) {
@@ -227,8 +213,8 @@ router.get('/', async (req, res) => {
   }
 
   res.json({
-    source:  sources.join(' + '),
-    sources,
+    source:  sources.filter((s) => allowedSources.has(s)).join(' + ') || 'SquareYards + NoBroker',
+    sources: sources.filter((s) => allowedSources.has(s)),
     city,
     count:   listings.length,
     radiusKm: radius ? parseFloat(radius) : null,
