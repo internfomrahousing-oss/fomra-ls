@@ -35,9 +35,11 @@ double? parseLandExtentSqft(String extent) {
   if (n == null || n <= 0) return null;
 
   if (lower.contains('acre')) return n * 43560;
+  if (lower.contains('hectare') || lower.contains('hect')) return n * 107639;
+  if (lower.contains('ground')) return n * 2400;   // TN unit: 1 ground = 2400 sqft
   if (lower.contains('cent')) return n * 435.6;
   if (lower.contains('sq')) return n;
-  return n;
+  return n; // bare number → assume already in sqft
 }
 
 /// Extracts numeric road width in feet from lead text.

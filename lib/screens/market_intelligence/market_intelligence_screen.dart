@@ -1737,6 +1737,38 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
             onChanged: (_) =>
                 setState(() => _valuationResult = _computeValuation()),
           ),
+          if ((widget.lead?.landExtent.trim().isNotEmpty ?? false)) ...[
+            const SizedBox(height: 6),
+            Builder(builder: (_) {
+              final ext = widget.lead!.landExtent.trim();
+              final extSqft = parseLandExtentSqft(ext);
+              final extStr = extSqft?.round().toString();
+              return Row(children: [
+                Expanded(
+                  child: Text(
+                    'Land extent: $ext'
+                    '${extSqft != null ? ' ≈ $extStr sqft' : ''}',
+                    style: TextStyle(
+                        fontSize: 11, color: context.fomraTextSecondary),
+                  ),
+                ),
+                if (extStr != null && _landSizeCtrl.text != extStr)
+                  TextButton(
+                    onPressed: () => setState(() {
+                      _landSizeCtrl.text = extStr;
+                      _valuationResult = _computeValuation();
+                    }),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    child: const Text('Use extent',
+                        style: TextStyle(fontSize: 11)),
+                  ),
+              ]);
+            }),
+          ],
           const SizedBox(height: 16),
           _simpleValuationOutput(v),
         ],
