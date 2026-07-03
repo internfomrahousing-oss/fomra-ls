@@ -187,7 +187,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
   String _typeFilter = 'All';   // Layer 1: All | House | Plot | Flat
   String _stageFilter = 'All';  // Layer 2: All | Ongoing | Completed | Old
   int _oldYearsFilter = 5;       // 2 | 5 | 10
-  bool _showProjects = false;    // list is hidden until "View Projects" tapped
+  bool _projectsExpanded = true; // project list expanded when results exist
   int _mbFetchSeq = 0;
 
   // EC & Patta – location data passed to the section widget
@@ -957,7 +957,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
       _mbError = null;
       _mbPartialWarning = null;
       _mbListings = [];
-      _showProjects = false;
+      _projectsExpanded = true;
       _valuationResult = null;
     });
 
@@ -1001,6 +1001,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
 
       setState(() {
         _mbListings = listings;
+        _projectsExpanded = listings.isNotEmpty;
         _mbSource = (result!['source'] as String?) ?? 'MagicBricks';
         final partial = result['partial'] is List
             ? (result['partial'] as List).join('; ')
@@ -1177,9 +1178,11 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
   }
 
   Widget _buildMagicBricksSection() {
-    const mbColor = Color(0xFFE65100);
     final city = (_detectedDistrict ?? '')
         .replaceAll(RegExp(r'\s*[Dd]istrict\s*$'), '').trim();
+    final areaLabel = city.isEmpty ? 'Chennai' : city;
+    final radiusLabel =
+        _activeLatLng != null ? ' · ${_selectedRadius}km' : '';
 
     String fmtPricePerSqft(Map<String, dynamic> item) {
       var ppsf = (item['pricePerSqft'] as num?)?.toDouble() ?? 0;
@@ -1218,75 +1221,120 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
           style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: color)),
     );
 
+    Widget metaChip(IconData icon, String label) => Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: context.fomraSurfaceVar,
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: context.fomraBorder.withValues(alpha: 0.7)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 13, color: context.fomraTextSecondary),
+              const SizedBox(width: 5),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                  color: context.fomraTextPrimary,
+                ),
+              ),
+            ],
+          ),
+        );
+
+    Widget typeChip(String label, bool selected, VoidCallback onSelect) =>
+        Padding(
+          padding: const EdgeInsets.only(right: 6),
+          child: FilterChip(
+            label: Text(label, style: const TextStyle(fontSize: 11)),
+            selected: selected,
+            onSelected: (_) => onSelect(),
+            selectedColor: AppColors.primary.withValues(alpha: 0.14),
+            checkmarkColor: AppColors.primary,
+            showCheckmark: selected,
+            labelStyle: TextStyle(
+              color: selected ? AppColors.primary : context.fomraTextPrimary,
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+            ),
+            side: BorderSide(
+              color: selected
+                  ? AppColors.primary.withValues(alpha: 0.45)
+                  : context.fomraBorder,
+            ),
+            backgroundColor: context.fomraSurface,
+            visualDensity: VisualDensity.compact,
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+        );
+
     return _SectionCard(
       title: 'Competitor Projects',
       icon: Icons.business_center_outlined,
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('Sources: $_mbSource',
-            style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
-        const SizedBox(height: 2),
-        Text(
-          'Area: ${city.isEmpty ? 'Chennai' : city}'
-          '${_activeLatLng != null ? ' · ${_selectedRadius}km radius' : ''}',
-          style: TextStyle(fontSize: 12, color: context.fomraTextPrimary),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            metaChip(Icons.hub_outlined, _mbSource),
+            metaChip(Icons.place_outlined, '$areaLabel$radiusLabel'),
+          ],
         ),
-        const SizedBox(height: 10),
-        // Step 1 — pick what to search for.
-        const Text('Property type',
-            style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: AppColors.textSecondary)),
-        const SizedBox(height: 6),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(children: [
-            for (final f in ['All', 'House', 'Plot', 'Flat'])
-              Padding(
-                padding: const EdgeInsets.only(right: 6),
-                child: ChoiceChip(
-                  label: Text(f, style: const TextStyle(fontSize: 11)),
-                  selected: _typeFilter == f,
-                  selectedColor: mbColor,
-                  labelStyle: TextStyle(
-                    color: _typeFilter == f
-                        ? Colors.white
-                        : context.fomraTextPrimary,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  onSelected: (_) => setState(() {
-                    _typeFilter = f;
-                    if (_valuationResult != null) {
-                      _valuationResult = _computeValuation();
-                    }
-                  }),
+        const SizedBox(height: 14),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Expanded(
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    for (final f in ['All', 'House', 'Plot', 'Flat'])
+                      typeChip(
+                        f,
+                        _typeFilter == f,
+                        () => setState(() {
+                          _typeFilter = f;
+                          if (_valuationResult != null) {
+                            _valuationResult = _computeValuation();
+                          }
+                        }),
+                      ),
+                  ],
                 ),
               ),
-          ]),
-        ),
-        const SizedBox(height: 10),
-        // Step 2 — search.
-        SizedBox(
-          width: double.infinity,
-          child: ElevatedButton.icon(
-            onPressed: _fetchingMb ? null : _fetchMagicBricksProjects,
-            icon: _fetchingMb
-                ? const SizedBox(
-                    width: 14, height: 14,
-                    child: CircularProgressIndicator(
-                        color: Colors.white, strokeWidth: 2))
-                : const Icon(Icons.travel_explore, size: 16),
-            label: Text(_fetchingMb ? 'Searching…' : 'Search Projects',
-                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: mbColor,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              padding: const EdgeInsets.symmetric(vertical: 12),
             ),
-          ),
+            const SizedBox(width: 8),
+            FilledButton.icon(
+              onPressed: _fetchingMb ? null : _fetchMagicBricksProjects,
+              icon: _fetchingMb
+                  ? const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2,
+                      ),
+                    )
+                  : const Icon(Icons.search, size: 16),
+              label: Text(
+                _fetchingMb ? 'Searching' : 'Search',
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+              ),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                minimumSize: const Size(0, 38),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+            ),
+          ],
         ),
 
         if (_mbPartialWarning != null && _mbPartialWarning!.isNotEmpty) ...[
@@ -1338,53 +1386,71 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
         ],
 
         if (_mbListings.isNotEmpty) ...[
-          const SizedBox(height: 12),
-          if (_areaPriceStats().hasData)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: mbColor.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: mbColor.withValues(alpha: 0.25)),
-              ),
-              child: Text(
-                'Area average: ₹${_areaPriceStats().avgPerSqft.round()}/sqft'
-                ' (${_areaPriceStats().pricedCount} priced projects within ${_selectedRadius}km of pin)',
-                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: mbColor),
-              ),
-            ),
-          if (_areaPriceStats().hasData) const SizedBox(height: 10),
-          if (!_showProjects)
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: () => setState(() => _showProjects = true),
-                icon: const Icon(Icons.list_alt_outlined, size: 18),
-                label: Text('View Projects (${_mbListings.length})',
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: mbColor,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  elevation: 0,
+          const SizedBox(height: 14),
+          Material(
+            color: context.fomraSurfaceVar,
+            borderRadius: BorderRadius.circular(12),
+            child: InkWell(
+              onTap: () => setState(() => _projectsExpanded = !_projectsExpanded),
+              borderRadius: BorderRadius.circular(12),
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(
+                        Icons.apartment_outlined,
+                        size: 18,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${_mbListings.length} project${_mbListings.length == 1 ? '' : 's'} found',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: context.fomraTextPrimary,
+                            ),
+                          ),
+                          if (_areaPriceStats().hasData) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              'Avg ₹${_areaPriceStats().avgPerSqft.round()}/sqft'
+                              ' · ${_areaPriceStats().pricedCount} priced'
+                              ' · ${_selectedRadius}km radius',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: context.fomraTextSecondary,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    Icon(
+                      _projectsExpanded
+                          ? Icons.keyboard_arrow_up
+                          : Icons.keyboard_arrow_down,
+                      color: context.fomraTextSecondary,
+                    ),
+                  ],
                 ),
-              ),
-            )
-          else ...[
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton.icon(
-              onPressed: () => setState(() => _showProjects = false),
-              icon: const Icon(Icons.expand_less, size: 18),
-              label: const Text('Hide Projects', style: TextStyle(fontSize: 12)),
-              style: TextButton.styleFrom(
-                foregroundColor: mbColor,
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               ),
             ),
           ),
+          if (_projectsExpanded) ...[
+          const SizedBox(height: 10),
           // ── Project stage (property type is chosen above, before search) ──
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
@@ -1493,19 +1559,19 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                           decoration: BoxDecoration(
-                            color: mbColor.withValues(alpha: 0.1),
+                            color: AppColors.primary.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(ppsfStr,
                               style: const TextStyle(
-                                  fontSize: 11, fontWeight: FontWeight.w800, color: mbColor)),
+                                  fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.primary)),
                         )
                       else
                         Text(priceLabel,
                             style: TextStyle(
                                 fontSize: 10,
                                 fontWeight: FontWeight.w600,
-                                color: hasPrice ? mbColor : AppColors.textSecondary,
+                                color: hasPrice ? AppColors.primary : AppColors.textSecondary,
                                 fontStyle: hasPrice ? FontStyle.normal : FontStyle.italic)),
                       if (areaSqft > 0) ...[
                         const SizedBox(height: 4),
@@ -1564,12 +1630,12 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                 if (detailUrl.isNotEmpty) ...[
                   const SizedBox(height: 8),
                   Row(children: [
-                    Icon(Icons.open_in_new, size: 13, color: mbColor),
+                    Icon(Icons.open_in_new, size: 13, color: AppColors.primary),
                     const SizedBox(width: 4),
                     Text(
                       'View on ${source.isNotEmpty ? source : 'website'}',
                       style: TextStyle(
-                          fontSize: 11, fontWeight: FontWeight.w700, color: mbColor),
+                          fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.primary),
                     ),
                   ]),
                 ],
@@ -1585,10 +1651,10 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
           Center(
             child: Column(children: [
               Icon(Icons.business_outlined, size: 36,
-                  color: mbColor.withValues(alpha: 0.3)),
+                  color: AppColors.primary.withValues(alpha: 0.3)),
               const SizedBox(height: 8),
               const Text(
-                'Tap "Fetch Projects" to load\ncompetitor projects with prices\nfrom MagicBricks, 99acres & Housing.com.',
+                'Pick a property type and tap Search to load\nnearby competitor projects with prices.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                     fontSize: 12, color: AppColors.textSecondary, height: 1.4),
