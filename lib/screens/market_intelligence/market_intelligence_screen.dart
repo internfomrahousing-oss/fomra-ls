@@ -1376,66 +1376,90 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
 
         if (_mbListings.isNotEmpty) ...[
           const SizedBox(height: 14),
-          Material(
-            color: context.fomraSurfaceVar,
-            borderRadius: BorderRadius.circular(12),
-            child: InkWell(
-              onTap: () => setState(() => _projectsExpanded = !_projectsExpanded),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: context.fomraSurfaceVar,
               borderRadius: BorderRadius.circular(12),
-              child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: mbColor.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Icon(
-                        Icons.apartment_outlined,
-                        size: 18,
-                        color: mbColor,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '${_mbListings.length} project${_mbListings.length == 1 ? '' : 's'} found',
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                              color: context.fomraTextPrimary,
-                            ),
-                          ),
-                          if (_areaPriceStats().hasData) ...[
-                            const SizedBox(height: 2),
-                            Text(
-                              'Avg ₹${_areaPriceStats().avgPerSqft.round()}/sqft'
-                              ' · ${_areaPriceStats().pricedCount} priced'
-                              ' · ${_selectedRadius}km radius',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: context.fomraTextSecondary,
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                    Icon(
-                      _projectsExpanded
-                          ? Icons.keyboard_arrow_up
-                          : Icons.keyboard_arrow_down,
-                      color: context.fomraTextSecondary,
-                    ),
-                  ],
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: mbColor.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    Icons.apartment_outlined,
+                    size: 18,
+                    color: mbColor,
+                  ),
                 ),
-              ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _typeFilter == 'All'
+                            ? '${_mbListings.length} project${_mbListings.length == 1 ? '' : 's'} found'
+                            : '${_filteredMbListings.length} of ${_mbListings.length} match $_typeFilter',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: context.fomraTextPrimary,
+                        ),
+                      ),
+                      if (_areaPriceStats().hasData) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          'Avg ₹${_areaPriceStats().avgPerSqft.round()}/sqft'
+                          ' · ${_areaPriceStats().pricedCount} priced'
+                          ' · ${_selectedRadius}km radius',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: context.fomraTextSecondary,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                if (_projectsExpanded)
+                  TextButton.icon(
+                    onPressed: () => setState(() => _projectsExpanded = false),
+                    icon: const Icon(Icons.keyboard_arrow_up, size: 18),
+                    label: const Text(
+                      'Hide',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                    ),
+                    style: TextButton.styleFrom(
+                      foregroundColor: context.fomraTextSecondary,
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      minimumSize: const Size(0, 36),
+                    ),
+                  )
+                else
+                  FilledButton.icon(
+                    onPressed: () => setState(() => _projectsExpanded = true),
+                    icon: const Icon(Icons.list_alt_outlined, size: 16),
+                    label: const Text(
+                      'Show projects',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                    ),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: mbColor,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      minimumSize: const Size(0, 36),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ),
           if (_projectsExpanded) ...[
@@ -1491,6 +1515,19 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
             ]),
           ],
           const SizedBox(height: 8),
+          if (_filteredMbListings.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Text(
+                'No projects match the selected filters. Try All for type and stage.',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: context.fomraTextSecondary,
+                  height: 1.4,
+                ),
+              ),
+            )
+          else ...[
           Text(
             '${_filteredMbListings.length} of ${_mbListings.length} project${_mbListings.length == 1 ? '' : 's'}',
             style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
@@ -1634,6 +1671,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
               ),
             );
           }),
+          ],
           ],
         ] else if (!_fetchingMb && _mbError == null) ...[
           const SizedBox(height: 16),
@@ -4070,10 +4108,12 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
 
   Future<void> _loadFmbForSelectedParcel() async {
     if (widget.tngisParcelLoading) {
-      setState(() {
-        _loadingFmb = true;
-        _fmbLoadError = null;
-      });
+      if (mounted) {
+        setState(() {
+          _loadingFmb = true;
+          _fmbLoadError = null;
+        });
+      }
       return;
     }
 
@@ -4143,6 +4183,18 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
 
   bool _hasFmbSubdivision(_TngisSubdivisionRow row) =>
       row.effectiveSubDivision != null;
+
+  void _autoOpenFmbIfReady(
+    Uint8List pdfBytes, {
+    String? survey,
+    String? sub,
+  }) {
+    if (_selectedGiService != 'fmb' || pdfBytes.isEmpty) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _selectedGiService != 'fmb') return;
+      _showFmbSketch(pdfBytes, survey: survey, sub: sub);
+    });
+  }
 
   void _showFmbSketch(
     Uint8List pdfBytes, {
@@ -4268,10 +4320,12 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
     try {
       final bytes = await ApiClient.getBytes(path);
       if (!mounted) return;
+      final pdf = Uint8List.fromList(bytes);
       setState(() {
-        _fmbPdfBytes = Uint8List.fromList(bytes);
+        _fmbPdfBytes = pdf;
         _loadingFmb = false;
       });
+      _autoOpenFmbIfReady(pdf, survey: survey, sub: sub);
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() {
@@ -4322,6 +4376,11 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
           _fmbPdfBytes = bundle.fmbPdf;
           _fmbLoadError = null;
         });
+        _autoOpenFmbIfReady(
+          bundle.fmbPdf!,
+          survey: row.surveyNumber,
+          sub: row.effectiveSubDivision,
+        );
       }
     } on ApiException catch (e) {
       bundle.fmbError = e.message;
@@ -4447,10 +4506,12 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
     try {
       final bytes = await ApiClient.getBytes(path);
       if (!mounted) return;
+      final pdf = Uint8List.fromList(bytes);
       setState(() {
-        _fmbPdfBytes = Uint8List.fromList(bytes);
+        _fmbPdfBytes = pdf;
         _loadingFmb = false;
       });
+      _autoOpenFmbIfReady(pdf);
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() {
@@ -5706,12 +5767,22 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
           ? 'FMB Sketch · Survey ${survey ?? ''} · Sub $sub'
           : 'FMB Sketch · Survey ${survey ?? ''} (general)';
       final subtitle = sub != null && sub.isNotEmpty && sub != '-'
-          ? 'TNGIS GI Viewer sketch (govt seal) · ${(pdfBytes.length / 1024).round()} KB'
-          : 'TNGIS general survey FMB · ${(pdfBytes.length / 1024).round()} KB';
-      return _buildFmbSketchButton(
-        title: title,
-        subtitle: subtitle,
-        onTap: () => _showFmbSketch(pdfBytes!, fileName: fileName),
+          ? 'TNGIS / CollabLand sketch · ${(pdfBytes.length / 1024).round()} KB'
+          : 'General survey FMB · ${(pdfBytes.length / 1024).round()} KB';
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildFmbSketchButton(
+            title: title,
+            subtitle: subtitle,
+            onTap: () => _showFmbSketch(pdfBytes!, fileName: fileName),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Tap the card above to open full screen, or use Open in new tab inside the viewer.',
+            style: TextStyle(fontSize: 10, color: context.fomraTextSecondary, height: 1.35),
+          ),
+        ],
       );
     }
 

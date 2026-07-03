@@ -1764,7 +1764,7 @@ function collablandPropsFromCodes(codes, tngisProps = {}) {
 }
 
 /**
- * TNGIS GI Viewer sketch_fmb only — same source as tngis.tn.gov.in GI Viewer.
+ * TNGIS sketch_fmb (govt seal) first, then CollabLand-TN — maximizes coverage.
  */
 async function tryFmbSourcesForCodes(codes, ctx = {}) {
   const { lat, lon, tngisProps = {} } = ctx;
@@ -1778,15 +1778,53 @@ async function tryFmbSourcesForCodes(codes, ctx = {}) {
 
   const ruralUrban = giLand?.ruralUrban ?? tngisProps.rural_urban;
   const types = sketchFmbTypeCandidates(ruralUrban, tngisProps);
-  let lastErr = 'FMB sketch not available from TNGIS GI Viewer';
+  let lastErr = 'FMB sketch not available from TNGIS';
 
-  for (const landType of types) {
+  const tryCollab = async () => {
     try {
-      const fmb = await fetchGiFmbSketch({ ...codes, landType });
-      if (fmb.ok && fmb.pdfBase64 && !isInvalidFmbPdfBase64(fmb.pdfBase64)) {
-        return { ...fmb, landTypeUsed: landType };
+      const props = collablandPropsFromCodes(codes, tngisProps);
+      const collab = await fetchCollablandFmbPdf(props);
+      if (collab?.available && collab.pdfBase64 && !isInvalidFmbPdfBase64(collab.pdfBase64)) {
+        return {
+          ok:           true,
+          source:       collab.source,
+          pdfBase64:    collab.pdfBase64,
+          fileName:     collab.fileName || fmbFileName(props),
+          landTypeUsed: 'collabland',
+        };
       }
-      if (fmb.error) lastErr = fmb.error;
+      if (collab?.error) lastErr = collab.error;
+    } catch (err) {
+      lastErr = err.message;
+    }
+    return null;
+  };
+
+  // Prefer TNGIS GI Viewer sketch_fmb (rural FMB / urban TSLR, Tahsildar seal).
+  const [primaryType, ...altTypes] = types;
+  const tryTngis = async (landType) => {
+    const fmb = await fetchGiFmbSketch({ ...codes, landType });
+    if (fmb.ok && fmb.pdfBase64 && !isInvalidFmbPdfBase64(fmb.pdfBase64)) {
+      return { ...fmb, landTypeUsed: landType };
+    }
+    if (fmb.error) lastErr = fmb.error;
+    return null;
+  };
+
+  try {
+    const primary = await tryTngis(primaryType);
+    if (primary) return primary;
+  } catch (err) {
+    lastErr = err.message;
+  }
+
+  const collabHit = await tryCollab();
+  if (collabHit) return collabHit;
+
+  for (const landType of altTypes) {
+    try {
+      const hit = await tryTngis(landType);
+      if (hit) return hit;
     } catch (err) {
       lastErr = err.message;
     }
@@ -2614,7 +2652,8 @@ router.get('/fmb', async (req, res) => {
   }
 
   if (surveyReq && tngisProps?.survey_number
-      && !surveyNumberMatches(tngisProps.survey_number, surveyReq)) {
+      && !surveyNumberMatches(tngisProps.survey_number, surveyReq)
+      && !surveyNumberMatches(codes.surveyNumber, surveyReq)) {
     return res.status(404).json({
       error: `Survey ${surveyReq} not found for FMB lookup.`,
     });
