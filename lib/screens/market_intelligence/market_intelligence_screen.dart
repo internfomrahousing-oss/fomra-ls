@@ -916,18 +916,64 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                 ? 'Hold'
                 : 'Avoid';
 
+    // Describe THIS plot's actual situation, not a generic definition.
+    final locWord = infraScore >= 70
+        ? 'well-developed'
+        : infraScore >= 45
+            ? 'moderately developed'
+            : 'under-developed';
+    final actWord = n >= 6
+        ? 'active'
+        : n >= 3
+            ? 'moderate'
+            : 'quiet';
+    final headWord = headroomScore >= 75
+        ? 'strong room to grow'
+        : headroomScore >= 45
+            ? 'some room to grow'
+            : 'limited upside (already premium-priced)';
+    final verdict = investmentScore >= 70
+        ? 'a strong investment'
+        : investmentScore >= 50
+            ? 'a reasonable investment'
+            : investmentScore >= 35
+                ? 'a cautious / hold'
+                : 'a weak investment';
     final investmentReason =
-        'Investment $investmentScore/100 blends three signals:\n'
-        '• Location — infrastructure & amenities score ${infraScore.round()}/100 (50%)\n'
-        '• Market activity — $n priced project${n == 1 ? '' : 's'} nearby → '
-        '${activityScore.round()}/100 (30%)\n'
-        '• Price headroom — area rate ₹${rate.round()}/sqft → '
-        '${headroomScore.round()}/100 (20%; cheaper areas have more room to grow)\n'
-        'Higher = well-served, active market, with upside.';
-    final riskReason =
-        'Risk $riskScore/100 is the mirror of the investment score — the two add up to '
-        '100. It rises where infrastructure, market activity or price upside are weak, '
-        'and falls where the location is well-served, active and has room to grow.';
+        'Investment $investmentScore/100 for this plot:\n'
+        '• Location is $locWord — amenities (schools, hospitals, roads, transport) '
+        'score ${infraScore.round()}/100.\n'
+        '• Market is $actWord — $n priced project${n == 1 ? '' : 's'} nearby '
+        '(${activityScore.round()}/100).\n'
+        '• Pricing shows $headWord — area rate ₹${rate.round()}/sqft '
+        '(${headroomScore.round()}/100).\n'
+        'Overall this looks like $verdict.';
+
+    final weaknesses = <String>[];
+    if (infraScore < 55) {
+      weaknesses.add('sparse infrastructure (${infraScore.round()}/100)');
+    }
+    if (n < 4) weaknesses.add('a $actWord market ($n nearby)');
+    if (headroomScore < 55) {
+      weaknesses.add('little price upside (₹${rate.round()}/sqft)');
+    }
+    final strengths = <String>[];
+    if (infraScore >= 55) {
+      strengths.add('good infrastructure (${infraScore.round()}/100)');
+    }
+    if (n >= 4) strengths.add('an active market ($n nearby)');
+    if (headroomScore >= 55) {
+      strengths.add('room to appreciate (₹${rate.round()}/sqft)');
+    }
+    final riskBand = riskScore >= 60
+        ? 'high'
+        : riskScore >= 40
+            ? 'moderate'
+            : 'low';
+    final riskReason = 'Risk $riskScore/100 ($riskBand — it is 100 minus the '
+            'investment score). '
+        '${weaknesses.isNotEmpty ? 'Pushed up by ${weaknesses.join(', ')}. ' : ''}'
+        '${strengths.isNotEmpty ? 'Held down by ${strengths.join(', ')}.' : ''}';
 
     return _ValuationResult(
       areaAvgPerSqft: benchmarkPrice,
