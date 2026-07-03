@@ -164,6 +164,9 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
 
   // POI
   int _selectedRadius = 2;
+  // Competitor projects always search a fixed 2km — independent of the map /
+  // infrastructure radius picker.
+  static const int _compRadiusKm = 2;
   Map<String, int> _poiCounts = {};
   Map<String, List<Map<String, dynamic>>> _poiPlaces = {};
   bool _collectingPois = false;
@@ -1018,7 +1021,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
       'city=${Uri.encodeComponent(cityParam)}',
       'lat=${loc.latitude}',
       'lng=${loc.longitude}',
-      'radius=$_selectedRadius',
+      'radius=$_compRadiusKm',
     ];
     final params = parts.join('&');
     final fetchSeq = ++_mbFetchSeq;
@@ -1242,7 +1245,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
         .replaceAll(RegExp(r'\s*[Dd]istrict\s*$'), '').trim();
     final areaLabel = city.isEmpty ? 'Chennai' : city;
     final radiusLabel =
-        _activeLatLng != null ? ' · ${_selectedRadius}km' : '';
+        _activeLatLng != null ? ' · ${_compRadiusKm}km' : '';
 
     String fmtPricePerSqft(Map<String, dynamic> item) {
       var ppsf = (item['pricePerSqft'] as num?)?.toDouble() ?? 0;
@@ -1487,7 +1490,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                         Text(
                           'Avg ₹${_areaPriceStats().avgPerSqft.round()}/sqft'
                           ' · ${_areaPriceStats().pricedCount} priced'
-                          ' · ${_selectedRadius}km radius',
+                          ' · ${_compRadiusKm}km radius',
                           style: TextStyle(
                             fontSize: 11,
                             color: context.fomraTextSecondary,
