@@ -188,6 +188,27 @@ function distanceScore(km, penalty, missingScore = 30) {
   return clampScore(Math.max(0, 100 - km * penalty));
 }
 
+/** Density score: how MANY of a type are nearby (each of the first 5 adds 20). */
+const DENSITY_TARGET = 5;
+function densityScore(count) {
+  return clampScore((Math.min(count || 0, DENSITY_TARGET) / DENSITY_TARGET) * 100);
+}
+
+/**
+ * Per-amenity score = 70% proximity (nearest one) + 30% density (how many).
+ * So "1 close" scores well but "several close" scores higher.
+ */
+function amenityScore(nearestKm, count, penalty) {
+  return clampScore(distanceScore(nearestKm, penalty) * 0.7 + densityScore(count) * 0.3);
+}
+function poiScore(places, category, penalty) {
+  return amenityScore(
+    nearestDistanceKm(places, category),
+    (places[category] || []).length,
+    penalty,
+  );
+}
+
 function nearestBusKm(places) {
   const stop = nearestDistanceKm(places, 'Bus Stops');
   const terminal = nearestDistanceKm(places, 'Bus Terminals');
@@ -215,25 +236,25 @@ function localTrafficScore(roadCounts, radiusKm) {
 }
 
 function educationScore(places) {
-  const school = distanceScore(nearestDistanceKm(places, 'Schools'), DISTANCE_PENALTY.school);
-  const college = distanceScore(nearestDistanceKm(places, 'Colleges'), DISTANCE_PENALTY.college);
-  const university = distanceScore(nearestDistanceKm(places, 'Universities'), DISTANCE_PENALTY.university);
+  const school = poiScore(places, 'Schools', DISTANCE_PENALTY.school);
+  const college = poiScore(places, 'Colleges', DISTANCE_PENALTY.college);
+  const university = poiScore(places, 'Universities', DISTANCE_PENALTY.university);
   return clampScore(school * 0.40 + college * 0.35 + university * 0.25);
 }
 
 function healthcareScore(places) {
-  const hospital = distanceScore(nearestDistanceKm(places, 'Hospitals'), DISTANCE_PENALTY.hospital);
-  const clinic = distanceScore(nearestDistanceKm(places, 'Clinics'), DISTANCE_PENALTY.clinic);
-  const pharmacy = distanceScore(nearestDistanceKm(places, 'Pharmacies'), DISTANCE_PENALTY.pharmacy);
+  const hospital = poiScore(places, 'Hospitals', DISTANCE_PENALTY.hospital);
+  const clinic = poiScore(places, 'Clinics', DISTANCE_PENALTY.clinic);
+  const pharmacy = poiScore(places, 'Pharmacies', DISTANCE_PENALTY.pharmacy);
   return clampScore(hospital * 0.50 + clinic * 0.30 + pharmacy * 0.20);
 }
 
 function commercialScore(places) {
-  const supermarket = distanceScore(nearestDistanceKm(places, 'Supermarkets'), DISTANCE_PENALTY.supermarket);
-  const bank = distanceScore(nearestDistanceKm(places, 'Banks'), DISTANCE_PENALTY.bank);
-  const mall = distanceScore(nearestDistanceKm(places, 'Malls'), DISTANCE_PENALTY.mall);
-  const restaurant = distanceScore(nearestDistanceKm(places, 'Restaurants'), DISTANCE_PENALTY.restaurant);
-  const atm = distanceScore(nearestDistanceKm(places, 'ATMs'), DISTANCE_PENALTY.atm);
+  const supermarket = poiScore(places, 'Supermarkets', DISTANCE_PENALTY.supermarket);
+  const bank = poiScore(places, 'Banks', DISTANCE_PENALTY.bank);
+  const mall = poiScore(places, 'Malls', DISTANCE_PENALTY.mall);
+  const restaurant = poiScore(places, 'Restaurants', DISTANCE_PENALTY.restaurant);
+  const atm = poiScore(places, 'ATMs', DISTANCE_PENALTY.atm);
   return clampScore(
     supermarket * 0.30
     + bank * 0.20
@@ -244,10 +265,12 @@ function commercialScore(places) {
 }
 
 function transportScore(places) {
-  const bus = distanceScore(nearestBusKm(places), DISTANCE_PENALTY.bus);
-  const railway = distanceScore(nearestDistanceKm(places, 'Railway Stations'), DISTANCE_PENALTY.railway);
-  const metro = distanceScore(nearestDistanceKm(places, 'Metro Stations'), DISTANCE_PENALTY.metro);
-  const airport = distanceScore(nearestDistanceKm(places, 'Airports'), DISTANCE_PENALTY.airport);
+  const busCount = (places['Bus Stops'] || []).length
+    + (places['Bus Terminals'] || []).length;
+  const bus = amenityScore(nearestBusKm(places), busCount, DISTANCE_PENALTY.bus);
+  const railway = poiScore(places, 'Railway Stations', DISTANCE_PENALTY.railway);
+  const metro = poiScore(places, 'Metro Stations', DISTANCE_PENALTY.metro);
+  const airport = poiScore(places, 'Airports', DISTANCE_PENALTY.airport);
   return clampScore(bus * 0.40 + railway * 0.30 + metro * 0.20 + airport * 0.10);
 }
 
