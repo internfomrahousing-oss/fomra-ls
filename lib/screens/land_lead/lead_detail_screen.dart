@@ -138,22 +138,7 @@ class _LeadDetailsCard extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             if (lead.sitePhotoUrls.length == 1)
-              Align(
-                alignment: Alignment.centerLeft,
-                child: GestureDetector(
-                  onTap: () => _showFullPhoto(context, lead.sitePhotoUrls.first),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: Image.network(
-                      lead.sitePhotoUrls.first,
-                      width: 140,
-                      height: 140,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => _photoError(),
-                    ),
-                  ),
-                ),
-              )
+              _sitePhotoThumb(context, lead.sitePhotoUrls.first)
             else
               GridView.builder(
                 shrinkWrap: true,
@@ -188,22 +173,7 @@ class _LeadDetailsCard extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 8),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: GestureDetector(
-                onTap: () => _showFullPhoto(context, lead.sitePhotoUrl),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Image.network(
-                    lead.sitePhotoUrl,
-                    width: 140,
-                    height: 140,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => _photoError(),
-                  ),
-                ),
-              ),
-            ),
+            _sitePhotoThumb(context, lead.sitePhotoUrl),
           ],
           const SizedBox(height: 8),
           Text(
@@ -217,6 +187,41 @@ class _LeadDetailsCard extends StatelessWidget {
       ),
     );
   }
+}
+
+// A small square site-photo thumbnail with a guaranteed-tappable "View full
+// size" button below it. On web the image can render as an HTML overlay that
+// swallows taps, so the button (a real Flutter widget) is the reliable target.
+Widget _sitePhotoThumb(BuildContext context, String url) {
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      GestureDetector(
+        onTap: () => _showFullPhoto(context, url),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: Image.network(
+            url,
+            width: 140,
+            height: 140,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => _photoError(),
+          ),
+        ),
+      ),
+      TextButton.icon(
+        onPressed: () => _showFullPhoto(context, url),
+        icon: const Icon(Icons.fullscreen, size: 18),
+        label: const Text('View full size', style: TextStyle(fontSize: 12)),
+        style: TextButton.styleFrom(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          minimumSize: Size.zero,
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        ),
+      ),
+    ],
+  );
 }
 
 void _showFullPhoto(BuildContext context, String url) {
