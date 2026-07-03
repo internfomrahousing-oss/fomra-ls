@@ -797,6 +797,42 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
     return ppsf > 0 ? ppsf : null;
   }
 
+  double get _effectiveLandSizeSqft {
+    if (widget.lead != null) {
+      final fromExtent = parseLandExtentSqft(widget.lead!.landExtent);
+      if (fromExtent != null) return fromExtent;
+    }
+    return double.tryParse(_landSizeCtrl.text) ?? 1000;
+  }
+
+  Widget _buildReadOnlyLandSizeSqft(double sqft) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _FieldLabel('Land Size (sqft)'),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: context.fomraSurfaceVar,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: context.fomraBorder.withValues(alpha: 0.85),
+            ),
+          ),
+          child: Text(
+            sqft.round().toString(),
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: context.fomraTextPrimary,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   _AreaPriceStats _areaPriceStats() {
     // Benchmark follows the selected property type — House/Plot/Flat averages
     // its own ₹/sqft; "All" uses everything. Drives the AI valuation buy price.
@@ -834,7 +870,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
     // infrastructure score around the pinned point.
     final benchmarkPrice = areaStats.avgPerSqft;
     final infraScore = _infraScores['Overall Location'] ?? 50;
-    final landSize = double.tryParse(_landSizeCtrl.text) ?? 1000;
+    final landSize = _effectiveLandSizeSqft;
 
     final buyPerSqft = benchmarkPrice;
     final purchaseTotal = buyPerSqft * landSize;
@@ -1471,6 +1507,10 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                                 fontWeight: FontWeight.w600,
                                 color: hasPrice ? mbColor : AppColors.textSecondary,
                                 fontStyle: hasPrice ? FontStyle.normal : FontStyle.italic)),
+                      if (areaSqft > 0) ...[
+                        const SizedBox(height: 4),
+                        chip('$areaSqft sqft', const Color(0xFF00695C)),
+                      ],
                       if (totalStr.isNotEmpty) ...[
                         const SizedBox(height: 3),
                         Text(totalStr,
@@ -1511,12 +1551,10 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                   ]),
                 ],
                 if (bhk.isNotEmpty || (poss.isNotEmpty && poss != 'N/A') ||
-                    rera.isNotEmpty || source.isNotEmpty || areaSqft > 0) ...[
+                    rera.isNotEmpty || source.isNotEmpty) ...[
                   const SizedBox(height: 6),
                   Wrap(spacing: 6, runSpacing: 4, children: [
                     if (source.isNotEmpty) chip(source, const Color(0xFF6A1B9A)),
-                    if (areaSqft > 0)
-                      chip('$areaSqft sqft', const Color(0xFF00695C)),
                     if (bhk.isNotEmpty) chip(bhk, const Color(0xFF1565C0)),
                     if (poss.isNotEmpty && poss != 'N/A')
                       chip(poss, AppColors.success),
@@ -1737,44 +1775,18 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const _FieldLabel('Land Size (sqft)'),
-          TextField(
-            controller: _landSizeCtrl,
-            keyboardType: TextInputType.number,
-            decoration: _inputDec(context, 'e.g. 5000'),
-            onChanged: (_) =>
-                setState(() => _valuationResult = _computeValuation()),
-          ),
+          _buildReadOnlyLandSizeSqft(_effectiveLandSizeSqft),
           if ((widget.lead?.landExtent.trim().isNotEmpty ?? false)) ...[
             const SizedBox(height: 6),
             Builder(builder: (_) {
               final ext = widget.lead!.landExtent.trim();
               final extSqft = parseLandExtentSqft(ext);
-              final extStr = extSqft?.round().toString();
-              return Row(children: [
-                Expanded(
-                  child: Text(
-                    'Land extent: $ext'
-                    '${extSqft != null ? ' ≈ $extStr sqft' : ''}',
-                    style: TextStyle(
-                        fontSize: 11, color: context.fomraTextSecondary),
-                  ),
-                ),
-                if (extStr != null && _landSizeCtrl.text != extStr)
-                  TextButton(
-                    onPressed: () => setState(() {
-                      _landSizeCtrl.text = extStr;
-                      _valuationResult = _computeValuation();
-                    }),
-                    style: TextButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      minimumSize: Size.zero,
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                    child: const Text('Use extent',
-                        style: TextStyle(fontSize: 11)),
-                  ),
-              ]);
+              return Text(
+                'Land extent: $ext'
+                '${extSqft != null ? ' ≈ ${extSqft.round()} sqft' : ''}',
+                style: TextStyle(
+                    fontSize: 11, color: context.fomraTextSecondary),
+              );
             }),
           ],
           const SizedBox(height: 16),
