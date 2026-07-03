@@ -187,7 +187,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
   String _typeFilter = 'All';   // Layer 1: All | House | Plot | Flat
   String _stageFilter = 'All';  // Layer 2: All | Ongoing | Completed | Old
   int _oldYearsFilter = 5;       // 2 | 5 | 10
-  bool _projectsExpanded = true; // project list expanded when results exist
+  bool _projectsExpanded = false; // collapsed until user taps summary bar
   int _mbFetchSeq = 0;
 
   // EC & Patta – location data passed to the section widget
@@ -957,7 +957,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
       _mbError = null;
       _mbPartialWarning = null;
       _mbListings = [];
-      _projectsExpanded = true;
+      _projectsExpanded = false;
       _valuationResult = null;
     });
 
@@ -989,7 +989,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
 
       setState(() {
         _mbListings = listings;
-        _projectsExpanded = listings.isNotEmpty;
+        _projectsExpanded = false;
         _mbSource = (result['source'] as String?) ?? 'SquareYards + NoBroker';
         final partial = result['partial'] is List
             ? (result['partial'] as List).join('; ')
