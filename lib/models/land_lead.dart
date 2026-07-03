@@ -55,6 +55,30 @@ class LandLead {
     this.status = LeadStatus.new_,
   });
 
+  LandLead copyWith({String? surveyNumber, String? subDivision}) => LandLead(
+        leadId: leadId,
+        inputSource: inputSource,
+        location: location,
+        gpsCoordinates: gpsCoordinates,
+        village: village,
+        taluk: taluk,
+        district: district,
+        pincode: pincode,
+        surveyNumber: surveyNumber ?? this.surveyNumber,
+        subDivision: subDivision ?? this.subDivision,
+        landExtent: landExtent,
+        ownerName: ownerName,
+        contactDetails: contactDetails,
+        landType: landType,
+        roadWidth: roadWidth,
+        accessDetails: accessDetails,
+        notes: notes,
+        sitePhotoUrl: sitePhotoUrl,
+        sitePhotoUrls: sitePhotoUrls,
+        addedOn: addedOn,
+        createdByName: createdByName,
+        status: status,
+      );
 }
 
 extension InputSourceLabel on InputSource {

@@ -26,6 +26,14 @@ class AppStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  void updateLeadParcel(String leadId, String surveyNumber, String subDivision) {
+    final idx = leads.indexWhere((l) => l.leadId == leadId);
+    if (idx == -1) return;
+    leads[idx] = leads[idx]
+        .copyWith(surveyNumber: surveyNumber, subDivision: subDivision);
+    notifyListeners();
+  }
+
   void setLeads(List<LandLead> newLeads) {
     leads.clear();
     leads.addAll(newLeads);

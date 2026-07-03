@@ -1,13 +1,41 @@
 import 'package:flutter/material.dart';
 import '../../models/land_lead.dart';
+import '../../services/app_store.dart';
+import '../../services/land_lead_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../market_intelligence/market_intelligence_screen.dart';
 
-class LeadDetailScreen extends StatelessWidget {
+class LeadDetailScreen extends StatefulWidget {
   final LandLead lead;
 
   const LeadDetailScreen({super.key, required this.lead});
+
+  @override
+  State<LeadDetailScreen> createState() => _LeadDetailScreenState();
+}
+
+class _LeadDetailScreenState extends State<LeadDetailScreen> {
+  late LandLead lead = widget.lead;
+
+  Future<void> _onParcelEdited(String survey, String sub) async {
+    setState(() => lead = lead.copyWith(surveyNumber: survey, subDivision: sub));
+    AppStore.instance.updateLeadParcel(lead.leadId, survey, sub);
+    try {
+      await LandLeadService.updateSurveySub(lead.leadId, survey, sub);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Survey / sub-division updated')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Saved locally; sync failed: $e')),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -46,7 +74,11 @@ class LeadDetailScreen extends StatelessWidget {
           children: [
             _LeadDetailsCard(lead: lead),
             const SizedBox(height: 20),
-            MarketIntelligenceScreen(lead: lead, embeddedInLead: true),
+            MarketIntelligenceScreen(
+              lead: lead,
+              embeddedInLead: true,
+              onParcelEdited: _onParcelEdited,
+            ),
           ],
         ),
       ),
