@@ -1,3 +1,6 @@
+# Flutter — only ship the web bundle (exclude Android/iOS build artifacts under build/)
+build/*
+!build/web
 android/
 ios/
 linux/
@@ -13,4 +16,3 @@ backend/node_modules/
 node_modules/
 tmp_*
 *.pdf
-.git/
