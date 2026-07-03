@@ -210,14 +210,12 @@ Widget _sitePhotoThumb(BuildContext context, String url) {
           ),
         ),
       ),
-      TextButton.icon(
-        onPressed: () => _showFullPhoto(context, url),
-        icon: const Icon(Icons.fullscreen, size: 18),
-        label: const Text('View full size', style: TextStyle(fontSize: 12)),
-        style: TextButton.styleFrom(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          minimumSize: Size.zero,
-          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      const SizedBox(height: 4),
+      GestureDetector(
+        onTap: () => _showFullPhoto(context, url),
+        child: const Text(
+          'Tap to view',
+          style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
         ),
       ),
     ],
