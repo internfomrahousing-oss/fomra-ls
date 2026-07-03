@@ -2716,10 +2716,10 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
           ],
           if (_poisCollected) ...[
             const SizedBox(height: 12),
-            const Text(
-              'Weighted: Education 25% · Healthcare 20% · Roads 25% · Commercial 15% · Transport 15%. Nearest-amenity distance scoring.',
+            Text(
+              'Weighted: Education 25% · Healthcare 20% · Roads 25% · Commercial 15% · Transport 15%. Nearest-amenity + count scoring.',
               style: TextStyle(
-                  fontSize: 10, color: AppColors.textSecondary, height: 1.35),
+                  fontSize: 10, color: context.fomraTextSecondary, height: 1.35),
             ),
             const SizedBox(height: 18),
             Container(
@@ -2756,9 +2756,10 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                                 fontWeight: FontWeight.w800,
                                 color: overallColor),
                           ),
-                          const Text('/100',
+                          Text('/100',
                               style: TextStyle(
-                                  fontSize: 10, color: AppColors.textSecondary)),
+                                  fontSize: 10,
+                                  color: context.fomraTextSecondary)),
                         ],
                       ),
                     ],
@@ -2783,9 +2784,9 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                             : overall > 45
                                 ? 'Moderate infrastructure. Room to grow.'
                                 : 'Infrastructure needs development.',
-                        style: const TextStyle(
+                        style: TextStyle(
                             fontSize: 12,
-                            color: AppColors.textSecondary,
+                            color: context.fomraTextSecondary,
                             height: 1.4),
                       ),
                     ],
@@ -2816,8 +2817,10 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(e.key,
-                          style: const TextStyle(
-                              fontSize: 11, fontWeight: FontWeight.w600)),
+                          style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: context.fomraTextPrimary)),
                       const SizedBox(height: 4),
                       Text('${score.toInt()}',
                           style: TextStyle(
@@ -5454,7 +5457,8 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
         if (widget.village != null && widget.village!.isNotEmpty) ...[
           const SizedBox(height: 8),
           Text('${widget.village}${widget.taluk != null ? ', ${widget.taluk}' : ''}',
-              style: const TextStyle(fontSize: 10, color: AppColors.textSecondary)),
+              style: TextStyle(
+                  fontSize: 10, color: context.fomraTextSecondary)),
         ],
       ]),
     );
