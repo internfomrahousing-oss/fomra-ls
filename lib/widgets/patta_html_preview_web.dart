@@ -90,7 +90,7 @@ class _PattaHtmlPreviewState extends State<PattaHtmlPreview> {
           const SizedBox(height: 6),
         ],
         ClipRRect(
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(14),
           child: Container(
             height: widget.height,
             decoration: BoxDecoration(

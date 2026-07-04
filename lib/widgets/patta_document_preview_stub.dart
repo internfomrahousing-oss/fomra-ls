@@ -27,7 +27,7 @@ class PattaDocumentPreview extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       decoration: BoxDecoration(
         color: const Color(0xFFFFF8F8),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFFC62828).withValues(alpha: 0.35)),
       ),
       child: Row(
@@ -37,7 +37,7 @@ class PattaDocumentPreview extends StatelessWidget {
             height: 52,
             decoration: BoxDecoration(
               color: const Color(0xFFC62828).withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(14),
             ),
             child: const Icon(
               Icons.picture_as_pdf_outlined,

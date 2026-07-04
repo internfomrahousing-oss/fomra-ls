@@ -391,7 +391,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
                     dividerColor: Colors.transparent,
                     indicatorSize: TabBarIndicatorSize.tab,
                     indicator: BoxDecoration(
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(14),
                       color: indicator,
                     ),
                     labelColor: Colors.white,
@@ -416,10 +416,10 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
               Stack(clipBehavior: Clip.none, children: [
                 Material(
                   color: glass,
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(16),
                   child: InkWell(
                     onTap: _showNotificationsSheet,
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(16),
                     child: const Padding(
                       padding: EdgeInsets.all(10),
                       child: Icon(Icons.notifications_outlined,
@@ -527,10 +527,10 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
             child: Material(
               color: AppColors.primary.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(16),
               child: InkWell(
                 onTap: _openAddTask,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(16),
                 child: Padding(
                   padding: const EdgeInsets.all(16),
                   child: Row(children: [
@@ -538,7 +538,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
                         color: AppColors.primary,
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(14),
                       ),
                       child: const Icon(Icons.add_task,
                           color: Colors.white, size: 24),
@@ -1260,14 +1260,14 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
                   const _SectionLabel('Due Date'),
                   InkWell(
                     onTap: _pickDueDate,
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(16),
                     child: Container(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 14, vertical: 14),
                       decoration: BoxDecoration(
                         color: context.fomraSurfaceVar,
                         border: Border.all(color: context.fomraBorder),
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(16),
                       ),
                       child: Row(children: [
                         Icon(Icons.calendar_today,
@@ -1404,7 +1404,7 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
         padding: const WidgetStatePropertyAll(
             EdgeInsets.symmetric(vertical: 4)),
         shape: WidgetStatePropertyAll(RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(16),
           side: BorderSide(color: context.fomraBorder),
         )),
       ),
@@ -1412,14 +1412,14 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
         return InkWell(
           onTap: () =>
               controller.isOpen ? controller.close() : controller.open(),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(16),
           child: Container(
             padding:
                 const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
             decoration: BoxDecoration(
               color: context.fomraSurfaceVar,
               border: Border.all(color: context.fomraBorder),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(16),
             ),
             child: Row(children: [
               Icon(Icons.group_outlined,
@@ -1965,7 +1965,7 @@ class _EscalationTile extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
           color: AppColors.warning.withValues(alpha: 0.07),
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(
               color: AppColors.warning.withValues(alpha: 0.25)),
         ),
@@ -2058,7 +2058,7 @@ class _InfoPill extends StatelessWidget {
             const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
           color: color.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(12),
         ),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           Text(label,

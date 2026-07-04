@@ -829,7 +829,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
             color: context.fomraSurfaceVar,
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(16),
             border: Border.all(
               color: context.fomraBorder.withValues(alpha: 0.85),
             ),
@@ -1393,7 +1393,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                     const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 minimumSize: const Size(0, 38),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(14),
                 ),
               ),
             ),
@@ -1408,7 +1408,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
               color: context.isDarkMode
                   ? AppColors.warning.withValues(alpha: 0.14)
                   : const Color(0xFFFFFBEB),
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(12),
               border: Border.all(
                 color: context.isDarkMode
                     ? AppColors.warning.withValues(alpha: 0.4)
@@ -1434,7 +1434,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
               color: const Color(0xFFFEF2F2),
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(12),
               border: Border.all(color: const Color(0xFFFCA5A5)),
             ),
             child: Row(children: [
@@ -1454,7 +1454,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             decoration: BoxDecoration(
               color: context.fomraSurfaceVar,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(16),
             ),
             child: Row(
               children: [
@@ -1462,7 +1462,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
                     color: mbColor.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(12),
                   ),
                   child: Icon(
                     Icons.apartment_outlined,
@@ -1529,7 +1529,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                       minimumSize: const Size(0, 36),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(14),
                       ),
                     ),
                   ),
@@ -1868,7 +1868,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
               color: context.fomraSurfaceVar,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(16),
             ),
             child: Text(
               '${loc.latitude.toStringAsFixed(5)}° N, ${loc.longitude.toStringAsFixed(5)}° E',
@@ -2158,10 +2158,10 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
 
   Widget _buildZoomButton(IconData icon, VoidCallback onTap) => Material(
         color: AppColors.primary.withValues(alpha: 0.9),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         child: InkWell(
           onTap: _mapReady ? onTap : null,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(16),
           child: Padding(
             padding: const EdgeInsets.all(10),
             child: Icon(icon, color: Colors.white, size: 20),
@@ -2173,10 +2173,10 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
         color: context.fomraSurface.withValues(alpha: 0.9),
         elevation: 3,
         shadowColor: Colors.black26,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(16),
           child: Padding(
             padding: const EdgeInsets.all(10),
             child: Icon(icon, size: 20, color: AppColors.primary),
@@ -2209,13 +2209,13 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
       color: selected ? selectedBg : unselectedBg,
       elevation: selected ? 2 : 1,
       shadowColor: Colors.black.withValues(alpha: isDark ? 0.5 : 0.2),
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(16),
       child: InkWell(
         onTap: () => _setMapLayer(layer),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         child: Container(
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(16),
             border: Border.all(color: borderColor),
           ),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -2465,7 +2465,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
                     color: Colors.black54,
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(14),
                   ),
                   child: Text(
                     '${activeLoc.latitude.toStringAsFixed(5)}° N, '
@@ -2508,7 +2508,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
                 color: context.fomraSurfaceVar,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(16),
               ),
               child: Text(
                 'Pinned: ${activeLoc.latitude.toStringAsFixed(5)}° N, ${activeLoc.longitude.toStringAsFixed(5)}° E',
@@ -2650,7 +2650,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF00838F),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(16),
                 ),
                 padding: const EdgeInsets.symmetric(vertical: 13),
               ),
@@ -2813,7 +2813,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
                     color: color.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(16),
                     border: Border.all(color: color.withValues(alpha: 0.25)),
                   ),
                   child: Column(
@@ -3257,7 +3257,7 @@ class _PoiListSheet extends StatelessWidget {
                               lat: lat,
                               lon: lon,
                             ),
-                            borderRadius: BorderRadius.circular(10),
+                            borderRadius: BorderRadius.circular(14),
                             child: Padding(
                               padding:
                                   const EdgeInsets.symmetric(vertical: 8),
@@ -3329,7 +3329,7 @@ class _SectionCard extends StatelessWidget {
               padding: const EdgeInsets.all(9),
               decoration: BoxDecoration(
                 color: AppColors.primary.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(14),
               ),
               child: Icon(icon, color: AppColors.primary, size: 20),
             ),
@@ -3355,7 +3355,7 @@ class _ErrorBanner extends StatelessWidget {
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
           color: AppColors.error.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(12),
           border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
         ),
         child: Row(children: [
@@ -3423,7 +3423,7 @@ class _LeadValuationAmountTile extends StatelessWidget {
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: color.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(color: color.withValues(alpha: 0.25)),
         ),
         child: Column(
@@ -3462,7 +3462,7 @@ class _BenchmarkTile extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
         decoration: BoxDecoration(
           color: color.withValues(alpha: 0.07),
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(color: color.withValues(alpha: 0.22)),
         ),
         child: Column(
@@ -3507,7 +3507,7 @@ class _OutputCard extends StatelessWidget {
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: color.withValues(alpha: 0.07),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(color: color.withValues(alpha: 0.25)),
         ),
         child: Column(children: [
@@ -5349,7 +5349,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
             color: context.isDarkMode
                 ? AppColors.primary.withValues(alpha: 0.16)
                 : const Color(0xFFEFF6FF),
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(14),
             border: Border.all(
               color: context.isDarkMode
                   ? AppColors.primary.withValues(alpha: 0.35)
@@ -5396,7 +5396,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
               color: context.fomraSurfaceVar,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(16),
               border: Border.all(color: context.fomraBorder),
             ),
             child: Text(
@@ -5473,7 +5473,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
         color: context.fomraSurface,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(color: context.fomraBorder),
       ),
       child: Column(
@@ -5584,14 +5584,14 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
                 width: 88,
                 child: Material(
                   color: selected ? svc.color.withValues(alpha: 0.14) : context.fomraSurface,
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(16),
                   child: InkWell(
                     onTap: () => _onSelectGiService(svc.id),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(16),
                     child: Container(
                       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 6),
                       decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(16),
                         border: Border.all(
                           color: selected ? svc.color : svc.color.withValues(alpha: 0.4),
                           width: selected ? 2 : 1,
@@ -5727,7 +5727,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: svc.color.withValues(alpha: 0.04),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: svc.color.withValues(alpha: 0.3)),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -5902,7 +5902,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
           margin: const EdgeInsets.only(bottom: 8),
           decoration: BoxDecoration(
             color: Colors.amber.shade50,
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(12),
             border: Border.all(color: Colors.amber.shade200),
           ),
           child: Text(
@@ -6004,15 +6004,15 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
     // The whole card is the button — tapping anywhere opens the PDF.
     return Material(
       color: cardBg,
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: BorderRadius.circular(14),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(14),
         child: Container(
           width: double.infinity,
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(14),
             border: Border.all(color: cardBorder),
           ),
           child: Row(
@@ -6022,7 +6022,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
                 height: 48,
                 decoration: BoxDecoration(
                   color: iconBg,
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(Icons.picture_as_pdf_outlined, color: iconColor, size: 28),
               ),
@@ -6161,7 +6161,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: context.fomraSurface,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: context.fomraBorder),
         boxShadow: context.fomraCardShadow,
       ),
@@ -6223,7 +6223,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
           color: Colors.grey.shade50,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(12),
           border: Border.all(color: Colors.grey.shade300),
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -6243,7 +6243,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Colors.grey.shade300),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -6270,14 +6270,14 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
     return Expanded(
       child: Material(
         color: selected ? const Color(0xFF2E7D32).withValues(alpha: 0.14) : Colors.white,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(14),
         child: InkWell(
           onTap: () => setState(() => _selectedCropSeason = id),
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(14),
           child: Container(
             padding: const EdgeInsets.symmetric(vertical: 12),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(14),
               border: Border.all(
                 color: selected ? const Color(0xFF2E7D32) : const Color(0xFF2E7D32).withValues(alpha: 0.4),
                 width: selected ? 2 : 1,
@@ -6347,7 +6347,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: context.fomraSurface,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(
           color: row.containsPoint
               ? (context.isDarkMode
@@ -6401,7 +6401,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
     return Container(
       decoration: BoxDecoration(
         color: context.fomraSurface,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: row.containsPoint
               ? (context.isDarkMode
@@ -6467,7 +6467,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
             color: const Color(0xFF1B5E20).withValues(alpha: 0.05),
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(14),
             border: Border.all(color: const Color(0xFF1B5E20).withValues(alpha: 0.25)),
           ),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -6506,7 +6506,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
             color: const Color(0xFFC62828).withValues(alpha: 0.04),
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(14),
             border: Border.all(color: const Color(0xFFC62828).withValues(alpha: 0.25)),
           ),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -6560,7 +6560,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
     return Container(
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.04),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
       padding: const EdgeInsets.all(12),
@@ -6590,7 +6590,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
                     color: context.fomraSurface,
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: context.fomraBorder),
                   ),
                   child: Column(children: owner.entries.map((e) => _kv(e.key, e.value)).toList()),
@@ -6641,7 +6641,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
           color: const Color(0xFF1B5E20).withValues(alpha: 0.05),
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(color: const Color(0xFF1B5E20).withValues(alpha: 0.25)),
         ),
         child: Column(
@@ -6700,7 +6700,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
           color: const Color(0xFFC62828).withValues(alpha: 0.04),
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(color: const Color(0xFFC62828).withValues(alpha: 0.25)),
         ),
         child: Column(
@@ -6731,7 +6731,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(color: color.withValues(alpha: 0.35)),
       ),
       child: DropdownButtonHideUnderline(
@@ -6788,7 +6788,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(14),
             border: Border.all(color: color.withValues(alpha: 0.25)),
           ),
           child: DropdownButtonHideUnderline(
@@ -6848,7 +6848,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(
             color: selected != null ? color.withValues(alpha: 0.5) : const Color(0xFFE5E7EB)),
       ),

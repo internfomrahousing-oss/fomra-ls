@@ -247,7 +247,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
                   color: AppColors.primary.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(14),
                 ),
                 child: const Icon(Icons.lock_outline,
                     size: 20, color: AppColors.primary),
@@ -270,7 +270,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
                   color: AppColors.error.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(14),
                 ),
                 child: const Icon(Icons.logout_rounded,
                     size: 20, color: AppColors.error),
@@ -590,7 +590,7 @@ class _HeroBannerState extends State<_HeroBanner>
                       padding: const EdgeInsets.all(5),
                       decoration: BoxDecoration(
                         color: greetColor.withValues(alpha: 0.18),
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(12),
                       ),
                       child: Icon(greetIcon, color: greetColor, size: 15),
                     ),
@@ -708,7 +708,7 @@ class _MyPerformanceCard extends StatelessWidget {
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
             color: color.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(16),
           ),
           child: const Icon(Icons.emoji_events_outlined, color: color, size: 22),
         ),
@@ -762,7 +762,7 @@ class _PerformanceCard extends StatelessWidget {
             padding: const EdgeInsets.all(6),
             decoration: BoxDecoration(
               color: color.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(14),
             ),
             child: const Icon(Icons.emoji_events_outlined, color: color, size: 16),
           ),
@@ -888,7 +888,7 @@ class _KpiChip extends StatelessWidget {
                 padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
                   color: color.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(14),
                 ),
                 child: Icon(icon, color: color, size: 14),
               ),

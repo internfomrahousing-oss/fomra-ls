@@ -194,7 +194,7 @@ class _StartupScreenState extends State<_StartupScreen> {
                             backgroundColor: Colors.white,
                             foregroundColor: const Color(0xFF1B3A6B),
                             shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10)),
+                                borderRadius: BorderRadius.circular(14)),
                           ),
                         ),
                       ),

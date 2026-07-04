@@ -131,13 +131,13 @@ class _PattaDocumentPreviewState extends State<PattaDocumentPreview> {
           ),
         if (hasPreview)
           ClipRRect(
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(14),
             child: Container(
               height: widget.height,
               decoration: BoxDecoration(
                 color: Colors.grey.shade100,
                 border: Border.all(color: Colors.grey.shade300),
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(14),
               ),
               child: _viewType.isNotEmpty
                   ? HtmlElementView(viewType: _viewType)
@@ -149,12 +149,12 @@ class _PattaDocumentPreviewState extends State<PattaDocumentPreview> {
             color: Colors.transparent,
             child: InkWell(
               onTap: _openInNewTab,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(16),
               child: Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   color: const Color(0xFFFFF8F8),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(16),
                   border: Border.all(color: const Color(0xFFC62828).withValues(alpha: 0.35)),
                 ),
                 child: const Text('PDF loaded — click to open'),

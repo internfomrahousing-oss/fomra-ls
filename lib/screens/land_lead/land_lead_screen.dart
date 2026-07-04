@@ -766,7 +766,7 @@ class _LeadSummary extends StatelessWidget {
                     padding: const EdgeInsets.all(7),
                     decoration: BoxDecoration(
                       color: color.withValues(alpha: 0.16),
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(14),
                     ),
                     child: Icon(icon, color: color, size: 16),
                   ),
@@ -869,10 +869,10 @@ class _SearchBar extends StatelessWidget {
             const SizedBox(width: 10),
             Material(
               color: AppColors.primary.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(16),
               child: InkWell(
                 onTap: onFilter,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(16),
                 child: const Padding(
                   padding: EdgeInsets.all(11),
                   child: Icon(Icons.tune_rounded,
@@ -889,7 +889,7 @@ class _SearchBar extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
           decoration: BoxDecoration(
             color: AppColors.primary.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(14),
           ),
           child: Row(children: [
             Text('Filtered: ${filterStatus!.label}',

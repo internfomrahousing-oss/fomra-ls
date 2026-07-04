@@ -143,7 +143,7 @@ class ChangePasswordCard extends StatelessWidget {
                 padding: const EdgeInsets.all(9),
                 decoration: BoxDecoration(
                   color: cs.primary.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(14),
                 ),
                 child: Icon(Icons.lock_outline, color: cs.primary, size: 20),
               ),

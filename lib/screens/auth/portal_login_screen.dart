@@ -244,7 +244,7 @@ class _PortalLoginScreenState extends State<PortalLoginScreen> {
                                     decoration: BoxDecoration(
                                       color: AppColors.error
                                           .withValues(alpha: 0.08),
-                                      borderRadius: BorderRadius.circular(8),
+                                      borderRadius: BorderRadius.circular(12),
                                       border: Border.all(
                                           color: AppColors.error
                                               .withValues(alpha: 0.3)),
@@ -278,7 +278,7 @@ class _PortalLoginScreenState extends State<PortalLoginScreen> {
                                       foregroundColor: Colors.white,
                                       shape: RoundedRectangleBorder(
                                           borderRadius:
-                                              BorderRadius.circular(12)),
+                                              BorderRadius.circular(16)),
                                       elevation: 0,
                                     ),
                                     child: _loading

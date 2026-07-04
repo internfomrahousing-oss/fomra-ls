@@ -264,7 +264,7 @@ class _EmployeeCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 10),
       elevation: 0,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         side: BorderSide(color: context.fomraBorder),
       ),
       child: Padding(
@@ -312,7 +312,7 @@ class _EmployeeCard extends StatelessWidget {
                           color: active
                               ? AppColors.success.withValues(alpha: 0.12)
                               : Colors.grey.shade200,
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(16),
                         ),
                         child: Text(
                           employee.status.label,

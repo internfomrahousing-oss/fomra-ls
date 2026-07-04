@@ -31,7 +31,7 @@ class PattaHtmlPreview extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         border: Border.all(color: const Color(0xFF1B5E20).withValues(alpha: 0.2)),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(14),
       ),
       child: SingleChildScrollView(
         child: Text(text.isEmpty ? 'Patta document loaded' : text, style: const TextStyle(fontSize: 12)),

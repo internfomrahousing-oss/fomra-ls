@@ -134,7 +134,7 @@ class _FmbSketchViewerDialogState extends State<_FmbSketchViewerDialog> {
           height: h,
           decoration: BoxDecoration(
             color: const Color(0xFF263238),
-            borderRadius: _fullscreen ? BorderRadius.zero : BorderRadius.circular(8),
+            borderRadius: _fullscreen ? BorderRadius.zero : BorderRadius.circular(12),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.45),

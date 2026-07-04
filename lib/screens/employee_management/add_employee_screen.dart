@@ -94,7 +94,7 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
                               padding: const EdgeInsets.all(10),
                               decoration: BoxDecoration(
                                 color: AppColors.primary.withValues(alpha: 0.12),
-                                borderRadius: BorderRadius.circular(12),
+                                borderRadius: BorderRadius.circular(16),
                               ),
                               child: const Icon(Icons.badge_outlined,
                                   color: AppColors.primary, size: 20),

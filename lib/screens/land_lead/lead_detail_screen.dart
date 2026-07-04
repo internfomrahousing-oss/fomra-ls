@@ -242,7 +242,7 @@ Widget _sitePhotosRow(BuildContext context, List<String> urls) {
           child: GestureDetector(
             onTap: () => _showFullPhoto(context, urls[i]),
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(12),
               child: SizedBox(
                 width: thumbSize,
                 height: thumbSize,

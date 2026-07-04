@@ -213,7 +213,7 @@ class _LegalVerificationScreenState extends State<LegalVerificationScreen> {
           child: Card(
             margin: const EdgeInsets.only(bottom: 12),
             shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12)),
+                borderRadius: BorderRadius.circular(16)),
             elevation: 1,
             child: Padding(
               padding: const EdgeInsets.all(14),
@@ -222,7 +222,7 @@ class _LegalVerificationScreenState extends State<LegalVerificationScreen> {
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
                     color: AppColors.primary.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(14),
                   ),
                   child: const Icon(Icons.gavel_outlined,
                       color: AppColors.primary, size: 22),
@@ -393,7 +393,7 @@ class _LegalVerificationScreenState extends State<LegalVerificationScreen> {
                       backgroundColor: AppColors.primary,
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10)),
+                          borderRadius: BorderRadius.circular(14)),
                     ),
                   ),
                 ),
@@ -409,7 +409,7 @@ class _LegalVerificationScreenState extends State<LegalVerificationScreen> {
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
             color: AppColors.primary.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(12),
           ),
           child: Icon(icon, color: AppColors.primary, size: 18),
         ),
@@ -436,13 +436,13 @@ class _LegalVerificationScreenState extends State<LegalVerificationScreen> {
             hintStyle: const TextStyle(
                 fontSize: 12, color: AppColors.textSecondary),
             border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(14),
                 borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
             enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(14),
                 borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
             focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(14),
                 borderSide:
                     const BorderSide(color: AppColors.primary, width: 1.5)),
             contentPadding:
@@ -464,7 +464,7 @@ class _LegalVerificationScreenState extends State<LegalVerificationScreen> {
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: Colors.grey.shade50,
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(color: const Color(0xFFE5E7EB)),
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -490,13 +490,13 @@ class _LegalVerificationScreenState extends State<LegalVerificationScreen> {
                 hintStyle: const TextStyle(
                     fontSize: 12, color: AppColors.textSecondary),
                 border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(12),
                     borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
                 enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(12),
                     borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
                 focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(12),
                     borderSide: const BorderSide(
                         color: AppColors.primary, width: 1.5)),
                 contentPadding: const EdgeInsets.symmetric(
@@ -555,7 +555,7 @@ class _LegalVerificationScreenState extends State<LegalVerificationScreen> {
                 color: selected
                     ? color.withValues(alpha: 0.1)
                     : Colors.grey.shade50,
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(14),
                 border: Border.all(
                   color: selected ? color : Colors.grey.shade300,
                   width: selected ? 2 : 1,
@@ -588,13 +588,13 @@ class _LegalVerificationScreenState extends State<LegalVerificationScreen> {
             hintStyle: const TextStyle(
                 fontSize: 12, color: AppColors.textSecondary),
             border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(14),
                 borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
             enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(14),
                 borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
             focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(14),
                 borderSide: const BorderSide(
                     color: AppColors.primary, width: 1.5)),
             contentPadding:

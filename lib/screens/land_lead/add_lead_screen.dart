@@ -875,7 +875,7 @@ class _TermsDropdown extends StatelessWidget {
         initialValue: value,
         onChanged: onChanged,
         menuMaxHeight: 260,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         decoration: FomraInput.decoration(
           context: context,
           label: 'Terms',
@@ -1059,7 +1059,7 @@ class _MultiPhotoUpload extends StatelessWidget {
           width: _thumbSize,
           height: _thumbSize,
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(12),
             child: child,
           ),
         ),
@@ -1257,7 +1257,7 @@ class _LocationPinMap extends StatelessWidget {
         ]),
         const SizedBox(height: 8),
         ClipRRect(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(16),
           child: SizedBox(
             height: 240,
             child: Stack(
@@ -1297,7 +1297,7 @@ class _LocationPinMap extends StatelessWidget {
                           horizontal: 12, vertical: 8),
                       decoration: BoxDecoration(
                         color: context.fomraSurface.withValues(alpha: 0.95),
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(12),
                         boxShadow: [
                           BoxShadow(
                             color: Colors.black.withValues(alpha: 0.08),
@@ -1367,7 +1367,7 @@ class _LocationModeToggle extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: context.fomraSurfaceVar,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
       ),
       padding: const EdgeInsets.all(4),
       child: Row(children: [
@@ -1464,15 +1464,15 @@ class _LiveLocationButton extends StatelessWidget {
       color: filled
           ? AppColors.success.withValues(alpha: 0.08)
           : AppColors.primary.withValues(alpha: 0.06),
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(16),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         child: Container(
           padding:
               const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(16),
             border: Border.all(
               color: filled
                   ? AppColors.success.withValues(alpha: 0.4)
@@ -1574,7 +1574,7 @@ class _SectionHeader extends StatelessWidget {
           height: 34,
           decoration: BoxDecoration(
             gradient: AppColors.primaryGradient,
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(16),
           ),
           child: Center(
             child: Text(number,
@@ -1623,7 +1623,7 @@ class _InputSourceDropdown extends StatelessWidget {
         initialValue: value,
         onChanged: onChanged,
         menuMaxHeight: 260,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         decoration: FomraInput.decoration(
           context: context,
           label: 'Input Source',
@@ -1673,7 +1673,7 @@ class _ReadOnlyField extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         color: context.fomraSurfaceVar,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: context.fomraBorder),
       ),
       child: Row(children: [
@@ -1757,7 +1757,7 @@ class _LandTypeDropdown extends StatelessWidget {
         initialValue: value,
         onChanged: onChanged,
         menuMaxHeight: 280,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         decoration: FomraInput.decoration(
           context: context,
           label: 'Land Type',

@@ -125,7 +125,7 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
                     top: 12,
                     child: Material(
                       color: context.fomraSurface.withValues(alpha: 0.95),
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(16),
                       elevation: 2,
                       child: Padding(
                         padding: const EdgeInsets.symmetric(
@@ -150,7 +150,7 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
                   bottom: 12,
                   child: Material(
                     color: context.fomraSurface.withValues(alpha: 0.95),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(16),
                     elevation: 2,
                     child: Padding(
                       padding: const EdgeInsets.all(12),

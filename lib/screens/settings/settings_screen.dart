@@ -64,7 +64,7 @@ class _SettingsCard extends StatelessWidget {
                 padding: const EdgeInsets.all(9),
                 decoration: BoxDecoration(
                   color: cs.primary.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(14),
                 ),
                 child: Icon(icon, color: cs.primary, size: 20),
               ),
@@ -156,7 +156,7 @@ class _ThemeOption extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(16),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.fromLTRB(6, 6, 6, 8),
@@ -164,7 +164,7 @@ class _ThemeOption extends StatelessWidget {
           color: selected
               ? cs.primary.withValues(alpha: 0.12)
               : cs.surfaceContainerHighest.withValues(alpha: 0.4),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: selected
                 ? cs.primary

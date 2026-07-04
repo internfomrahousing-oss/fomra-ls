@@ -113,7 +113,7 @@ class _DrawerHeader extends StatelessWidget {
                       )
                     : null,
                 color: isDark ? null : AppColors.accent,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(16),
                 border: isDark
                     ? Border.all(
                         color: AppColors.primaryLight.withValues(alpha: 0.4))
@@ -174,7 +174,7 @@ class _DrawerTile extends StatelessWidget {
         color: isActive
             ? accent.withValues(alpha: isDark ? 0.14 : 0.18)
             : Colors.transparent,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(14),
         border: isActive
             ? Border.all(color: accent.withValues(alpha: isDark ? 0.35 : 0.25))
             : null,
@@ -211,7 +211,7 @@ class _DrawerTile extends StatelessWidget {
           }
         },
         dense: true,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       ),
     );
   }

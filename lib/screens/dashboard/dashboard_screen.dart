@@ -294,7 +294,7 @@ class _Header extends StatelessWidget {
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
             color: accentColor.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(14),
           ),
           child: Icon(icon, color: accentColor, size: 22),
         ),
@@ -370,7 +370,7 @@ class _KpiCard extends StatelessWidget {
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
                         color: d.color.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(8)),
+                        borderRadius: BorderRadius.circular(12)),
                     child: Icon(d.icon, color: d.color, size: 18),
                   ),
                   Container(
@@ -635,7 +635,7 @@ class _KpiLeadsSheet extends StatelessWidget {
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
                     color: color.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(12),
                   ),
                   child: Icon(Icons.list_alt, color: color, size: 20),
                 ),
@@ -702,7 +702,7 @@ class _KpiLeadTile extends StatelessWidget {
 
     return Material(
       color: context.fomraSurfaceVar,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(16),
       child: InkWell(
         onTap: () {
           Navigator.pop(context);
@@ -713,7 +713,7 @@ class _KpiLeadTile extends StatelessWidget {
             ),
           );
         },
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         child: Padding(
           padding: const EdgeInsets.all(14),
           child: Column(
