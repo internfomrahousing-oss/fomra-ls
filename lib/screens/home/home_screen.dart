@@ -48,6 +48,8 @@ class _HomeScreenState extends State<HomeScreen> {
     for (final l in AppStore.instance.leads) {
       final name = l.createdByName.trim();
       if (name.isEmpty) continue;
+      // Management is not part of the employee leaderboard.
+      if (name.toLowerCase() == 'management') continue;
       counts[name] = (counts[name] ?? 0) + 1;
     }
 
