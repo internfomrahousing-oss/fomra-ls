@@ -14,6 +14,7 @@ import '../../widgets/fomra_app_bar.dart';
 import '../../widgets/fomra_bottom_nav.dart';
 import 'add_lead_screen.dart';
 import 'lead_detail_screen.dart';
+import 'leads_map_screen.dart';
 
 class LandLeadScreen extends StatefulWidget {
   final bool isTab;
@@ -284,38 +285,72 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
     );
   }
 
+  void _openLeadsMap() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => LeadsMapScreen(leads: _leads),
+      ),
+    );
+  }
+
+  Widget _actionPill({
+    required VoidCallback onTap,
+    required IconData icon,
+    required String label,
+    Color? foreground,
+    Color? background,
+  }) {
+    final fg = foreground ?? AppColors.primary;
+    final bg = background ?? AppColors.primary.withValues(alpha: 0.10);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(999),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: fg.withValues(alpha: 0.25)),
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(icon, size: 18, color: fg),
+            const SizedBox(width: 7),
+            Text(label,
+                style: TextStyle(
+                    fontSize: 13.5, fontWeight: FontWeight.w700, color: fg)),
+          ]),
+        ),
+      ),
+    );
+  }
+
   Widget _buildSelectBar() {
     if (!_selectMode) {
-      // Idle: a compact pill button on the right.
       return Padding(
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 2),
         child: Align(
           alignment: Alignment.centerRight,
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: _toggleSelectMode,
-              borderRadius: BorderRadius.circular(999),
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha: 0.10),
-                  borderRadius: BorderRadius.circular(999),
-                  border: Border.all(
-                      color: AppColors.primary.withValues(alpha: 0.25)),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              if (_isManagement)
+                _actionPill(
+                  onTap: _toggleSelectMode,
+                  icon: Icons.checklist_rtl,
+                  label: 'Select',
                 ),
-                child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                  Icon(Icons.checklist_rtl, size: 18, color: AppColors.primary),
-                  SizedBox(width: 7),
-                  Text('Select',
-                      style: TextStyle(
-                          fontSize: 13.5,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.primary)),
-                ]),
+              if (_isManagement) const SizedBox(height: 8),
+              _actionPill(
+                onTap: _openLeadsMap,
+                icon: Icons.map_outlined,
+                label: 'Show all projects',
+                foreground: const Color(0xFF0F766E),
+                background: const Color(0xFF0F766E).withValues(alpha: 0.10),
               ),
-            ),
+            ],
           ),
         ),
       );
@@ -433,7 +468,7 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
     }
 
     final slivers = <Widget>[
-      if (_isManagement && _leads.isNotEmpty)
+      if (_leads.isNotEmpty)
         SliverToBoxAdapter(child: _buildSelectBar()),
       if (_leads.isNotEmpty) SliverToBoxAdapter(child: _LeadSummary(leads: _leads)),
       if (_leads.isNotEmpty)
