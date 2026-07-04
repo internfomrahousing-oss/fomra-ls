@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../models/add_lead_result.dart';
 import '../../models/land_lead.dart';
 import '../../services/app_store.dart';
+import '../../services/auth_service.dart';
 import '../../services/land_lead_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_theme_context.dart';
@@ -62,7 +63,17 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
     }
   }
 
-  List<LandLead> get _leads => AppStore.instance.leads;
+  /// Management sees every lead; an employee sees only the leads they added.
+  List<LandLead> get _leads {
+    final all = AppStore.instance.leads;
+    if (AuthService.instance.isManagement) return all;
+    final me =
+        (AuthService.instance.currentUser?.fullName ?? '').trim().toLowerCase();
+    if (me.isEmpty) return all;
+    return all
+        .where((l) => l.createdByName.trim().toLowerCase() == me)
+        .toList();
+  }
 
   List<LandLead> get _filtered => _leads.where((l) {
         final matchStatus = _filterStatus == null || l.status == _filterStatus;
