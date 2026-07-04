@@ -327,36 +327,30 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
     );
   }
 
-  Widget _buildSelectBar() {
-    if (!_selectMode) {
-      return Padding(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 2),
-        child: Align(
-          alignment: Alignment.centerRight,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              if (_isManagement)
-                _actionPill(
-                  onTap: _toggleSelectMode,
-                  icon: Icons.checklist_rtl,
-                  label: 'Select',
-                ),
-              if (_isManagement) const SizedBox(height: 8),
-              _actionPill(
-                onTap: _openLeadsMap,
-                icon: Icons.map_outlined,
-                label: 'Show all projects',
-                foreground: const Color(0xFF0F766E),
-                background: const Color(0xFF0F766E).withValues(alpha: 0.10),
-              ),
-            ],
-          ),
+  Widget _buildIdleManagementActions() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _actionPill(
+          onTap: _toggleSelectMode,
+          icon: Icons.checklist_rtl,
+          label: 'Select',
         ),
-      );
-    }
+        const SizedBox(height: 8),
+        _actionPill(
+          onTap: _openLeadsMap,
+          icon: Icons.map_outlined,
+          label: 'Show all projects',
+          foreground: const Color(0xFF0F766E),
+          background: const Color(0xFF0F766E).withValues(alpha: 0.10),
+        ),
+      ],
+    );
+  }
 
-    // Active: a highlighted action bar.
+  Widget _buildSelectBar() {
+    if (!_selectMode) return const SizedBox.shrink();
     final count = _selectedLeadIds.length;
     final canAssign = count > 0;
     return Padding(
@@ -468,9 +462,17 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
     }
 
     final slivers = <Widget>[
-      if (_leads.isNotEmpty)
+      if (_isManagement && _selectMode && _leads.isNotEmpty)
         SliverToBoxAdapter(child: _buildSelectBar()),
-      if (_leads.isNotEmpty) SliverToBoxAdapter(child: _LeadSummary(leads: _leads)),
+      if (_leads.isNotEmpty)
+        SliverToBoxAdapter(
+          child: _LeadSummary(
+            leads: _leads,
+            trailing: _isManagement && !_selectMode
+                ? _buildIdleManagementActions()
+                : null,
+          ),
+        ),
       if (_leads.isNotEmpty)
         SliverToBoxAdapter(
           child: _SearchBar(
@@ -707,7 +709,8 @@ class _EmptyState extends StatelessWidget {
 
 class _LeadSummary extends StatelessWidget {
   final List<LandLead> leads;
-  const _LeadSummary({required this.leads});
+  final Widget? trailing;
+  const _LeadSummary({required this.leads, this.trailing});
 
   @override
   Widget build(BuildContext context) {
@@ -722,83 +725,99 @@ class _LeadSummary extends StatelessWidget {
     return Container(
       color: context.fomraPageBg,
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-      child: SizedBox(
-        height: 122,
-        child: ListView.separated(
-          scrollDirection: Axis.horizontal,
-          itemCount: kpis.length,
-          separatorBuilder: (_, __) => const SizedBox(width: 12),
-          itemBuilder: (_, i) {
-            final status = kpis[i].$1;
-            final icon = kpis[i].$2;
-            final count = leads.where((l) => l.status == status).length;
-            final color = status.color;
-            return Container(
-              width: 152,
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(18),
-                gradient: LinearGradient(
-                  colors: [color.withValues(alpha: 0.18), color.withValues(alpha: 0.06)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                border: Border.all(color: color.withValues(alpha: 0.18)),
-                boxShadow: context.fomraCardShadow,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(7),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: SizedBox(
+              height: 122,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: kpis.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 12),
+                itemBuilder: (_, i) {
+                  final status = kpis[i].$1;
+                  final icon = kpis[i].$2;
+                  final count = leads.where((l) => l.status == status).length;
+                  final color = status.color;
+                  return Container(
+                    width: 152,
+                    padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: color.withValues(alpha: 0.16),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Icon(icon, color: color, size: 16),
-                  ),
-                  const Spacer(),
-                  Text(
-                    '$count',
-                    style: TextStyle(
-                      color: color,
-                      fontSize: 28,
-                      fontWeight: FontWeight.w800,
-                      height: 1,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    status.label,
-                    style: TextStyle(
-                      color: context.fomraTextPrimary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Container(
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: color.withValues(alpha: 0.22),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: FractionallySizedBox(
-                      alignment: Alignment.centerLeft,
-                      widthFactor: leads.isEmpty ? 0 : (count / leads.length).clamp(0, 1),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: color,
-                          borderRadius: BorderRadius.circular(999),
-                        ),
+                      borderRadius: BorderRadius.circular(18),
+                      gradient: LinearGradient(
+                        colors: [
+                          color.withValues(alpha: 0.18),
+                          color.withValues(alpha: 0.06)
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
                       ),
+                      border: Border.all(color: color.withValues(alpha: 0.18)),
+                      boxShadow: context.fomraCardShadow,
                     ),
-                  ),
-                ],
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(7),
+                          decoration: BoxDecoration(
+                            color: color.withValues(alpha: 0.16),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Icon(icon, color: color, size: 16),
+                        ),
+                        const Spacer(),
+                        Text(
+                          '$count',
+                          style: TextStyle(
+                            color: color,
+                            fontSize: 28,
+                            fontWeight: FontWeight.w800,
+                            height: 1,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          status.label,
+                          style: TextStyle(
+                            color: context.fomraTextPrimary,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Container(
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: color.withValues(alpha: 0.22),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: FractionallySizedBox(
+                            alignment: Alignment.centerLeft,
+                            widthFactor: leads.isEmpty
+                                ? 0
+                                : (count / leads.length).clamp(0, 1),
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: color,
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
               ),
-            );
-          },
-        ),
+            ),
+          ),
+          if (trailing != null) ...[
+            const SizedBox(width: 12),
+            trailing!,
+          ],
+        ],
       ),
     );
   }
