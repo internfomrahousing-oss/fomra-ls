@@ -2,8 +2,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../models/land_lead.dart';
+import '../settings/change_password_screen.dart';
 import '../../services/auth_service.dart';
 import '../../services/app_store.dart';
+import '../../services/employee_service.dart';
+import '../../services/land_lead_service.dart';
 import '../../services/notifications_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_theme_context.dart';
@@ -37,16 +40,77 @@ class _HomeScreenState extends State<HomeScreen> {
 
   int get _unreadCount => _notifications.where((n) => !n.isRead).length;
 
+  bool get _isManagement => AuthService.instance.isManagement;
+
+  /// Per-employee "leads added" leaderboard, highest first.
+  List<_LeadPerf> get _performance {
+    final counts = <String, int>{};
+    for (final l in AppStore.instance.leads) {
+      final name = l.createdByName.trim();
+      if (name.isEmpty) continue;
+      counts[name] = (counts[name] ?? 0) + 1;
+    }
+
+    final employees = AppStore.instance.employees;
+    final result = <_LeadPerf>[];
+    if (employees.isNotEmpty) {
+      for (final e in employees) {
+        result.add(_LeadPerf(
+            e.fullName, e.designation, counts[e.fullName.trim()] ?? 0));
+      }
+      // Include lead creators who aren't in the roster (e.g. removed staff).
+      for (final entry in counts.entries) {
+        final inRoster =
+            employees.any((e) => e.fullName.trim() == entry.key);
+        if (!inRoster) result.add(_LeadPerf(entry.key, '', entry.value));
+      }
+    } else {
+      for (final entry in counts.entries) {
+        result.add(_LeadPerf(entry.key, '', entry.value));
+      }
+    }
+
+    result.sort((a, b) => b.count.compareTo(a.count));
+    return result;
+  }
 
   @override
   void initState() {
     super.initState();
     AppStore.instance.addListener(_onStoreUpdate);
     _loadNotifications();
+    _loadPerformanceData();
     _notifChannel = NotificationsService.subscribe(
       audience: _notifAudience,
       onChange: _loadNotifications,
     );
+  }
+
+  /// Make sure leads are loaded so both the management leaderboard and an
+  /// employee's own "leads added" count have data before those screens are
+  /// opened. The employee roster is only needed for the management leaderboard.
+  Future<void> _loadPerformanceData() async {
+    if (AppStore.instance.leads.isEmpty) {
+      try {
+        final leads = await LandLeadService.getAll();
+        AppStore.instance.setLeads(leads);
+      } catch (_) {/* keep whatever is cached */}
+    }
+    if (_isManagement && AppStore.instance.employees.isEmpty) {
+      try {
+        final employees = await EmployeeService.getAll();
+        if (employees.isNotEmpty) AppStore.instance.setEmployees(employees);
+      } catch (_) {/* fall back to lead-derived names */}
+    }
+  }
+
+  /// Leads added by the currently signed-in user (matched by creator name).
+  int get _myLeadCount {
+    final me = (AuthService.instance.currentUser?.fullName ?? '').trim();
+    if (me.isEmpty) return 0;
+    return AppStore.instance.leads
+        .where((l) => l.createdByName.trim() == me)
+        .length;
   }
 
   @override
@@ -131,6 +195,39 @@ class _HomeScreenState extends State<HomeScreen> {
                       fontSize: 13, color: context.fomraTextSecondary)),
             ],
             const SizedBox(height: 16),
+            // My performance — leads this user has added.
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0EA5E9).withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                    color: const Color(0xFF0EA5E9).withValues(alpha: 0.25)),
+              ),
+              child: Row(children: [
+                const Icon(Icons.emoji_events_outlined,
+                    size: 20, color: Color(0xFF0EA5E9)),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text('My Performance',
+                      style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: context.fomraTextPrimary)),
+                ),
+                Text('$_myLeadCount',
+                    style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF0EA5E9))),
+                const SizedBox(width: 6),
+                Text('leads added',
+                    style: TextStyle(
+                        fontSize: 12, color: context.fomraTextSecondary)),
+              ]),
+            ),
+            const SizedBox(height: 12),
             const Divider(height: 1),
             ListTile(
               contentPadding: EdgeInsets.zero,
@@ -140,15 +237,19 @@ class _HomeScreenState extends State<HomeScreen> {
                   color: AppColors.primary.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: const Icon(Icons.settings_outlined,
+                child: const Icon(Icons.lock_outline,
                     size: 20, color: AppColors.primary),
               ),
-              title: const Text('Settings',
+              title: const Text('Change Password',
                   style: TextStyle(fontWeight: FontWeight.w600)),
               trailing: const Icon(Icons.chevron_right_rounded, size: 20),
               onTap: () {
                 Navigator.pop(ctx);
-                Navigator.pushNamed(context, '/settings');
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) => const ChangePasswordScreen()),
+                );
               },
             ),
             ListTile(
@@ -259,59 +360,12 @@ class _HomeScreenState extends State<HomeScreen> {
                   ]),
                   const SizedBox(height: 24),
 
-                  const _SectionHeader('Quick Actions'),
-                  const SizedBox(height: 16),
-                  GridView.count(
-                    crossAxisCount: 2,
-                    crossAxisSpacing: 10,
-                    mainAxisSpacing: 10,
-                    childAspectRatio: 2.8,
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    children: [
-                      const _ActionCard(
-                        icon: Icons.space_dashboard_outlined,
-                        label: 'Land Workspace',
-                        sub: 'Open',
-                        route: '/land-lead',
-                        gradient: LinearGradient(
-                          colors: [Color(0xFF041E42), Color(0xFF1E3A8A)],
-                          begin: Alignment.topLeft, end: Alignment.bottomRight,
-                        ),
-                      ),
-                      const _ActionCard(
-                        icon: Icons.insights_outlined,
-                        label: 'Market Intel',
-                        sub: 'Open',
-                        route: '/market-intelligence',
-                        gradient: LinearGradient(
-                          colors: [Color(0xFF0F2B6E), Color(0xFF2563EB)],
-                          begin: Alignment.topLeft, end: Alignment.bottomRight,
-                        ),
-                      ),
-                      if (AuthService.instance.isManagement)
-                        const _ActionCard(
-                          icon: Icons.dashboard_outlined,
-                          label: 'Dashboard',
-                          sub: 'Open',
-                          route: '/dashboard',
-                          gradient: LinearGradient(
-                            colors: [Color(0xFF0A2348), Color(0xFF1A3A7A)],
-                            begin: Alignment.topLeft, end: Alignment.bottomRight,
-                          ),
-                        ),
-                      const _ActionCard(
-                        icon: Icons.settings_outlined,
-                        label: 'Settings',
-                        sub: 'Open',
-                        route: '/settings',
-                        gradient: LinearGradient(
-                          colors: [Color(0xFF1E1B4B), Color(0xFF4F46E5)],
-                          begin: Alignment.topLeft, end: Alignment.bottomRight,
-                        ),
-                      ),
-                    ],
-                  ),
+                  // Management-only: leads-added performance per employee.
+                  if (_isManagement) ...[
+                    const _SectionHeader('Performance'),
+                    const SizedBox(height: 12),
+                    _PerformanceCard(entries: _performance),
+                  ],
                   const SizedBox(height: 28),
                 ],
               ),
@@ -367,7 +421,10 @@ class _HeroBannerState extends State<_HeroBanner>
   @override
   Widget build(BuildContext context) {
     final time = _formattedTime(_now);
-    final greeting = _greetingFor(_now);
+    final firstName = widget.userName.trim().split(RegExp(r'\s+')).first;
+    final greeting = firstName.isEmpty
+        ? _greetingFor(_now)
+        : '${_greetingFor(_now)}, $firstName';
     final greetIcon = _greetIconFor(_now);
     final isDark = context.isDarkMode;
     final greetColor = _greetingAccent(_now);
@@ -603,6 +660,136 @@ class _Blob extends StatelessWidget {
 
 // ── KPI Chip ─────────────────────────────────────────────────────────────────
 
+// ── Performance ───────────────────────────────────────────────────────────────
+
+class _LeadPerf {
+  final String name;
+  final String designation;
+  final int count;
+  const _LeadPerf(this.name, this.designation, this.count);
+}
+
+class _PerformanceCard extends StatelessWidget {
+  final List<_LeadPerf> entries;
+  const _PerformanceCard({required this.entries});
+
+  @override
+  Widget build(BuildContext context) {
+    const color = Color(0xFF0EA5E9);
+    final total = entries.fold<int>(0, (s, e) => s + e.count);
+    final maxCount =
+        entries.isEmpty ? 0 : entries.map((e) => e.count).reduce((a, b) => a > b ? a : b);
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: context.fomraSurface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
+        boxShadow: context.fomraCardShadow,
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(Icons.emoji_events_outlined, color: color, size: 16),
+          ),
+          const SizedBox(width: 10),
+          Text('Leads Added',
+              style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: context.fomraTextPrimary)),
+          const Spacer(),
+          Text('$total total',
+              style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: context.fomraTextSecondary)),
+        ]),
+        const SizedBox(height: 6),
+        if (entries.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            child: Text('No employee lead activity yet.',
+                style: TextStyle(
+                    fontSize: 13, color: context.fomraTextSecondary)),
+          )
+        else
+          ...List.generate(entries.length, (i) {
+            final e = entries[i];
+            final frac = maxCount == 0 ? 0.0 : e.count / maxCount;
+            return Padding(
+              padding: const EdgeInsets.only(top: 14),
+              child: Row(children: [
+                CircleAvatar(
+                  radius: 16,
+                  backgroundColor: color.withValues(alpha: 0.12),
+                  child: Text(
+                    e.name.isNotEmpty ? e.name[0].toUpperCase() : '?',
+                    style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: color),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(children: [
+                        Expanded(
+                          child: Text(
+                            e.name.isEmpty ? 'Unknown' : e.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: context.fomraTextPrimary),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text('${e.count}',
+                            style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w800,
+                                color: color)),
+                      ]),
+                      const SizedBox(height: 6),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(6),
+                        child: LinearProgressIndicator(
+                          value: frac,
+                          minHeight: 6,
+                          backgroundColor: color.withValues(alpha: 0.10),
+                          valueColor:
+                              const AlwaysStoppedAnimation<Color>(color),
+                        ),
+                      ),
+                      if (e.designation.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(e.designation,
+                            style: TextStyle(
+                                fontSize: 11,
+                                color: context.fomraTextSecondary)),
+                      ],
+                    ],
+                  ),
+                ),
+              ]),
+            );
+          }),
+      ]),
+    );
+  }
+}
+
 class _KpiChip extends StatelessWidget {
   final String label;
   final int value;
@@ -688,123 +875,6 @@ class _SectionHeader extends StatelessWidget {
                 color: context.fomraTextPrimary,
                 letterSpacing: 0.1)),
       ]);
-}
-
-// ── Action Card ───────────────────────────────────────────────────────────────
-
-class _ActionCard extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String sub;
-  final String route;
-  final LinearGradient gradient;
-  const _ActionCard({
-    required this.icon,
-    required this.label,
-    required this.sub,
-    required this.route,
-    required this.gradient,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return _HoverActionCard(
-      onTap: () => Navigator.pushNamed(context, route),
-      gradient: gradient,
-      icon: icon,
-      label: label,
-      sub: sub,
-    );
-  }
-}
-
-class _HoverActionCard extends StatefulWidget {
-  final VoidCallback onTap;
-  final LinearGradient gradient;
-  final IconData icon;
-  final String label;
-  final String sub;
-
-  const _HoverActionCard({
-    required this.onTap,
-    required this.gradient,
-    required this.icon,
-    required this.label,
-    required this.sub,
-  });
-
-  @override
-  State<_HoverActionCard> createState() => _HoverActionCardState();
-}
-
-class _HoverActionCardState extends State<_HoverActionCard> {
-  bool _hovered = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
-      child: AnimatedScale(
-        duration: const Duration(milliseconds: 220),
-        scale: _hovered ? 1.01 : 1,
-        child: Material(
-          color: Colors.transparent,
-          borderRadius: BorderRadius.circular(14),
-          child: Ink(
-            decoration: BoxDecoration(
-              gradient: widget.gradient,
-              borderRadius: BorderRadius.circular(14),
-              boxShadow: AppColors.coloredShadow(widget.gradient.colors.first),
-            ),
-            child: InkWell(
-              onTap: widget.onTap,
-              borderRadius: BorderRadius.circular(14),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(7),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Icon(widget.icon, color: Colors.white, size: 16),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        widget.label,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    Text(
-                      widget.sub,
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.85),
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Icon(Icons.chevron_right_rounded,
-                        color: Colors.white.withValues(alpha: 0.9), size: 18),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 // ── Notifications Sheet ───────────────────────────────────────────────────────

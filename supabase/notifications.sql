@@ -30,14 +30,21 @@ CREATE POLICY "anyone can manage notifications"
   USING (true)
   WITH CHECK (true);
 
--- Make sure the uploader-name column exists (see land_leads.sql).
+-- Make sure the uploader-name and uploader-role columns exist (see land_leads.sql).
 ALTER TABLE land_leads ADD COLUMN IF NOT EXISTS created_by_name TEXT DEFAULT '';
+ALTER TABLE land_leads ADD COLUMN IF NOT EXISTS created_by_role TEXT DEFAULT 'employee';
 
--- Notify management whenever a new land lead is uploaded, naming the employee
--- who uploaded it. Runs with definer rights so it fires regardless of role.
+-- Notify management whenever an EMPLOYEE uploads a new land lead, naming the
+-- employee. Leads uploaded by management itself do NOT notify management.
+-- Runs with definer rights so it fires regardless of role.
 CREATE OR REPLACE FUNCTION notify_management_on_new_lead()
 RETURNS TRIGGER AS $$
 BEGIN
+  -- Skip notifications for leads management added themselves.
+  IF COALESCE(NEW.created_by_role, '') = 'management' THEN
+    RETURN NEW;
+  END IF;
+
   INSERT INTO notifications (audience, type, title, message, lead_id)
   VALUES (
     'management',

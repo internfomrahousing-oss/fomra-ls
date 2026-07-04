@@ -21,6 +21,24 @@ class NotificationsService {
         .toList();
   }
 
+  /// Insert a notification for an audience ('management' | 'employee').
+  /// Fire-and-forget from the UI; failures are swallowed by the caller.
+  static Future<void> create({
+    required String audience,
+    required String title,
+    String message = '',
+    String type = 'alert',
+    String? leadId,
+  }) async {
+    await _db.from('notifications').insert({
+      'audience': audience,
+      'type': type,
+      'title': title,
+      'message': message,
+      if (leadId != null) 'lead_id': leadId,
+    });
+  }
+
   static Future<void> markRead(String id) async {
     await _db.from('notifications').update({'is_read': true}).eq('id', id);
   }

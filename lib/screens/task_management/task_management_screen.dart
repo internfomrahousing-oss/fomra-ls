@@ -3,6 +3,7 @@ import '../../models/employee_profile.dart';
 import '../../services/app_store.dart';
 import '../../services/auth_service.dart';
 import '../../services/employee_service.dart';
+import '../../services/notifications_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_input.dart';
 import '../../theme/fomra_theme_context.dart';
@@ -216,6 +217,22 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
         }
       }
     }
+  }
+
+  /// When management assigns a task, push a live notification to the employee
+  /// portal's notification bell (audience-based, shown to signed-in employees).
+  void _notifyAssignees(Task task) {
+    if (!AuthService.instance.isManagement) return;
+    if (task.assignedTo.isEmpty) return;
+    final who = task.assignedTo.join(', ');
+    NotificationsService.create(
+      audience: 'employee',
+      type: 'task',
+      title: 'New task assigned',
+      message: '${task.title} — assigned to $who',
+    ).catchError((_) {
+      // Non-fatal: the task is still created if the notification insert fails.
+    });
   }
 
   void _pushNotification(Task task, String message, {String? id}) {
@@ -666,10 +683,13 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => _AddTaskSheet(
-        onSave: (task) => setState(() {
-          _tasks.insert(0, task);
-          _pushNotification(task, '✅ Task "${task.title}" created.');
-        }),
+        onSave: (task) {
+          setState(() {
+            _tasks.insert(0, task);
+            _pushNotification(task, '✅ Task "${task.title}" created.');
+          });
+          _notifyAssignees(task);
+        },
       ),
     );
   }

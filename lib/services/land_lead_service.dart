@@ -23,6 +23,8 @@ class LandLeadService {
   }) async {
     final userId = _db.auth.currentUser?.id;
     final createdByName = AuthService.instance.currentUser?.fullName ?? '';
+    final createdByRole =
+        AuthService.instance.isManagement ? 'management' : 'employee';
     final leadId = await _db.rpc('generate_land_lead_id') as String;
 
     var sitePhotoUrls = List<String>.from(lead.sitePhotoUrls);
@@ -52,6 +54,7 @@ class LandLeadService {
           'added_on': lead.addedOn.toUtc().toIso8601String(),
           if (userId != null) 'created_by': userId,
           if (createdByName.isNotEmpty) 'created_by_name': createdByName,
+          'created_by_role': createdByRole,
         })
         .select()
         .single();
