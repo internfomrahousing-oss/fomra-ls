@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../models/land_lead.dart';
+import '../land_lead/lead_detail_screen.dart';
 import '../settings/change_password_screen.dart';
 import '../../services/auth_service.dart';
 import '../../services/app_store.dart';
@@ -127,11 +128,18 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _loadNotifications() async {
     try {
       final list = await NotificationsService.getAll(audience: _notifAudience);
-      if (mounted) setState(() => _notifications = list);
+      // Don't surface lead notifications for leads management uploaded itself.
+      final filtered =
+          list.where((n) => !_isManagementLeadNotification(n)).toList();
+      if (mounted) setState(() => _notifications = filtered);
     } catch (_) {
       // Keep the current list if the fetch fails (e.g. table not created yet).
     }
   }
+
+  bool _isManagementLeadNotification(AppNotification n) =>
+      n.type == NotificationType.lead &&
+      n.title.toLowerCase().contains('by management');
 
   void _showNotifications() {
     showModalBottomSheet(
@@ -155,7 +163,22 @@ class _HomeScreenState extends State<HomeScreen> {
         },
         onOpen: (n) {
           Navigator.pop(context); // close the notifications sheet
-          if (n.type == NotificationType.lead) {
+          if (n.type != NotificationType.lead) return;
+          // Open the specific lead's detail when we can resolve it; otherwise
+          // fall back to the land lead list.
+          LandLead? lead;
+          for (final l in AppStore.instance.leads) {
+            if (l.leadId == n.leadId) {
+              lead = l;
+              break;
+            }
+          }
+          if (lead != null) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => LeadDetailScreen(lead: lead!)),
+            );
+          } else {
             Navigator.pushNamed(context, '/land-lead');
           }
         },
