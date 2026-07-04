@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import '../../models/employee_profile.dart';
+import '../../services/app_store.dart';
 import '../../services/auth_service.dart';
+import '../../services/employee_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_input.dart';
 import '../../theme/fomra_theme_context.dart';
@@ -1049,7 +1052,41 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
   final Set<String> _assignedTo = {};
   final Set<Duration> _reminders = {};
 
+  /// Selectable assignees — real employee roster when available, else _kTeam.
+  List<String> _teamNames = List<String>.from(_kTeam);
+
   bool get _isManagement => AuthService.instance.isManagement;
+
+  @override
+  void initState() {
+    super.initState();
+    if (_isManagement) _loadEmployees();
+  }
+
+  Future<void> _loadEmployees() async {
+    // Use already-loaded roster immediately if present.
+    final cached = AppStore.instance.employees;
+    if (cached.isNotEmpty) {
+      setState(() => _teamNames = _namesFrom(cached));
+      return;
+    }
+    try {
+      final list = await EmployeeService.getAll();
+      if (list.isNotEmpty) AppStore.instance.setEmployees(list);
+      if (mounted && list.isNotEmpty) {
+        setState(() => _teamNames = _namesFrom(list));
+      }
+    } catch (_) {
+      // Keep the _kTeam fallback on failure.
+    }
+  }
+
+  List<String> _namesFrom(List<EmployeeProfile> list) {
+    final active =
+        list.where((e) => e.status == EmployeeStatus.active).toList();
+    final src = active.isNotEmpty ? active : list;
+    return src.map((e) => e.fullName).toList();
+  }
 
   @override
   void dispose() {
@@ -1252,46 +1289,37 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
                   // Assign Users (management only)
                   if (_isManagement) ...[
                     const _SectionLabel('Assign Users'),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: _kTeam.map((name) {
-                        final selected = _assignedTo.contains(name);
-                        return FilterChip(
-                          label: Text(name,
-                              style: TextStyle(
-                                  fontSize: 12,
-                                  color: selected || context.isDarkMode
-                                      ? Colors.white
-                                      : context.fomraTextPrimary)),
-                          avatar: CircleAvatar(
-                            backgroundColor: selected
-                                ? Colors.white.withValues(alpha: 0.3)
-                                : AppColors.primary.withValues(alpha: 0.1),
-                            child: Text(name[0],
-                                style: TextStyle(
-                                    fontSize: 11,
-                                    color: selected
-                                        ? Colors.white
-                                        : (context.isDarkMode
-                                            ? AppColors.primaryLight
-                                            : AppColors.primary),
-                                    fontWeight: FontWeight.bold)),
-                          ),
-                          selected: selected,
-                          onSelected: (v) => setState(() => v
-                              ? _assignedTo.add(name)
-                              : _assignedTo.remove(name)),
-                          selectedColor: AppColors.primary,
-                          backgroundColor: context.fomraSurfaceVar,
-                          side: BorderSide(
-                              color: selected
-                                  ? AppColors.primary
-                                  : context.fomraBorder),
-                          showCheckmark: false,
-                        );
-                      }).toList(),
-                    ),
+                    _buildAssigneeDropdown(context),
+                    if (_assignedTo.isNotEmpty) ...[
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: _assignedTo.map((name) {
+                          return Chip(
+                            label: Text(name,
+                                style: const TextStyle(
+                                    fontSize: 12, color: Colors.white)),
+                            avatar: CircleAvatar(
+                              backgroundColor:
+                                  Colors.white.withValues(alpha: 0.3),
+                              child: Text(
+                                  name.isNotEmpty ? name[0].toUpperCase() : '?',
+                                  style: const TextStyle(
+                                      fontSize: 11,
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold)),
+                            ),
+                            backgroundColor: AppColors.primary,
+                            side: const BorderSide(color: AppColors.primary),
+                            deleteIcon: const Icon(Icons.close,
+                                size: 16, color: Colors.white),
+                            onDeleted: () =>
+                                setState(() => _assignedTo.remove(name)),
+                          );
+                        }).toList(),
+                      ),
+                    ],
                     const SizedBox(height: 18),
                   ],
 
@@ -1324,6 +1352,82 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
           ),
         ]),
       ),
+    );
+  }
+
+  Widget _buildAssigneeDropdown(BuildContext context) {
+    return MenuAnchor(
+      alignmentOffset: const Offset(0, 6),
+      style: MenuStyle(
+        backgroundColor: WidgetStatePropertyAll(context.fomraSurface),
+        elevation: const WidgetStatePropertyAll(4),
+        padding: const WidgetStatePropertyAll(
+            EdgeInsets.symmetric(vertical: 4)),
+        shape: WidgetStatePropertyAll(RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: context.fomraBorder),
+        )),
+      ),
+      builder: (context, controller, _) {
+        return InkWell(
+          onTap: () =>
+              controller.isOpen ? controller.close() : controller.open(),
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            decoration: BoxDecoration(
+              color: context.fomraSurfaceVar,
+              border: Border.all(color: context.fomraBorder),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(children: [
+              Icon(Icons.group_outlined,
+                  size: 18,
+                  color: context.isDarkMode
+                      ? AppColors.primaryLight
+                      : AppColors.primary),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  _assignedTo.isEmpty
+                      ? 'Select employees…'
+                      : '${_assignedTo.length} selected',
+                  style: TextStyle(
+                      fontSize: 14,
+                      color: _assignedTo.isEmpty
+                          ? context.fomraTextSecondary
+                          : context.fomraTextPrimary),
+                ),
+              ),
+              Icon(
+                  controller.isOpen
+                      ? Icons.arrow_drop_up
+                      : Icons.arrow_drop_down,
+                  color: context.fomraTextSecondary),
+            ]),
+          ),
+        );
+      },
+      menuChildren: [
+        for (final name in _teamNames) _buildAssigneeMenuItem(context, name),
+      ],
+    );
+  }
+
+  Widget _buildAssigneeMenuItem(BuildContext context, String name) {
+    final selected = _assignedTo.contains(name);
+    return MenuItemButton(
+      closeOnActivate: false,
+      onPressed: () => setState(() =>
+          selected ? _assignedTo.remove(name) : _assignedTo.add(name)),
+      leadingIcon: Icon(
+        selected ? Icons.check_box : Icons.check_box_outline_blank,
+        size: 20,
+        color: selected ? AppColors.primary : context.fomraTextSecondary,
+      ),
+      child: Text(name,
+          style: TextStyle(fontSize: 14, color: context.fomraTextPrimary)),
     );
   }
 
