@@ -128,18 +128,39 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _loadNotifications() async {
     try {
       final list = await NotificationsService.getAll(audience: _notifAudience);
-      // Don't surface lead notifications for leads management uploaded itself.
-      final filtered =
-          list.where((n) => !_isManagementLeadNotification(n)).toList();
+      final filtered = list
+          .where((n) => !_isManagementLeadNotification(n) && _isForMe(n))
+          .toList();
       if (mounted) setState(() => _notifications = filtered);
     } catch (_) {
       // Keep the current list if the fetch fails (e.g. table not created yet).
     }
   }
 
+  // Don't surface lead notifications for leads management uploaded itself.
   bool _isManagementLeadNotification(AppNotification n) =>
       n.type == NotificationType.lead &&
       n.title.toLowerCase().contains('by management');
+
+  /// A task-assignment notification is only for the employees it was assigned
+  /// to. The assignees are named in the message ("… — assigned to pooja, vijay"),
+  /// so an employee only sees it when their own name is in that list. Management
+  /// and all non-assignment notifications are shown as-is.
+  bool _isForMe(AppNotification n) {
+    if (_isManagement) return true;
+    if (n.type != NotificationType.task) return true;
+    const marker = 'assigned to ';
+    final msg = n.message.toLowerCase();
+    final idx = msg.lastIndexOf(marker);
+    if (idx == -1) return true; // can't tell who it's for → show it
+    final me = (AuthService.instance.currentUser?.fullName ?? '')
+        .trim()
+        .toLowerCase();
+    if (me.isEmpty) return true;
+    final assignees =
+        msg.substring(idx + marker.length).split(',').map((s) => s.trim());
+    return assignees.contains(me);
+  }
 
   void _showNotifications() {
     showModalBottomSheet(
