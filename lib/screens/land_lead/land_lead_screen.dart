@@ -29,6 +29,9 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
   bool _loading = true;
   String? _loadError;
 
+  bool _selectMode = false;
+  final Set<String> _selectedLeadIds = {};
+
   @override
   void initState() {
     super.initState();
@@ -50,34 +53,133 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
     try {
       final list = await EmployeeService.getAll();
       if (list.isNotEmpty) AppStore.instance.setEmployees(list);
-    } catch (_) {/* assignment menu just stays empty */}
+    } catch (_) {/* assignment picker just stays empty */}
   }
 
-  /// Reassign a lead to [name] so it shows on that employee's leads page, and
-  /// notify that employee.
-  void _assignLead(LandLead lead, String name) {
-    if (name == lead.createdByName) return;
-    final previousName = lead.createdByName;
-    AppStore.instance.replaceLead(lead.copyWith(createdByName: name));
-    LandLeadService.assignTo(lead.leadId, name).catchError((_) {
-      AppStore.instance.replaceLead(lead.copyWith(createdByName: previousName));
+  void _toggleSelectMode() {
+    setState(() {
+      _selectMode = !_selectMode;
+      _selectedLeadIds.clear();
     });
+  }
+
+  void _toggleLeadSelected(LandLead lead) {
+    setState(() {
+      if (!_selectedLeadIds.remove(lead.leadId)) {
+        _selectedLeadIds.add(lead.leadId);
+      }
+    });
+  }
+
+  /// Ask which employee to assign the selected leads to, confirm, then assign.
+  Future<void> _assignSelected() async {
+    if (_selectedLeadIds.isEmpty) return;
+    final names = _employeeNames;
+    if (names.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('No employees available to assign.'),
+        behavior: SnackBarBehavior.floating,
+      ));
+      return;
+    }
+
+    // 1) Pick employee.
+    final name = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: context.fomraSurface,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+            child: Row(children: [
+              Text('Assign ${_selectedLeadIds.length} lead(s) to',
+                  style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: context.fomraTextPrimary)),
+            ]),
+          ),
+          const Divider(height: 1),
+          Flexible(
+            child: ListView(
+              shrinkWrap: true,
+              children: names
+                  .map((n) => ListTile(
+                        leading: CircleAvatar(
+                          backgroundColor:
+                              AppColors.primary.withValues(alpha: 0.12),
+                          child: Text(n.isNotEmpty ? n[0].toUpperCase() : '?',
+                              style: const TextStyle(
+                                  color: AppColors.primary,
+                                  fontWeight: FontWeight.bold)),
+                        ),
+                        title: Text(n),
+                        onTap: () => Navigator.pop(ctx, n),
+                      ))
+                  .toList(),
+            ),
+          ),
+          const SizedBox(height: 8),
+        ]),
+      ),
+    );
+    if (name == null || !mounted) return;
+
+    // 2) Confirm.
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Assign leads?'),
+        content: Text(
+            'Assign ${_selectedLeadIds.length} lead(s) to $name? '
+            'They will move to $name\'s leads page and $name will be notified.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Assign')),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    _assignLeadsTo(_selectedLeadIds.toList(), name);
+  }
+
+  void _assignLeadsTo(List<String> leadIds, String name) {
+    final all = AppStore.instance.leads;
+    for (final id in leadIds) {
+      final lead = all.where((l) => l.leadId == id).cast<LandLead?>().firstOrNull;
+      if (lead == null || lead.createdByName == name) continue;
+      final previousName = lead.createdByName;
+      AppStore.instance.replaceLead(lead.copyWith(createdByName: name));
+      LandLeadService.assignTo(id, name).catchError((_) {
+        AppStore.instance
+            .replaceLead(lead.copyWith(createdByName: previousName));
+      });
+    }
+    // One targeted notification for the assignee.
     NotificationsService.create(
       audience: 'employee',
       type: 'lead',
-      title: 'Lead assigned to you',
-      leadId: lead.leadId,
-      message:
-          '${lead.leadId}${lead.location.isNotEmpty ? ' — ${lead.location}' : ''} '
-          '— assigned to $name',
+      title: 'Leads assigned to you',
+      leadId: leadIds.length == 1 ? leadIds.first : null,
+      message: '${leadIds.length} lead(s) — assigned to $name',
     ).catchError((_) {});
+
+    setState(() {
+      _selectMode = false;
+      _selectedLeadIds.clear();
+    });
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Lead ${lead.leadId} assigned to $name'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('${leadIds.length} lead(s) assigned to $name'),
+        behavior: SnackBarBehavior.floating,
+      ));
     }
   }
 
@@ -182,6 +284,37 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
     );
   }
 
+  Widget _buildSelectBar() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      child: _selectMode
+          ? Row(children: [
+              Text('${_selectedLeadIds.length} selected',
+                  style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: context.fomraTextPrimary)),
+              const Spacer(),
+              TextButton(
+                  onPressed: _toggleSelectMode, child: const Text('Cancel')),
+              const SizedBox(width: 8),
+              FilledButton.icon(
+                onPressed: _selectedLeadIds.isEmpty ? null : _assignSelected,
+                icon: const Icon(Icons.person_add_alt_1, size: 18),
+                label: const Text('Assign'),
+              ),
+            ])
+          : Align(
+              alignment: Alignment.centerRight,
+              child: OutlinedButton.icon(
+                onPressed: _toggleSelectMode,
+                icon: const Icon(Icons.checklist, size: 18),
+                label: const Text('Select'),
+              ),
+            ),
+    );
+  }
+
   Widget _buildScrollableBody() {
     if (_loading) {
       return const Center(child: CircularProgressIndicator());
@@ -213,6 +346,8 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
     }
 
     final slivers = <Widget>[
+      if (_isManagement && _leads.isNotEmpty)
+        SliverToBoxAdapter(child: _buildSelectBar()),
       if (_leads.isNotEmpty) SliverToBoxAdapter(child: _LeadSummary(leads: _leads)),
       if (_leads.isNotEmpty)
         SliverToBoxAdapter(
@@ -244,7 +379,9 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
                 final lead = _filtered[i];
                 return Dismissible(
                   key: ValueKey(lead.leadId),
-                  direction: DismissDirection.endToStart,
+                  direction: _selectMode
+                      ? DismissDirection.none
+                      : DismissDirection.endToStart,
                   confirmDismiss: (_) => _confirmAndDelete(lead),
                   background: Container(
                     margin: const EdgeInsets.only(bottom: 16),
@@ -270,16 +407,17 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
                   ),
                   child: _LeadCard(
                     lead: lead,
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => LeadDetailScreen(lead: lead),
-                      ),
-                    ),
+                    selectionMode: _selectMode,
+                    selected: _selectedLeadIds.contains(lead.leadId),
+                    onTap: _selectMode
+                        ? () => _toggleLeadSelected(lead)
+                        : () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => LeadDetailScreen(lead: lead),
+                              ),
+                            ),
                     onStatusChange: (s) => _updateStatus(lead, s),
-                    assignableEmployees: _isManagement ? _employeeNames : const [],
-                    onAssign:
-                        _isManagement ? (name) => _assignLead(lead, name) : null,
                   ),
                 );
               },
@@ -640,15 +778,15 @@ class _LeadCard extends StatelessWidget {
   final LandLead lead;
   final ValueChanged<LeadStatus> onStatusChange;
   final VoidCallback? onTap;
-  final List<String> assignableEmployees;
-  final void Function(String name)? onAssign;
+  final bool selectionMode;
+  final bool selected;
 
   const _LeadCard({
     required this.lead,
     required this.onStatusChange,
     this.onTap,
-    this.assignableEmployees = const [],
-    this.onAssign,
+    this.selectionMode = false,
+    this.selected = false,
   });
 
   @override
@@ -664,12 +802,29 @@ class _LeadCard extends StatelessWidget {
       child: Card(
         margin: const EdgeInsets.only(bottom: 16),
         clipBehavior: Clip.antiAlias,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+          side: selected
+              ? const BorderSide(color: AppColors.primary, width: 1.5)
+              : BorderSide.none,
+        ),
         elevation: 0,
         child: InkWell(
           onTap: onTap,
           child: IntrinsicHeight(
             child: Row(children: [
+            if (selectionMode)
+              Padding(
+                padding: const EdgeInsets.only(left: 10),
+                child: Icon(
+                  selected
+                      ? Icons.check_box
+                      : Icons.check_box_outline_blank,
+                  color: selected
+                      ? AppColors.primary
+                      : context.fomraTextSecondary,
+                ),
+              ),
             Container(
               width: 5,
               decoration: BoxDecoration(
@@ -695,42 +850,6 @@ class _LeadCard extends StatelessWidget {
                                 letterSpacing: 0.2)),
                       ),
                       _StatusBadge(status: lead.status),
-                      if (onAssign != null) ...[
-                        const SizedBox(width: 4),
-                        PopupMenuButton<String>(
-                          tooltip: 'Assign to employee',
-                          padding: EdgeInsets.zero,
-                          position: PopupMenuPosition.under,
-                          icon: const Icon(Icons.person_add_alt_1_outlined,
-                              size: 20, color: AppColors.primary),
-                          itemBuilder: (context) => assignableEmployees.isEmpty
-                              ? const [
-                                  PopupMenuItem<String>(
-                                    enabled: false,
-                                    child: Text('No employees'),
-                                  ),
-                                ]
-                              : assignableEmployees
-                                  .map((name) => PopupMenuItem<String>(
-                                        value: name,
-                                        child: Row(children: [
-                                          Icon(
-                                            name == lead.createdByName
-                                                ? Icons.check_circle
-                                                : Icons.person_outline,
-                                            size: 16,
-                                            color: name == lead.createdByName
-                                                ? AppColors.primary
-                                                : context.fomraTextSecondary,
-                                          ),
-                                          const SizedBox(width: 8),
-                                          Text(name),
-                                        ]),
-                                      ))
-                                  .toList(),
-                          onSelected: onAssign,
-                        ),
-                      ],
                     ]),
                     const SizedBox(height: 5),
                     Text(
@@ -807,38 +926,41 @@ class _LeadCard extends StatelessWidget {
                               fontSize: 11,
                               color: context.fomraTextSecondary)),
                     ]),
-                    const SizedBox(height: 10),
-                    SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: LeadStatus.values
-                            .where((s) => s != lead.status && s != LeadStatus.siteVisit)
-                            .map((s) => Padding(
-                                  padding: const EdgeInsets.only(right: 8),
-                                  child: OutlinedButton(
-                                    onPressed: () => onStatusChange(s),
-                                    style: OutlinedButton.styleFrom(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 11, vertical: 5),
-                                      minimumSize: Size.zero,
-                                      tapTargetSize:
-                                          MaterialTapTargetSize.shrinkWrap,
-                                      side: BorderSide(
-                                          color: s.color
-                                              .withValues(alpha: 0.5)),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(999),
+                    if (!selectionMode) ...[
+                      const SizedBox(height: 10),
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: LeadStatus.values
+                              .where((s) =>
+                                  s != lead.status && s != LeadStatus.siteVisit)
+                              .map((s) => Padding(
+                                    padding: const EdgeInsets.only(right: 8),
+                                    child: OutlinedButton(
+                                      onPressed: () => onStatusChange(s),
+                                      style: OutlinedButton.styleFrom(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 11, vertical: 5),
+                                        minimumSize: Size.zero,
+                                        tapTargetSize:
+                                            MaterialTapTargetSize.shrinkWrap,
+                                        side: BorderSide(
+                                            color: s.color
+                                                .withValues(alpha: 0.5)),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(999),
+                                        ),
                                       ),
+                                      child: Text('→ ${s.label}',
+                                          style: TextStyle(
+                                              fontSize: 11, color: s.color)),
                                     ),
-                                    child: Text('→ ${s.label}',
-                                        style: TextStyle(
-                                            fontSize: 11,
-                                            color: s.color)),
-                                  ),
-                                ))
-                            .toList(),
+                                  ))
+                              .toList(),
+                        ),
                       ),
-                    ),
+                    ],
                   ],
                 ),
               ),
