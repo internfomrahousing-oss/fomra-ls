@@ -285,33 +285,120 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
   }
 
   Widget _buildSelectBar() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-      child: _selectMode
-          ? Row(children: [
-              Text('${_selectedLeadIds.length} selected',
-                  style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: context.fomraTextPrimary)),
-              const Spacer(),
-              TextButton(
-                  onPressed: _toggleSelectMode, child: const Text('Cancel')),
-              const SizedBox(width: 8),
-              FilledButton.icon(
-                onPressed: _selectedLeadIds.isEmpty ? null : _assignSelected,
-                icon: const Icon(Icons.person_add_alt_1, size: 18),
-                label: const Text('Assign'),
-              ),
-            ])
-          : Align(
-              alignment: Alignment.centerRight,
-              child: OutlinedButton.icon(
-                onPressed: _toggleSelectMode,
-                icon: const Icon(Icons.checklist, size: 18),
-                label: const Text('Select'),
+    if (!_selectMode) {
+      // Idle: a compact pill button on the right.
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 2),
+        child: Align(
+          alignment: Alignment.centerRight,
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: _toggleSelectMode,
+              borderRadius: BorderRadius.circular(999),
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(
+                      color: AppColors.primary.withValues(alpha: 0.25)),
+                ),
+                child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(Icons.checklist_rtl, size: 18, color: AppColors.primary),
+                  SizedBox(width: 7),
+                  Text('Select',
+                      style: TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.primary)),
+                ]),
               ),
             ),
+          ),
+        ),
+      );
+    }
+
+    // Active: a highlighted action bar.
+    final count = _selectedLeadIds.length;
+    final canAssign = count > 0;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 2),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(colors: [
+            AppColors.primary.withValues(alpha: 0.12),
+            AppColors.primary.withValues(alpha: 0.05),
+          ]),
+          borderRadius: BorderRadius.circular(18),
+          border:
+              Border.all(color: AppColors.primary.withValues(alpha: 0.25)),
+        ),
+        child: Row(children: [
+          Container(
+            width: 30,
+            height: 30,
+            alignment: Alignment.center,
+            decoration: const BoxDecoration(
+                color: AppColors.primary, shape: BoxShape.circle),
+            child: Text('$count',
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800)),
+          ),
+          const SizedBox(width: 10),
+          Text(count == 1 ? 'lead selected' : 'leads selected',
+              style: TextStyle(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w600,
+                  color: context.fomraTextPrimary)),
+          const Spacer(),
+          TextButton(
+            onPressed: _toggleSelectMode,
+            style: TextButton.styleFrom(
+                foregroundColor: context.fomraTextSecondary,
+                padding: const EdgeInsets.symmetric(horizontal: 10)),
+            child: const Text('Cancel'),
+          ),
+          const SizedBox(width: 4),
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: canAssign ? _assignSelected : null,
+              borderRadius: BorderRadius.circular(999),
+              child: Opacity(
+                opacity: canAssign ? 1 : 0.45,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                        colors: [Color(0xFF1D4ED8), Color(0xFF3B82F6)]),
+                    borderRadius: BorderRadius.circular(999),
+                    boxShadow: canAssign
+                        ? AppColors.coloredShadow(AppColors.primary)
+                        : null,
+                  ),
+                  child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(Icons.person_add_alt_1,
+                        size: 17, color: Colors.white),
+                    SizedBox(width: 7),
+                    Text('Assign',
+                        style: TextStyle(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white)),
+                  ]),
+                ),
+              ),
+            ),
+          ),
+        ]),
+      ),
     );
   }
 
@@ -815,14 +902,25 @@ class _LeadCard extends StatelessWidget {
             child: Row(children: [
             if (selectionMode)
               Padding(
-                padding: const EdgeInsets.only(left: 10),
-                child: Icon(
-                  selected
-                      ? Icons.check_box
-                      : Icons.check_box_outline_blank,
-                  color: selected
-                      ? AppColors.primary
-                      : context.fomraTextSecondary,
+                padding: const EdgeInsets.only(left: 14, right: 2),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 160),
+                  curve: Curves.easeOut,
+                  width: 24,
+                  height: 24,
+                  decoration: BoxDecoration(
+                    color: selected ? AppColors.primary : Colors.transparent,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: selected
+                          ? AppColors.primary
+                          : context.fomraBorder,
+                      width: 2,
+                    ),
+                  ),
+                  child: selected
+                      ? const Icon(Icons.check, size: 15, color: Colors.white)
+                      : null,
                 ),
               ),
             Container(
