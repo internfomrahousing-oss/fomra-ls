@@ -74,6 +74,7 @@ class LandLead {
     String? notes,
     String? sitePhotoUrl,
     List<String>? sitePhotoUrls,
+    String? createdByName,
     LeadStatus? status,
   }) =>
       LandLead(
@@ -97,7 +98,7 @@ class LandLead {
         sitePhotoUrl: sitePhotoUrl ?? this.sitePhotoUrl,
         sitePhotoUrls: sitePhotoUrls ?? this.sitePhotoUrls,
         addedOn: addedOn,
-        createdByName: createdByName,
+        createdByName: createdByName ?? this.createdByName,
         status: status ?? this.status,
       );
 }

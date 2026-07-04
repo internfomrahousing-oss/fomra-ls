@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import '../../models/add_lead_result.dart';
 import '../../models/land_lead.dart';
+import '../../models/employee_profile.dart';
 import '../../services/app_store.dart';
 import '../../services/auth_service.dart';
+import '../../services/employee_service.dart';
 import '../../services/land_lead_service.dart';
+import '../../services/notifications_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../widgets/app_drawer.dart';
@@ -31,6 +34,51 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
     super.initState();
     AppStore.instance.addListener(_onStoreUpdate);
     _loadLeads();
+    if (AuthService.instance.isManagement) _loadEmployees();
+  }
+
+  bool get _isManagement => AuthService.instance.isManagement;
+
+  /// Employee names management can assign leads to.
+  List<String> get _employeeNames => AppStore.instance.employees
+      .where((e) => e.status == EmployeeStatus.active)
+      .map((e) => e.fullName)
+      .toList();
+
+  Future<void> _loadEmployees() async {
+    if (AppStore.instance.employees.isNotEmpty) return;
+    try {
+      final list = await EmployeeService.getAll();
+      if (list.isNotEmpty) AppStore.instance.setEmployees(list);
+    } catch (_) {/* assignment menu just stays empty */}
+  }
+
+  /// Reassign a lead to [name] so it shows on that employee's leads page, and
+  /// notify that employee.
+  void _assignLead(LandLead lead, String name) {
+    if (name == lead.createdByName) return;
+    final previousName = lead.createdByName;
+    AppStore.instance.replaceLead(lead.copyWith(createdByName: name));
+    LandLeadService.assignTo(lead.leadId, name).catchError((_) {
+      AppStore.instance.replaceLead(lead.copyWith(createdByName: previousName));
+    });
+    NotificationsService.create(
+      audience: 'employee',
+      type: 'lead',
+      title: 'Lead assigned to you',
+      leadId: lead.leadId,
+      message:
+          '${lead.leadId}${lead.location.isNotEmpty ? ' — ${lead.location}' : ''} '
+          '— assigned to $name',
+    ).catchError((_) {});
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Lead ${lead.leadId} assigned to $name'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   @override
@@ -229,6 +277,9 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
                       ),
                     ),
                     onStatusChange: (s) => _updateStatus(lead, s),
+                    assignableEmployees: _isManagement ? _employeeNames : const [],
+                    onAssign:
+                        _isManagement ? (name) => _assignLead(lead, name) : null,
                   ),
                 );
               },
@@ -589,11 +640,15 @@ class _LeadCard extends StatelessWidget {
   final LandLead lead;
   final ValueChanged<LeadStatus> onStatusChange;
   final VoidCallback? onTap;
+  final List<String> assignableEmployees;
+  final void Function(String name)? onAssign;
 
   const _LeadCard({
     required this.lead,
     required this.onStatusChange,
     this.onTap,
+    this.assignableEmployees = const [],
+    this.onAssign,
   });
 
   @override
@@ -640,6 +695,42 @@ class _LeadCard extends StatelessWidget {
                                 letterSpacing: 0.2)),
                       ),
                       _StatusBadge(status: lead.status),
+                      if (onAssign != null) ...[
+                        const SizedBox(width: 4),
+                        PopupMenuButton<String>(
+                          tooltip: 'Assign to employee',
+                          padding: EdgeInsets.zero,
+                          position: PopupMenuPosition.under,
+                          icon: const Icon(Icons.person_add_alt_1_outlined,
+                              size: 20, color: AppColors.primary),
+                          itemBuilder: (context) => assignableEmployees.isEmpty
+                              ? const [
+                                  PopupMenuItem<String>(
+                                    enabled: false,
+                                    child: Text('No employees'),
+                                  ),
+                                ]
+                              : assignableEmployees
+                                  .map((name) => PopupMenuItem<String>(
+                                        value: name,
+                                        child: Row(children: [
+                                          Icon(
+                                            name == lead.createdByName
+                                                ? Icons.check_circle
+                                                : Icons.person_outline,
+                                            size: 16,
+                                            color: name == lead.createdByName
+                                                ? AppColors.primary
+                                                : context.fomraTextSecondary,
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Text(name),
+                                        ]),
+                                      ))
+                                  .toList(),
+                          onSelected: onAssign,
+                        ),
+                      ],
                     ]),
                     const SizedBox(height: 5),
                     Text(

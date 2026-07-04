@@ -102,6 +102,16 @@ class LandLeadService {
     return _db.storage.from(_photoBucket).getPublicUrl(path);
   }
 
+  /// Reassign a lead to an employee (by name). Since a lead's owning employee
+  /// is tracked via created_by_name, this makes the lead appear on that
+  /// employee's leads page.
+  static Future<void> assignTo(String leadId, String employeeName) async {
+    await _db.from('land_leads').update({
+      'created_by_name': employeeName,
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    }).eq('id', leadId);
+  }
+
   static Future<void> updateStatus(String leadId, LeadStatus status) async {
     await _db.from('land_leads').update({
       'status': status.name,

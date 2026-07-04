@@ -142,13 +142,12 @@ class _HomeScreenState extends State<HomeScreen> {
       n.type == NotificationType.lead &&
       n.title.toLowerCase().contains('by management');
 
-  /// A task-assignment notification is only for the employees it was assigned
-  /// to. The assignees are named in the message ("… — assigned to pooja, vijay"),
+  /// An assignment notification is only for the employees it was assigned to.
+  /// The assignees are named in the message ("… — assigned to pooja, vijay"),
   /// so an employee only sees it when their own name is in that list. Management
   /// and all non-assignment notifications are shown as-is.
   bool _isForMe(AppNotification n) {
     if (_isManagement) return true;
-    if (n.type != NotificationType.task) return true;
     const marker = 'assigned to ';
     final msg = n.message.toLowerCase();
     final idx = msg.lastIndexOf(marker);
