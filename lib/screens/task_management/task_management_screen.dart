@@ -235,6 +235,32 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
     });
   }
 
+  /// Apply a task status change and, when an employee makes the change, notify
+  /// the management notification bar about the progress.
+  void _applyStatusChange(Task task, TaskStatus s) {
+    final changed = task.status != s;
+    setState(() {
+      task.status = s;
+      if (s == TaskStatus.done) task.completedAt = DateTime.now();
+    });
+    if (changed) _notifyManagementOfProgress(task, s);
+  }
+
+  /// When an employee updates a task, push a live notification to the
+  /// management portal's notification bell.
+  void _notifyManagementOfProgress(Task task, TaskStatus s) {
+    if (AuthService.instance.isManagement) return; // only employees make progress
+    final who = AuthService.instance.currentUser?.fullName ?? 'An employee';
+    NotificationsService.create(
+      audience: 'management',
+      type: 'task',
+      title: 'Task update by $who',
+      message: '${task.title} → ${_statusLabel(s)}',
+    ).catchError((_) {
+      // Non-fatal: the status change still applies if the insert fails.
+    });
+  }
+
   void _pushNotification(Task task, String message, {String? id}) {
     _notifications.insert(
       0,
@@ -482,10 +508,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
                 return _TaskCard(
                   task: task,
                   onTap: () => _showTaskDetail(task),
-                  onStatusChange: (t, s) => setState(() {
-                    t.status = s;
-                    if (s == TaskStatus.done) t.completedAt = DateTime.now();
-                  }),
+                  onStatusChange: _applyStatusChange,
                 );
               },
             ),
@@ -598,10 +621,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
         (i) => _TaskList(
           tasks: _tasksForTab(i),
           tabIndex: i,
-          onStatusChange: (task, s) => setState(() {
-            task.status = s;
-            if (s == TaskStatus.done) task.completedAt = DateTime.now();
-          }),
+          onStatusChange: _applyStatusChange,
           onTap: (task) => _showTaskDetail(task),
           onPrimaryAction: i == 0 ? _openAddTask : null,
         ),
@@ -701,10 +721,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
       backgroundColor: Colors.transparent,
       builder: (_) => _TaskDetailSheet(
         task: task,
-        onStatusChange: (s) => setState(() {
-          task.status = s;
-          if (s == TaskStatus.done) task.completedAt = DateTime.now();
-        }),
+        onStatusChange: (s) => _applyStatusChange(task, s),
       ),
     );
   }
@@ -956,36 +973,39 @@ class _TaskCard extends StatelessWidget {
                       ]),
                     ],
 
-                    const SizedBox(height: 8),
-                    // Status action buttons
-                    SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                          children: TaskStatus.values
-                              .where((s) => s != task.status)
-                              .map((s) => Padding(
-                                    padding: const EdgeInsets.only(right: 6),
-                                    child: OutlinedButton(
-                                      onPressed: () =>
-                                          onStatusChange(task, s),
-                                      style: OutlinedButton.styleFrom(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 10, vertical: 4),
-                                        minimumSize: Size.zero,
-                                        tapTargetSize:
-                                            MaterialTapTargetSize.shrinkWrap,
-                                        side: BorderSide(
-                                            color: _statusColor(s)
-                                                .withValues(alpha: 0.5)),
+                    // Status action buttons — employees update progress;
+                    // management only views tasks.
+                    if (!AuthService.instance.isManagement) ...[
+                      const SizedBox(height: 8),
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                            children: TaskStatus.values
+                                .where((s) => s != task.status)
+                                .map((s) => Padding(
+                                      padding: const EdgeInsets.only(right: 6),
+                                      child: OutlinedButton(
+                                        onPressed: () =>
+                                            onStatusChange(task, s),
+                                        style: OutlinedButton.styleFrom(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 10, vertical: 4),
+                                          minimumSize: Size.zero,
+                                          tapTargetSize:
+                                              MaterialTapTargetSize.shrinkWrap,
+                                          side: BorderSide(
+                                              color: _statusColor(s)
+                                                  .withValues(alpha: 0.5)),
+                                        ),
+                                        child: Text('→ ${_statusLabel(s)}',
+                                            style: TextStyle(
+                                                fontSize: 11,
+                                                color: _statusColor(s))),
                                       ),
-                                      child: Text('→ ${_statusLabel(s)}',
-                                          style: TextStyle(
-                                              fontSize: 11,
-                                              color: _statusColor(s))),
-                                    ),
-                                  ))
-                              .toList()),
-                    ),
+                                    ))
+                                .toList()),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -1521,7 +1541,8 @@ class _TaskDetailSheet extends StatelessWidget {
               controller: controller,
               padding: const EdgeInsets.all(20),
               children: [
-                // Status actions
+                // Status actions — hidden for management (view-only).
+                if (!AuthService.instance.isManagement) ...[
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: TaskStatus.values.map((s) {
@@ -1562,6 +1583,7 @@ class _TaskDetailSheet extends StatelessWidget {
                   }).toList(),
                 ),
                 const SizedBox(height: 20),
+                ],
 
                 // Track Completion
                 _DetailSection(
