@@ -4,6 +4,7 @@ import '../models/employee_profile.dart';
 import '../models/user.dart';
 import 'api_client.dart';
 import 'employee_service.dart';
+import 'tab_session_store.dart';
 
 enum LoginPortal { employee, management }
 
@@ -91,10 +92,9 @@ class AuthService {
       _client.auth.currentUser != null || _portal != null;
 
   Future<void> restoreSession() async {
-    final prefs = await SharedPreferences.getInstance();
-    final portalName = prefs.getString(_portalKey);
-    _loginEmail = prefs.getString(_loginEmailKey);
-    _loginDisplayName = prefs.getString(_loginNameKey);
+    final portalName = await tabGetString(_portalKey);
+    _loginEmail = await tabGetString(_loginEmailKey);
+    _loginDisplayName = await tabGetString(_loginNameKey);
     if (portalName == LoginPortal.management.name) {
       _portal = LoginPortal.management;
     } else if (portalName == LoginPortal.employee.name) {
@@ -108,26 +108,26 @@ class AuthService {
       _portal = LoginPortal.employee;
     }
 
-    final local = prefs.getBool(_localSessionKey) ?? false;
+    final local = (await tabGetString(_localSessionKey)) == 'true';
     // Keep the session while the Supabase session is missing only if it's a
     // local login or we're still inside the post-login grace window. This stops
     // a reload from bouncing the user back to the login screen.
     if (!local &&
-        !_withinLoginGrace(prefs) &&
+        !(await _withinLoginGrace()) &&
         _client.auth.currentUser == null) {
       _portal = null;
       _loginEmail = null;
       _loginDisplayName = null;
-      await prefs.remove(_portalKey);
-      await prefs.remove(_loginEmailKey);
-      await prefs.remove(_loginNameKey);
-      await prefs.remove(_loginAtKey);
+      await tabRemove(_portalKey);
+      await tabRemove(_loginEmailKey);
+      await tabRemove(_loginNameKey);
+      await tabRemove(_loginAtKey);
     }
   }
 
   /// Whether the last login was recent enough to keep the session alive.
-  bool _withinLoginGrace(SharedPreferences prefs) {
-    final raw = prefs.getString(_loginAtKey);
+  Future<bool> _withinLoginGrace() async {
+    final raw = await tabGetString(_loginAtKey);
     if (raw == null) return false;
     final at = DateTime.tryParse(raw);
     if (at == null) return false;
@@ -157,11 +157,10 @@ class AuthService {
   Future<bool> checkSession() async {
     await restoreSession();
     if (_client.auth.currentUser != null) return true;
-    final prefs = await SharedPreferences.getInstance();
-    if ((prefs.getBool(_localSessionKey) ?? false) && _portal != null) {
+    if ((await tabGetString(_localSessionKey)) == 'true' && _portal != null) {
       return true;
     }
-    return _withinLoginGrace(prefs) && _portal != null;
+    return (await _withinLoginGrace()) && _portal != null;
   }
 
   Future<void> loginWithPortal(
@@ -211,12 +210,11 @@ class AuthService {
     _portal = portal;
     _loginEmail = normalizedEmail;
     _loginDisplayName = await _resolveDisplayName(normalizedEmail, portal);
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_portalKey, portal.name);
-    await prefs.setString(_loginEmailKey, normalizedEmail);
-    await prefs.setString(_loginNameKey, _loginDisplayName!);
-    await prefs.setBool(_localSessionKey, !supabaseOk);
-    await prefs.setString(_loginAtKey, DateTime.now().toIso8601String());
+    await tabSetString(_portalKey, portal.name);
+    await tabSetString(_loginEmailKey, normalizedEmail);
+    await tabSetString(_loginNameKey, _loginDisplayName!);
+    await tabSetString(_localSessionKey, (!supabaseOk).toString());
+    await tabSetString(_loginAtKey, DateTime.now().toIso8601String());
   }
 
   Future<void> login(String email, String password) async {
@@ -270,12 +268,11 @@ class AuthService {
     _portal = null;
     _loginEmail = null;
     _loginDisplayName = null;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_portalKey);
-    await prefs.remove(_localSessionKey);
-    await prefs.remove(_loginEmailKey);
-    await prefs.remove(_loginNameKey);
-    await prefs.remove(_loginAtKey);
+    await tabRemove(_portalKey);
+    await tabRemove(_localSessionKey);
+    await tabRemove(_loginEmailKey);
+    await tabRemove(_loginNameKey);
+    await tabRemove(_loginAtKey);
   }
 
   /// Changes the password for the currently signed-in portal. Verifies the

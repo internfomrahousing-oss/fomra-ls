@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'services/auth_service.dart';
+import 'services/session_scoped_local_storage.dart';
 import 'services/supabase_config.dart';
 import 'services/theme_controller.dart';
 import 'theme/app_theme.dart';
@@ -90,6 +91,11 @@ class _StartupScreenState extends State<_StartupScreen> {
         publishableKey: supabaseAnon,
         authOptions: const FlutterAuthClientOptions(
           detectSessionInUri: false,
+          // Per-tab session persistence so different tabs can hold different
+          // accounts (Management vs Employee) at the same time.
+          localStorage: SessionScopedLocalStorage(
+            persistSessionKey: 'fomrals-supabase-session',
+          ),
         ),
       ).timeout(
         const Duration(seconds: 12),

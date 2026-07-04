@@ -197,39 +197,6 @@ class _HomeScreenState extends State<HomeScreen> {
                       fontSize: 13, color: context.fomraTextSecondary)),
             ],
             const SizedBox(height: 16),
-            // My performance — leads this user has added.
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              decoration: BoxDecoration(
-                color: const Color(0xFF0EA5E9).withValues(alpha: 0.10),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                    color: const Color(0xFF0EA5E9).withValues(alpha: 0.25)),
-              ),
-              child: Row(children: [
-                const Icon(Icons.emoji_events_outlined,
-                    size: 20, color: Color(0xFF0EA5E9)),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text('My Performance',
-                      style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: context.fomraTextPrimary)),
-                ),
-                Text('$_myLeadCount',
-                    style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF0EA5E9))),
-                const SizedBox(width: 6),
-                Text('leads added',
-                    style: TextStyle(
-                        fontSize: 12, color: context.fomraTextSecondary)),
-              ]),
-            ),
-            const SizedBox(height: 12),
             const Divider(height: 1),
             ListTile(
               contentPadding: EdgeInsets.zero,
@@ -367,6 +334,12 @@ class _HomeScreenState extends State<HomeScreen> {
                     const _SectionHeader('Performance'),
                     const SizedBox(height: 12),
                     _PerformanceCard(entries: _performance),
+                  ]
+                  // Employee-only: their own leads-added count.
+                  else ...[
+                    const _SectionHeader('My Performance'),
+                    const SizedBox(height: 12),
+                    _MyPerformanceCard(count: _myLeadCount),
                   ],
                   const SizedBox(height: 28),
                 ],
@@ -669,6 +642,56 @@ class _LeadPerf {
   final String designation;
   final int count;
   const _LeadPerf(this.name, this.designation, this.count);
+}
+
+class _MyPerformanceCard extends StatelessWidget {
+  final int count;
+  const _MyPerformanceCard({required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    const color = Color(0xFF0EA5E9);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: context.fomraSurface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
+        boxShadow: context.fomraCardShadow,
+      ),
+      child: Row(children: [
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: const Icon(Icons.emoji_events_outlined, color: color, size: 22),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Leads Added',
+                style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: context.fomraTextPrimary)),
+            const SizedBox(height: 2),
+            Text('Your total contribution',
+                style: TextStyle(
+                    fontSize: 12, color: context.fomraTextSecondary)),
+          ]),
+        ),
+        Text('$count',
+            style: const TextStyle(
+                fontSize: 30,
+                fontWeight: FontWeight.w800,
+                color: color,
+                letterSpacing: -0.5)),
+      ]),
+    );
+  }
 }
 
 class _PerformanceCard extends StatelessWidget {
