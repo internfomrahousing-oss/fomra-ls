@@ -506,10 +506,10 @@ class _HeroBannerState extends State<_HeroBanner>
                             'Welcome to FomraLS',
                             style: TextStyle(
                               color: Colors.white,
-                              fontSize: 28,
+                              fontSize: 34,
                               fontWeight: FontWeight.w800,
-                              letterSpacing: -0.4,
-                              height: 1.05,
+                              letterSpacing: -0.8,
+                              height: 1.02,
                             ),
                           ),
                         ),
@@ -699,7 +699,7 @@ class _MyPerformanceCard extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: context.fomraSurface,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(24),
         border: Border.all(color: color.withValues(alpha: 0.2)),
         boxShadow: context.fomraCardShadow,
       ),
@@ -752,7 +752,7 @@ class _PerformanceCard extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: context.fomraSurface,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(24),
         border: Border.all(color: color.withValues(alpha: 0.2)),
         boxShadow: context.fomraCardShadow,
       ),
@@ -875,40 +875,48 @@ class _KpiChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Expanded(
         child: Container(
-          padding: const EdgeInsets.all(14),
+          padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: context.fomraSurface,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: color.withValues(alpha: 0.2)),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: color.withValues(alpha: 0.22)),
             boxShadow: context.fomraCardShadow,
           ),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
               Container(
-                padding: const EdgeInsets.all(6),
+                padding: const EdgeInsets.all(9),
                 decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.12),
+                  color: color.withValues(alpha: 0.14),
                   borderRadius: BorderRadius.circular(14),
                 ),
-                child: Icon(icon, color: color, size: 14),
+                child: Icon(icon, color: color, size: 18),
               ),
               const Spacer(),
-              Text(
-                trend,
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: color,
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  trend,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    color: color,
+                  ),
                 ),
               ),
             ]),
-            const SizedBox(height: 10),
+            const SizedBox(height: 14),
             Text('$value',
                 style: TextStyle(
-                    fontSize: 28,
+                    fontSize: 36,
                     fontWeight: FontWeight.w800,
                     color: color,
-                    letterSpacing: -0.5)),
+                    height: 1.0,
+                    letterSpacing: -1.0)),
             const SizedBox(height: 4),
             Text(label,
                 style: TextStyle(
@@ -929,19 +937,19 @@ class _SectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Row(children: [
         Container(
-          width: 3, height: 16,
+          width: 4, height: 22,
           decoration: BoxDecoration(
             gradient: AppColors.primaryGradient,
-            borderRadius: BorderRadius.circular(2),
+            borderRadius: BorderRadius.circular(3),
           ),
         ),
-        const SizedBox(width: 8),
+        const SizedBox(width: 10),
         Text(title,
             style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
                 color: context.fomraTextPrimary,
-                letterSpacing: 0.1)),
+                letterSpacing: -0.4)),
       ]);
 }
 
