@@ -50,22 +50,22 @@ class AppColors {
     end: Alignment.bottomRight,
   );
 
-  // ── Radius tokens ── design-brief scale: 12 / 16 / 20 / 24 ────────────────────
+  // ── Radius tokens ── design-brief scale, rounder cards ────────────────────────
   static const double radiusXs = 12; // chips, small controls
   static const double radiusSm = 16; // buttons, inputs
-  static const double radiusMd = 20; // cards
-  static const double radiusLg = 24; // large cards, bottom sheets
-  static const double radiusXl = 28; // hero surfaces
+  static const double radiusMd = 24; // cards (noticeably rounded)
+  static const double radiusLg = 28; // large cards, bottom sheets
+  static const double radiusXl = 32; // hero surfaces
 
-  // ── Shadow tokens ── soft, diffuse (Opendoor-style) ───────────────────────────
+  // ── Shadow tokens ── soft but clearly visible depth ───────────────────────────
   static const List<BoxShadow> cardShadow = [
-    BoxShadow(color: Color(0x0D000000), blurRadius: 18, offset: Offset(0, 6)),
-    BoxShadow(color: Color(0x05000000), blurRadius: 4,  offset: Offset(0, 1)),
+    BoxShadow(color: Color(0x18000000), blurRadius: 28, offset: Offset(0, 10)),
+    BoxShadow(color: Color(0x0C000000), blurRadius: 8,  offset: Offset(0, 2)),
   ];
 
   static const List<BoxShadow> elevatedShadow = [
-    BoxShadow(color: Color(0x1A000000), blurRadius: 30, offset: Offset(0, 14)),
-    BoxShadow(color: Color(0x08000000), blurRadius: 8,  offset: Offset(0, 3)),
+    BoxShadow(color: Color(0x28000000), blurRadius: 40, offset: Offset(0, 18)),
+    BoxShadow(color: Color(0x12000000), blurRadius: 12, offset: Offset(0, 4)),
   ];
 
   static List<BoxShadow> coloredShadow(Color color) => [
@@ -120,11 +120,11 @@ TextTheme _textTheme({
   required Color tertiary,
 }) =>
     TextTheme(
-      displayLarge:  TextStyle(fontSize: 36, fontWeight: FontWeight.w800, letterSpacing: -1.1, height: 1.12, color: primary),
-      displayMedium: TextStyle(fontSize: 30, fontWeight: FontWeight.w800, letterSpacing: -0.7, height: 1.15, color: primary),
-      headlineLarge: TextStyle(fontSize: 24, fontWeight: FontWeight.w700, letterSpacing: -0.4, height: 1.2,  color: primary),
-      headlineMedium:TextStyle(fontSize: 20, fontWeight: FontWeight.w700, letterSpacing: -0.3, height: 1.25, color: primary),
-      titleLarge:    TextStyle(fontSize: 17, fontWeight: FontWeight.w700, letterSpacing: -0.1, height: 1.3,  color: primary),
+      displayLarge:  TextStyle(fontSize: 42, fontWeight: FontWeight.w800, letterSpacing: -1.4, height: 1.08, color: primary),
+      displayMedium: TextStyle(fontSize: 34, fontWeight: FontWeight.w800, letterSpacing: -0.9, height: 1.12, color: primary),
+      headlineLarge: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, letterSpacing: -0.6, height: 1.18, color: primary),
+      headlineMedium:TextStyle(fontSize: 23, fontWeight: FontWeight.w700, letterSpacing: -0.4, height: 1.22, color: primary),
+      titleLarge:    TextStyle(fontSize: 19, fontWeight: FontWeight.w700, letterSpacing: -0.2, height: 1.28, color: primary),
       titleMedium:   TextStyle(fontSize: 15, fontWeight: FontWeight.w600, letterSpacing: 0.0,  height: 1.35, color: primary),
       titleSmall:    TextStyle(fontSize: 13, fontWeight: FontWeight.w600, letterSpacing: 0.1,  height: 1.35, color: primary),
       bodyLarge:     TextStyle(fontSize: 15, fontWeight: FontWeight.w400, letterSpacing: 0.0,  height: 1.55, color: primary),
