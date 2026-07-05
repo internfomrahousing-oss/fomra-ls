@@ -22,11 +22,14 @@ class AuthService {
   /// even across reloads, regardless of whether the Supabase session rehydrates.
   static const _sessionGrace = Duration(minutes: 5);
 
-  static String _passwordKey(LoginPortal portal) =>
-      'portal_password_${portal.name}';
+  // Local per-account password cache key (offline / pre-migration fallback).
+  static String _accountPwKey(String account) =>
+      'account_password_${account.trim().toLowerCase()}';
 
   static const managementEmail = 'management@fomrahousing.in';
   static const employeeEmail = 'employee@fomrahousing.in';
+
+  /// The default password every account starts with, until it's changed.
   static const portalPassword = 'fomra@2024';
 
   static SupabaseClient get _client => Supabase.instance.client;
@@ -45,18 +48,34 @@ class AuthService {
         LoginPortal.employee => employeeEmail,
       };
 
-  /// The active password for a portal: a custom one set via Settings,
-  /// falling back to the shared default [portalPassword].
-  Future<String> passwordForPortal(LoginPortal portal) async {
+  /// Locally-cached password for an account (offline / pre-migration fallback).
+  Future<String> _localPasswordFor(String account) async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_passwordKey(portal)) ?? portalPassword;
+    return prefs.getString(_accountPwKey(account)) ?? portalPassword;
   }
 
-  /// A login password is valid if it matches the active portal password.
-  /// Trimmed so autofill/keyboard trailing spaces don't block login. (A changed
-  /// password still invalidates the old one — the default is not a backdoor.)
-  Future<bool> _passwordMatches(LoginPortal portal, String entered) async {
-    return entered.trim() == (await passwordForPortal(portal)).trim();
+  /// Whether [entered] is the correct password for [account] (a login email).
+  ///
+  /// The source of truth is the server (per-account, synced across devices):
+  /// [verify_account_password] returns true/false when a custom password is set,
+  /// or null when the account still uses the default [portalPassword]. If the
+  /// RPC is unavailable (offline, or the migration hasn't been applied yet) it
+  /// falls back to the previous local behavior so login keeps working.
+  /// Trimmed so autofill/keyboard trailing spaces don't block login.
+  Future<bool> _passwordMatches(String account, String entered) async {
+    final trimmed = entered.trim();
+    try {
+      final res = await _client.rpc('verify_account_password', params: {
+        'p_account': account.trim().toLowerCase(),
+        'p_password': trimmed,
+      });
+      if (res is bool) return res;
+      // null → no custom password set → the account still uses the default.
+      return trimmed == portalPassword.trim();
+    } catch (_) {
+      final local = await _localPasswordFor(account);
+      return trimmed == local.trim();
+    }
   }
 
   AppUser? get currentUser {
@@ -187,7 +206,7 @@ class AuthService {
         );
       }
     }
-    if (!await _passwordMatches(portal, password)) {
+    if (!await _passwordMatches(normalizedEmail, password)) {
       throw const ApiException(
         statusCode: 401,
         message: 'Invalid email or password.',
@@ -275,9 +294,10 @@ class AuthService {
     await tabRemove(_loginAtKey);
   }
 
-  /// Changes the password for the currently signed-in portal. Verifies the
-  /// current password, stores the new one locally, and best-effort syncs it to
-  /// the Supabase account when a real session exists.
+  /// Changes the password for the currently signed-in account (this email).
+  /// The new password becomes that account's password on every device — it's
+  /// stored server-side (hashed), not per-browser. Verifies the current password
+  /// first. Falls back to local storage if the DB function isn't available.
   Future<void> changePassword({
     required String currentPassword,
     required String newPassword,
@@ -289,12 +309,6 @@ class AuthService {
         message: 'You are not signed in.',
       );
     }
-    if (currentPassword != await passwordForPortal(portal)) {
-      throw const ApiException(
-        statusCode: 400,
-        message: 'Current password is incorrect.',
-      );
-    }
     if (newPassword.trim().length < 6) {
       throw const ApiException(
         statusCode: 400,
@@ -302,15 +316,44 @@ class AuthService {
       );
     }
 
-    // Best-effort: update the Supabase account password if a session exists.
+    final account = (_loginEmail ?? emailForPortal(portal)).trim().toLowerCase();
+    final prefs = await SharedPreferences.getInstance();
+
+    try {
+      final ok = await _client.rpc('set_account_password', params: {
+        'p_account': account,
+        'p_current': currentPassword.trim(),
+        'p_new': newPassword.trim(),
+      });
+      if (ok == false) {
+        throw const ApiException(
+          statusCode: 400,
+          message: 'Current password is incorrect.',
+        );
+      }
+      // Server is now the source of truth — drop any stale local override.
+      await prefs.remove(_accountPwKey(account));
+    } on ApiException {
+      rethrow;
+    } catch (_) {
+      // RPC unavailable (offline or migration not applied) → local fallback,
+      // keyed per-account so it still behaves per-employee.
+      if (!await _passwordMatches(account, currentPassword)) {
+        throw const ApiException(
+          statusCode: 400,
+          message: 'Current password is incorrect.',
+        );
+      }
+      await prefs.setString(_accountPwKey(account), newPassword.trim());
+    }
+
+    // Best-effort: update the Supabase Auth account password if a real session
+    // exists (kept for accounts that have a Supabase user).
     try {
       if (_client.auth.currentUser != null) {
         await _client.auth.updateUser(UserAttributes(password: newPassword));
       }
     } catch (_) {}
-
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_passwordKey(portal), newPassword);
   }
 
   String routeForPortal(LoginPortal portal) => '/home';
