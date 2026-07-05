@@ -82,7 +82,8 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
                     padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
                       color: context.fomraSurface,
-                      borderRadius: BorderRadius.circular(20),
+                      borderRadius: BorderRadius.circular(AppColors.radiusMd),
+                      border: Border.all(color: context.fomraBorder),
                       boxShadow: context.fomraCardShadow,
                     ),
                     child: Column(

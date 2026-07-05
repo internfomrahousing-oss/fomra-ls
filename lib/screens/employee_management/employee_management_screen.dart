@@ -7,6 +7,7 @@ import '../../services/employee_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_input.dart';
 import '../../theme/fomra_theme_context.dart';
+import '../../widgets/ui/app_components.dart';
 import 'add_employee_screen.dart';
 
 class EmployeeManagementScreen extends StatefulWidget {
@@ -170,64 +171,34 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
         ),
         Expanded(
           child: _loading
-              ? const Center(child: CircularProgressIndicator())
+              ? const _EmployeeLoadingSkeleton()
               : _loadError != null
-                  ? Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(24),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(_loadError!,
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(
-                                    color: AppColors.textSecondary)),
-                            const SizedBox(height: 12),
-                            OutlinedButton.icon(
-                              onPressed: _loadEmployees,
-                              icon: const Icon(Icons.refresh, size: 16),
-                              label: const Text('Retry'),
-                            ),
-                          ],
-                        ),
+                  ? EmptyState(
+                      icon: Icons.cloud_off_outlined,
+                      title: 'Couldn’t load employees',
+                      message: _loadError,
+                      action: PrimaryButton(
+                        label: 'Retry',
+                        icon: Icons.refresh,
+                        onPressed: _loadEmployees,
                       ),
                     )
                   : _filtered.isEmpty
-                      ? Center(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.groups_outlined,
-                                  size: 48,
-                                  color: Colors.grey.shade400),
-                              const SizedBox(height: 12),
-                              Text(
-                                _employees.isEmpty
-                                    ? 'No employees yet'
-                                    : 'No matches',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 15,
-                                ),
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
-                                'Add an employee profile to get started',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey.shade600,
-                                ),
-                              ),
-                              if (_employees.isEmpty) ...[
-                                const SizedBox(height: 16),
-                                FilledButton.icon(
+                      ? EmptyState(
+                          icon: Icons.groups_outlined,
+                          title: _employees.isEmpty
+                              ? 'No employees yet'
+                              : 'No matches',
+                          message: _employees.isEmpty
+                              ? 'Add an employee profile to get started.'
+                              : 'Try a different search term.',
+                          action: _employees.isEmpty
+                              ? PrimaryButton(
+                                  label: 'Add Employee',
+                                  icon: Icons.person_add_outlined,
                                   onPressed: _openAddEmployee,
-                                  icon: const Icon(Icons.person_add_outlined),
-                                  label: const Text('Add Employee'),
-                                ),
-                              ],
-                            ],
-                          ),
+                                )
+                              : null,
                         )
                       : RefreshIndicator(
                           onRefresh: _loadEmployees,
@@ -243,6 +214,24 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                         ),
         ),
       ],
+    );
+  }
+}
+
+class _EmployeeLoadingSkeleton extends StatelessWidget {
+  const _EmployeeLoadingSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+      children: List.generate(
+        6,
+        (_) => const Padding(
+          padding: EdgeInsets.only(bottom: AppSpacing.sm),
+          child: LoadingSkeleton(height: 92, radius: AppColors.radiusSm),
+        ),
+      ),
     );
   }
 }
@@ -311,8 +300,8 @@ class _EmployeeCard extends StatelessWidget {
                         decoration: BoxDecoration(
                           color: active
                               ? AppColors.success.withValues(alpha: 0.12)
-                              : Colors.grey.shade200,
-                          borderRadius: BorderRadius.circular(16),
+                              : context.fomraSurfaceVar,
+                          borderRadius: BorderRadius.circular(999),
                         ),
                         child: Text(
                           employee.status.label,
@@ -340,7 +329,7 @@ class _EmployeeCard extends StatelessWidget {
                     const SizedBox(height: 2),
                     Text(employee.phone,
                         style: TextStyle(
-                            fontSize: 12, color: Colors.grey.shade700)),
+                            fontSize: 12, color: context.fomraTextSecondary)),
                   ],
                   if (employee.designation.isNotEmpty ||
                       employee.department.isNotEmpty) ...[
@@ -354,7 +343,7 @@ class _EmployeeCard extends StatelessWidget {
                       ].join(' · '),
                       style: TextStyle(
                         fontSize: 11,
-                        color: Colors.grey.shade600,
+                        color: context.fomraTextTertiary,
                       ),
                     ),
                   ],

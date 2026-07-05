@@ -5,6 +5,7 @@ import '../../services/app_store.dart';
 import '../../services/legal_verification_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_theme_context.dart';
+import '../../widgets/ui/app_components.dart';
 import '../../widgets/app_drawer.dart';
 import '../../widgets/fomra_app_bar.dart';
 import '../../widgets/fomra_bottom_nav.dart';
@@ -174,31 +175,10 @@ class _LegalVerificationScreenState extends State<LegalVerificationScreen> {
 
   Widget _buildLeadList() {
     if (_leads.isEmpty) {
-      return Center(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Container(
-            width: 80,
-            height: 80,
-            decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha: 0.08),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(Icons.gavel_outlined,
-                size: 38, color: AppColors.primary.withValues(alpha: 0.4)),
-          ),
-          const SizedBox(height: 16),
-          const Text('No leads found',
-              style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textSecondary)),
-          const SizedBox(height: 4),
-          const Text(
-            'Add leads in LandWorkspace first.',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
-          ),
-        ]),
+      return const EmptyState(
+        icon: Icons.gavel_outlined,
+        title: 'No leads found',
+        message: 'Add leads in LandWorkspace first, then run legal review here.',
       );
     }
 
@@ -393,7 +373,8 @@ class _LegalVerificationScreenState extends State<LegalVerificationScreen> {
                       backgroundColor: AppColors.primary,
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14)),
+                          borderRadius:
+                              BorderRadius.circular(AppColors.radiusSm)),
                     ),
                   ),
                 ),
@@ -437,10 +418,10 @@ class _LegalVerificationScreenState extends State<LegalVerificationScreen> {
                 fontSize: 12, color: AppColors.textSecondary),
             border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
+                borderSide: BorderSide(color: context.fomraBorder)),
             enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
+                borderSide: BorderSide(color: context.fomraBorder)),
             focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
                 borderSide:
@@ -448,7 +429,7 @@ class _LegalVerificationScreenState extends State<LegalVerificationScreen> {
             contentPadding:
                 const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             filled: true,
-            fillColor: Colors.grey.shade50,
+            fillColor: context.fomraSurfaceVar,
           ),
           style: const TextStyle(fontSize: 13),
         ),
@@ -463,9 +444,9 @@ class _LegalVerificationScreenState extends State<LegalVerificationScreen> {
       Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: Colors.grey.shade50,
+          color: context.fomraSurfaceVar,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: const Color(0xFFE5E7EB)),
+          border: Border.all(color: context.fomraBorder),
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(label,
@@ -491,10 +472,10 @@ class _LegalVerificationScreenState extends State<LegalVerificationScreen> {
                     fontSize: 12, color: AppColors.textSecondary),
                 border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
+                    borderSide: BorderSide(color: context.fomraBorder)),
                 enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
+                    borderSide: BorderSide(color: context.fomraBorder)),
                 focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: const BorderSide(
@@ -520,7 +501,7 @@ class _LegalVerificationScreenState extends State<LegalVerificationScreen> {
             color: selected ? color.withValues(alpha: 0.12) : context.fomraSurface,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
-              color: selected ? color : Colors.grey.shade300,
+              color: selected ? color : context.fomraBorder,
               width: selected ? 1.5 : 1,
             ),
           ),
@@ -554,16 +535,16 @@ class _LegalVerificationScreenState extends State<LegalVerificationScreen> {
               decoration: BoxDecoration(
                 color: selected
                     ? color.withValues(alpha: 0.1)
-                    : Colors.grey.shade50,
+                    : context.fomraSurfaceVar,
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(
-                  color: selected ? color : Colors.grey.shade300,
+                  color: selected ? color : context.fomraBorder,
                   width: selected ? 2 : 1,
                 ),
               ),
               child: Row(mainAxisSize: MainAxisSize.min, children: [
                 Icon(icon,
-                    color: selected ? color : Colors.grey.shade400, size: 18),
+                    color: selected ? color : context.fomraTextTertiary, size: 18),
                 const SizedBox(width: 6),
                 Text(label,
                     style: TextStyle(
@@ -589,10 +570,10 @@ class _LegalVerificationScreenState extends State<LegalVerificationScreen> {
                 fontSize: 12, color: AppColors.textSecondary),
             border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
+                borderSide: BorderSide(color: context.fomraBorder)),
             enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
+                borderSide: BorderSide(color: context.fomraBorder)),
             focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
                 borderSide: const BorderSide(
@@ -600,7 +581,7 @@ class _LegalVerificationScreenState extends State<LegalVerificationScreen> {
             contentPadding:
                 const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
             filled: true,
-            fillColor: Colors.grey.shade50,
+            fillColor: context.fomraSurfaceVar,
           ),
           style: const TextStyle(fontSize: 13),
         ),
