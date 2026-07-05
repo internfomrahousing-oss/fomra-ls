@@ -112,10 +112,11 @@ class _LeadDetailsCard extends StatelessWidget {
       width: double.infinity,
       decoration: BoxDecoration(
         color: context.fomraSurface,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(AppColors.radiusMd),
+        border: Border.all(color: context.fomraBorder),
         boxShadow: context.fomraCardShadow,
       ),
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(AppSpacing.md),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -125,12 +126,12 @@ class _LeadDetailsCard extends StatelessWidget {
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
                   color: AppColors.primary.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(4),
+                  borderRadius: BorderRadius.circular(AppColors.radiusXs),
                 ),
                 child: const Icon(
                   Icons.description_outlined,
                   color: AppColors.primary,
-                  size: 22,
+                  size: AppIconSize.secondary,
                 ),
               ),
               const SizedBox(width: 10),

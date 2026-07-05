@@ -339,28 +339,49 @@ class _KpiData {
   );
 }
 
-class _KpiCard extends StatelessWidget {
+class _KpiCard extends StatefulWidget {
   final _KpiData d;
   const _KpiCard(this.d);
 
   @override
+  State<_KpiCard> createState() => _KpiCardState();
+}
+
+class _KpiCardState extends State<_KpiCard> {
+  bool _hovered = false;
+
+  @override
   Widget build(BuildContext context) {
-    return Material(
-      color: context.fomraSurface,
-      borderRadius: BorderRadius.circular(14),
-      elevation: 0,
-      shadowColor: Colors.transparent,
-      child: InkWell(
-        onTap: () => d.onTap(d),
-        borderRadius: BorderRadius.circular(14),
-        child: Ink(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            border: Border(left: BorderSide(color: d.color, width: 4)),
-            boxShadow: context.fomraCardShadow,
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(18),
+    final d = widget.d;
+    final radius = BorderRadius.circular(AppColors.radiusSm);
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      cursor: SystemMouseCursors.click,
+      child: Material(
+        color: context.fomraSurface,
+        borderRadius: radius,
+        elevation: 0,
+        shadowColor: Colors.transparent,
+        child: InkWell(
+          onTap: () => d.onTap(d),
+          borderRadius: radius,
+          child: AnimatedContainer(
+            duration: AppMotion.normal,
+            curve: AppMotion.curve,
+            transform: _hovered
+                ? Matrix4.translationValues(0, -3, 0)
+                : Matrix4.identity(),
+            decoration: BoxDecoration(
+              color: context.fomraSurface,
+              borderRadius: radius,
+              border: Border(left: BorderSide(color: d.color, width: 4)),
+              boxShadow: _hovered
+                  ? AppColors.elevatedShadow
+                  : context.fomraCardShadow,
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpacing.md),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -421,6 +442,7 @@ class _KpiCard extends StatelessWidget {
               ],
             ),
           ),
+          ),
         ),
       ),
     );
@@ -473,7 +495,8 @@ class _AnalyticsCard extends StatelessWidget {
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: context.fomraSurface,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(AppColors.radiusMd),
+        border: Border.all(color: context.fomraBorder),
         boxShadow: context.fomraCardShadow,
       ),
       child: Column(
@@ -615,7 +638,8 @@ class _KpiLeadsSheet extends StatelessWidget {
       builder: (_, scrollCtrl) => Container(
         decoration: BoxDecoration(
           color: context.fomraSurface,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(AppColors.radiusLg)),
         ),
         child: Column(
           children: [

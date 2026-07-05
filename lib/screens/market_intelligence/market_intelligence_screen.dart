@@ -179,7 +179,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
   final _roadWidthCtrl = TextEditingController();
   final _landSizeCtrl = TextEditingController();
   String _locationCategory = 'Urban';
-  String _developmentPotential = 'Medium';
+  final String _developmentPotential = 'Medium';
   _ValuationResult? _valuationResult;
 
   // Competitor Projects (SquareYards + NoBroker)
@@ -1464,7 +1464,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                     color: mbColor.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Icon(
+                  child: const Icon(
                     Icons.apartment_outlined,
                     size: 18,
                     color: mbColor,
@@ -1730,11 +1730,11 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                 if (detailUrl.isNotEmpty) ...[
                   const SizedBox(height: 8),
                   Row(children: [
-                    Icon(Icons.open_in_new, size: 13, color: mbColor),
+                    const Icon(Icons.open_in_new, size: 13, color: mbColor),
                     const SizedBox(width: 4),
                     Text(
                       'View on ${source.isNotEmpty ? source : 'website'}',
-                      style: TextStyle(
+                      style: const TextStyle(
                           fontSize: 11, fontWeight: FontWeight.w700, color: mbColor),
                     ),
                   ]),
@@ -2197,7 +2197,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
     const darkSurface = Color(0xFF1E293B);
     final selectedBg = isDark ? AppColors.primaryLight : AppColors.primary;
     final unselectedBg = (isDark ? darkSurface : Colors.white).withValues(alpha: 0.94);
-    final selectedFg = Colors.white;
+    const selectedFg = Colors.white;
     final unselectedFg = isDark ? Colors.white.withValues(alpha: 0.9) : AppColors.primary;
     final borderColor = selected
         ? Colors.transparent
@@ -3530,7 +3530,7 @@ class _AutoChip extends StatelessWidget {
   final String label;
   final String value;
   final Color? tone;
-  const _AutoChip(this.label, this.value, {this.tone});
+  const _AutoChip(this.label, this.value) : tone = null;
 
   @override
   Widget build(BuildContext context) {

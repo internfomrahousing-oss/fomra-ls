@@ -12,6 +12,7 @@ import '../../theme/fomra_theme_context.dart';
 import '../../widgets/app_drawer.dart';
 import '../../widgets/fomra_app_bar.dart';
 import '../../widgets/fomra_bottom_nav.dart';
+import '../../widgets/ui/app_components.dart';
 import 'add_lead_screen.dart';
 import 'lead_detail_screen.dart';
 import 'leads_map_screen.dart';
@@ -433,30 +434,18 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
 
   Widget _buildScrollableBody() {
     if (_loading) {
-      return const Center(child: CircularProgressIndicator());
+      return const _LeadsLoadingSkeleton();
     }
 
     if (_loadError != null) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.cloud_off_outlined,
-                  size: 48, color: AppColors.textSecondary),
-              const SizedBox(height: 12),
-              Text(_loadError!,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: AppColors.textSecondary)),
-              const SizedBox(height: 16),
-              ElevatedButton.icon(
-                onPressed: _loadLeads,
-                icon: const Icon(Icons.refresh, size: 18),
-                label: const Text('Retry'),
-              ),
-            ],
-          ),
+      return EmptyState(
+        icon: Icons.cloud_off_outlined,
+        title: 'Couldn’t load leads',
+        message: _loadError,
+        action: PrimaryButton(
+          label: 'Retry',
+          icon: Icons.refresh,
+          onPressed: _loadLeads,
         ),
       );
     }
@@ -519,7 +508,7 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
                     margin: const EdgeInsets.only(bottom: 16),
                     decoration: BoxDecoration(
                       color: AppColors.error,
-                      borderRadius: BorderRadius.circular(18),
+                      borderRadius: BorderRadius.circular(AppColors.radiusMd),
                     ),
                     alignment: Alignment.centerRight,
                     padding: const EdgeInsets.only(right: 20),
@@ -684,33 +673,50 @@ class _EmptyState extends StatelessWidget {
   const _EmptyState({required this.hasLeads});
 
   @override
-  Widget build(BuildContext context) => Center(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Container(
-            width: 90,
-            height: 90,
-            decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha: 0.06),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(Icons.add_location_alt_outlined,
-                size: 44,
-                color: AppColors.primary.withValues(alpha: 0.4)),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            hasLeads
-                ? 'No leads match the current filter.'
-                : 'No land leads yet.\nTap Add Lead to capture your first lead.',
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-                color: AppColors.textSecondary,
-                fontSize: 15,
-                height: 1.5,
-                fontWeight: FontWeight.w500),
-          ),
-        ]),
+  Widget build(BuildContext context) => EmptyState(
+        icon: Icons.add_location_alt_outlined,
+        title: hasLeads ? 'No matching leads' : 'No land leads yet',
+        message: hasLeads
+            ? 'No leads match the current filter. Try clearing it.'
+            : 'Tap Add Lead to capture your first land lead.',
       );
+}
+
+// ── Loading Skeleton ──────────────────────────────────────────────────────────
+
+class _LeadsLoadingSkeleton extends StatelessWidget {
+  const _LeadsLoadingSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+      children: [
+        // Summary strip placeholders.
+        SizedBox(
+          height: 122,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: 4,
+            separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.sm),
+            itemBuilder: (_, __) => const LoadingSkeleton(
+                width: 152, height: 122, radius: AppColors.radiusMd),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        const LoadingSkeleton(height: 52, radius: AppColors.radiusSm),
+        const SizedBox(height: AppSpacing.md),
+        // Card placeholders.
+        ...List.generate(
+          4,
+          (_) => const Padding(
+            padding: EdgeInsets.only(bottom: AppSpacing.md),
+            child: LoadingSkeleton(height: 148, radius: AppColors.radiusMd),
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 // ── Summary Bar ───────────────────────────────────────────────────────────────
@@ -747,7 +753,7 @@ class _LeadSummary extends StatelessWidget {
               width: 152,
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(18),
+                borderRadius: BorderRadius.circular(AppColors.radiusMd),
                 gradient: LinearGradient(
                   colors: [
                     color.withValues(alpha: 0.18),
@@ -842,7 +848,7 @@ class _SearchBar extends StatelessWidget {
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
           color: context.fomraSurface,
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(AppColors.radiusSm),
           border: Border.all(color: context.fomraBorder.withValues(alpha: 0.7)),
           boxShadow: context.fomraCardShadow,
         ),
@@ -940,10 +946,10 @@ class _LeadCard extends StatelessWidget {
         margin: const EdgeInsets.only(bottom: 16),
         clipBehavior: Clip.antiAlias,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(AppColors.radiusMd),
           side: selected
               ? const BorderSide(color: AppColors.primary, width: 1.5)
-              : BorderSide.none,
+              : BorderSide(color: context.fomraBorder),
         ),
         elevation: 0,
         child: InkWell(
@@ -978,8 +984,8 @@ class _LeadCard extends StatelessWidget {
               decoration: BoxDecoration(
                 color: statusColor,
                 borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(18),
-                    bottomLeft: Radius.circular(18)),
+                    topLeft: Radius.circular(AppColors.radiusMd),
+                    bottomLeft: Radius.circular(AppColors.radiusMd)),
               ),
             ),
             Expanded(

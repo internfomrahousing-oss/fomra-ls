@@ -2,19 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 class AppColors {
-  // ── Brand ────────────────────────────────────────────────────────────────────
-  static const Color primary      = Color(0xFF2454FF);
-  static const Color primaryLight = Color(0xFF5B7FFF);
-  static const Color primaryDark  = Color(0xFF1A43E2);
-  static const Color secondary    = Color(0xFF7C3AED); // purple accent
-  static const Color accent       = Color(0xFF5B7FFF);
+  // ── Brand ── aligned to design brief (reduced blue, softer) ───────────────────
+  static const Color primary      = Color(0xFF2563EB); // blue-600
+  static const Color primaryLight = Color(0xFF60A5FA); // blue-400
+  static const Color primaryDark  = Color(0xFF1D4ED8); // blue-700
+  static const Color secondary    = Color(0xFF8B5CF6); // violet-500 (purple accent)
+  static const Color accent       = Color(0xFF60A5FA);
   static const Color accentLight  = Color(0xFFFBBF24);
+  static const Color purple       = Color(0xFF8B5CF6);
 
   // ── Surface ───────────────────────────────────────────────────────────────────
-  static const Color background   = Color(0xFFF6F8FC);
+  static const Color background   = Color(0xFFF8FAFC); // slate-50
   static const Color surface      = Color(0xFFFFFFFF);
-  static const Color surfaceVar   = Color(0xFFF8FAFF);
-  static const Color border       = Color(0xFFE4E8F0);
+  static const Color surfaceVar   = Color(0xFFF1F5F9); // slate-100
+  static const Color border       = Color(0xFFE5E7EB); // gray-200
 
   // ── Text ─────────────────────────────────────────────────────────────────────
   static const Color textPrimary   = Color(0xFF111827);
@@ -30,31 +31,31 @@ class AppColors {
   static const Color darkTextSecondary = Color(0xFF94A3B8);
   static const Color darkTextTertiary  = Color(0xFF64748B);
 
-  // ── Semantic ─────────────────────────────────────────────────────────────────
-  static const Color success = Color(0xFF16C47F);
-  static const Color warning = Color(0xFFF59E0B);
-  static const Color error   = Color(0xFFEF4444);
-  static const Color info    = Color(0xFF2563EB);
+  // ── Semantic ── aligned to design brief ───────────────────────────────────────
+  static const Color success = Color(0xFF10B981); // emerald-500
+  static const Color warning = Color(0xFFF59E0B); // amber-500
+  static const Color error   = Color(0xFFEF4444); // red-500
+  static const Color info    = Color(0xFF2563EB); // blue-600
 
   // ── Gradients ────────────────────────────────────────────────────────────────
   static const LinearGradient primaryGradient = LinearGradient(
-    colors: [Color(0xFF0F3EB5), Color(0xFF2563EB)],
+    colors: [Color(0xFF1D4ED8), Color(0xFF2563EB)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
 
   static const LinearGradient heroGradient = LinearGradient(
-    colors: [Color(0xFF0D2E8A), Color(0xFF1A56DB)],
+    colors: [Color(0xFF1E3A8A), Color(0xFF2563EB)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
 
-  // ── Radius tokens ── softer, rounder corners ──────────────────────────────────
-  static const double radiusXs = 8;
-  static const double radiusSm = 14;
-  static const double radiusMd = 22;
-  static const double radiusLg = 24;
-  static const double radiusXl = 28;
+  // ── Radius tokens ── design-brief scale: 12 / 16 / 20 / 24 ────────────────────
+  static const double radiusXs = 12; // chips, small controls
+  static const double radiusSm = 16; // buttons, inputs
+  static const double radiusMd = 20; // cards
+  static const double radiusLg = 24; // large cards, bottom sheets
+  static const double radiusXl = 28; // hero surfaces
 
   // ── Shadow tokens ── soft, diffuse (Opendoor-style) ───────────────────────────
   static const List<BoxShadow> cardShadow = [
@@ -71,6 +72,44 @@ class AppColors {
     BoxShadow(color: color.withValues(alpha: 0.26), blurRadius: 18, offset: const Offset(0, 7)),
     BoxShadow(color: color.withValues(alpha: 0.12), blurRadius: 6,  offset: const Offset(0, 2)),
   ];
+}
+
+/// Spacing scale from the design brief: 4 · 8 · 12 · 16 · 24 · 32 · 48.
+/// Use these instead of magic numbers so gaps stay consistent app-wide.
+class AppSpacing {
+  const AppSpacing._();
+  static const double xxs = 4;
+  static const double xs  = 8;
+  static const double sm  = 12;
+  static const double md  = 16;
+  static const double lg  = 24;
+  static const double xl  = 32;
+  static const double xxl = 48;
+
+  // Ready-made SizedBox gaps for column/row layouts.
+  static const SizedBox gapXxs = SizedBox(height: xxs, width: xxs);
+  static const SizedBox gapXs  = SizedBox(height: xs,  width: xs);
+  static const SizedBox gapSm  = SizedBox(height: sm,  width: sm);
+  static const SizedBox gapMd  = SizedBox(height: md,  width: md);
+  static const SizedBox gapLg  = SizedBox(height: lg,  width: lg);
+  static const SizedBox gapXl  = SizedBox(height: xl,  width: xl);
+}
+
+/// Consistent icon sizing from the brief: primary 28 · secondary 22 · small 18.
+class AppIconSize {
+  const AppIconSize._();
+  static const double primary   = 28;
+  static const double secondary = 22;
+  static const double small     = 18;
+}
+
+/// Motion tokens — brief calls for 150–250ms with easing.
+class AppMotion {
+  const AppMotion._();
+  static const Duration fast   = Duration(milliseconds: 150);
+  static const Duration normal = Duration(milliseconds: 200);
+  static const Duration slow   = Duration(milliseconds: 250);
+  static const Curve curve     = Curves.easeOutCubic;
 }
 
 const _fontFamily = 'Inter';

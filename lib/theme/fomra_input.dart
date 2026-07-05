@@ -5,7 +5,8 @@ import 'app_theme.dart';
 class FomraInput {
   FomraInput._();
 
-  static const double borderRadius = 10;
+  // Matches the app-wide inputDecorationTheme radius for consistent inputs.
+  static const double borderRadius = 14;
   static const EdgeInsets contentPadding =
       EdgeInsets.symmetric(horizontal: 14, vertical: 14);
 

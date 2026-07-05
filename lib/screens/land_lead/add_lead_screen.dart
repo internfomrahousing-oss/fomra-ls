@@ -773,7 +773,7 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   gradient: AppColors.primaryGradient,
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(AppColors.radiusSm),
                   boxShadow: AppColors.coloredShadow(AppColors.primary),
                 ),
                 child: ElevatedButton.icon(
@@ -787,7 +787,7 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
                     elevation: 0,
                     shadowColor: Colors.transparent,
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14)),
+                        borderRadius: BorderRadius.circular(AppColors.radiusSm)),
                   ),
                 ),
               ),
@@ -1564,7 +1564,7 @@ class _SectionHeader extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: context.fomraSurface,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(AppColors.radiusSm),
         border: Border.all(color: context.fomraBorder),
         boxShadow: context.fomraCardShadow,
       ),

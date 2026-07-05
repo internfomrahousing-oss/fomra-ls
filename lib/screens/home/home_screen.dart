@@ -365,7 +365,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     _KpiChip(
                       label: 'Broker',
                       value: _brokerLeads,
-                      color: const Color(0xFF7C3AED),
+                      color: AppColors.purple,
                       icon: Icons.handshake_outlined,
                       trend: '+3%',
                     ),
