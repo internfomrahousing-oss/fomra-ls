@@ -6222,16 +6222,16 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
         margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
-          color: Colors.grey.shade50,
+          color: context.fomraSurfaceVar,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.grey.shade300),
+          border: Border.all(color: context.fomraBorder),
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(title, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800)),
           const SizedBox(height: 6),
           Text(
             season['error']?.toString() ?? 'No crop data available for this season.',
-            style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
+            style: TextStyle(fontSize: 11, color: context.fomraTextSecondary),
           ),
         ]),
       );
@@ -6242,9 +6242,9 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.fomraSurface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade300),
+        border: Border.all(color: context.fomraBorder),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text(title, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800)),
