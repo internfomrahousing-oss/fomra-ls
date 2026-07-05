@@ -3096,7 +3096,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
       ]),
       const SizedBox(height: 6),
       Text('Tap Investment or Risk to see why.',
-          style: TextStyle(fontSize: 10, color: Colors.grey.shade600)),
+          style: TextStyle(fontSize: 10, color: context.fomraTextSecondary)),
     ]);
   }
 
@@ -5553,7 +5553,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
                       const SizedBox(height: 4),
                       Text('N/A',
                           style: TextStyle(
-                              fontSize: 8, color: Colors.grey.shade500)),
+                              fontSize: 8, color: context.fomraTextTertiary)),
                     ],
                   ]),
                 ),
@@ -5792,7 +5792,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
         Text(
           'Resolving plot at tap point…',
           textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+          style: TextStyle(fontSize: 11, color: context.fomraTextSecondary),
         ),
       ]);
     }
@@ -5809,7 +5809,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
         Text(
           'Fetching FMB for Survey ${widget.surveyNumber ?? '—'} · Sub ${_resolvedMapSub() ?? widget.subDivision ?? '—'}…',
           textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+          style: TextStyle(fontSize: 11, color: context.fomraTextSecondary),
         ),
       ]);
     }
@@ -5919,7 +5919,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
             : widget.lat == null
                 ? 'Tap the map to select a land parcel, then open FMB.'
                 : 'Waiting for survey and sub-division. Tap directly on your plot.',
-        style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+        style: TextStyle(fontSize: 11, color: context.fomraTextSecondary),
       ),
       if (widget.surveyNumber != null) ...[
         const SizedBox(height: 8),
@@ -6105,7 +6105,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
     }
     return Text(
       'Patta not available from TNGIS for this plot.',
-      style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+      style: TextStyle(fontSize: 11, color: context.fomraTextSecondary),
     );
   }
 
@@ -6135,7 +6135,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
     }
     return Text(
       'Tap EC again after selecting a plot on the map.',
-      style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+      style: TextStyle(fontSize: 11, color: context.fomraTextSecondary),
     );
   }
 
@@ -6496,7 +6496,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
             else
               Text(
                 'Tap Load Patta for this subdivision.',
-                style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                style: TextStyle(fontSize: 11, color: context.fomraTextSecondary),
               ),
           ]),
         ),
@@ -6547,7 +6547,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
                 row.fmbAvailable
                     ? 'Loading FMB from TNGIS…'
                     : 'FMB may not be digitized for this subdivision.',
-                style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                style: TextStyle(fontSize: 11, color: context.fomraTextSecondary),
               ),
           ]),
         ),
