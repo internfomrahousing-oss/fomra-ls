@@ -3393,7 +3393,7 @@ class _ScoreRow extends StatelessWidget {
           borderRadius: BorderRadius.circular(4),
           child: LinearProgressIndicator(
             value: score / 100,
-            backgroundColor: const Color(0xFFE5E7EB),
+            backgroundColor: context.fomraSurfaceVar,
             color: color,
             minHeight: isWide ? 10 : 6,
           ),
