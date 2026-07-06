@@ -110,6 +110,11 @@ class AuthService {
   bool get isLoggedIn =>
       _client.auth.currentUser != null || _portal != null;
 
+  /// True when the app holds a REAL Supabase Auth session — required for the
+  /// locked-down (authenticated-only) database. False means the login fell back
+  /// to local mode (anon), which the RLS lockdown would block from writing.
+  bool get hasRealSession => _client.auth.currentUser != null;
+
   Future<void> restoreSession() async {
     final portalName = await tabGetString(_portalKey);
     _loginEmail = await tabGetString(_loginEmailKey);

@@ -19,6 +19,8 @@ class SettingsScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
         children: [
+          const _SessionStatusSection(),
+          const SizedBox(height: 18),
           const _ThemeSection(),
           const SizedBox(height: 18),
           _ChangePasswordButtonSection(
@@ -87,6 +89,65 @@ class _SettingsCard extends StatelessWidget {
             ]),
             const SizedBox(height: 18),
             child,
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Session status ───────────────────────────────────────────────────────────
+
+class _SessionStatusSection extends StatelessWidget {
+  const _SessionStatusSection();
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final secure = AuthService.instance.hasRealSession;
+    final color = secure ? AppColors.success : AppColors.warning;
+
+    return _SettingsCard(
+      icon: secure ? Icons.verified_user_outlined : Icons.gpp_maybe_outlined,
+      title: 'Session security',
+      subtitle: 'Is this login a real authenticated session?',
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: color.withValues(alpha: 0.4)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(secure ? Icons.lock_outline : Icons.lock_open_outlined,
+                color: color, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    secure ? 'Secure (authenticated)' : 'Local (not authenticated)',
+                    style: TextStyle(
+                        fontWeight: FontWeight.w700, color: color, fontSize: 14),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    secure
+                        ? 'This login can use the locked-down (secure) database.'
+                        : 'This login would be blocked by the secure database. '
+                            'Sign out and back in on the latest build; if it stays '
+                            'Local, reset this account’s password in Supabase.',
+                    style: TextStyle(
+                        fontSize: 12,
+                        height: 1.35,
+                        color: cs.onSurface.withValues(alpha: 0.65)),
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
       ),
