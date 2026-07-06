@@ -66,33 +66,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   bool _isSameMonth(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month;
 
-  String _dateLabel(DateTime date) {
-    const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
-    const weekdays = [
-      'Mon',
-      'Tue',
-      'Wed',
-      'Thu',
-      'Fri',
-      'Sat',
-      'Sun',
-    ];
-    return '${weekdays[date.weekday - 1]}, ${months[date.month - 1]} ${date.day}';
-  }
-
   List<LandLead> get _sortedLeads {
     final leads = List<LandLead>.from(AppStore.instance.leads);
     leads.sort((a, b) => b.addedOn.compareTo(a.addedOn));
@@ -116,55 +89,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
       if (idx >= 0 && idx < days) buckets[idx] += 1;
     }
     return buckets;
-  }
-
-  List<_TeamPerf> _buildTeamPerformance(List<LandLead> leads) {
-    final employeeMap = <String, String>{};
-    for (final employee in AppStore.instance.employees) {
-      if (employee.fullName.trim().isEmpty) continue;
-      employeeMap[employee.fullName.trim()] = employee.designation.trim();
-    }
-
-    final now = DateTime.now();
-    final byUser = <String, List<LandLead>>{};
-    for (final lead in leads) {
-      final name = lead.createdByName.trim();
-      if (name.isEmpty || name.toLowerCase() == 'management') continue;
-      byUser.putIfAbsent(name, () => []).add(lead);
-    }
-
-    final maxCount = byUser.values.isEmpty
-        ? 1
-        : byUser.values.map((e) => e.length).reduce((a, b) => a > b ? a : b);
-
-    final rows = byUser.entries.map((entry) {
-      final personLeads = entry.value;
-      final total = personLeads.length;
-      final today = personLeads.where((l) => _isSameDay(l.addedOn, now)).length;
-      final pct = (total / maxCount).clamp(0.0, 1.0);
-      final status = switch (pct) {
-        >= 0.8 => ('Top performer', StatusTone.success),
-        >= 0.55 => ('On track', StatusTone.primary),
-        >= 0.3 => ('Needs boost', StatusTone.warning),
-        _ => ('Low activity', StatusTone.danger),
-      };
-      return _TeamPerf(
-        name: entry.key,
-        designation: employeeMap[entry.key] ?? '',
-        total: total,
-        today: today,
-        percent: pct,
-        rank: 0,
-        statusLabel: status.$1,
-        tone: status.$2,
-      );
-    }).toList()
-      ..sort((a, b) => b.total.compareTo(a.total));
-
-    for (var i = 0; i < rows.length; i++) {
-      rows[i] = rows[i].copyWith(rank: i + 1);
-    }
-    return rows;
   }
 
   void _openKpiLeads(_KpiData kpi) {
@@ -208,7 +132,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final weeklyTrend = _trendByDays(7, leads);
     final maxPipeline = [newLeads, contacted, negotiation, acquired]
         .fold<int>(1, (a, b) => a > b ? a : b);
-    final teamRows = _buildTeamPerformance(leads);
 
     final kpis = [
       _KpiData(
@@ -279,44 +202,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
     ];
 
-    final quickActions = [
-      _QuickActionData(
-        label: 'Add Lead',
-        subtitle: 'Capture new parcel',
-        icon: Icons.add_location_alt_outlined,
-        accent: const Color(0xFF2563EB),
-        onTap: () => _goTo('/land-lead'),
-      ),
-      _QuickActionData(
-        label: 'Create Task',
-        subtitle: 'Assign the team',
-        icon: Icons.playlist_add_check_circle_outlined,
-        accent: const Color(0xFF8B5CF6),
-        onTap: () => _goTo('/task-management'),
-      ),
-      _QuickActionData(
-        label: 'Generate Report',
-        subtitle: 'Open analytics',
-        icon: Icons.assessment_outlined,
-        accent: const Color(0xFFF59E0B),
-        onTap: () => _openKpiLeads(kpis.first),
-      ),
-      _QuickActionData(
-        label: 'Search Property',
-        subtitle: 'Open market intel',
-        icon: Icons.travel_explore_outlined,
-        accent: const Color(0xFF10B981),
-        onTap: () => _goTo('/market-intelligence'),
-      ),
-      _QuickActionData(
-        label: 'Add Employee',
-        subtitle: 'Manage workforce',
-        icon: Icons.person_add_alt_1_outlined,
-        accent: const Color(0xFF6366F1),
-        onTap: () => _goTo('/employee-management'),
-      ),
-    ];
-
     return Scaffold(
       appBar: const FomraAppBar(moduleName: 'Dashboard'),
       drawer: const AppDrawer(currentRoute: '/dashboard'),
@@ -330,33 +215,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _DashboardHeader(
-                  dateLabel: _dateLabel(now),
-                  activeLeads: activeLeads,
-                  todayTasks: addedToday,
-                  pendingActions: pendingActions,
-                ),
-                const SizedBox(height: 16),
-                SectionHeader(
-                  title: 'Quick actions',
-                  subtitle:
-                      'Shortcuts into lead capture, team execution, and reports.',
-                  icon: Icons.flash_on_rounded,
-                  trailing: Text(
-                    'Preserves your current workflows',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: context.fomraTextSecondary,
-                    ),
-                  ),
-                ),
-                _QuickActionsGrid(actions: quickActions),
-                const SizedBox(height: 20),
                 const SectionHeader(
                   title: 'Overview',
-                  subtitle:
-                      'More informative KPI cards improve scan speed and decision-making.',
+                  subtitle: 'Pipeline KPIs with trends and drill-down detail.',
                   icon: Icons.analytics_outlined,
                 ),
                 _KpiGrid(
@@ -364,158 +225,44 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   onTap: _openKpiLeads,
                 ),
                 const SizedBox(height: 20),
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    final split = constraints.maxWidth >= 960;
-                    if (!split) {
-                      return Column(
-                        children: [
-                          _SectionCard(
-                            title: 'Team performance',
-                            subtitle:
-                                'Stronger ranking rows make individual contribution easier to compare.',
-                            icon: Icons.groups_rounded,
-                            child: teamRows.isEmpty
-                                ? EmptyState(
-                                    icon: Icons.groups_outlined,
-                                    title: 'No leads yet',
-                                    message:
-                                        'Create your first lead to start tracking team performance.',
-                                    action: PrimaryButton(
-                                      label: 'Add Lead',
-                                      icon: Icons.add_location_alt_outlined,
-                                      onPressed: () => _goTo('/land-lead'),
-                                    ),
-                                  )
-                                : Column(
-                                    children: [
-                                      for (final row in teamRows) ...[
-                                        _PerformanceRow(data: row),
-                                        if (row != teamRows.last)
-                                          const SizedBox(height: 12),
-                                      ],
-                                    ],
-                                  ),
-                          ),
-                          const SizedBox(height: 16),
-                          _SectionCard(
-                            title: 'Pipeline funnel',
-                            subtitle:
-                                'Compact progress bars show where deals are slowing down.',
-                            icon: Icons.filter_alt_outlined,
-                            child: Column(
-                              children: [
-                                _FunnelRow(
-                                  label: 'New',
-                                  value: newLeads,
-                                  maxValue: maxPipeline,
-                                  color: LeadStatus.new_.color,
-                                ),
-                                _FunnelRow(
-                                  label: 'Contacted',
-                                  value: contacted,
-                                  maxValue: maxPipeline,
-                                  color: LeadStatus.contacted.color,
-                                ),
-                                _FunnelRow(
-                                  label: 'Negotiation',
-                                  value: negotiation,
-                                  maxValue: maxPipeline,
-                                  color: LeadStatus.negotiation.color,
-                                ),
-                                _FunnelRow(
-                                  label: 'Acquired',
-                                  value: acquired,
-                                  maxValue: maxPipeline,
-                                  color: LeadStatus.closed.color,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      );
-                    }
-
-                    return Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          flex: 7,
-                          child: _SectionCard(
-                            title: 'Team performance',
-                            subtitle:
-                                'Stronger ranking rows make individual contribution easier to compare.',
-                            icon: Icons.groups_rounded,
-                            child: teamRows.isEmpty
-                                ? EmptyState(
-                                    icon: Icons.groups_outlined,
-                                    title: 'No leads yet',
-                                    message:
-                                        'Create your first lead to start tracking team performance.',
-                                    action: PrimaryButton(
-                                      label: 'Add Lead',
-                                      icon: Icons.add_location_alt_outlined,
-                                      onPressed: () => _goTo('/land-lead'),
-                                    ),
-                                  )
-                                : Column(
-                                    children: [
-                                      for (final row in teamRows) ...[
-                                        _PerformanceRow(data: row),
-                                        if (row != teamRows.last)
-                                          const SizedBox(height: 12),
-                                      ],
-                                    ],
-                                  ),
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          flex: 5,
-                          child: _SectionCard(
-                            title: 'Pipeline funnel',
-                            subtitle:
-                                'Compact progress bars show where deals are slowing down.',
-                            icon: Icons.filter_alt_outlined,
-                            child: Column(
-                              children: [
-                                _FunnelRow(
-                                  label: 'New',
-                                  value: newLeads,
-                                  maxValue: maxPipeline,
-                                  color: LeadStatus.new_.color,
-                                ),
-                                _FunnelRow(
-                                  label: 'Contacted',
-                                  value: contacted,
-                                  maxValue: maxPipeline,
-                                  color: LeadStatus.contacted.color,
-                                ),
-                                _FunnelRow(
-                                  label: 'Negotiation',
-                                  value: negotiation,
-                                  maxValue: maxPipeline,
-                                  color: LeadStatus.negotiation.color,
-                                ),
-                                _FunnelRow(
-                                  label: 'Acquired',
-                                  value: acquired,
-                                  maxValue: maxPipeline,
-                                  color: LeadStatus.closed.color,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    );
-                  },
+                _SectionCard(
+                  title: 'Pipeline funnel',
+                  subtitle:
+                      'Track lead progression from new to acquired.',
+                  icon: Icons.filter_alt_outlined,
+                  child: Column(
+                    children: [
+                      _FunnelRow(
+                        label: 'New',
+                        value: newLeads,
+                        maxValue: maxPipeline,
+                        color: LeadStatus.new_.color,
+                      ),
+                      _FunnelRow(
+                        label: 'Contacted',
+                        value: contacted,
+                        maxValue: maxPipeline,
+                        color: LeadStatus.contacted.color,
+                      ),
+                      _FunnelRow(
+                        label: 'Negotiation',
+                        value: negotiation,
+                        maxValue: maxPipeline,
+                        color: LeadStatus.negotiation.color,
+                      ),
+                      _FunnelRow(
+                        label: 'Acquired',
+                        value: acquired,
+                        maxValue: maxPipeline,
+                        color: LeadStatus.closed.color,
+                      ),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 20),
                 _SectionCard(
                   title: 'Recent activity',
-                  subtitle:
-                      'A denser activity feed reduces empty space and keeps the latest work visible.',
+                  subtitle: 'Latest updates across your land acquisition pipeline.',
                   icon: Icons.history_rounded,
                   child: _recentLeads.isEmpty
                       ? EmptyState(
@@ -564,249 +311,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _DashboardHeader extends StatelessWidget {
-  final String dateLabel;
-  final int todayTasks;
-  final int activeLeads;
-  final int pendingActions;
-
-  const _DashboardHeader({
-    required this.dateLabel,
-    required this.todayTasks,
-    required this.activeLeads,
-    required this.pendingActions,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return AppCard(
-      padding: const EdgeInsets.all(24),
-      radius: AppColors.radiusLg,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Welcome back',
-                      style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                            fontWeight: FontWeight.w800,
-                            color: context.fomraTextPrimary,
-                          ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '$dateLabel · Premium visibility into lead flow and team output.',
-                      style: TextStyle(
-                        fontSize: 13,
-                        height: 1.5,
-                        color: context.fomraTextSecondary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                width: 52,
-                height: 52,
-                decoration: BoxDecoration(
-                  gradient: AppColors.primaryGradient,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: AppColors.coloredShadow(AppColors.primary),
-                ),
-                alignment: Alignment.center,
-                child: const Icon(
-                  Icons.dashboard_customize_outlined,
-                  color: Colors.white,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 18),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: [
-              _SummaryBadge(
-                label: 'Today’s tasks',
-                value: '$todayTasks',
-                icon: Icons.today_outlined,
-                accent: AppColors.primary,
-              ),
-              _SummaryBadge(
-                label: 'Active leads',
-                value: '$activeLeads',
-                icon: Icons.trending_up_rounded,
-                accent: AppColors.success,
-              ),
-              _SummaryBadge(
-                label: 'Pending actions',
-                value: '$pendingActions',
-                icon: Icons.pending_actions_outlined,
-                accent: AppColors.warning,
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SummaryBadge extends StatelessWidget {
-  final String label;
-  final String value;
-  final IconData icon;
-  final Color accent;
-
-  const _SummaryBadge({
-    required this.label,
-    required this.value,
-    required this.icon,
-    required this.accent,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      constraints: const BoxConstraints(minWidth: 180),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: accent.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: accent.withValues(alpha: 0.16)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.8),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            alignment: Alignment.center,
-            child: Icon(icon, color: accent, size: 18),
-          ),
-          const SizedBox(width: 10),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                value,
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  color: context.fomraTextPrimary,
-                ),
-              ),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: context.fomraTextSecondary,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _QuickActionData {
-  final String label;
-  final String subtitle;
-  final IconData icon;
-  final Color accent;
-  final VoidCallback onTap;
-
-  const _QuickActionData({
-    required this.label,
-    required this.subtitle,
-    required this.icon,
-    required this.accent,
-    required this.onTap,
-  });
-}
-
-class _QuickActionsGrid extends StatelessWidget {
-  final List<_QuickActionData> actions;
-
-  const _QuickActionsGrid({required this.actions});
-
-  @override
-  Widget build(BuildContext context) {
-    final width = MediaQuery.sizeOf(context).width;
-    final columns = width >= 1100 ? 5 : width >= 860 ? 3 : 2;
-    return GridView.builder(
-      itemCount: actions.length,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: columns,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-        childAspectRatio: width >= 860 ? 1.65 : 1.35,
-      ),
-      itemBuilder: (_, i) => _QuickActionCard(data: actions[i]),
-    );
-  }
-}
-
-class _QuickActionCard extends StatelessWidget {
-  final _QuickActionData data;
-
-  const _QuickActionCard({required this.data});
-
-  @override
-  Widget build(BuildContext context) {
-    return AppCard(
-      onTap: data.onTap,
-      padding: const EdgeInsets.all(20),
-      radius: AppColors.radiusMd,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: data.accent.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            alignment: Alignment.center,
-            child: Icon(data.icon, color: data.accent, size: 22),
-          ),
-          const Spacer(),
-          Text(
-            data.label,
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
-              color: context.fomraTextPrimary,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            data.subtitle,
-            style: TextStyle(
-              fontSize: 12,
-              color: context.fomraTextSecondary,
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -1028,185 +532,6 @@ class _MiniSparkline extends StatelessWidget {
             ),
           )
           .toList(),
-    );
-  }
-}
-
-class _TeamPerf {
-  final String name;
-  final String designation;
-  final int total;
-  final int today;
-  final double percent;
-  final int rank;
-  final String statusLabel;
-  final StatusTone tone;
-
-  const _TeamPerf({
-    required this.name,
-    required this.designation,
-    required this.total,
-    required this.today,
-    required this.percent,
-    required this.rank,
-    required this.statusLabel,
-    required this.tone,
-  });
-
-  _TeamPerf copyWith({int? rank}) => _TeamPerf(
-        name: name,
-        designation: designation,
-        total: total,
-        today: today,
-        percent: percent,
-        rank: rank ?? this.rank,
-        statusLabel: statusLabel,
-        tone: tone,
-      );
-}
-
-class _PerformanceRow extends StatelessWidget {
-  final _TeamPerf data;
-
-  const _PerformanceRow({required this.data});
-
-  @override
-  Widget build(BuildContext context) {
-    final accent = data.rank == 1
-        ? AppColors.warning
-        : data.rank == 2
-            ? AppColors.primary
-            : AppColors.purple;
-    final initials = data.name.trim().isEmpty
-        ? '?'
-        : data.name.trim().split(RegExp(r'\s+')).take(2).map((e) => e[0]).join();
-
-    return AppCard(
-      padding: const EdgeInsets.all(18),
-      radius: AppColors.radiusMd,
-      interactive: false,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: accent.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            alignment: Alignment.center,
-            child: Text(
-              initials.toUpperCase(),
-              style: TextStyle(
-                fontWeight: FontWeight.w800,
-                color: accent,
-              ),
-            ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        data.name,
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          color: context.fomraTextPrimary,
-                        ),
-                      ),
-                    ),
-                    Text(
-                      '#${data.rank}',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w800,
-                        color: accent,
-                      ),
-                    ),
-                  ],
-                ),
-                if (data.designation.isNotEmpty) ...[
-                  const SizedBox(height: 3),
-                  Text(
-                    data.designation,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: context.fomraTextSecondary,
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(999),
-                        child: LinearProgressIndicator(
-                          value: data.percent,
-                          minHeight: 10,
-                          backgroundColor: accent.withValues(alpha: 0.12),
-                          valueColor: AlwaysStoppedAnimation<Color>(accent),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Text(
-                      '${(data.percent * 100).round()}%',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: context.fomraTextPrimary,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    StatusChip(label: data.statusLabel, tone: data.tone),
-                    _TinyStat(label: 'Lead count', value: '${data.total}'),
-                    _TinyStat(label: 'Today', value: '${data.today}'),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _TinyStat extends StatelessWidget {
-  final String label;
-  final String value;
-
-  const _TinyStat({required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: context.fomraSurfaceVar,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        '$label: $value',
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          color: context.fomraTextSecondary,
-        ),
-      ),
     );
   }
 }

@@ -16,6 +16,7 @@ import '../../models/app_notification.dart';
 import '../../widgets/app_drawer.dart';
 import '../../widgets/fomra_app_bar.dart';
 import '../../widgets/fomra_bottom_nav.dart';
+import '../../widgets/portal_home_sections.dart';
 import '../../widgets/ui/app_components.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -32,52 +33,18 @@ class _HomeScreenState extends State<HomeScreen> {
   String get _notifAudience =>
       AuthService.instance.isManagement ? 'management' : 'employee';
 
-  int get _totalLeads  => AppStore.instance.leads.length;
   int get _activeLeads => AppStore.instance.leads
-      .where((l) => [LeadStatus.new_, LeadStatus.contacted,
-                     LeadStatus.siteVisit, LeadStatus.negotiation]
-          .contains(l.status))
+      .where((l) => [
+            LeadStatus.new_,
+            LeadStatus.contacted,
+            LeadStatus.siteVisit,
+            LeadStatus.negotiation,
+          ].contains(l.status))
       .length;
-  int get _brokerLeads => AppStore.instance.leads
-      .where((l) => l.inputSource == InputSource.broker).length;
 
   int get _unreadCount => _notifications.where((n) => !n.isRead).length;
 
   bool get _isManagement => AuthService.instance.isManagement;
-
-  /// Per-employee "leads added" leaderboard, highest first.
-  List<_LeadPerf> get _performance {
-    final counts = <String, int>{};
-    for (final l in AppStore.instance.leads) {
-      final name = l.createdByName.trim();
-      if (name.isEmpty) continue;
-      // Management is not part of the employee leaderboard.
-      if (name.toLowerCase() == 'management') continue;
-      counts[name] = (counts[name] ?? 0) + 1;
-    }
-
-    final employees = AppStore.instance.employees;
-    final result = <_LeadPerf>[];
-    if (employees.isNotEmpty) {
-      for (final e in employees) {
-        result.add(_LeadPerf(
-            e.fullName, e.designation, counts[e.fullName.trim()] ?? 0));
-      }
-      // Include lead creators who aren't in the roster (e.g. removed staff).
-      for (final entry in counts.entries) {
-        final inRoster =
-            employees.any((e) => e.fullName.trim() == entry.key);
-        if (!inRoster) result.add(_LeadPerf(entry.key, '', entry.value));
-      }
-    } else {
-      for (final entry in counts.entries) {
-        result.add(_LeadPerf(entry.key, '', entry.value));
-      }
-    }
-
-    result.sort((a, b) => b.count.compareTo(a.count));
-    return result;
-  }
 
   @override
   void initState() {
@@ -295,11 +262,62 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  void _goTo(String route) => Navigator.pushNamed(context, route);
+
   @override
   Widget build(BuildContext context) {
     final user = AuthService.instance.currentUser;
     final userName = user?.fullName ?? 'User';
     final userEmail = user?.email ?? '';
+    final now = DateTime.now();
+    final leads = AppStore.instance.leads;
+    final newLeads =
+        leads.where((l) => l.status == LeadStatus.new_).length;
+    final negotiation =
+        leads.where((l) => l.status == LeadStatus.negotiation).length;
+    final pendingActions = newLeads + negotiation;
+    final addedToday =
+        leads.where((l) => portalIsSameDay(l.addedOn, now)).length;
+    final teamRows = buildPortalTeamPerformance(leads);
+
+    final quickActions = [
+      PortalQuickAction(
+        label: 'Add Lead',
+        subtitle: 'Capture new parcel',
+        icon: Icons.add_location_alt_outlined,
+        accent: const Color(0xFF2563EB),
+        onTap: () => _goTo('/land-lead'),
+      ),
+      PortalQuickAction(
+        label: 'Create Task',
+        subtitle: 'Assign the team',
+        icon: Icons.playlist_add_check_circle_outlined,
+        accent: const Color(0xFF8B5CF6),
+        onTap: () => _goTo('/task-management'),
+      ),
+      PortalQuickAction(
+        label: 'View Dashboard',
+        subtitle: 'KPIs and funnel',
+        icon: Icons.assessment_outlined,
+        accent: const Color(0xFFF59E0B),
+        onTap: () => _goTo('/dashboard'),
+      ),
+      PortalQuickAction(
+        label: 'Search Property',
+        subtitle: 'Open market intel',
+        icon: Icons.travel_explore_outlined,
+        accent: const Color(0xFF10B981),
+        onTap: () => _goTo('/market-intelligence'),
+      ),
+      if (_isManagement)
+        PortalQuickAction(
+          label: 'Add Employee',
+          subtitle: 'Manage workforce',
+          icon: Icons.person_add_alt_1_outlined,
+          accent: const Color(0xFF6366F1),
+          onTap: () => _goTo('/employee-management'),
+        ),
+    ];
 
     return Scaffold(
       appBar: FomraAppBar(
@@ -333,387 +351,133 @@ class _HomeScreenState extends State<HomeScreen> {
       body: SafeArea(
         child: SingleChildScrollView(
           padding: FomraLayout.pagePadding(context),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-                _HomeHeroBanner(
-                  userName: userName,
-                  onProfileTap: () =>
-                      _showProfileMenu(userName, userEmail),
-                  unreadCount: _unreadCount,
-                ),
-                const SizedBox(height: 24),
-                const SectionHeader(
-                  title: 'Overview',
-                  subtitle: 'Pipeline snapshot',
-                  icon: Icons.analytics_outlined,
-                ),
-                _OverviewMetrics(
-                  totalLeads: _totalLeads,
-                  activeLeads: _activeLeads,
-                  brokerLeads: _brokerLeads,
-                ),
-                const SizedBox(height: 20),
-                AppCard(
-                  padding: const EdgeInsets.all(AppSpacing.lg),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      SectionHeader(
-                        title: _isManagement
-                            ? 'Team performance'
-                            : 'My performance',
-                        subtitle: _isManagement
-                            ? 'Leads added by each team member'
-                            : 'Your contribution this period',
-                        padding: EdgeInsets.zero,
-                      ),
-                      _isManagement
-                          ? _PerformanceList(entries: _performance)
-                          : _MyPerformanceContent(count: _myLeadCount),
-                    ],
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 1180),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  PortalWelcomeHeader(
+                    userName: userName,
+                    dateLabel: portalDateLabel(now),
+                    todayTasks: addedToday,
+                    activeLeads: _activeLeads,
+                    pendingActions: pendingActions,
+                    onProfileTap: () =>
+                        _showProfileMenu(userName, userEmail),
                   ),
-                ),
-                const SizedBox(height: 96),
-              ],
+                  const SizedBox(height: 20),
+                  const SectionHeader(
+                    title: 'Quick actions',
+                    subtitle:
+                        'Shortcuts into lead capture, tasks, and analytics.',
+                    icon: Icons.flash_on_rounded,
+                  ),
+                  PortalQuickActionsGrid(actions: quickActions),
+                  const SizedBox(height: 20),
+                  PortalSectionCard(
+                    title: _isManagement
+                        ? 'Team performance'
+                        : 'My performance',
+                    subtitle: _isManagement
+                        ? 'Ranking, progress, and today’s activity by team member.'
+                        : 'Your lead contribution this period.',
+                    icon: Icons.groups_rounded,
+                    child: _isManagement
+                        ? (teamRows.isEmpty
+                            ? EmptyState(
+                                icon: Icons.groups_outlined,
+                                title: 'No leads yet',
+                                message:
+                                    'Create your first lead to start tracking team performance.',
+                                action: PrimaryButton(
+                                  label: 'Add Lead',
+                                  icon: Icons.add_location_alt_outlined,
+                                  onPressed: () => _goTo('/land-lead'),
+                                ),
+                              )
+                            : Column(
+                                children: [
+                                  for (final row in teamRows) ...[
+                                    PortalPerformanceRow(data: row),
+                                    if (row != teamRows.last)
+                                      const SizedBox(height: 12),
+                                  ],
+                                ],
+                              ))
+                        : _EmployeePerformanceCard(count: _myLeadCount),
+                  ),
+                  const SizedBox(height: 96),
+                ],
+              ),
             ),
           ),
         ),
+      ),
     );
   }
 }
 
-class _HomeHeroBanner extends StatelessWidget {
-  final String userName;
-  final VoidCallback onProfileTap;
-  final int unreadCount;
+class _EmployeePerformanceCard extends StatelessWidget {
+  final int count;
 
-  const _HomeHeroBanner({
-    required this.userName,
-    required this.onProfileTap,
-    this.unreadCount = 0,
-  });
+  const _EmployeePerformanceCard({required this.count});
 
   @override
   Widget build(BuildContext context) {
-    final firstName =
-        userName.trim().split(RegExp(r'\s+')).firstWhere((s) => s.isNotEmpty,
-            orElse: () => '');
-    final greeting = firstName.isEmpty ? 'Welcome back' : 'Welcome, $firstName';
-    final initial =
-        firstName.isNotEmpty ? firstName[0].toUpperCase() : '?';
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        gradient: context.fomraHeroGradient,
-        borderRadius: BorderRadius.circular(AppColors.radiusXl),
-        boxShadow: AppColors.coloredShadow(AppColors.primary),
-      ),
+    return AppCard(
+      padding: const EdgeInsets.all(20),
+      radius: AppColors.radiusMd,
+      interactive: false,
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            alignment: Alignment.center,
+            child: const Icon(
+              Icons.emoji_events_outlined,
+              color: AppColors.primary,
+            ),
+          ),
+          const SizedBox(width: 16),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.16),
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.22),
-                    ),
-                  ),
-                  child: Text(
-                    'FomraLS',
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.95),
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.6,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 14),
                 Text(
-                  greeting,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 28,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.6,
-                    height: 1.1,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Land acquisition workspace for Fomra Housing',
+                  'Leads added',
                   style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.82),
-                    fontSize: 14,
-                    height: 1.45,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: context.fomraTextPrimary,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Your total contribution to the pipeline',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: context.fomraTextSecondary,
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 12),
-          GestureDetector(
-            onTap: onProfileTap,
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Container(
-                  width: 54,
-                  height: 54,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.white.withValues(alpha: 0.18),
-                    border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.35),
-                      width: 2,
-                    ),
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    initial,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w800,
-                      fontSize: 20,
-                    ),
-                  ),
+          AnimatedCounter(
+            value: count,
+            style: Theme.of(context).textTheme.headlineLarge?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.primary,
                 ),
-                if (unreadCount > 0)
-                  Positioned(
-                    right: -2,
-                    top: -2,
-                    child: Container(
-                      padding: const EdgeInsets.all(5),
-                      decoration: const BoxDecoration(
-                        color: AppColors.error,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Text(
-                        unreadCount > 9 ? '9+' : '$unreadCount',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 9,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
           ),
         ],
       ),
     );
-  }
-}
-
-class _OverviewMetrics extends StatelessWidget {
-  final int totalLeads;
-  final int activeLeads;
-  final int brokerLeads;
-
-  const _OverviewMetrics({
-    required this.totalLeads,
-    required this.activeLeads,
-    required this.brokerLeads,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final metrics = [
-      MetricCard(
-        label: 'Total leads',
-        value: '$totalLeads',
-        icon: Icons.analytics_outlined,
-        accent: AppColors.primary,
-        trendLabel: '+12%',
-      ),
-      MetricCard(
-        label: 'Active pipeline',
-        value: '$activeLeads',
-        icon: Icons.trending_up_rounded,
-        accent: AppColors.success,
-        trendLabel: '+6%',
-      ),
-      MetricCard(
-        label: 'Broker sourced',
-        value: '$brokerLeads',
-        icon: Icons.handshake_outlined,
-        accent: AppColors.primaryLight,
-        trendLabel: '+3%',
-      ),
-    ];
-
-    if (FomraLayout.isTablet(context)) {
-      return Row(
-        children: [
-          for (var i = 0; i < metrics.length; i++)
-            Expanded(
-              child: Padding(
-                padding: EdgeInsets.only(right: i < metrics.length - 1 ? 12 : 0),
-                child: metrics[i],
-              ),
-            ),
-        ],
-      );
-    }
-
-    return SizedBox(
-      height: 168,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: metrics.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 12),
-        itemBuilder: (_, i) => SizedBox(width: 220, child: metrics[i]),
-      ),
-    );
-  }
-}
-
-// ── Performance ───────────────────────────────────────────────────────────────
-
-class _LeadPerf {
-  final String name;
-  final String designation;
-  final int count;
-  const _LeadPerf(this.name, this.designation, this.count);
-}
-
-class _MyPerformanceContent extends StatelessWidget {
-  final int count;
-  const _MyPerformanceContent({required this.count});
-
-  @override
-  Widget build(BuildContext context) {
-    const color = AppColors.primary;
-    return Row(children: [
-      Container(
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: const Icon(Icons.emoji_events_outlined, color: color, size: 22),
-      ),
-      const SizedBox(width: 14),
-      Expanded(
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Leads added',
-              style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  color: context.fomraTextPrimary)),
-          const SizedBox(height: 2),
-          Text('Your total contribution',
-              style: TextStyle(
-                  fontSize: 12, color: context.fomraTextSecondary)),
-        ]),
-      ),
-      Text('$count',
-          style: const TextStyle(
-              fontSize: 30,
-              fontWeight: FontWeight.w800,
-              color: color,
-              letterSpacing: -0.5)),
-    ]);
-  }
-}
-
-class _PerformanceList extends StatelessWidget {
-  final List<_LeadPerf> entries;
-  const _PerformanceList({required this.entries});
-
-  @override
-  Widget build(BuildContext context) {
-    const color = AppColors.primary;
-    final maxCount =
-        entries.isEmpty ? 0 : entries.map((e) => e.count).reduce((a, b) => a > b ? a : b);
-
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      if (entries.isEmpty)
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6),
-          child: Text('No employee lead activity yet.',
-              style: TextStyle(
-                  fontSize: 13, color: context.fomraTextSecondary)),
-        )
-      else
-        ...List.generate(entries.length, (i) {
-            final e = entries[i];
-            final frac = maxCount == 0 ? 0.0 : e.count / maxCount;
-            return Padding(
-              padding: const EdgeInsets.only(top: 14),
-              child: Row(children: [
-                CircleAvatar(
-                  radius: 16,
-                  backgroundColor: color.withValues(alpha: 0.12),
-                  child: Text(
-                    e.name.isNotEmpty ? e.name[0].toUpperCase() : '?',
-                    style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold,
-                        color: color),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(children: [
-                        Expanded(
-                          child: Text(
-                            e.name.isEmpty ? 'Unknown' : e.name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: context.fomraTextPrimary),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text('${e.count}',
-                            style: const TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w800,
-                                color: color)),
-                      ]),
-                      const SizedBox(height: 6),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(6),
-                        child: LinearProgressIndicator(
-                          value: frac,
-                          minHeight: 6,
-                          backgroundColor: color.withValues(alpha: 0.10),
-                          valueColor:
-                              const AlwaysStoppedAnimation<Color>(color),
-                        ),
-                      ),
-                      if (e.designation.isNotEmpty) ...[
-                        const SizedBox(height: 4),
-                        Text(e.designation,
-                            style: TextStyle(
-                                fontSize: 11,
-                                color: context.fomraTextSecondary)),
-                      ],
-                    ],
-                  ),
-                ),
-              ]),
-            );
-          }),
-    ]);
   }
 }
 
