@@ -411,13 +411,14 @@ class _KpiGrid extends StatelessWidget {
   Widget build(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
     final cols = width > 1100 ? 4 : width > 760 ? 2 : 1;
+    final cardHeight = width > 1100 ? 296.0 : width > 760 ? 288.0 : 272.0;
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       itemCount: kpis.length,
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: cols,
-        childAspectRatio: width > 1100 ? 1.32 : width > 760 ? 1.22 : 1.5,
+        mainAxisExtent: cardHeight,
         crossAxisSpacing: 16,
         mainAxisSpacing: 16,
       ),
@@ -434,72 +435,81 @@ class _KpiCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AppCard(
+    return SizedBox.expand(
+      child: AppCard(
       onTap: onTap,
-      padding: const EdgeInsets.all(22),
+      padding: const EdgeInsets.all(20),
       radius: AppColors.radiusLg,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Row(
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: data.accent.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                alignment: Alignment.center,
-                child: Icon(data.icon, color: data.accent),
+              Row(
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: data.accent.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    alignment: Alignment.center,
+                    child: Icon(data.icon, color: data.accent),
+                  ),
+                  const Spacer(),
+                  StatusChip(
+                    label: data.trend,
+                    tone: data.trendNeutral
+                        ? StatusTone.neutral
+                        : data.trendUp
+                            ? StatusTone.success
+                            : StatusTone.danger,
+                    icon: data.trendNeutral
+                        ? Icons.remove_rounded
+                        : data.trendUp
+                            ? Icons.arrow_upward_rounded
+                            : Icons.arrow_downward_rounded,
+                  ),
+                ],
               ),
-              const Spacer(),
-              StatusChip(
-                label: data.trend,
-                tone: data.trendNeutral
-                    ? StatusTone.neutral
-                    : data.trendUp
-                        ? StatusTone.success
-                        : StatusTone.danger,
-                icon: data.trendNeutral
-                    ? Icons.remove_rounded
-                    : data.trendUp
-                        ? Icons.arrow_upward_rounded
-                        : Icons.arrow_downward_rounded,
+              const SizedBox(height: 14),
+              AnimatedCounter(
+                value: int.tryParse(data.value) ?? 0,
+                style: Theme.of(context).textTheme.displayMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: context.fomraTextPrimary,
+                      height: 1.05,
+                    ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                data.label,
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: context.fomraTextPrimary,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                data.secondary,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: context.fomraTextSecondary,
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                height: 28,
+                child: _MiniSparkline(values: data.sparkline, color: data.accent),
               ),
             ],
           ),
-          const SizedBox(height: 18),
-          AnimatedCounter(
-            value: int.tryParse(data.value) ?? 0,
-            style: Theme.of(context).textTheme.displayMedium?.copyWith(
-                  fontWeight: FontWeight.w800,
-                  color: context.fomraTextPrimary,
-                ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            data.label,
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
-              color: context.fomraTextPrimary,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            data.secondary,
-            style: TextStyle(
-              fontSize: 12,
-              color: context.fomraTextSecondary,
-            ),
-          ),
-          const SizedBox(height: 14),
-          SizedBox(
-            height: 30,
-            child: _MiniSparkline(values: data.sparkline, color: data.accent),
-          ),
-          const Spacer(),
           Row(
             children: [
               Expanded(
@@ -508,7 +518,7 @@ class _KpiCard extends StatelessWidget {
                   value: data.todayValue,
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 10),
               Expanded(
                 child: _KpiMetaBlock(
                   label: data.periodLabel,
@@ -518,6 +528,7 @@ class _KpiCard extends StatelessWidget {
             ],
           ),
         ],
+      ),
       ),
     );
   }
