@@ -64,6 +64,85 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
     }
   }
 
+  /// Reset an employee's login password back to (or to) a chosen value.
+  Future<void> _resetPassword(EmployeeProfile employee) async {
+    final ctrl = TextEditingController(text: 'fomra@2024');
+    final newPw = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Reset password'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Set a new login password for ${employee.fullName}.',
+                style: TextStyle(fontSize: 13, color: context.fomraTextSecondary)),
+            const SizedBox(height: 12),
+            TextField(
+              controller: ctrl,
+              autofocus: true,
+              decoration: const InputDecoration(labelText: 'New password'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+              child: const Text('Reset')),
+        ],
+      ),
+    );
+    if (newPw == null || newPw.length < 6 || !mounted) {
+      if (newPw != null && newPw.length < 6 && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Password must be at least 6 characters.'),
+          behavior: SnackBarBehavior.floating,
+        ));
+      }
+      return;
+    }
+    try {
+      await EmployeeService.resetAuthPassword(employee.email, newPw);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Password reset for ${employee.fullName}'),
+        behavior: SnackBarBehavior.floating,
+      ));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(e.toString().replaceFirst('Exception: ', '')),
+        backgroundColor: AppColors.error,
+        behavior: SnackBarBehavior.floating,
+      ));
+    }
+  }
+
+  /// One-time backfill: create real auth logins for all existing employees.
+  Future<void> _provisionAllLogins() async {
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+      content: Text('Provisioning employee logins…'),
+      behavior: SnackBarBehavior.floating,
+    ));
+    try {
+      final n = await EmployeeService.provisionAllEmployees();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Provisioned logins for $n employee(s).'),
+        behavior: SnackBarBehavior.floating,
+      ));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(e.toString().replaceFirst('Exception: ', '')),
+        backgroundColor: AppColors.error,
+        behavior: SnackBarBehavior.floating,
+      ));
+    }
+  }
+
   Future<void> _confirmRemoveAccess(EmployeeProfile employee) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -166,6 +245,24 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                   ),
                 ),
               ),
+              PopupMenuButton<String>(
+                tooltip: 'More',
+                icon: const Icon(Icons.more_vert),
+                onSelected: (v) {
+                  if (v == 'provision') _provisionAllLogins();
+                },
+                itemBuilder: (_) => const [
+                  PopupMenuItem(
+                    value: 'provision',
+                    child: ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(Icons.key_outlined),
+                      title: Text('Provision logins for all'),
+                      subtitle: Text('One-time: give every employee a login'),
+                    ),
+                  ),
+                ],
+              ),
             ],
           ),
         ),
@@ -209,6 +306,8 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                               employee: _filtered[i],
                               onRemoveAccess: () =>
                                   _confirmRemoveAccess(_filtered[i]),
+                              onResetPassword: () =>
+                                  _resetPassword(_filtered[i]),
                             ),
                           ),
                         ),
@@ -239,10 +338,12 @@ class _EmployeeLoadingSkeleton extends StatelessWidget {
 class _EmployeeCard extends StatelessWidget {
   final EmployeeProfile employee;
   final VoidCallback onRemoveAccess;
+  final VoidCallback onResetPassword;
 
   const _EmployeeCard({
     required this.employee,
     required this.onRemoveAccess,
+    required this.onResetPassword,
   });
 
   @override
@@ -350,11 +451,33 @@ class _EmployeeCard extends StatelessWidget {
                 ],
               ),
             ),
-            IconButton(
-              tooltip: 'Remove access',
-              onPressed: onRemoveAccess,
-              icon: const Icon(Icons.person_remove_outlined),
-              color: AppColors.error,
+            PopupMenuButton<String>(
+              tooltip: 'Manage',
+              icon: const Icon(Icons.more_vert),
+              onSelected: (v) {
+                if (v == 'reset') onResetPassword();
+                if (v == 'remove') onRemoveAccess();
+              },
+              itemBuilder: (_) => const [
+                PopupMenuItem(
+                  value: 'reset',
+                  child: ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(Icons.lock_reset_outlined),
+                    title: Text('Reset password'),
+                  ),
+                ),
+                PopupMenuItem(
+                  value: 'remove',
+                  child: ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(Icons.person_remove_outlined,
+                        color: AppColors.error),
+                    title: Text('Remove access',
+                        style: TextStyle(color: AppColors.error)),
+                  ),
+                ),
+              ],
             ),
           ],
         ),

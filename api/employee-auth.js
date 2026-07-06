@@ -1,0 +1,128 @@
+// Admin endpoint: provision / reset Supabase Auth users for employees.
+//
+// Why this exists: creating an auth user (so an employee can get a REAL
+// authenticated session, which lets us lock RLS down to `authenticated`)
+// requires the service_role key, which must never live in the client. This
+// serverless function holds it server-side and is callable ONLY by a signed-in
+// management user (verified via their Supabase access token).
+//
+// Required Vercel environment variables:
+//   SUPABASE_URL                 e.g. https://irjgtudyxzzvgbbrxmgq.supabase.co
+//   SUPABASE_SERVICE_ROLE_KEY    Project Settings → API → service_role (secret!)
+//   MANAGEMENT_EMAIL             defaults to management@fomrahousing.in
+//
+// Auth: caller must send `Authorization: Bearer <management access token>`.
+// The token is validated against Supabase and must belong to MANAGEMENT_EMAIL.
+
+const DEFAULT_PASSWORD = 'fomra@2024';
+
+function cors(res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+}
+
+async function readBody(req) {
+  if (req.body && typeof req.body === 'object') return req.body;
+  if (typeof req.body === 'string') {
+    try { return JSON.parse(req.body || '{}'); } catch { return {}; }
+  }
+  return await new Promise((resolve) => {
+    let data = '';
+    req.on('data', (c) => (data += c));
+    req.on('end', () => { try { resolve(JSON.parse(data || '{}')); } catch { resolve({}); } });
+    req.on('error', () => resolve({}));
+  });
+}
+
+async function findUserIdByEmail(base, headers, email) {
+  for (let page = 1; page <= 10; page++) {
+    const r = await fetch(`${base}?page=${page}&per_page=200`, { headers });
+    if (!r.ok) break;
+    const data = await r.json();
+    const users = Array.isArray(data) ? data : (data.users || []);
+    const found = users.find((u) => (u.email || '').toLowerCase() === email);
+    if (found) return found.id;
+    if (users.length < 200) break;
+  }
+  return null;
+}
+
+module.exports = async (req, res) => {
+  cors(res);
+  if (req.method === 'OPTIONS') return res.status(204).end();
+  if (req.method !== 'POST') return res.status(405).json({ error: 'method not allowed' });
+
+  const SUPABASE_URL = process.env.SUPABASE_URL;
+  const SERVICE_ROLE = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const MGMT_EMAIL = (process.env.MANAGEMENT_EMAIL || 'management@fomrahousing.in').toLowerCase();
+  if (!SUPABASE_URL || !SERVICE_ROLE) {
+    return res.status(500).json({ error: 'server not configured (missing SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY)' });
+  }
+
+  // 1) Authenticate the caller: their access token must be a valid session
+  //    belonging to the management account.
+  const authz = req.headers['authorization'] || '';
+  const token = authz.startsWith('Bearer ') ? authz.slice(7) : '';
+  if (!token) return res.status(401).json({ error: 'missing bearer token' });
+  try {
+    const who = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+      headers: { apikey: SERVICE_ROLE, Authorization: `Bearer ${token}` },
+    });
+    if (!who.ok) return res.status(401).json({ error: 'invalid session' });
+    const user = await who.json();
+    if ((user.email || '').toLowerCase() !== MGMT_EMAIL) {
+      return res.status(403).json({ error: 'management only' });
+    }
+  } catch (e) {
+    return res.status(401).json({ error: 'could not verify session' });
+  }
+
+  const body = await readBody(req);
+  const action = body.action;
+  const email = (body.email || '').trim().toLowerCase();
+  const password = body.password || DEFAULT_PASSWORD;
+  if (!email) return res.status(400).json({ error: 'email required' });
+
+  const base = `${SUPABASE_URL}/auth/v1/admin/users`;
+  const headers = {
+    apikey: SERVICE_ROLE,
+    Authorization: `Bearer ${SERVICE_ROLE}`,
+    'Content-Type': 'application/json',
+  };
+
+  try {
+    if (action === 'provision') {
+      // Create a confirmed auth user. Idempotent: treat "already exists" as ok.
+      const r = await fetch(base, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ email, password, email_confirm: true }),
+      });
+      if (r.ok) return res.status(200).json({ ok: true, created: true });
+      const err = await r.json().catch(() => ({}));
+      const msg = `${err.msg || err.error_description || err.message || ''}`.toLowerCase();
+      if (r.status === 422 || msg.includes('already') || msg.includes('registered') || msg.includes('exists')) {
+        return res.status(200).json({ ok: true, created: false, existed: true });
+      }
+      return res.status(r.status).json({ error: err.msg || err.message || 'create failed' });
+    }
+
+    if (action === 'reset') {
+      const id = await findUserIdByEmail(base, headers, email);
+      if (!id) return res.status(404).json({ error: 'no auth user for that email' });
+      const r = await fetch(`${base}/${id}`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({ password }),
+      });
+      if (r.ok) return res.status(200).json({ ok: true });
+      const err = await r.json().catch(() => ({}));
+      return res.status(r.status).json({ error: err.msg || err.message || 'reset failed' });
+    }
+
+    return res.status(400).json({ error: 'unknown action (use "provision" or "reset")' });
+  } catch (e) {
+    return res.status(500).json({ error: String(e && e.message ? e.message : e) });
+  }
+};

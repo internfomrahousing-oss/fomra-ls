@@ -1,14 +1,85 @@
 import 'dart:convert';
 
+import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/employee_profile.dart';
+import 'api_client.dart';
 
 class EmployeeService {
   static const _cacheKey = 'employee_profiles_v1';
 
   static SupabaseClient get _db => Supabase.instance.client;
+
+  // ── Auth-user provisioning (real Supabase Auth for each employee) ────────────
+  // These call the management-only admin endpoint (api/employee-auth), which
+  // uses the server-side service_role key. They require a signed-in management
+  // session; without one they no-op (create) or throw (reset) so the app keeps
+  // working before real auth is fully rolled out.
+
+  /// Create a real Supabase Auth user for [email] (default password) so the
+  /// employee can get an authenticated session. Best-effort and non-fatal.
+  static Future<void> provisionAuthUser(String email, {String? password}) async {
+    final token = _db.auth.currentSession?.accessToken;
+    if (token == null) return; // no management session → skip silently
+    try {
+      final res = await http.post(
+        Uri.parse('${ApiClient.baseUrl}/api/employee-auth'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({
+          'action': 'provision',
+          'email': email.trim().toLowerCase(),
+          if (password != null) 'password': password,
+        }),
+      );
+      if (res.statusCode >= 400) {
+        // ignore: avoid_print
+        print('provisionAuthUser(${email.trim()}) → ${res.statusCode} ${res.body}');
+      }
+    } catch (_) {/* endpoint not deployed / offline — profile still created */}
+  }
+
+  /// Reset an employee's login password (management only).
+  static Future<void> resetAuthPassword(String email, String password) async {
+    final token = _db.auth.currentSession?.accessToken;
+    if (token == null) {
+      throw Exception('Sign in as management to reset employee passwords.');
+    }
+    final res = await http.post(
+      Uri.parse('${ApiClient.baseUrl}/api/employee-auth'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+      body: jsonEncode({
+        'action': 'reset',
+        'email': email.trim().toLowerCase(),
+        'password': password,
+      }),
+    );
+    if (res.statusCode >= 400) {
+      String msg = 'Reset failed (${res.statusCode}).';
+      try {
+        final j = jsonDecode(res.body);
+        if (j is Map && j['error'] != null) msg = j['error'].toString();
+      } catch (_) {}
+      throw Exception(msg);
+    }
+  }
+
+  /// Provision auth users for every current employee (one-time backfill).
+  /// Returns the number attempted. Management only.
+  static Future<int> provisionAllEmployees() async {
+    final all = await getAll();
+    for (final e in all) {
+      await provisionAuthUser(e.email);
+    }
+    return all.length;
+  }
 
   static Future<List<EmployeeProfile>> getAll() async {
     try {
@@ -83,6 +154,8 @@ class EmployeeService {
         all.insert(0, profile);
         await _saveCache(all);
       }
+      // Best-effort: give the new employee a real auth login (default password).
+      await provisionAuthUser(profile.email);
       return profile;
     } catch (e) {
       final profile = EmployeeProfile(
