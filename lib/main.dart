@@ -20,6 +20,18 @@ void main() {
   runZonedGuarded(() async {
     WidgetsFlutterBinding.ensureInitialized();
     FlutterError.onError = FlutterError.presentError;
+    ErrorWidget.builder = (details) => Material(
+          color: const Color(0xFFFFF5F5),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: SingleChildScrollView(
+              child: Text(
+                details.exceptionAsString(),
+                style: const TextStyle(color: Color(0xFFB91C1C), fontSize: 13),
+              ),
+            ),
+          ),
+        );
     await ThemeController.instance.load();
     runApp(const FomraLSApp());
   }, (error, stack) {
@@ -84,6 +96,21 @@ class _StartupScreenState extends State<_StartupScreen> {
 
   Future<void> _init() async {
     if (mounted) setState(() => _error = null);
+
+    try {
+      await _initCore().timeout(
+        const Duration(seconds: 15),
+        onTimeout: () => throw 'Connection timed out.\nCheck your internet and try again.',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      // Never leave the splash stuck — send the user to login with a snack later.
+      Navigator.of(context).pushReplacementNamed('/login');
+      return;
+    }
+  }
+
+  Future<void> _initCore() async {
     String? error;
     try {
       await Supabase.initialize(
@@ -91,8 +118,6 @@ class _StartupScreenState extends State<_StartupScreen> {
         publishableKey: supabaseAnon,
         authOptions: const FlutterAuthClientOptions(
           detectSessionInUri: false,
-          // Per-tab session persistence so different tabs can hold different
-          // accounts (Management vs Employee) at the same time.
           localStorage: SessionScopedLocalStorage(
             persistSessionKey: 'fomrals-supabase-session',
           ),
@@ -104,10 +129,13 @@ class _StartupScreenState extends State<_StartupScreen> {
     } catch (e) {
       error = e.toString();
     }
-    bool loggedIn = false;
+
+    var loggedIn = false;
     if (error == null) {
       try {
-        loggedIn = await AuthService.instance.checkSession();
+        loggedIn = await AuthService.instance
+            .checkSession()
+            .timeout(const Duration(seconds: 5));
       } catch (_) {
         loggedIn = false;
       }
@@ -116,20 +144,23 @@ class _StartupScreenState extends State<_StartupScreen> {
     if (!mounted) return;
     if (error != null) {
       setState(() => _error = error);
-    } else {
-      Navigator.of(context)
-          .pushReplacementNamed(loggedIn ? '/home' : '/login');
+      return;
     }
+    Navigator.of(context)
+        .pushReplacementNamed(loggedIn ? '/home' : '/login');
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF1B3A6B),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 32),
-          child: Column(
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: const BoxDecoration(gradient: AppColors.heroGradientDark),
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
@@ -192,7 +223,7 @@ class _StartupScreenState extends State<_StartupScreen> {
                           label: const Text('Retry'),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.white,
-                            foregroundColor: const Color(0xFF1B3A6B),
+                            foregroundColor: AppColors.primaryDark,
                             shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(14)),
                           ),
@@ -218,6 +249,7 @@ class _StartupScreenState extends State<_StartupScreen> {
                 ),
               ],
             ],
+            ),
           ),
         ),
       ),

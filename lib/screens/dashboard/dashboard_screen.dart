@@ -7,6 +7,7 @@ import '../land_lead/lead_detail_screen.dart';
 import '../../widgets/app_drawer.dart';
 import '../../widgets/fomra_app_bar.dart';
 import '../../widgets/fomra_bottom_nav.dart';
+import '../../widgets/fomra_portal_body.dart';
 
 enum _KpiFilter { total, active, acquired, rejected }
 
@@ -120,8 +121,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     // KPI accent colors — tuned to stay clearly visible on BOTH light and dark
     // themes (saturated 600-shade on light, brighter 400-shade on dark).
     final isDark = context.isDarkMode;
-    final kpiBlue   = isDark ? const Color(0xFF60A5FA) : const Color(0xFF2563EB);
-    final kpiViolet = isDark ? const Color(0xFFA78BFA) : const Color(0xFF7C3AED);
+    final kpiBlue   = isDark ? AppColors.primaryLight : AppColors.primary;
+    final kpiIndigo = isDark ? AppColors.accentLight : AppColors.secondary;
     final kpiGreen  = isDark ? const Color(0xFF34D399) : const Color(0xFF059669);
     final kpiRed    = isDark ? const Color(0xFFF87171) : const Color(0xFFDC2626);
 
@@ -130,7 +131,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
       drawer: const AppDrawer(currentRoute: '/dashboard'),
       bottomNavigationBar: const FomraBottomNav(currentRoute: '/dashboard'),
       backgroundColor: context.fomraPageBg,
-      body: SingleChildScrollView(
+      body: FomraPortalBody(
+        child: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -158,7 +160,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 'Active Leads',
                 '$activeLeads',
                 Icons.trending_up_outlined,
-                kpiViolet,
+                kpiIndigo,
                 'In pipeline',
                 '+8%',
                 [newLeads.toDouble(), contacted.toDouble(), negotiation.toDouble(), activeLeads.toDouble()],
@@ -259,6 +261,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
           ],
         ),
+      ),
       ),
     );
   }

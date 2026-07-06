@@ -161,7 +161,7 @@ class _LegalVerificationScreenState extends State<LegalVerificationScreen> {
   @override
   Widget build(BuildContext context) {
     final body = _selectedLead == null ? _buildLeadList() : _buildForm();
-    if (widget.isTab) return Scaffold(body: body);
+    if (widget.isTab) return body;
     return Scaffold(
       appBar: const FomraAppBar(moduleName: 'Legal Verification'),
       drawer: const AppDrawer(currentRoute: '/legal-verification'),

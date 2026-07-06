@@ -1,51 +1,60 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 class AppColors {
-  // ── Brand ── aligned to design brief (reduced blue, softer) ───────────────────
-  static const Color primary      = Color(0xFF2563EB); // blue-600
-  static const Color primaryLight = Color(0xFF60A5FA); // blue-400
-  static const Color primaryDark  = Color(0xFF1D4ED8); // blue-700
-  static const Color secondary    = Color(0xFF8B5CF6); // violet-500 (purple accent)
-  static const Color accent       = Color(0xFF60A5FA);
-  static const Color accentLight  = Color(0xFFFBBF24);
-  static const Color purple       = Color(0xFF8B5CF6);
+  // ── Brand blue ──────────────────────────────────────────────────────────────
+  static const Color primary       = Color(0xFF2563EB); // blue-600
+  static const Color primaryLight  = Color(0xFF60A5FA); // blue-400
+  static const Color primaryDark   = Color(0xFF1D4ED8); // blue-700
+  static const Color primaryDarker = Color(0xFF1E3A8A); // blue-900
+  static const Color secondary     = Color(0xFF3B82F6); // blue-500
+  static const Color accent        = Color(0xFF60A5FA);
+  static const Color accentLight   = Color(0xFF93C5FD); // blue-300
+  /// Legacy alias — maps to brand blue for older call sites.
+  static const Color purple        = Color(0xFF3B82F6);
 
-  // ── Surface ───────────────────────────────────────────────────────────────────
-  static const Color background   = Color(0xFFF8FAFC); // slate-50
-  static const Color surface      = Color(0xFFFFFFFF);
-  static const Color surfaceVar   = Color(0xFFF1F5F9); // slate-100
-  static const Color border       = Color(0xFFE5E7EB); // gray-200
+  // ── Surface (light, blue-tinted) ────────────────────────────────────────────
+  static const Color background = Color(0xFFF4F8FF);
+  static const Color surface    = Color(0xFFFFFFFF);
+  static const Color surfaceVar = Color(0xFFEFF6FF);
+  static const Color border     = Color(0xFFDBEAFE);
 
   // ── Text ─────────────────────────────────────────────────────────────────────
-  static const Color textPrimary   = Color(0xFF111827);
-  static const Color textSecondary = Color(0xFF6B7280);
-  static const Color textTertiary  = Color(0xFF9CA3AF);
+  static const Color textPrimary   = Color(0xFF0F172A);
+  static const Color textSecondary = Color(0xFF475569);
+  static const Color textTertiary  = Color(0xFF94A3B8);
 
-  // ── Dark surfaces ─────────────────────────────────────────────────────────────
-  static const Color darkBackground   = Color(0xFF0F172A); // slate-900
-  static const Color darkSurface      = Color(0xFF1E293B); // slate-800
-  static const Color darkSurfaceVar   = Color(0xFF273449);
-  static const Color darkBorder       = Color(0xFF334155); // slate-700
+  // ── Dark surfaces (navy blue) ─────────────────────────────────────────────────
+  static const Color darkBackground   = Color(0xFF0A1628);
+  static const Color darkSurface      = Color(0xFF0F1F3D);
+  static const Color darkSurfaceVar   = Color(0xFF152A52);
+  static const Color darkBorder       = Color(0xFF1E3A5F);
   static const Color darkTextPrimary   = Color(0xFFF1F5F9);
   static const Color darkTextSecondary = Color(0xFF94A3B8);
   static const Color darkTextTertiary  = Color(0xFF64748B);
 
-  // ── Semantic ── aligned to design brief ───────────────────────────────────────
-  static const Color success = Color(0xFF10B981); // emerald-500
-  static const Color warning = Color(0xFFF59E0B); // amber-500
-  static const Color error   = Color(0xFFEF4444); // red-500
-  static const Color info    = Color(0xFF2563EB); // blue-600
+  // ── Semantic ────────────────────────────────────────────────────────────────
+  static const Color success = Color(0xFF10B981);
+  static const Color warning = Color(0xFFF59E0B);
+  static const Color error   = Color(0xFFEF4444);
+  static const Color info    = Color(0xFF2563EB);
 
   // ── Gradients ────────────────────────────────────────────────────────────────
   static const LinearGradient primaryGradient = LinearGradient(
-    colors: [Color(0xFF1D4ED8), Color(0xFF2563EB)],
+    colors: [Color(0xFF1D4ED8), Color(0xFF2563EB), Color(0xFF3B82F6)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
 
   static const LinearGradient heroGradient = LinearGradient(
-    colors: [Color(0xFF1E3A8A), Color(0xFF2563EB)],
+    colors: [Color(0xFF1E3A8A), Color(0xFF1D4ED8), Color(0xFF2563EB)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+
+  static const LinearGradient heroGradientDark = LinearGradient(
+    colors: [Color(0xFF0A1628), Color(0xFF0F2447), Color(0xFF1D4ED8)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
@@ -150,15 +159,24 @@ ThemeData appTheme() {
     textTheme: textTheme,
     colorScheme: ColorScheme.fromSeed(
       seedColor: AppColors.primary,
-      primary:   AppColors.primary,
+      primary: AppColors.primary,
       secondary: AppColors.secondary,
-      tertiary:  AppColors.accent,
-      surface:   AppColors.surface,
-      error:     AppColors.error,
+      tertiary: AppColors.accentLight,
+      surface: AppColors.surface,
+      error: AppColors.error,
+    ),
+    pageTransitionsTheme: const PageTransitionsTheme(
+      builders: {
+        TargetPlatform.android: CupertinoPageTransitionsBuilder(),
+        TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+        TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
+        TargetPlatform.windows: FadeUpwardsPageTransitionsBuilder(),
+        TargetPlatform.linux: FadeUpwardsPageTransitionsBuilder(),
+      },
     ),
     scaffoldBackgroundColor: AppColors.background,
     appBarTheme: const AppBarTheme(
-      backgroundColor: Colors.transparent,
+      backgroundColor: AppColors.primaryDark,
       foregroundColor: Colors.white,
       elevation: 0,
       scrolledUnderElevation: 0,
@@ -230,11 +248,11 @@ ThemeData appTheme() {
       isDense: true,
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: Color(0xFFE0E0E0)),
+        borderSide: const BorderSide(color: AppColors.border),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: Color(0xFFE0E0E0)),
+        borderSide: const BorderSide(color: AppColors.border),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
@@ -286,7 +304,7 @@ ThemeData appTheme() {
           borderRadius: BorderRadius.circular(AppColors.radiusMd)),
     ),
     snackBarTheme: SnackBarThemeData(
-      backgroundColor: AppColors.textPrimary,
+      backgroundColor: AppColors.primaryDark,
       contentTextStyle: const TextStyle(
           fontFamily: fontFamily,
           color: Colors.white,
@@ -320,15 +338,24 @@ ThemeData appThemeDark() {
     colorScheme: ColorScheme.fromSeed(
       seedColor: AppColors.primary,
       brightness: Brightness.dark,
-      primary:   AppColors.primaryLight,
+      primary: AppColors.primaryLight,
       secondary: AppColors.secondary,
-      tertiary:  AppColors.accent,
-      surface:   AppColors.darkSurface,
-      error:     AppColors.error,
+      tertiary: AppColors.accentLight,
+      surface: AppColors.darkSurface,
+      error: AppColors.error,
+    ),
+    pageTransitionsTheme: const PageTransitionsTheme(
+      builders: {
+        TargetPlatform.android: CupertinoPageTransitionsBuilder(),
+        TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+        TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
+        TargetPlatform.windows: FadeUpwardsPageTransitionsBuilder(),
+        TargetPlatform.linux: FadeUpwardsPageTransitionsBuilder(),
+      },
     ),
     scaffoldBackgroundColor: AppColors.darkBackground,
     appBarTheme: const AppBarTheme(
-      backgroundColor: Colors.transparent,
+      backgroundColor: AppColors.primaryDark,
       foregroundColor: Colors.white,
       elevation: 0,
       scrolledUnderElevation: 0,
@@ -357,7 +384,7 @@ ThemeData appThemeDark() {
     ),
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
-        backgroundColor: AppColors.primaryLight,
+        backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         elevation: 0,
         shadowColor: Colors.transparent,
@@ -449,7 +476,7 @@ ThemeData appThemeDark() {
           fontWeight: FontWeight.w400),
     ),
     floatingActionButtonTheme: FloatingActionButtonThemeData(
-      backgroundColor: AppColors.primaryLight,
+      backgroundColor: AppColors.primary,
       foregroundColor: Colors.white,
       elevation: 4,
       shape: RoundedRectangleBorder(
