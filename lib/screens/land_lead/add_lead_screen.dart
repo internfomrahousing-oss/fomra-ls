@@ -586,7 +586,7 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
 
             const _ReadOnlyField(
               label: 'Lead ID',
-              value: 'Auto-generated (e.g. 06202600001)',
+              value: 'Auto-generated (1, 2, 3 …)',
             ),
             const SizedBox(height: 16),
 
