@@ -332,16 +332,15 @@ class _HomeScreenState extends State<HomeScreen> {
       backgroundColor: context.fomraPageBg,
       body: SingleChildScrollView(
         padding: FomraLayout.pagePadding(context),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxWidth: FomraLayout.isDesktop(context)
-                  ? FomraLayout.maxContentWidth
-                  : double.infinity,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: FomraLayout.isDesktop(context)
+                ? FomraLayout.maxContentWidth
+                : double.infinity,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
                 _HomeHeroBanner(
                   userName: userName,
                   onProfileTap: () =>
@@ -384,7 +383,6 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
             ),
           ),
-        ),
       ),
     );
   }

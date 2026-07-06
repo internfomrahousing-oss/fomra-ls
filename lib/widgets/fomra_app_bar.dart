@@ -19,19 +19,11 @@ class FomraAppBar extends StatelessWidget implements PreferredSizeWidget {
     final toolbarHeight = wide ? 64.0 : kToolbarHeight;
     return AppBar(
       toolbarHeight: toolbarHeight,
-      flexibleSpace: Container(
-        decoration: BoxDecoration(
-          gradient: context.fomraHeroGradient,
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.primary.withValues(alpha: 0.22),
-              blurRadius: 18,
-              offset: const Offset(0, 6),
-            ),
-          ],
-        ),
-      ),
-      backgroundColor: Colors.transparent,
+      // Opaque bar — transparent + flexibleSpace can leave the scaffold body
+      // unpainted on Flutter web (CanvasKit).
+      backgroundColor:
+          context.isDarkMode ? AppColors.darkSurface : AppColors.primaryDark,
+      foregroundColor: Colors.white,
       surfaceTintColor: Colors.transparent,
       elevation: 0,
       scrolledUnderElevation: 0,
@@ -97,14 +89,7 @@ class FomraAppBar extends StatelessWidget implements PreferredSizeWidget {
 
   static void _goHome(BuildContext context) {
     Navigator.of(context).pushAndRemoveUntil(
-      PageRouteBuilder(
-        pageBuilder: (_, __, ___) => const HomeScreen(),
-        transitionsBuilder: (_, animation, __, child) => FadeTransition(
-          opacity: CurvedAnimation(parent: animation, curve: Curves.easeOut),
-          child: child,
-        ),
-        transitionDuration: const Duration(milliseconds: 250),
-      ),
+      MaterialPageRoute(builder: (_) => const HomeScreen()),
       (_) => false,
     );
   }

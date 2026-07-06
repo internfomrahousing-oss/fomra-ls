@@ -20,6 +20,18 @@ void main() {
   runZonedGuarded(() async {
     WidgetsFlutterBinding.ensureInitialized();
     FlutterError.onError = FlutterError.presentError;
+    ErrorWidget.builder = (details) => Material(
+          color: const Color(0xFFFFF5F5),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: SingleChildScrollView(
+              child: Text(
+                details.exceptionAsString(),
+                style: const TextStyle(color: Color(0xFFB91C1C), fontSize: 13),
+              ),
+            ),
+          ),
+        );
     await ThemeController.instance.load();
     runApp(const FomraLSApp());
   }, (error, stack) {

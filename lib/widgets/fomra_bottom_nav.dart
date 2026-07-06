@@ -44,14 +44,7 @@ class FomraBottomNav extends StatelessWidget {
     if (currentRoute == item.route) return;
     if (item.route == '/home') {
       Navigator.of(context).pushAndRemoveUntil(
-        PageRouteBuilder(
-          pageBuilder: (_, __, ___) => const HomeScreen(),
-          transitionsBuilder: (_, animation, __, child) => FadeTransition(
-            opacity: CurvedAnimation(parent: animation, curve: Curves.easeOut),
-            child: child,
-          ),
-          transitionDuration: const Duration(milliseconds: 250),
-        ),
+        MaterialPageRoute(builder: (_) => const HomeScreen()),
         (_) => false,
       );
     } else {

@@ -95,12 +95,12 @@ class _LandWorkspaceScreenState extends State<LandWorkspaceScreen>
       ),
       drawer: const AppDrawer(currentRoute: '/land-lead'),
       bottomNavigationBar: const FomraBottomNav(currentRoute: '/land-lead'),
-      body: TabBarView(
-        controller: _tab,
-        physics: const NeverScrollableScrollPhysics(),
+      body: IndexedStack(
+        index: _tab.index,
+        sizing: StackFit.expand,
         children: const [
-          SizedBox.expand(child: LandLeadScreen(isTab: true)),
-          SizedBox.expand(child: TaskManagementScreen(isTab: true)),
+          LandLeadScreen(isTab: true),
+          TaskManagementScreen(isTab: true),
         ],
       ),
     );
