@@ -99,8 +99,8 @@ class _LandWorkspaceScreenState extends State<LandWorkspaceScreen>
         controller: _tab,
         physics: const NeverScrollableScrollPhysics(),
         children: const [
-          LandLeadScreen(isTab: true),
-          TaskManagementScreen(isTab: true),
+          SizedBox.expand(child: LandLeadScreen(isTab: true)),
+          SizedBox.expand(child: TaskManagementScreen(isTab: true)),
         ],
       ),
     );

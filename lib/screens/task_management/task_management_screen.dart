@@ -631,13 +631,18 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
     final fab = _tabController.index == 0 ? _buildAddTaskFab() : null;
 
     if (widget.isTab) {
-      return Scaffold(
-        backgroundColor: context.fomraPageBg,
-        body: Column(children: [
-          _buildTaskTabBar(),
-          Expanded(child: taskListView),
-        ]),
-        floatingActionButton: fab,
+      return Stack(
+        fit: StackFit.expand,
+        children: [
+          Column(
+            children: [
+              _buildTaskTabBar(),
+              Expanded(child: taskListView),
+            ],
+          ),
+          if (fab != null)
+            Positioned(right: 16, bottom: 16, child: fab),
+        ],
       );
     }
 

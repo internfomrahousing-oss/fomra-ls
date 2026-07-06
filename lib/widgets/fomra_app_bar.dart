@@ -14,9 +14,11 @@ class FomraAppBar extends StatelessWidget implements PreferredSizeWidget {
 
   @override
   Widget build(BuildContext context) {
-    final wide = MediaQuery.sizeOf(context).width >= FomraLayout.desktopBreakpoint;
+    final wide =
+        MediaQuery.sizeOf(context).width >= FomraLayout.desktopBreakpoint;
+    final toolbarHeight = wide ? 64.0 : kToolbarHeight;
     return AppBar(
-      toolbarHeight: wide ? 64 : kToolbarHeight,
+      toolbarHeight: toolbarHeight,
       flexibleSpace: Container(
         decoration: BoxDecoration(
           gradient: context.fomraHeroGradient,
@@ -108,6 +110,10 @@ class FomraAppBar extends StatelessWidget implements PreferredSizeWidget {
   }
 
   @override
-  Size get preferredSize =>
-      Size.fromHeight(kToolbarHeight + (bottom?.preferredSize.height ?? 0));
+  Size get preferredSize {
+    // Match [build] toolbar height; callers with [bottom] must use a non-const
+    // FomraAppBar so MediaQuery is available — portal screens are always const
+    // width but height is driven by kToolbarHeight + bottom.
+    return Size.fromHeight(kToolbarHeight + (bottom?.preferredSize.height ?? 0));
+  }
 }
