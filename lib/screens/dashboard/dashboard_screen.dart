@@ -7,6 +7,7 @@ import '../land_lead/lead_detail_screen.dart';
 import '../../widgets/app_drawer.dart';
 import '../../widgets/fomra_app_bar.dart';
 import '../../widgets/fomra_bottom_nav.dart';
+import '../../widgets/fomra_portal_body.dart';
 
 enum _KpiFilter { total, active, acquired, rejected }
 
@@ -130,7 +131,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
       drawer: const AppDrawer(currentRoute: '/dashboard'),
       bottomNavigationBar: const FomraBottomNav(currentRoute: '/dashboard'),
       backgroundColor: context.fomraPageBg,
-      body: SingleChildScrollView(
+      body: FomraPortalBody(
+        child: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -259,6 +261,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
           ],
         ),
+      ),
       ),
     );
   }

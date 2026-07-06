@@ -19,6 +19,7 @@ import '../../utils/lead_location_parser.dart';
 import '../../widgets/app_drawer.dart';
 import '../../widgets/fomra_app_bar.dart';
 import '../../widgets/fomra_bottom_nav.dart';
+import '../../widgets/fomra_portal_body.dart';
 import '../../widgets/fmb_sketch_viewer.dart';
 import '../../widgets/patta_document_preview.dart';
 import '../../widgets/patta_html_preview.dart';
@@ -1992,7 +1993,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
       drawer: const AppDrawer(currentRoute: '/market-intelligence'),
       bottomNavigationBar:
           const FomraBottomNav(currentRoute: '/market-intelligence'),
-      body: _wrapWithFullScreenMap(body),
+      body: FomraPortalBody(child: _wrapWithFullScreenMap(body)),
     );
   }
 

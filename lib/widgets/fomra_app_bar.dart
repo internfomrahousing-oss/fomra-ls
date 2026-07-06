@@ -17,73 +17,79 @@ class FomraAppBar extends StatelessWidget implements PreferredSizeWidget {
     final wide =
         MediaQuery.sizeOf(context).width >= FomraLayout.desktopBreakpoint;
     final toolbarHeight = wide ? 64.0 : kToolbarHeight;
-    return AppBar(
-      toolbarHeight: toolbarHeight,
-      // Opaque bar — transparent + flexibleSpace can leave the scaffold body
-      // unpainted on Flutter web (CanvasKit).
-      backgroundColor:
-          context.isDarkMode ? AppColors.darkSurface : AppColors.primaryDark,
-      foregroundColor: Colors.white,
-      surfaceTintColor: Colors.transparent,
-      elevation: 0,
-      scrolledUnderElevation: 0,
-      title: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          MouseRegion(
-            cursor: SystemMouseCursors.click,
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () => _goHome(context),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 30,
-                    height: 30,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.18),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.2), width: 1),
+    final bottomHeight = bottom?.preferredSize.height ?? 0.0;
+
+    return PreferredSize(
+      preferredSize: Size.fromHeight(toolbarHeight + bottomHeight),
+      child: AppBar(
+        toolbarHeight: toolbarHeight,
+        backgroundColor:
+            context.isDarkMode ? AppColors.darkSurface : AppColors.primaryDark,
+        foregroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => _goHome(context),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 30,
+                      height: 30,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.18),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.2),
+                            width: 1),
+                      ),
+                      child: const Icon(Icons.house_outlined,
+                          color: Colors.white, size: 16),
                     ),
-                    child: const Icon(Icons.house_outlined,
-                        color: Colors.white, size: 16),
-                  ),
-                  const SizedBox(width: 10),
-                  const Text('FomraLS',
-                      style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 18,
-                          letterSpacing: 0.1)),
-                ],
+                    const SizedBox(width: 10),
+                    const Text('FomraLS',
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 18,
+                            letterSpacing: 0.1)),
+                  ],
+                ),
               ),
             ),
-          ),
-          if (moduleName != null) ...[
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.14),
-                borderRadius: BorderRadius.circular(999),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
+            if (moduleName != null) ...[
+              const SizedBox(width: 8),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(999),
+                  border:
+                      Border.all(color: Colors.white.withValues(alpha: 0.22)),
+                ),
+                child: Text(moduleName!,
+                    style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white.withValues(alpha: 0.9))),
               ),
-              child: Text(moduleName!,
-                  style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white.withValues(alpha: 0.9))),
-            ),
+            ],
           ],
+        ),
+        actions: [
+          ...?actions,
+          const FomraThemeToggle(),
         ],
+        bottom: bottom,
       ),
-      actions: [
-        ...?actions,
-        const FomraThemeToggle(),
-      ],
-      bottom: bottom,
     );
   }
 
@@ -96,9 +102,8 @@ class FomraAppBar extends StatelessWidget implements PreferredSizeWidget {
 
   @override
   Size get preferredSize {
-    // Match [build] toolbar height; callers with [bottom] must use a non-const
-    // FomraAppBar so MediaQuery is available — portal screens are always const
-    // width but height is driven by kToolbarHeight + bottom.
-    return Size.fromHeight(kToolbarHeight + (bottom?.preferredSize.height ?? 0));
+    final bottomHeight = bottom?.preferredSize.height ?? 0.0;
+    // Use the tallest toolbar height so scaffold body math is never negative.
+    return Size.fromHeight(64.0 + bottomHeight);
   }
 }

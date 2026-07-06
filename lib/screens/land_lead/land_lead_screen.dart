@@ -262,7 +262,7 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
       return Stack(
         fit: StackFit.expand,
         children: [
-          Positioned.fill(child: body),
+          body,
           Positioned(right: 16, bottom: 16, child: fab),
         ],
       );

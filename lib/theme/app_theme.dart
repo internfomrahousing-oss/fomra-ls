@@ -176,7 +176,7 @@ ThemeData appTheme() {
     ),
     scaffoldBackgroundColor: AppColors.background,
     appBarTheme: const AppBarTheme(
-      backgroundColor: Colors.transparent,
+      backgroundColor: AppColors.primaryDark,
       foregroundColor: Colors.white,
       elevation: 0,
       scrolledUnderElevation: 0,
@@ -355,7 +355,7 @@ ThemeData appThemeDark() {
     ),
     scaffoldBackgroundColor: AppColors.darkBackground,
     appBarTheme: const AppBarTheme(
-      backgroundColor: Colors.transparent,
+      backgroundColor: AppColors.primaryDark,
       foregroundColor: Colors.white,
       elevation: 0,
       scrolledUnderElevation: 0,

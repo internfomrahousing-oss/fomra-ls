@@ -4,6 +4,7 @@ import '../../theme/fomra_theme_context.dart';
 import '../../widgets/app_drawer.dart';
 import '../../widgets/fomra_app_bar.dart';
 import '../../widgets/fomra_bottom_nav.dart';
+import '../../widgets/fomra_portal_body.dart';
 import '../task_management/task_management_screen.dart';
 import 'land_lead_screen.dart';
 
@@ -95,13 +96,10 @@ class _LandWorkspaceScreenState extends State<LandWorkspaceScreen>
       ),
       drawer: const AppDrawer(currentRoute: '/land-lead'),
       bottomNavigationBar: const FomraBottomNav(currentRoute: '/land-lead'),
-      body: IndexedStack(
-        index: _tab.index,
-        sizing: StackFit.expand,
-        children: const [
-          LandLeadScreen(isTab: true),
-          TaskManagementScreen(isTab: true),
-        ],
+      body: FomraPortalBody(
+        child: _tab.index == 0
+            ? const LandLeadScreen(isTab: true)
+            : const TaskManagementScreen(isTab: true),
       ),
     );
   }
