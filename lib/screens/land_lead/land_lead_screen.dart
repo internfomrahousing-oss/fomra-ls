@@ -932,187 +932,214 @@ class _LeadCard extends StatelessWidget {
     final locationText = [lead.location, lead.village, lead.district]
         .where((s) => s.isNotEmpty)
         .join(', ');
+    final title = lead.ownerName.trim().isNotEmpty
+        ? lead.ownerName.trim()
+        : 'Lead #${lead.leadId}';
 
     return MouseRegion(
       cursor: SystemMouseCursors.click,
-      child: Card(
-        margin: const EdgeInsets.only(bottom: 16),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 14),
         clipBehavior: Clip.antiAlias,
-        shape: RoundedRectangleBorder(
+        decoration: BoxDecoration(
+          color: context.fomraSurface,
           borderRadius: BorderRadius.circular(AppColors.radiusMd),
-          side: selected
-              ? const BorderSide(color: AppColors.primary, width: 1.5)
-              : BorderSide(color: context.fomraBorder),
+          border: Border.all(
+            color: selected ? AppColors.primary : context.fomraBorder,
+            width: selected ? 1.5 : 1,
+          ),
+          boxShadow: context.fomraCardShadow,
         ),
-        elevation: 0,
-        child: InkWell(
-          onTap: onTap,
-          child: IntrinsicHeight(
-            child: Row(children: [
-            if (selectionMode)
-              Padding(
-                padding: const EdgeInsets.only(left: 14, right: 2),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 160),
-                  curve: Curves.easeOut,
-                  width: 24,
-                  height: 24,
-                  decoration: BoxDecoration(
-                    color: selected ? AppColors.primary : Colors.transparent,
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: selected
-                          ? AppColors.primary
-                          : context.fomraBorder,
-                      width: 2,
-                    ),
-                  ),
-                  child: selected
-                      ? const Icon(Icons.check, size: 15, color: Colors.white)
-                      : null,
-                ),
-              ),
-            Container(
-              width: 5,
-              decoration: BoxDecoration(
-                color: statusColor,
-                borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(AppColors.radiusMd),
-                    bottomLeft: Radius.circular(AppColors.radiusMd)),
-              ),
-            ),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(children: [
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // ── Header: [checkbox] avatar · name/ID · status pill ──
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      if (selectionMode) ...[
+                        AnimatedContainer(
+                          duration: const Duration(milliseconds: 160),
+                          curve: Curves.easeOut,
+                          width: 24,
+                          height: 24,
+                          decoration: BoxDecoration(
+                            color:
+                                selected ? AppColors.primary : Colors.transparent,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: selected
+                                  ? AppColors.primary
+                                  : context.fomraBorder,
+                              width: 2,
+                            ),
+                          ),
+                          child: selected
+                              ? const Icon(Icons.check,
+                                  size: 15, color: Colors.white)
+                              : null,
+                        ),
+                        const SizedBox(width: 12),
+                      ],
+                      Container(
+                        width: 46,
+                        height: 46,
+                        decoration: BoxDecoration(
+                          color: statusColor.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Icon(Icons.location_on_rounded,
+                            color: statusColor, size: 24),
+                      ),
+                      const SizedBox(width: 12),
                       Expanded(
-                        child: Text(lead.leadId,
-                            style: TextStyle(
-                                fontSize: 18,
-                                color: context.fomraTextPrimary,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 16,
                                 fontWeight: FontWeight.w800,
-                                letterSpacing: 0.2)),
+                                letterSpacing: -0.2,
+                                color: context.fomraTextPrimary,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Lead #${lead.leadId} · ${lead.landType.label}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                                color: context.fomraTextSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
+                      const SizedBox(width: 8),
                       _StatusBadge(status: lead.status),
-                    ]),
-                    const SizedBox(height: 5),
-                    Text(
-                      lead.ownerName,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: context.fomraTextSecondary,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    _LeadFieldRow(
-                      icon: Icons.location_on_outlined,
-                      text: locationText.isEmpty ? 'Location not provided' : locationText,
-                    ),
-                    const SizedBox(height: 6),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  _LeadFieldRow(
+                    icon: Icons.place_outlined,
+                    text: locationText.isEmpty
+                        ? 'Location not provided'
+                        : locationText,
+                  ),
+                  if (lead.surveyNumber.isNotEmpty ||
+                      lead.subDivision.isNotEmpty ||
+                      lead.landExtent.isNotEmpty) ...[
+                    const SizedBox(height: 10),
                     Wrap(
-                      spacing: 10,
+                      spacing: 8,
                       runSpacing: 8,
                       children: [
                         if (lead.surveyNumber.isNotEmpty)
                           _Chip(Icons.tag, 'Survey ${lead.surveyNumber}'),
                         if (lead.subDivision.isNotEmpty)
-                          _Chip(Icons.call_split_outlined, 'Sub ${lead.subDivision}'),
+                          _Chip(Icons.call_split_outlined,
+                              'Sub ${lead.subDivision}'),
                         if (lead.landExtent.isNotEmpty)
                           _Chip(Icons.straighten, lead.landExtent),
-                        _Chip(Icons.terrain_outlined, lead.landType.label),
                       ],
                     ),
-                    const SizedBox(height: 10),
-                    Row(children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 5),
-                        decoration: BoxDecoration(
-                            color: sourceColor.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(20)),
-                        child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(_sourceIcon(lead.inputSource),
-                                  size: 12, color: sourceColor),
-                              const SizedBox(width: 5),
-                              Text(lead.inputSource.label,
-                                  style: TextStyle(
-                                      fontSize: 10,
-                                      color: sourceColor,
-                                      fontWeight: FontWeight.w700)),
-                            ]),
-                      ),
-                      if (lead.createdByName.isNotEmpty) ...[
-                        const SizedBox(width: 8),
-                        Icon(Icons.person_outline,
-                            size: 12, color: context.fomraTextSecondary),
-                        const SizedBox(width: 4),
-                        Flexible(
-                          child: Text(
-                            lead.createdByName,
-                            overflow: TextOverflow.ellipsis,
+                  ],
+                  const SizedBox(height: 14),
+                  Divider(height: 1, color: context.fomraBorder),
+                  const SizedBox(height: 12),
+                  // ── Footer: source · creator · date ──
+                  Row(children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                          color: sourceColor.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(999)),
+                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                        Icon(_sourceIcon(lead.inputSource),
+                            size: 12, color: sourceColor),
+                        const SizedBox(width: 5),
+                        Text(lead.inputSource.label,
                             style: TextStyle(
-                                fontSize: 11,
-                                color: context.fomraTextSecondary,
-                                fontWeight: FontWeight.w600),
-                          ),
-                        ),
-                      ],
-                      const Spacer(),
-                      Icon(Icons.calendar_today,
-                          size: 12, color: context.fomraTextSecondary),
-                      const SizedBox(width: 5),
-                      Text(
-                          '${lead.addedOn.day}/${lead.addedOn.month}/${lead.addedOn.year}',
+                                fontSize: 10,
+                                color: sourceColor,
+                                fontWeight: FontWeight.w700)),
+                      ]),
+                    ),
+                    if (lead.createdByName.isNotEmpty) ...[
+                      const SizedBox(width: 8),
+                      Icon(Icons.person_outline,
+                          size: 12, color: context.fomraTextTertiary),
+                      const SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                          lead.createdByName,
+                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                               fontSize: 11,
-                              color: context.fomraTextSecondary)),
-                    ]),
-                    if (!selectionMode) ...[
-                      const SizedBox(height: 10),
-                      SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Row(
-                          children: LeadStatus.values
-                              .where((s) =>
-                                  s != lead.status && s != LeadStatus.siteVisit)
-                              .map((s) => Padding(
-                                    padding: const EdgeInsets.only(right: 8),
-                                    child: OutlinedButton(
-                                      onPressed: () => onStatusChange(s),
-                                      style: OutlinedButton.styleFrom(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 11, vertical: 5),
-                                        minimumSize: Size.zero,
-                                        tapTargetSize:
-                                            MaterialTapTargetSize.shrinkWrap,
-                                        side: BorderSide(
-                                            color: s.color
-                                                .withValues(alpha: 0.5)),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(999),
-                                        ),
-                                      ),
-                                      child: Text('→ ${s.label}',
-                                          style: TextStyle(
-                                              fontSize: 11, color: s.color)),
-                                    ),
-                                  ))
-                              .toList(),
+                              color: context.fomraTextSecondary,
+                              fontWeight: FontWeight.w600),
                         ),
                       ),
                     ],
+                    const Spacer(),
+                    Icon(Icons.calendar_today_outlined,
+                        size: 12, color: context.fomraTextTertiary),
+                    const SizedBox(width: 5),
+                    Text(
+                        '${lead.addedOn.day}/${lead.addedOn.month}/${lead.addedOn.year}',
+                        style: TextStyle(
+                            fontSize: 11, color: context.fomraTextSecondary)),
+                  ]),
+                  if (!selectionMode) ...[
+                    const SizedBox(height: 12),
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: LeadStatus.values
+                            .where((s) =>
+                                s != lead.status && s != LeadStatus.siteVisit)
+                            .map((s) => Padding(
+                                  padding: const EdgeInsets.only(right: 8),
+                                  child: OutlinedButton(
+                                    onPressed: () => onStatusChange(s),
+                                    style: OutlinedButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 12, vertical: 6),
+                                      minimumSize: Size.zero,
+                                      tapTargetSize:
+                                          MaterialTapTargetSize.shrinkWrap,
+                                      side: BorderSide(
+                                          color:
+                                              s.color.withValues(alpha: 0.5)),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(999),
+                                      ),
+                                    ),
+                                    child: Text('→ ${s.label}',
+                                        style: TextStyle(
+                                            fontSize: 11, color: s.color)),
+                                  ),
+                                ))
+                            .toList(),
+                      ),
+                    ),
                   ],
-                ),
+                ],
               ),
             ),
-            ]),
           ),
         ),
       ),
