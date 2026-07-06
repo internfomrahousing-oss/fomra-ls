@@ -34,23 +34,6 @@ class AuthService {
 
   static SupabaseClient get _client => Supabase.instance.client;
 
-  static bool get _supabaseReady {
-    try {
-      return Supabase.instance.isInitialized;
-    } catch (_) {
-      return false;
-    }
-  }
-
-  static User? get _currentAuthUser {
-    if (!_supabaseReady) return null;
-    try {
-      return _client.auth.currentUser;
-    } catch (_) {
-      return null;
-    }
-  }
-
   LoginPortal? _portal;
   String? _loginEmail;
   String? _loginDisplayName;
@@ -96,7 +79,7 @@ class AuthService {
   }
 
   AppUser? get currentUser {
-    final u = _currentAuthUser;
+    final u = _client.auth.currentUser;
     if (u != null) {
       final email = u.email ?? _loginEmail ?? '';
       return AppUser(
@@ -124,12 +107,13 @@ class AuthService {
     return null;
   }
 
-  bool get isLoggedIn => _currentAuthUser != null || _portal != null;
+  bool get isLoggedIn =>
+      _client.auth.currentUser != null || _portal != null;
 
   /// True when the app holds a REAL Supabase Auth session — required for the
   /// locked-down (authenticated-only) database. False means the login fell back
   /// to local mode (anon), which the RLS lockdown would block from writing.
-  bool get hasRealSession => _currentAuthUser != null;
+  bool get hasRealSession => _client.auth.currentUser != null;
 
   Future<void> restoreSession() async {
     final portalName = await tabGetString(_portalKey);
@@ -141,7 +125,7 @@ class AuthService {
       _portal = LoginPortal.employee;
     }
 
-    final authEmail = _currentAuthUser?.email?.trim().toLowerCase();
+    final authEmail = _client.auth.currentUser?.email?.trim().toLowerCase();
     if (authEmail == managementEmail) {
       _portal = LoginPortal.management;
     } else if (authEmail == employeeEmail) {
@@ -154,7 +138,7 @@ class AuthService {
     // a reload from bouncing the user back to the login screen.
     if (!local &&
         !(await _withinLoginGrace()) &&
-        _currentAuthUser == null) {
+        _client.auth.currentUser == null) {
       _portal = null;
       _loginEmail = null;
       _loginDisplayName = null;
@@ -196,7 +180,7 @@ class AuthService {
 
   Future<bool> checkSession() async {
     await restoreSession();
-    if (_currentAuthUser != null) return true;
+    if (_client.auth.currentUser != null) return true;
     if ((await tabGetString(_localSessionKey)) == 'true' && _portal != null) {
       return true;
     }
@@ -236,7 +220,7 @@ class AuthService {
         email: normalizedEmail,
         password: password,
       );
-      supabaseOk = _currentAuthUser != null;
+      supabaseOk = _client.auth.currentUser != null;
     } on AuthException {
       supabaseOk = false;
     } catch (_) {
@@ -377,7 +361,7 @@ class AuthService {
     // Best-effort: update the Supabase Auth account password if a real session
     // exists (kept for accounts that have a Supabase user).
     try {
-      if (_currentAuthUser != null) {
+      if (_client.auth.currentUser != null) {
         await _client.auth.updateUser(UserAttributes(password: newPassword));
       }
     } catch (_) {}
