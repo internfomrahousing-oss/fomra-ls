@@ -8,7 +8,6 @@ import '../../services/employee_service.dart';
 import '../../services/land_lead_service.dart';
 import '../../services/notifications_service.dart';
 import '../../theme/app_theme.dart';
-import '../../theme/fomra_layout.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../widgets/app_drawer.dart';
 import '../../widgets/fomra_app_bar.dart';
@@ -546,12 +545,9 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
       );
     }
 
-    return FomraLayout.constrain(
-      context,
-      child: CustomScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        slivers: slivers,
-      ),
+    return CustomScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      slivers: slivers,
     );
   }
 

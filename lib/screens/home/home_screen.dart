@@ -330,54 +330,66 @@ class _HomeScreenState extends State<HomeScreen> {
       drawer: const AppDrawer(currentRoute: '/home'),
       bottomNavigationBar: const FomraBottomNav(currentRoute: '/home'),
       backgroundColor: context.fomraPageBg,
-      body: FomraLayout.constrain(
-        context,
-        child: SingleChildScrollView(
-          padding: FomraLayout.pagePadding(context),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _HomeHeroBanner(
-                userName: userName,
-                onProfileTap: () => _showProfileMenu(userName, userEmail),
-                unreadCount: _unreadCount,
-              ),
-              const SizedBox(height: 24),
-              const SectionHeader(
-                title: 'Overview',
-                subtitle: 'Pipeline snapshot',
-                icon: Icons.analytics_outlined,
-              ),
-              _OverviewMetrics(
-                totalLeads: _totalLeads,
-                activeLeads: _activeLeads,
-                brokerLeads: _brokerLeads,
-              ),
-              const SizedBox(height: 20),
-              AppCard(
-                padding: const EdgeInsets.all(AppSpacing.lg),
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final maxW = FomraLayout.isDesktop(context)
+              ? FomraLayout.maxContentWidth
+                  .clamp(0.0, constraints.maxWidth)
+              : constraints.maxWidth;
+          return Align(
+            alignment: Alignment.topCenter,
+            child: SizedBox(
+              width: maxW,
+              child: SingleChildScrollView(
+                padding: FomraLayout.pagePadding(context),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    SectionHeader(
-                      title: _isManagement
-                          ? 'Team performance'
-                          : 'My performance',
-                      subtitle: _isManagement
-                          ? 'Leads added by each team member'
-                          : 'Your contribution this period',
-                      padding: EdgeInsets.zero,
+                    _HomeHeroBanner(
+                      userName: userName,
+                      onProfileTap: () =>
+                          _showProfileMenu(userName, userEmail),
+                      unreadCount: _unreadCount,
                     ),
-                    _isManagement
-                        ? _PerformanceList(entries: _performance)
-                        : _MyPerformanceContent(count: _myLeadCount),
+                    const SizedBox(height: 24),
+                    const SectionHeader(
+                      title: 'Overview',
+                      subtitle: 'Pipeline snapshot',
+                      icon: Icons.analytics_outlined,
+                    ),
+                    _OverviewMetrics(
+                      totalLeads: _totalLeads,
+                      activeLeads: _activeLeads,
+                      brokerLeads: _brokerLeads,
+                    ),
+                    const SizedBox(height: 20),
+                    AppCard(
+                      padding: const EdgeInsets.all(AppSpacing.lg),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          SectionHeader(
+                            title: _isManagement
+                                ? 'Team performance'
+                                : 'My performance',
+                            subtitle: _isManagement
+                                ? 'Leads added by each team member'
+                                : 'Your contribution this period',
+                            padding: EdgeInsets.zero,
+                          ),
+                          _isManagement
+                              ? _PerformanceList(entries: _performance)
+                              : _MyPerformanceContent(count: _myLeadCount),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 96),
                   ],
                 ),
               ),
-              const SizedBox(height: 96),
-            ],
-          ),
-        ),
+            ),
+          );
+        },
       ),
     );
   }

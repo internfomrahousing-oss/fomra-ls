@@ -29,18 +29,36 @@ class FomraLayout {
     return const EdgeInsets.symmetric(horizontal: 16, vertical: 12);
   }
 
+  /// Centers content on wide screens. Set [fillHeight] for scroll views inside
+  /// tab bodies so they receive the full viewport height (avoids blank panels).
   static Widget constrain(
     BuildContext context, {
     required Widget child,
     bool center = true,
+    bool fillHeight = false,
   }) {
-    final box = ConstrainedBox(
-      constraints: BoxConstraints(
-        maxWidth: isDesktop(context) ? maxContentWidth : double.infinity,
-      ),
-      child: child,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final maxW = isDesktop(context)
+            ? maxContentWidth.clamp(0.0, constraints.maxWidth)
+            : constraints.maxWidth;
+
+        final box = ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: maxW,
+            minHeight: fillHeight ? constraints.maxHeight : 0,
+            maxHeight: constraints.maxHeight,
+          ),
+          child: SizedBox(
+            width: maxW.isFinite ? maxW : null,
+            child: child,
+          ),
+        );
+
+        if (!center) return box;
+        return Align(alignment: Alignment.topCenter, child: box);
+      },
     );
-    return center ? Align(alignment: Alignment.topCenter, child: box) : box;
   }
 }
 
