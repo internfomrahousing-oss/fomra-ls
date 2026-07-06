@@ -357,6 +357,19 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
 
       final lat = position.latitude;
       final lng = position.longitude;
+      // Drop the point on the map (switch to manual mode) so survey/sub-division
+      // can be verified and the pin nudged onto the exact parcel if the GPS
+      // reading is slightly off the land.
+      if (mounted) {
+        setState(() {
+          _pinnedPoint = LatLng(lat, lng);
+          _locationMode = _LocationMode.manual;
+        });
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          final p = _pinnedPoint;
+          if (p != null) _centerMapOn(p);
+        });
+      }
       await _fillFromCoordinates(lat, lng, clearLoading: false);
       await _fillSurveyFromTngis(LatLng(lat, lng));
     } on LocationServiceDisabledException {
