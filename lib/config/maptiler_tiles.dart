@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:flutter_map_cancellable_tile_provider/flutter_map_cancellable_tile_provider.dart';
 
 /// MapTiler raster tiles (OpenMapTiles / OMT schema).
 class MapTilerTiles {
@@ -53,7 +54,13 @@ class MapTilerTiles {
       fallbackUrl: satelliteLayer ? satelliteFallback : standardFallback,
       userAgentPackageName: packageName,
       maxZoom: 22,
-      keepBuffer: 2,
+      // Cancel off-screen tile requests so the visible tiles load first — the
+      // biggest perceived-speed win for flutter_map (esp. on web).
+      tileProvider: CancellableNetworkTileProvider(),
+      // Keep more tiles around and preload a ring so panning/first paint is
+      // smoother instead of loading tile-by-tile.
+      keepBuffer: 4,
+      panBuffer: 1,
     );
   }
 }

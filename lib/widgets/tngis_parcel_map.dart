@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:flutter_map_cancellable_tile_provider/flutter_map_cancellable_tile_provider.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../services/api_client.dart';
@@ -358,6 +359,9 @@ class _TngisParcelMapState extends State<TngisParcelMap> {
               TileLayer(
                 urlTemplate: _satelliteUrl,
                 userAgentPackageName: 'in.fomrahousing.fomrals',
+                tileProvider: CancellableNetworkTileProvider(),
+                keepBuffer: 4,
+                panBuffer: 1,
               ),
               PolygonLayer(
                 polygons: _parcels.expand((p) {
