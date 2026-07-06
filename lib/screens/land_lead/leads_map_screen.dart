@@ -5,10 +5,8 @@ import 'package:latlong2/latlong.dart';
 import '../../config/maptiler_tiles.dart';
 import '../../models/land_lead.dart';
 import '../../theme/app_theme.dart';
-import '../../theme/fomra_layout.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../utils/lead_location_parser.dart';
-import '../../widgets/fomra_app_bar.dart';
 import 'lead_detail_screen.dart';
 
 class _PlottedLead {
@@ -47,17 +45,18 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
     final plotted = _plotted;
 
     return Scaffold(
-      backgroundColor: context.fomraPageBg,
-      extendBodyBehindAppBar: true,
-      appBar: FomraAppBar(
-        moduleName: plotted.isEmpty
-            ? 'Lead map'
-            : '${plotted.length} pinned',
+      appBar: AppBar(
+        title: Text(
+          plotted.isEmpty
+              ? 'Lead map'
+              : '${plotted.length} lead${plotted.length == 1 ? '' : 's'} on map',
+        ),
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
       ),
       body: plotted.isEmpty
           ? _buildEmpty(context)
           : Stack(
-              fit: StackFit.expand,
               children: [
                 FlutterMap(
                   mapController: _mapController,
@@ -76,8 +75,8 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
                         final color = p.lead.status.color;
                         return Marker(
                           point: p.point,
-                          width: 48,
-                          height: 56,
+                          width: 44,
+                          height: 52,
                           child: GestureDetector(
                             onTap: () => _openLead(context, p.lead),
                             child: Column(
@@ -85,28 +84,32 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
                               children: [
                                 Container(
                                   padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 4,
+                                    horizontal: 6,
+                                    vertical: 2,
                                   ),
                                   decoration: BoxDecoration(
                                     color: color,
-                                    borderRadius: BorderRadius.circular(8),
-                                    boxShadow: AppColors.coloredShadow(color),
+                                    borderRadius: BorderRadius.circular(6),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withValues(alpha: 0.2),
+                                        blurRadius: 4,
+                                        offset: const Offset(0, 1),
+                                      ),
+                                    ],
                                   ),
                                   child: Text(
                                     p.lead.leadId.length > 8
-                                        ? p.lead.leadId
-                                            .substring(p.lead.leadId.length - 6)
+                                        ? p.lead.leadId.substring(p.lead.leadId.length - 6)
                                         : p.lead.leadId,
                                     style: const TextStyle(
                                       color: Colors.white,
-                                      fontSize: 10,
+                                      fontSize: 9,
                                       fontWeight: FontWeight.w800,
                                     ),
                                   ),
                                 ),
-                                Icon(Icons.location_on_rounded,
-                                    color: color, size: 40),
+                                Icon(Icons.location_on, color: color, size: 36),
                               ],
                             ),
                           ),
@@ -117,60 +120,54 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
                 ),
                 if (_missingGps > 0)
                   Positioned(
-                    left: 16,
-                    right: 16,
-                    top: kToolbarHeight + 20,
-                    child: FomraLayout.constrain(
-                      context,
-                      child: FomraGlassPanel(
-                        child: Row(
-                          children: [
-                            const Icon(Icons.info_outline,
-                                size: 18, color: AppColors.primary),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                '$_missingGps lead${_missingGps == 1 ? '' : 's'} '
-                                'without GPS are hidden. Add GPS when creating leads.',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: context.fomraTextSecondary,
-                                  height: 1.35,
-                                ),
-                              ),
-                            ),
-                          ],
+                    left: 12,
+                    right: 12,
+                    top: 12,
+                    child: Material(
+                      color: context.fomraSurface.withValues(alpha: 0.95),
+                      borderRadius: BorderRadius.circular(16),
+                      elevation: 2,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                        child: Text(
+                          '$_missingGps lead${_missingGps == 1 ? '' : 's'} '
+                          'without GPS — not shown. Add GPS when creating leads.',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: context.fomraTextSecondary,
+                            height: 1.35,
+                          ),
                         ),
                       ),
                     ),
                   ),
                 Positioned(
-                  left: 16,
-                  right: 16,
-                  bottom: 20,
-                  child: FomraLayout.constrain(
-                    context,
-                    child: FomraGlassPanel(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
+                  left: 12,
+                  right: 12,
+                  bottom: 12,
+                  child: Material(
+                    color: context.fomraSurface.withValues(alpha: 0.95),
+                    borderRadius: BorderRadius.circular(16),
+                    elevation: 2,
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
                       child: Wrap(
-                        spacing: 14,
-                        runSpacing: 8,
-                        alignment: WrapAlignment.center,
+                        spacing: 10,
+                        runSpacing: 6,
                         children: LeadStatus.values
                             .where((s) => s != LeadStatus.siteVisit)
                             .map((s) => Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Icon(Icons.circle,
-                                        size: 10, color: s.color),
-                                    const SizedBox(width: 6),
+                                    Icon(Icons.location_on, size: 14, color: s.color),
+                                    const SizedBox(width: 4),
                                     Text(
                                       s.label,
                                       style: TextStyle(
-                                        fontSize: 11,
+                                        fontSize: 10,
                                         color: context.fomraTextSecondary,
                                         fontWeight: FontWeight.w600,
                                       ),
@@ -191,56 +188,34 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
 
   Widget _buildEmpty(BuildContext context) {
     return Center(
-      child: FomraLayout.constrain(
-        context,
-        child: Padding(
-          padding: FomraLayout.pagePadding(context),
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(32),
-            decoration: BoxDecoration(
-              color: context.fomraSurface,
-              borderRadius: BorderRadius.circular(AppColors.radiusXl),
-              border: Border.all(color: context.fomraBorder),
-              boxShadow: context.fomraCardShadow,
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.map_outlined,
+                size: 56, color: AppColors.primary.withValues(alpha: 0.35)),
+            const SizedBox(height: 16),
+            Text(
+              'No leads with GPS coordinates',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: context.fomraTextPrimary,
+              ),
             ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 72,
-                  height: 72,
-                  decoration: BoxDecoration(
-                    color: AppColors.primary.withValues(alpha: 0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(Icons.map_outlined,
-                      size: 36,
-                      color: AppColors.primary.withValues(alpha: 0.7)),
-                ),
-                const SizedBox(height: 18),
-                Text(
-                  'No leads with GPS coordinates',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                    color: context.fomraTextPrimary,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Add GPS when creating leads (tap the map in Add Lead) '
-                  'so they appear here as pinned locations.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: context.fomraTextSecondary,
-                    height: 1.5,
-                  ),
-                ),
-              ],
+            const SizedBox(height: 8),
+            Text(
+              'Add GPS when creating leads (tap the map in Add Lead) '
+              'so they appear here as pinned locations.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 13,
+                color: context.fomraTextSecondary,
+                height: 1.45,
+              ),
             ),
-          ),
+          ],
         ),
       ),
     );

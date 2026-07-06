@@ -10,13 +10,11 @@ import '../../services/employee_service.dart';
 import '../../services/land_lead_service.dart';
 import '../../services/notifications_service.dart';
 import '../../theme/app_theme.dart';
-import '../../theme/fomra_layout.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../models/app_notification.dart';
 import '../../widgets/app_drawer.dart';
 import '../../widgets/fomra_app_bar.dart';
 import '../../widgets/fomra_bottom_nav.dart';
-import '../../widgets/ui/app_components.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -330,255 +328,221 @@ class _HomeScreenState extends State<HomeScreen> {
       drawer: const AppDrawer(currentRoute: '/home'),
       bottomNavigationBar: const FomraBottomNav(currentRoute: '/home'),
       backgroundColor: context.fomraPageBg,
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: FomraLayout.pagePadding(context),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-                _HomeHeroBanner(
-                  userName: userName,
-                  onProfileTap: () =>
-                      _showProfileMenu(userName, userEmail),
-                  unreadCount: _unreadCount,
-                ),
-                const SizedBox(height: 24),
-                const SectionHeader(
-                  title: 'Overview',
-                  subtitle: 'Pipeline snapshot',
-                  icon: Icons.analytics_outlined,
-                ),
-                _OverviewMetrics(
-                  totalLeads: _totalLeads,
-                  activeLeads: _activeLeads,
-                  brokerLeads: _brokerLeads,
-                ),
-                const SizedBox(height: 20),
-                AppCard(
-                  padding: const EdgeInsets.all(AppSpacing.lg),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      SectionHeader(
-                        title: _isManagement
-                            ? 'Team performance'
-                            : 'My performance',
-                        subtitle: _isManagement
-                            ? 'Leads added by each team member'
-                            : 'Your contribution this period',
-                        padding: EdgeInsets.zero,
-                      ),
-                      _isManagement
-                          ? _PerformanceList(entries: _performance)
-                          : _MyPerformanceContent(count: _myLeadCount),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 96),
-              ],
+      body: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _GreetingHeader(
+              userName: userName,
+              onProfileTap: () => _showProfileMenu(userName, userEmail),
             ),
-          ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _HomeSection(
+                    title: 'Overview',
+                    child: Row(children: [
+                      _KpiChip(
+                        label: 'Total Leads',
+                        value: _totalLeads,
+                        color: const Color(0xFF2563EB),
+                        icon: Icons.analytics_outlined,
+                        trend: '+12%',
+                      ),
+                      const SizedBox(width: 12),
+                      _KpiChip(
+                        label: 'Active',
+                        value: _activeLeads,
+                        color: const Color(0xFF16A34A),
+                        icon: Icons.trending_up_outlined,
+                        trend: '+6%',
+                      ),
+                      const SizedBox(width: 12),
+                      _KpiChip(
+                        label: 'Broker',
+                        value: _brokerLeads,
+                        color: AppColors.purple,
+                        icon: Icons.handshake_outlined,
+                        trend: '+3%',
+                      ),
+                    ]),
+                  ),
+                  const SizedBox(height: 16),
+                  _HomeSection(
+                    title: _isManagement ? 'Team performance' : 'My performance',
+                    child: _isManagement
+                        ? _PerformanceList(entries: _performance)
+                        : _MyPerformanceContent(count: _myLeadCount),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
+      ),
     );
   }
 }
 
-class _HomeHeroBanner extends StatelessWidget {
+// ── Greeting Header (clean, light) ────────────────────────────────────────────
+
+class _GreetingHeader extends StatefulWidget {
   final String userName;
   final VoidCallback onProfileTap;
-  final int unreadCount;
+  const _GreetingHeader({required this.userName, required this.onProfileTap});
 
-  const _HomeHeroBanner({
-    required this.userName,
-    required this.onProfileTap,
-    this.unreadCount = 0,
-  });
+  @override
+  State<_GreetingHeader> createState() => _GreetingHeaderState();
+}
+
+class _GreetingHeaderState extends State<_GreetingHeader> {
+  Timer? _clockTimer;
+  DateTime _now = DateTime.now();
+
+  @override
+  void initState() {
+    super.initState();
+    _clockTimer = Timer.periodic(const Duration(minutes: 1), (_) {
+      if (mounted) setState(() => _now = DateTime.now());
+    });
+  }
+
+  @override
+  void dispose() {
+    _clockTimer?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final firstName =
-        userName.trim().split(RegExp(r'\s+')).firstWhere((s) => s.isNotEmpty,
-            orElse: () => '');
-    final greeting = firstName.isEmpty ? 'Welcome back' : 'Welcome, $firstName';
-    final initial =
-        firstName.isNotEmpty ? firstName[0].toUpperCase() : '?';
+    final firstName = widget.userName.trim().split(RegExp(r'\s+')).first;
+    final greeting = firstName.isEmpty
+        ? _greetingFor(_now)
+        : '${_greetingFor(_now)}, $firstName';
+    final initial = firstName.isNotEmpty ? firstName[0].toUpperCase() : '?';
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        gradient: context.fomraHeroGradient,
-        borderRadius: BorderRadius.circular(AppColors.radiusXl),
-        boxShadow: AppColors.coloredShadow(AppColors.primary),
-      ),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Container(
+            padding: const EdgeInsets.all(9),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(_greetIconFor(_now),
+                color: AppColors.primary, size: 20),
+          ),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.16),
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.22),
-                    ),
-                  ),
-                  child: Text(
-                    'FomraLS',
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.95),
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.6,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 14),
                 Text(
                   greeting,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 28,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 22,
                     fontWeight: FontWeight.w800,
-                    letterSpacing: -0.6,
-                    height: 1.1,
+                    letterSpacing: -0.5,
+                    color: context.fomraTextPrimary,
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 2),
                 Text(
-                  'Land acquisition workspace for Fomra Housing',
+                  _formattedDate(_now),
                   style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.82),
-                    fontSize: 14,
-                    height: 1.45,
-                  ),
+                      fontSize: 13, color: context.fomraTextSecondary),
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 10),
           GestureDetector(
-            onTap: onProfileTap,
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Container(
-                  width: 54,
-                  height: 54,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.white.withValues(alpha: 0.18),
-                    border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.35),
-                      width: 2,
-                    ),
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    initial,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w800,
-                      fontSize: 20,
-                    ),
-                  ),
+            onTap: widget.onProfileTap,
+            child: CircleAvatar(
+              radius: 22,
+              backgroundColor: AppColors.primary.withValues(alpha: 0.12),
+              child: Text(
+                initial,
+                style: const TextStyle(
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 16,
                 ),
-                if (unreadCount > 0)
-                  Positioned(
-                    right: -2,
-                    top: -2,
-                    child: Container(
-                      padding: const EdgeInsets.all(5),
-                      decoration: const BoxDecoration(
-                        color: AppColors.error,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Text(
-                        unreadCount > 9 ? '9+' : '$unreadCount',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 9,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
+              ),
             ),
           ),
         ],
       ),
     );
   }
+
+  String _greetingFor(DateTime dt) {
+    final hour = dt.hour;
+    if (hour < 12) return 'Good morning';
+    if (hour < 17) return 'Good afternoon';
+    return 'Good evening';
+  }
+
+  IconData _greetIconFor(DateTime dt) {
+    final hour = dt.hour;
+    if (hour < 12) return Icons.wb_sunny_outlined;
+    if (hour < 17) return Icons.wb_cloudy_outlined;
+    return Icons.nights_stay_outlined;
+  }
+
+  String _formattedDate(DateTime now) {
+    const months = ['Jan','Feb','Mar','Apr','May','Jun',
+                    'Jul','Aug','Sep','Oct','Nov','Dec'];
+    const days = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+    return '${days[now.weekday - 1]}, ${now.day} ${months[now.month - 1]} ${now.year}';
+  }
 }
 
-class _OverviewMetrics extends StatelessWidget {
-  final int totalLeads;
-  final int activeLeads;
-  final int brokerLeads;
+// ── Section card (white card with a heading) ──────────────────────────────────
 
-  const _OverviewMetrics({
-    required this.totalLeads,
-    required this.activeLeads,
-    required this.brokerLeads,
-  });
+class _HomeSection extends StatelessWidget {
+  final String title;
+  final Widget child;
+  const _HomeSection({required this.title, required this.child});
 
   @override
   Widget build(BuildContext context) {
-    final metrics = [
-      MetricCard(
-        label: 'Total leads',
-        value: '$totalLeads',
-        icon: Icons.analytics_outlined,
-        accent: AppColors.primary,
-        trendLabel: '+12%',
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: context.fomraSurface,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: context.fomraBorder),
+        boxShadow: context.fomraCardShadow,
       ),
-      MetricCard(
-        label: 'Active pipeline',
-        value: '$activeLeads',
-        icon: Icons.trending_up_rounded,
-        accent: AppColors.success,
-        trendLabel: '+6%',
-      ),
-      MetricCard(
-        label: 'Broker sourced',
-        value: '$brokerLeads',
-        icon: Icons.handshake_outlined,
-        accent: AppColors.primaryLight,
-        trendLabel: '+3%',
-      ),
-    ];
-
-    if (FomraLayout.isTablet(context)) {
-      return Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          for (var i = 0; i < metrics.length; i++)
-            Expanded(
-              child: Padding(
-                padding: EdgeInsets.only(right: i < metrics.length - 1 ? 12 : 0),
-                child: metrics[i],
-              ),
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.2,
+              color: context.fomraTextPrimary,
             ),
+          ),
+          const SizedBox(height: 14),
+          child,
         ],
-      );
-    }
-
-    return SizedBox(
-      height: 168,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: metrics.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 12),
-        itemBuilder: (_, i) => SizedBox(width: 220, child: metrics[i]),
       ),
     );
   }
 }
+
+// ── KPI Chip ─────────────────────────────────────────────────────────────────
 
 // ── Performance ───────────────────────────────────────────────────────────────
 
@@ -595,7 +559,7 @@ class _MyPerformanceContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const color = AppColors.primary;
+    const color = Color(0xFF0EA5E9);
     return Row(children: [
       Container(
         padding: const EdgeInsets.all(10),
@@ -635,7 +599,7 @@ class _PerformanceList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const color = AppColors.primary;
+    const color = Color(0xFF0EA5E9);
     final maxCount =
         entries.isEmpty ? 0 : entries.map((e) => e.count).reduce((a, b) => a > b ? a : b);
 
@@ -715,6 +679,76 @@ class _PerformanceList extends StatelessWidget {
           }),
     ]);
   }
+}
+
+class _KpiChip extends StatelessWidget {
+  final String label;
+  final int value;
+  final Color color;
+  final IconData icon;
+  final String trend;
+  const _KpiChip({
+    required this.label,
+    required this.value,
+    required this.color,
+    required this.icon,
+    required this.trend,
+  });
+
+  @override
+  Widget build(BuildContext context) => Expanded(
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: context.fomraSurface,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: color.withValues(alpha: 0.22)),
+            boxShadow: context.fomraCardShadow,
+          ),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              Container(
+                padding: const EdgeInsets.all(9),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(icon, color: color, size: 18),
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  trend,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    color: color,
+                  ),
+                ),
+              ),
+            ]),
+            const SizedBox(height: 14),
+            Text('$value',
+                style: TextStyle(
+                    fontSize: 36,
+                    fontWeight: FontWeight.w800,
+                    color: color,
+                    height: 1.0,
+                    letterSpacing: -1.0)),
+            const SizedBox(height: 4),
+            Text(label,
+                style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: context.fomraTextSecondary)),
+          ]),
+        ),
+      );
 }
 
 // ── Notifications Sheet ───────────────────────────────────────────────────────

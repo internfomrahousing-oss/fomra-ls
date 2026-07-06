@@ -3,14 +3,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/app_notification.dart';
 
 class NotificationsService {
-  static bool get _ready {
-    try {
-      return Supabase.instance.isInitialized;
-    } catch (_) {
-      return false;
-    }
-  }
-
   static SupabaseClient get _db => Supabase.instance.client;
 
   /// Newest notifications for an audience ('management' | 'employee').
@@ -18,7 +10,6 @@ class NotificationsService {
     String audience = 'management',
     int limit = 50,
   }) async {
-    if (!_ready) return [];
     final rows = await _db
         .from('notifications')
         .select()
@@ -39,7 +30,6 @@ class NotificationsService {
     String type = 'alert',
     String? leadId,
   }) async {
-    if (!_ready) return;
     await _db.from('notifications').insert({
       'audience': audience,
       'type': type,
@@ -50,12 +40,10 @@ class NotificationsService {
   }
 
   static Future<void> markRead(String id) async {
-    if (!_ready) return;
     await _db.from('notifications').update({'is_read': true}).eq('id', id);
   }
 
   static Future<void> markAllRead({String audience = 'management'}) async {
-    if (!_ready) return;
     await _db
         .from('notifications')
         .update({'is_read': true})
@@ -64,13 +52,11 @@ class NotificationsService {
   }
 
   /// Live channel that fires [onChange] on any insert/update/delete for the
-  /// audience. Returns null when Supabase is not ready. Call
-  /// [RealtimeChannel.unsubscribe] to stop listening.
-  static RealtimeChannel? subscribe({
+  /// audience. Call [RealtimeChannel.unsubscribe] to stop listening.
+  static RealtimeChannel subscribe({
     String audience = 'management',
     required void Function() onChange,
   }) {
-    if (!_ready) return null;
     return _db
         .channel('notifications:$audience')
         .onPostgresChanges(

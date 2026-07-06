@@ -14,16 +14,16 @@ class _MenuItem {
 
 const _baseMenuItems = [
   _MenuItem('Land Workspace', Icons.space_dashboard_outlined, '/land-lead',
-      AppColors.primary),
+      Color(0xFF5B7FFF)),
   _MenuItem('Market Intelligence', Icons.insights_outlined,
-      '/market-intelligence', AppColors.primaryLight),
+      '/market-intelligence', Color(0xFF22D3EE)),
 ];
 
 const _dashboardMenuItem = _MenuItem(
-    'Dashboard', Icons.dashboard_outlined, '/dashboard', AppColors.secondary);
+    'Dashboard', Icons.dashboard_outlined, '/dashboard', Color(0xFF818CF8));
 
 const _managementMenuItem = _MenuItem('Employee Management',
-    Icons.groups_outlined, '/employee-management', AppColors.primaryDark);
+    Icons.groups_outlined, '/employee-management', Color(0xFFA78BFA));
 
 class AppDrawer extends StatelessWidget {
   final String currentRoute;
@@ -80,9 +80,17 @@ class _DrawerHeader extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(20, 56, 20, 20),
         decoration: BoxDecoration(
           gradient: isDark
-              ? AppColors.heroGradientDark
-              : AppColors.primaryGradient,
-          color: null,
+              ? const LinearGradient(
+                  colors: [
+                    Color(0xFF152A52),
+                    Color(0xFF1E293B),
+                    Color(0xFF2A2258),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                )
+              : null,
+          color: isDark ? null : AppColors.primaryDark,
           border: isDark
               ? Border(bottom: BorderSide(color: context.fomraBorder))
               : null,
@@ -94,18 +102,22 @@ class _DrawerHeader extends StatelessWidget {
               width: 52,
               height: 52,
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Colors.white.withValues(alpha: isDark ? 0.22 : 0.28),
-                    AppColors.primaryLight.withValues(alpha: 0.35),
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
+                gradient: isDark
+                    ? LinearGradient(
+                        colors: [
+                          AppColors.primaryLight.withValues(alpha: 0.35),
+                          AppColors.secondary.withValues(alpha: 0.28),
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      )
+                    : null,
+                color: isDark ? null : AppColors.accent,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: isDark ? 0.35 : 0.4),
-                ),
+                border: isDark
+                    ? Border.all(
+                        color: AppColors.primaryLight.withValues(alpha: 0.4))
+                    : null,
                 boxShadow: isDark
                     ? [
                         BoxShadow(
@@ -117,7 +129,8 @@ class _DrawerHeader extends StatelessWidget {
                     : null,
               ),
               child: Icon(Icons.domain,
-                  color: Colors.white, size: 28),
+                  color: isDark ? AppColors.primaryLight : Colors.white,
+                  size: 28),
             ),
             const SizedBox(height: 12),
             Text(
@@ -222,11 +235,13 @@ class _DrawerFooter extends StatelessWidget {
         children: [
           CircleAvatar(
             radius: 18,
-            backgroundColor: AppColors.primary.withValues(alpha: isDark ? 0.22 : 0.18),
+            backgroundColor: isDark
+                ? AppColors.secondary.withValues(alpha: 0.28)
+                : AppColors.accent,
             child: Text(
               initial,
               style: TextStyle(
-                color: isDark ? AppColors.primaryLight : Colors.white,
+                color: isDark ? const Color(0xFFC4B5FD) : Colors.white,
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
               ),

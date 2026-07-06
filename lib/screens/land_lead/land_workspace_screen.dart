@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../theme/app_theme.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../widgets/app_drawer.dart';
 import '../../widgets/fomra_app_bar.dart';
@@ -72,7 +71,9 @@ class _LandWorkspaceScreenState extends State<LandWorkspaceScreen>
                 indicatorSize: TabBarIndicatorSize.tab,
                 indicator: BoxDecoration(
                   borderRadius: BorderRadius.circular(14),
-                  gradient: AppColors.primaryGradient,
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF3B82F6), Color(0xFF1D4ED8)],
+                  ),
                 ),
                 labelColor: Colors.white,
                 unselectedLabelColor: Colors.white70,
@@ -95,9 +96,14 @@ class _LandWorkspaceScreenState extends State<LandWorkspaceScreen>
       ),
       drawer: const AppDrawer(currentRoute: '/land-lead'),
       bottomNavigationBar: const FomraBottomNav(currentRoute: '/land-lead'),
-      body: _tab.index == 0
-          ? const LandLeadScreen(isTab: true)
-          : const TaskManagementScreen(isTab: true),
+      body: TabBarView(
+        controller: _tab,
+        physics: const NeverScrollableScrollPhysics(),
+        children: const [
+          LandLeadScreen(isTab: true),
+          TaskManagementScreen(isTab: true),
+        ],
+      ),
     );
   }
 }
