@@ -3,34 +3,121 @@ import 'package:flutter/material.dart';
 import '../models/land_lead.dart';
 import '../services/app_store.dart';
 import '../theme/app_theme.dart';
+import '../theme/fomra_layout.dart';
 import '../theme/fomra_theme_context.dart';
 import 'ui/app_components.dart';
 
-String portalDateLabel(DateTime date) {
-  const months = [
-    'Jan',
-    'Feb',
-    'Mar',
-    'Apr',
-    'May',
-    'Jun',
-    'Jul',
-    'Aug',
-    'Sep',
-    'Oct',
-    'Nov',
-    'Dec',
+/// Full date for the home hero — e.g. Monday, 6 July 2026.
+String portalHomeDateLabel(DateTime date) {
+  const weekdays = [
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday',
+    'Sunday',
   ];
-  const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-  return '${weekdays[date.weekday - 1]}, ${months[date.month - 1]} ${date.day}';
+  const months = [
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
+  ];
+  return '${weekdays[date.weekday - 1]}, ${date.day} ${months[date.month - 1]} ${date.year}';
 }
 
 bool portalIsSameDay(DateTime a, DateTime b) =>
     a.year == b.year && a.month == b.month && a.day == b.day;
 
+/// Display name for greeting — management portal uses "Management".
+String portalHomeDisplayName({
+  required String fullName,
+  required bool isManagement,
+}) {
+  if (isManagement) return 'Management';
+  final first = fullName.trim().split(RegExp(r'\s+')).firstWhere(
+        (s) => s.isNotEmpty,
+        orElse: () => '',
+      );
+  return first.isEmpty ? 'User' : first;
+}
+
+/// Time-of-day greeting per product brief.
+String portalTimeGreeting(DateTime now, String displayName) {
+  final hour = now.hour;
+  final salutation = switch (hour) {
+    >= 5 && < 12 => 'Happy Morning',
+    >= 12 && < 17 => 'Happy Afternoon',
+    _ => 'Happy Evening',
+  };
+  return '$salutation, $displayName!👋';
+}
+
+/// Staggered fade-in for home sections (150–250ms).
+class PortalFadeSection extends StatefulWidget {
+  final Widget child;
+  final int index;
+
+  const PortalFadeSection({
+    super.key,
+    required this.child,
+    this.index = 0,
+  });
+
+  @override
+  State<PortalFadeSection> createState() => _PortalFadeSectionState();
+}
+
+class _PortalFadeSectionState extends State<PortalFadeSection>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: AppMotion.slow,
+  );
+  late final Animation<double> _opacity =
+      CurvedAnimation(parent: _c, curve: AppMotion.curve);
+  late final Animation<Offset> _slide = Tween<Offset>(
+    begin: const Offset(0, 0.04),
+    end: Offset.zero,
+  ).animate(CurvedAnimation(parent: _c, curve: AppMotion.curve));
+
+  @override
+  void initState() {
+    super.initState();
+    Future<void>.delayed(Duration(milliseconds: 40 * widget.index), () {
+      if (mounted) _c.forward();
+    });
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _opacity,
+      child: SlideTransition(position: _slide, child: widget.child),
+    );
+  }
+}
+
 class PortalWelcomeHeader extends StatelessWidget {
-  final String userName;
+  final String greeting;
   final String dateLabel;
+  final String profileName;
+  final String profileRole;
   final int todayTasks;
   final int activeLeads;
   final int pendingActions;
@@ -38,8 +125,10 @@ class PortalWelcomeHeader extends StatelessWidget {
 
   const PortalWelcomeHeader({
     super.key,
-    required this.userName,
+    required this.greeting,
     required this.dateLabel,
+    required this.profileName,
+    required this.profileRole,
     required this.todayTasks,
     required this.activeLeads,
     required this.pendingActions,
@@ -48,110 +137,109 @@ class PortalWelcomeHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final firstName = userName.trim().split(RegExp(r'\s+')).firstWhere(
-          (s) => s.isNotEmpty,
-          orElse: () => '',
-        );
-    final greeting =
-        firstName.isEmpty ? 'Welcome back' : 'Welcome back, $firstName';
-    final initial =
-        firstName.isNotEmpty ? firstName[0].toUpperCase() : '?';
+    final initial = profileName.trim().isNotEmpty
+        ? profileName.trim()[0].toUpperCase()
+        : '?';
 
     return AppCard(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(AppSpacing.lg),
       radius: AppColors.radiusLg,
+      interactive: false,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      greeting,
-                      style:
-                          Theme.of(context).textTheme.headlineMedium?.copyWith(
-                                fontWeight: FontWeight.w800,
-                                color: context.fomraTextPrimary,
-                              ),
+                    AnimatedSwitcher(
+                      duration: AppMotion.slow,
+                      switchInCurve: AppMotion.curve,
+                      switchOutCurve: Curves.easeIn,
+                      transitionBuilder: (child, animation) => FadeTransition(
+                        opacity: animation,
+                        child: child,
+                      ),
+                      child: Text(
+                        greeting,
+                        key: ValueKey(greeting),
+                        style:
+                            Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                  fontWeight: FontWeight.w800,
+                                  color: context.fomraTextPrimary,
+                                  height: 1.2,
+                                ),
+                      ),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: AppSpacing.xxs),
                     Text(
-                      '$dateLabel · Your land acquisition command center.',
+                      dateLabel,
                       style: TextStyle(
                         fontSize: 13,
-                        height: 1.5,
+                        fontWeight: FontWeight.w500,
                         color: context.fomraTextSecondary,
                       ),
                     ),
                   ],
                 ),
               ),
-              if (onProfileTap != null)
-                GestureDetector(
-                  onTap: onProfileTap,
-                  child: Container(
-                    width: 52,
-                    height: 52,
-                    decoration: BoxDecoration(
-                      gradient: AppColors.primaryGradient,
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: AppColors.coloredShadow(AppColors.primary),
-                    ),
-                    alignment: Alignment.center,
-                    child: Text(
-                      initial,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 20,
-                      ),
-                    ),
-                  ),
-                )
-              else
-                Container(
-                  width: 52,
-                  height: 52,
-                  decoration: BoxDecoration(
-                    gradient: AppColors.primaryGradient,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: AppColors.coloredShadow(AppColors.primary),
-                  ),
-                  alignment: Alignment.center,
-                  child: const Icon(
-                    Icons.home_work_outlined,
-                    color: Colors.white,
-                  ),
-                ),
+              const SizedBox(width: AppSpacing.sm),
+              _PortalProfileChip(
+                initial: initial,
+                name: profileName,
+                role: profileRole,
+                onTap: onProfileTap,
+              ),
             ],
           ),
-          const SizedBox(height: 18),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: [
-              PortalSummaryBadge(
-                label: 'Today’s tasks',
-                value: '$todayTasks',
-                icon: Icons.today_outlined,
-                accent: AppColors.primary,
-              ),
-              PortalSummaryBadge(
-                label: 'Active leads',
-                value: '$activeLeads',
-                icon: Icons.trending_up_rounded,
-                accent: AppColors.success,
-              ),
-              PortalSummaryBadge(
-                label: 'Pending actions',
-                value: '$pendingActions',
-                icon: Icons.pending_actions_outlined,
-                accent: AppColors.warning,
-              ),
-            ],
+          const SizedBox(height: AppSpacing.md),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final stacked = constraints.maxWidth < 640;
+              final tiles = [
+                PortalSummaryTile(
+                  label: "Today's tasks",
+                  value: todayTasks,
+                  icon: Icons.today_outlined,
+                  accent: AppColors.primary,
+                ),
+                PortalSummaryTile(
+                  label: 'Active leads',
+                  value: activeLeads,
+                  icon: Icons.trending_up_rounded,
+                  accent: AppColors.success,
+                ),
+                PortalSummaryTile(
+                  label: 'Pending actions',
+                  value: pendingActions,
+                  icon: Icons.pending_actions_outlined,
+                  accent: AppColors.warning,
+                ),
+              ];
+              if (stacked) {
+                return Column(
+                  children: [
+                    for (var i = 0; i < tiles.length; i++) ...[
+                      tiles[i],
+                      if (i < tiles.length - 1)
+                        const SizedBox(height: AppSpacing.sm),
+                    ],
+                  ],
+                );
+              }
+              return Row(
+                children: [
+                  for (var i = 0; i < tiles.length; i++) ...[
+                    Expanded(child: tiles[i]),
+                    if (i < tiles.length - 1)
+                      const SizedBox(width: AppSpacing.sm),
+                  ],
+                ],
+              );
+            },
           ),
         ],
       ),
@@ -159,13 +247,103 @@ class PortalWelcomeHeader extends StatelessWidget {
   }
 }
 
-class PortalSummaryBadge extends StatelessWidget {
+class _PortalProfileChip extends StatelessWidget {
+  final String initial;
+  final String name;
+  final String role;
+  final VoidCallback? onTap;
+
+  const _PortalProfileChip({
+    required this.initial,
+    required this.name,
+    required this.role,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final chip = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                gradient: AppColors.primaryGradient,
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: AppColors.coloredShadow(AppColors.primary),
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                initial,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 17,
+                ),
+              ),
+            ),
+            Positioned(
+              right: -1,
+              bottom: -1,
+              child: Container(
+                width: 12,
+                height: 12,
+                decoration: BoxDecoration(
+                  color: AppColors.success,
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: context.fomraSurface,
+                    width: 2,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              name,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: context.fomraTextPrimary,
+              ),
+            ),
+            Text(
+              role,
+              style: TextStyle(
+                fontSize: 11,
+                color: context.fomraTextSecondary,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+
+    if (onTap == null) return chip;
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(onTap: onTap, child: chip),
+    );
+  }
+}
+
+class PortalSummaryTile extends StatefulWidget {
   final String label;
-  final String value;
+  final int value;
   final IconData icon;
   final Color accent;
 
-  const PortalSummaryBadge({
+  const PortalSummaryTile({
     super.key,
     required this.label,
     required this.value,
@@ -174,50 +352,80 @@ class PortalSummaryBadge extends StatelessWidget {
   });
 
   @override
+  State<PortalSummaryTile> createState() => _PortalSummaryTileState();
+}
+
+class _PortalSummaryTileState extends State<PortalSummaryTile> {
+  bool _hovered = false;
+
+  @override
   Widget build(BuildContext context) {
-    return Container(
-      constraints: const BoxConstraints(minWidth: 180),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: accent.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: accent.withValues(alpha: 0.16)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.8),
-              borderRadius: BorderRadius.circular(12),
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: AnimatedContainer(
+        duration: AppMotion.normal,
+        curve: AppMotion.curve,
+        transform: _hovered
+            ? Matrix4.translationValues(0, -2, 0)
+            : Matrix4.identity(),
+        decoration: BoxDecoration(
+          color: widget.accent.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(AppColors.radiusSm),
+          border: Border.all(
+            color: widget.accent.withValues(alpha: _hovered ? 0.28 : 0.14),
+          ),
+          boxShadow: _hovered ? context.fomraCardShadow : null,
+        ),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.sm,
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: context.fomraSurface.withValues(alpha: 0.9),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              alignment: Alignment.center,
+              child: Icon(
+                widget.icon,
+                color: widget.accent,
+                size: AppIconSize.small,
+              ),
             ),
-            alignment: Alignment.center,
-            child: Icon(icon, color: accent, size: 18),
-          ),
-          const SizedBox(width: 10),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                value,
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  color: context.fomraTextPrimary,
-                ),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  AnimatedCounter(
+                    value: widget.value,
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                      color: context.fomraTextPrimary,
+                      height: 1.1,
+                    ),
+                  ),
+                  Text(
+                    widget.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: context.fomraTextSecondary,
+                    ),
+                  ),
+                ],
               ),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: context.fomraTextSecondary,
-                ),
-              ),
-            ],
-          ),
-        ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -247,16 +455,31 @@ class PortalQuickActionsGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
-    final columns = width >= 1100 ? 5 : width >= 860 ? 3 : 2;
+    if (width < 640) {
+      return SizedBox(
+        height: 132,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          itemCount: actions.length,
+          separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.sm),
+          itemBuilder: (_, i) => SizedBox(
+            width: 156,
+            child: _QuickActionCard(data: actions[i]),
+          ),
+        ),
+      );
+    }
+
+    final columns = width >= 1200 ? 5 : width >= 900 ? 3 : 2;
     return GridView.builder(
       itemCount: actions.length,
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: columns,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-        childAspectRatio: width >= 860 ? 1.65 : 1.35,
+        crossAxisSpacing: AppSpacing.sm,
+        mainAxisSpacing: AppSpacing.sm,
+        mainAxisExtent: 124,
       ),
       itemBuilder: (_, i) => _QuickActionCard(data: actions[i]),
     );
@@ -272,35 +495,44 @@ class _QuickActionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return AppCard(
       onTap: data.onTap,
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(AppSpacing.md),
       radius: AppColors.radiusMd,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            width: 44,
-            height: 44,
+            width: 42,
+            height: 42,
             decoration: BoxDecoration(
               color: data.accent.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(14),
             ),
             alignment: Alignment.center,
-            child: Icon(data.icon, color: data.accent, size: 22),
+            child: Icon(
+              data.icon,
+              color: data.accent,
+              size: AppIconSize.secondary,
+            ),
           ),
           const Spacer(),
           Text(
             data.label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              fontSize: 15,
+              fontSize: 14,
               fontWeight: FontWeight.w700,
               color: context.fomraTextPrimary,
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 2),
           Text(
             data.subtitle,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              fontSize: 12,
+              fontSize: 11,
+              height: 1.3,
               color: context.fomraTextSecondary,
             ),
           ),
@@ -393,13 +625,19 @@ List<PortalTeamPerf> buildPortalTeamPerformance(List<LandLead> leads) {
   return rows;
 }
 
-class PortalPerformanceRow extends StatelessWidget {
+class PortalPerformanceRow extends StatefulWidget {
   final PortalTeamPerf data;
 
   const PortalPerformanceRow({super.key, required this.data});
 
   @override
+  State<PortalPerformanceRow> createState() => _PortalPerformanceRowState();
+}
+
+class _PortalPerformanceRowState extends State<PortalPerformanceRow> {
+  @override
   Widget build(BuildContext context) {
+    final data = widget.data;
     final accent = data.rank == 1
         ? AppColors.warning
         : data.rank == 2
@@ -415,7 +653,7 @@ class PortalPerformanceRow extends StatelessWidget {
             .join();
 
     return AppCard(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(AppSpacing.md),
       radius: AppColors.radiusMd,
       interactive: false,
       child: Row(
@@ -434,7 +672,7 @@ class PortalPerformanceRow extends StatelessWidget {
               style: TextStyle(fontWeight: FontWeight.w800, color: accent),
             ),
           ),
-          const SizedBox(width: 14),
+          const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -471,35 +709,40 @@ class PortalPerformanceRow extends StatelessWidget {
                     ),
                   ),
                 ],
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(999),
-                        child: LinearProgressIndicator(
-                          value: data.percent,
-                          minHeight: 10,
-                          backgroundColor: accent.withValues(alpha: 0.12),
-                          valueColor: AlwaysStoppedAnimation<Color>(accent),
+                const SizedBox(height: AppSpacing.sm),
+                TweenAnimationBuilder<double>(
+                  tween: Tween(begin: 0, end: data.percent),
+                  duration: AppMotion.slow,
+                  curve: AppMotion.curve,
+                  builder: (_, value, __) => Row(
+                    children: [
+                      Expanded(
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(999),
+                          child: LinearProgressIndicator(
+                            value: value,
+                            minHeight: 10,
+                            backgroundColor: accent.withValues(alpha: 0.12),
+                            valueColor: AlwaysStoppedAnimation<Color>(accent),
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 10),
-                    Text(
-                      '${(data.percent * 100).round()}%',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: context.fomraTextPrimary,
+                      const SizedBox(width: AppSpacing.sm),
+                      Text(
+                        '${(value * 100).round()}%',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: context.fomraTextPrimary,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: AppSpacing.sm),
                 Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
+                  spacing: AppSpacing.xs,
+                  runSpacing: AppSpacing.xs,
                   children: [
                     StatusChip(label: data.statusLabel, tone: data.tone),
                     _TinyStat(label: 'Lead count', value: '${data.total}'),
@@ -543,14 +786,14 @@ class _TinyStat extends StatelessWidget {
 
 class PortalSectionCard extends StatelessWidget {
   final String title;
-  final String subtitle;
+  final String? subtitle;
   final IconData icon;
   final Widget child;
 
   const PortalSectionCard({
     super.key,
     required this.title,
-    required this.subtitle,
+    this.subtitle,
     required this.icon,
     required this.child,
   });
@@ -558,7 +801,7 @@ class PortalSectionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AppCard(
-      padding: const EdgeInsets.all(22),
+      padding: const EdgeInsets.all(AppSpacing.lg),
       radius: AppColors.radiusLg,
       interactive: false,
       child: Column(
@@ -568,7 +811,7 @@ class PortalSectionCard extends StatelessWidget {
             title: title,
             subtitle: subtitle,
             icon: icon,
-            padding: const EdgeInsets.only(bottom: 16),
+            padding: const EdgeInsets.only(bottom: AppSpacing.md),
           ),
           child,
         ],
@@ -577,62 +820,38 @@ class PortalSectionCard extends StatelessWidget {
   }
 }
 
-class PortalFunnelRow extends StatelessWidget {
-  final String label;
-  final int value;
-  final int maxValue;
-  final Color color;
+/// Wider home content — ~94% of viewport on desktop.
+Widget portalHomeWidthConstraint(BuildContext context, Widget child) {
+  return LayoutBuilder(
+    builder: (context, constraints) {
+      final isWide = FomraLayout.isDesktop(context);
+      final maxW = isWide ? constraints.maxWidth * 0.94 : constraints.maxWidth;
+      return Center(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: maxW),
+          child: child,
+        ),
+      );
+    },
+  );
+}
 
-  const PortalFunnelRow({
-    super.key,
-    required this.label,
-    required this.value,
-    required this.maxValue,
-    required this.color,
-  });
+class PortalEmptyHint extends StatelessWidget {
+  final String hint;
+
+  const PortalEmptyHint({super.key, required this.hint});
 
   @override
   Widget build(BuildContext context) {
-    final factor =
-        maxValue <= 0 ? 0.0 : (value / maxValue).toDouble().clamp(0.0, 1.0);
     return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: context.fomraTextPrimary,
-                  ),
-                ),
-              ),
-              Text(
-                '$value',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w800,
-                  color: context.fomraTextPrimary,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(999),
-            child: LinearProgressIndicator(
-              value: factor,
-              minHeight: 10,
-              backgroundColor: color.withValues(alpha: 0.12),
-              color: color,
-            ),
-          ),
-        ],
+      padding: const EdgeInsets.only(top: AppSpacing.sm),
+      child: Text(
+        hint,
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          fontSize: 12,
+          color: context.fomraTextTertiary,
+        ),
       ),
     );
   }

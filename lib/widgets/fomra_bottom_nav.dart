@@ -67,71 +67,91 @@ class FomraBottomNav extends StatelessWidget {
     final inactive = context.fomraTextTertiary;
     return SafeArea(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+        padding: const EdgeInsets.fromLTRB(14, 6, 14, 10),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(AppColors.radiusXl),
           child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+            filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
             child: Container(
               decoration: BoxDecoration(
-                color: surface.withValues(alpha: context.isDarkMode ? 0.78 : 0.9),
+                color: surface.withValues(alpha: context.isDarkMode ? 0.82 : 0.92),
                 borderRadius: BorderRadius.circular(AppColors.radiusXl),
-                border: Border.all(color: border.withValues(alpha: 0.8)),
+                border: Border.all(color: border.withValues(alpha: 0.75)),
                 boxShadow: [
                   BoxShadow(
-                    color: context.isDarkMode
-                        ? const Color(0x40000000)
-                        : const Color(0x14000000),
-                    blurRadius: 20,
+                    color: AppColors.primary.withValues(alpha: 0.08),
+                    blurRadius: 24,
                     offset: const Offset(0, 8),
+                  ),
+                  BoxShadow(
+                    color: context.isDarkMode
+                        ? const Color(0x35000000)
+                        : const Color(0x10000000),
+                    blurRadius: 16,
+                    offset: const Offset(0, 4),
                   ),
                 ],
               ),
-              padding: const EdgeInsets.all(5),
+              padding: const EdgeInsets.all(4),
               child: Row(
                 children: items.map((item) {
                   final isActive = currentRoute == item.route ||
                       (item.route == '/land-lead' &&
                           currentRoute == '/task-management');
                   return Expanded(
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: () => _onTap(context, item),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 250),
-                        curve: Curves.easeOutCubic,
-                        padding: const EdgeInsets.symmetric(vertical: 9),
-                        decoration: BoxDecoration(
-                          gradient: isActive ? AppColors.primaryGradient : null,
-                          borderRadius: BorderRadius.circular(AppColors.radiusLg),
-                        ),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            AnimatedSwitcher(
-                              duration: const Duration(milliseconds: 220),
-                              transitionBuilder: (child, animation) =>
-                                  ScaleTransition(scale: animation, child: child),
-                              child: Icon(
-                                isActive ? item.activeIcon : item.icon,
-                                key: ValueKey('${item.route}-$isActive'),
-                                color: isActive ? Colors.white : inactive,
-                                size: 20,
+                    child: MouseRegion(
+                      cursor: SystemMouseCursors.click,
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () => _onTap(context, item),
+                        child: AnimatedContainer(
+                          duration: AppMotion.slow,
+                          curve: AppMotion.curve,
+                          padding: const EdgeInsets.symmetric(vertical: 7),
+                          decoration: BoxDecoration(
+                            gradient: isActive ? AppColors.primaryGradient : null,
+                            borderRadius:
+                                BorderRadius.circular(AppColors.radiusLg),
+                            boxShadow: isActive
+                                ? AppColors.coloredShadow(AppColors.primary)
+                                : null,
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              AnimatedSwitcher(
+                                duration: AppMotion.slow,
+                                switchInCurve: AppMotion.curve,
+                                transitionBuilder: (child, animation) =>
+                                    ScaleTransition(
+                                  scale: animation,
+                                  child: FadeTransition(
+                                    opacity: animation,
+                                    child: child,
+                                  ),
+                                ),
+                                child: Icon(
+                                  isActive ? item.activeIcon : item.icon,
+                                  key: ValueKey('${item.route}-$isActive'),
+                                  color: isActive ? Colors.white : inactive,
+                                  size: 19,
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 3),
-                            Text(
-                              item.label,
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: isActive
-                                    ? FontWeight.w700
-                                    : FontWeight.w500,
-                                color: isActive ? Colors.white : inactive,
-                                letterSpacing: 0.1,
+                              const SizedBox(height: 2),
+                              AnimatedDefaultTextStyle(
+                                duration: AppMotion.normal,
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: isActive
+                                      ? FontWeight.w700
+                                      : FontWeight.w500,
+                                  color: isActive ? Colors.white : inactive,
+                                  letterSpacing: 0.1,
+                                ),
+                                child: Text(item.label),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
                     ),

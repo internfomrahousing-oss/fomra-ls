@@ -26,9 +26,10 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   List<AppNotification> _notifications = [];
   RealtimeChannel? _notifChannel;
+  DateTime _clock = DateTime.now();
 
   String get _notifAudience =>
       AuthService.instance.isManagement ? 'management' : 'employee';
@@ -49,6 +50,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     AppStore.instance.addListener(_onStoreUpdate);
     _loadNotifications();
     _loadPerformanceData();
@@ -87,12 +89,23 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     AppStore.instance.removeListener(_onStoreUpdate);
     _notifChannel?.unsubscribe();
     super.dispose();
   }
 
   void _onStoreUpdate() => setState(() {});
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      setState(() => _clock = DateTime.now());
+    }
+  }
+
+  String get _profileRole =>
+      _isManagement ? 'Administrator' : 'Team member';
 
   Future<void> _loadNotifications() async {
     try {
@@ -176,87 +189,131 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _showProfileMenu(String name, String email) {
+    final initial =
+        name.trim().isNotEmpty ? name.trim()[0].toUpperCase() : '?';
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       builder: (ctx) => Container(
         margin: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
-        decoration: BoxDecoration(
-          color: context.fomraSurface,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: context.fomraCardShadow,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            CircleAvatar(
-              radius: 28,
-              backgroundColor: AppColors.primary.withValues(alpha: 0.12),
-              child: const Icon(Icons.person_outline,
-                  size: 28, color: AppColors.primary),
-            ),
-            const SizedBox(height: 12),
-            Text(name,
+        child: AppCard(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
+          radius: AppColors.radiusLg,
+          interactive: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      gradient: AppColors.primaryGradient,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      initial,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 22,
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    right: -2,
+                    bottom: -2,
+                    child: Container(
+                      width: 14,
+                      height: 14,
+                      decoration: BoxDecoration(
+                        color: AppColors.success,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: ctx.fomraSurface, width: 2),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                name,
                 style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: context.fomraTextPrimary)),
-            if (email.isNotEmpty) ...[
-              const SizedBox(height: 4),
-              Text(email,
-                  style: TextStyle(
-                      fontSize: 13, color: context.fomraTextSecondary)),
-            ],
-            const SizedBox(height: 16),
-            const Divider(height: 1),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(14),
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: ctx.fomraTextPrimary,
                 ),
-                child: const Icon(Icons.lock_outline,
-                    size: 20, color: AppColors.primary),
               ),
-              title: const Text('Change Password',
-                  style: TextStyle(fontWeight: FontWeight.w600)),
-              trailing: const Icon(Icons.chevron_right_rounded, size: 20),
-              onTap: () {
-                Navigator.pop(ctx);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (_) => const ChangePasswordScreen()),
-                );
-              },
-            ),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: AppColors.error.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(14),
+              Text(
+                _profileRole,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: ctx.fomraTextSecondary,
                 ),
-                child: const Icon(Icons.logout_rounded,
+              ),
+              if (email.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text(
+                  email,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: ctx.fomraTextSecondary,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 16),
+              const Divider(height: 1),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Icon(Icons.lock_outline,
+                      size: 20, color: AppColors.primary),
+                ),
+                title: const Text('Change Password',
+                    style: TextStyle(fontWeight: FontWeight.w600)),
+                trailing: const Icon(Icons.chevron_right_rounded, size: 20),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => const ChangePasswordScreen()),
+                  );
+                },
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppColors.error.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Icon(Icons.logout_rounded,
+                      size: 20, color: AppColors.error),
+                ),
+                title: const Text('Sign Out',
+                    style: TextStyle(
+                        fontWeight: FontWeight.w600, color: AppColors.error)),
+                trailing: const Icon(Icons.chevron_right_rounded,
                     size: 20, color: AppColors.error),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  AuthService.instance.logout();
+                  Navigator.pushNamedAndRemoveUntil(
+                      context, '/login', (_) => false);
+                },
               ),
-              title: const Text('Sign Out',
-                  style: TextStyle(
-                      fontWeight: FontWeight.w600, color: AppColors.error)),
-              trailing: const Icon(Icons.chevron_right_rounded,
-                  size: 20, color: AppColors.error),
-              onTap: () {
-                Navigator.pop(ctx);
-                AuthService.instance.logout();
-                Navigator.pushNamedAndRemoveUntil(
-                    context, '/login', (_) => false);
-              },
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -269,7 +326,12 @@ class _HomeScreenState extends State<HomeScreen> {
     final user = AuthService.instance.currentUser;
     final userName = user?.fullName ?? 'User';
     final userEmail = user?.email ?? '';
-    final now = DateTime.now();
+    final displayName = portalHomeDisplayName(
+      fullName: userName,
+      isManagement: _isManagement,
+    );
+    final greeting = portalTimeGreeting(_clock, displayName);
+    final dateLabel = portalHomeDateLabel(_clock);
     final leads = AppStore.instance.leads;
     final newLeads =
         leads.where((l) => l.status == LeadStatus.new_).length;
@@ -277,7 +339,7 @@ class _HomeScreenState extends State<HomeScreen> {
         leads.where((l) => l.status == LeadStatus.negotiation).length;
     final pendingActions = newLeads + negotiation;
     final addedToday =
-        leads.where((l) => portalIsSameDay(l.addedOn, now)).length;
+        leads.where((l) => portalIsSameDay(l.addedOn, _clock)).length;
     final teamRows = buildPortalTeamPerformance(leads);
 
     final quickActions = [
@@ -285,28 +347,28 @@ class _HomeScreenState extends State<HomeScreen> {
         label: 'Add Lead',
         subtitle: 'Capture new parcel',
         icon: Icons.add_location_alt_outlined,
-        accent: const Color(0xFF2563EB),
+        accent: AppColors.primary,
         onTap: () => _goTo('/land-lead'),
       ),
       PortalQuickAction(
         label: 'Create Task',
         subtitle: 'Assign the team',
         icon: Icons.playlist_add_check_circle_outlined,
-        accent: const Color(0xFF8B5CF6),
+        accent: AppColors.purple,
         onTap: () => _goTo('/task-management'),
       ),
       PortalQuickAction(
         label: 'View Dashboard',
         subtitle: 'KPIs and funnel',
         icon: Icons.assessment_outlined,
-        accent: const Color(0xFFF59E0B),
+        accent: AppColors.warning,
         onTap: () => _goTo('/dashboard'),
       ),
       PortalQuickAction(
         label: 'Search Property',
         subtitle: 'Open market intel',
         icon: Icons.travel_explore_outlined,
-        accent: const Color(0xFF10B981),
+        accent: AppColors.success,
         onTap: () => _goTo('/market-intelligence'),
       ),
       if (_isManagement)
@@ -314,7 +376,7 @@ class _HomeScreenState extends State<HomeScreen> {
           label: 'Add Employee',
           subtitle: 'Manage workforce',
           icon: Icons.person_add_alt_1_outlined,
-          accent: const Color(0xFF6366F1),
+          accent: AppColors.secondary,
           onTap: () => _goTo('/employee-management'),
         ),
     ];
@@ -329,16 +391,23 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             if (_unreadCount > 0)
               Positioned(
-                right: 8, top: 8,
+                right: 6,
+                top: 6,
                 child: Container(
-                  width: 14, height: 14,
+                  constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
                   decoration: const BoxDecoration(
-                      color: AppColors.accent, shape: BoxShape.circle),
-                  child: Center(
-                    child: Text('$_unreadCount',
-                        style: const TextStyle(
-                            color: Colors.white, fontSize: 8,
-                            fontWeight: FontWeight.bold)),
+                    color: AppColors.accent,
+                    shape: BoxShape.circle,
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    _unreadCount > 9 ? '9+' : '$_unreadCount',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                 ),
               ),
@@ -348,69 +417,87 @@ class _HomeScreenState extends State<HomeScreen> {
       drawer: const AppDrawer(currentRoute: '/home'),
       bottomNavigationBar: const FomraBottomNav(currentRoute: '/home'),
       backgroundColor: context.fomraPageBg,
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: FomraLayout.pagePadding(context),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 1180),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  PortalWelcomeHeader(
-                    userName: userName,
-                    dateLabel: portalDateLabel(now),
-                    todayTasks: addedToday,
-                    activeLeads: _activeLeads,
-                    pendingActions: pendingActions,
-                    onProfileTap: () =>
-                        _showProfileMenu(userName, userEmail),
-                  ),
-                  const SizedBox(height: 20),
-                  const SectionHeader(
-                    title: 'Quick actions',
-                    subtitle:
-                        'Shortcuts into lead capture, tasks, and analytics.',
-                    icon: Icons.flash_on_rounded,
-                  ),
-                  PortalQuickActionsGrid(actions: quickActions),
-                  const SizedBox(height: 20),
-                  PortalSectionCard(
-                    title: _isManagement
-                        ? 'Team performance'
-                        : 'My performance',
-                    subtitle: _isManagement
-                        ? 'Ranking, progress, and today’s activity by team member.'
-                        : 'Your lead contribution this period.',
-                    icon: Icons.groups_rounded,
-                    child: _isManagement
-                        ? (teamRows.isEmpty
-                            ? EmptyState(
-                                icon: Icons.groups_outlined,
-                                title: 'No leads yet',
-                                message:
-                                    'Create your first lead to start tracking team performance.',
-                                action: PrimaryButton(
-                                  label: 'Add Lead',
-                                  icon: Icons.add_location_alt_outlined,
-                                  onPressed: () => _goTo('/land-lead'),
-                                ),
-                              )
-                            : Column(
-                                children: [
-                                  for (final row in teamRows) ...[
-                                    PortalPerformanceRow(data: row),
-                                    if (row != teamRows.last)
-                                      const SizedBox(height: 12),
-                                  ],
-                                ],
-                              ))
-                        : _EmployeePerformanceCard(count: _myLeadCount),
-                  ),
-                  const SizedBox(height: 96),
-                ],
+      body: SingleChildScrollView(
+        padding: FomraLayout.pagePadding(context),
+        child: portalHomeWidthConstraint(
+          context,
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              PortalFadeSection(
+                index: 0,
+                child: PortalWelcomeHeader(
+                  greeting: greeting,
+                  dateLabel: dateLabel,
+                  profileName: _isManagement ? 'Management' : userName,
+                  profileRole: _profileRole,
+                  todayTasks: addedToday,
+                  activeLeads: _activeLeads,
+                  pendingActions: pendingActions,
+                  onProfileTap: () =>
+                      _showProfileMenu(userName, userEmail),
+                ),
               ),
-            ),
+              const SizedBox(height: AppSpacing.lg),
+              PortalFadeSection(
+                index: 1,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const SectionHeader(
+                      title: 'Quick actions',
+                      icon: Icons.flash_on_rounded,
+                    ),
+                    PortalQuickActionsGrid(actions: quickActions),
+                  ],
+                ),
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              PortalFadeSection(
+                index: 2,
+                child: PortalSectionCard(
+                  title: _isManagement
+                      ? 'Team performance'
+                      : 'My performance',
+                  subtitle: _isManagement
+                      ? 'Ranking and activity by team member'
+                      : 'Your lead contribution this period',
+                  icon: Icons.groups_rounded,
+                  child: _isManagement
+                      ? (teamRows.isEmpty
+                          ? Column(
+                              children: [
+                                EmptyState(
+                                  icon: Icons.groups_outlined,
+                                  title: 'No leads yet',
+                                  message:
+                                      'Create your first lead to start tracking team performance.',
+                                  action: PrimaryButton(
+                                    label: 'Add Lead',
+                                    icon: Icons.add_location_alt_outlined,
+                                    onPressed: () => _goTo('/land-lead'),
+                                  ),
+                                ),
+                                const PortalEmptyHint(
+                                  hint:
+                                      'Leads added by your team will appear here automatically.',
+                                ),
+                              ],
+                            )
+                          : Column(
+                              children: [
+                                for (final row in teamRows) ...[
+                                  PortalPerformanceRow(data: row),
+                                  if (row != teamRows.last)
+                                    const SizedBox(height: AppSpacing.sm),
+                                ],
+                              ],
+                            ))
+                      : _EmployeePerformanceCard(count: _myLeadCount),
+                ),
+              ),
+              const SizedBox(height: 88),
+            ],
           ),
         ),
       ),
@@ -499,8 +586,10 @@ class _NotificationsSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        color: context.fomraSurface,
+        borderRadius: const BorderRadius.vertical(
+          top: Radius.circular(AppColors.radiusLg),
+        ),
       ),
       child: DraggableScrollableSheet(
         initialChildSize: 0.5,
@@ -535,26 +624,11 @@ class _NotificationsSheet extends StatelessWidget {
           const Divider(height: 1),
           Expanded(
             child: notifications.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(18),
-                          decoration: BoxDecoration(
-                            color: context.fomraSurfaceVar,
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(Icons.notifications_none,
-                              size: 32, color: context.fomraTextSecondary),
-                        ),
-                        const SizedBox(height: 10),
-                        Text('No notifications yet',
-                            style: TextStyle(
-                                color: context.fomraTextSecondary,
-                                fontWeight: FontWeight.w500)),
-                      ],
-                    ),
+                ? EmptyState(
+                    icon: Icons.notifications_none_rounded,
+                    title: 'No notifications yet',
+                    message:
+                        'Updates about leads, tasks, and assignments will show up here.',
                   )
                 : ListView.separated(
                     controller: controller,
