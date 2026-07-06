@@ -206,24 +206,30 @@ class AuthService {
         );
       }
     }
-    if (!await _passwordMatches(normalizedEmail, password)) {
-      throw const ApiException(
-        statusCode: 401,
-        message: 'Invalid email or password.',
-      );
-    }
-
+    // Prefer a REAL Supabase Auth session — that's what makes locked-down
+    // (authenticated-only) RLS work. If Supabase accepts the credentials we're
+    // done; the password that logs you in is guaranteed to be the auth password.
     var supabaseOk = false;
     try {
       await _client.auth.signInWithPassword(
         email: normalizedEmail,
         password: password,
       );
-      supabaseOk = true;
+      supabaseOk = _client.auth.currentUser != null;
     } on AuthException {
       supabaseOk = false;
     } catch (_) {
       supabaseOk = false;
+    }
+
+    // Fallback for accounts not yet provisioned as real auth users: accept the
+    // legacy shared/custom password. (Once every account is provisioned and RLS
+    // is locked down, this path is no longer exercised.)
+    if (!supabaseOk && !await _passwordMatches(normalizedEmail, password)) {
+      throw const ApiException(
+        statusCode: 401,
+        message: 'Invalid email or password.',
+      );
     }
 
     _portal = portal;
