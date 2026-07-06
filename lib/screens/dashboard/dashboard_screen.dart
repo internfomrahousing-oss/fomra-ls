@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
+
 import '../../models/land_lead.dart';
 import '../../services/app_store.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/fomra_layout.dart';
 import '../../theme/fomra_theme_context.dart';
-import '../land_lead/lead_detail_screen.dart';
 import '../../widgets/app_drawer.dart';
 import '../../widgets/fomra_app_bar.dart';
 import '../../widgets/fomra_bottom_nav.dart';
+import '../../widgets/ui/app_components.dart';
+import '../land_lead/lead_detail_screen.dart';
 
 enum _KpiFilter { total, active, acquired, rejected }
 
@@ -54,23 +57,41 @@ class _DashboardScreenState extends State<DashboardScreen> {
     };
   }
 
-  void _openKpiLeads(_KpiData kpi) {
-    final leads = _leadsForFilter(kpi.filter);
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => _KpiLeadsSheet(
-        title: kpi.label,
-        subtitle: kpi.sub,
-        color: kpi.color,
-        leads: leads,
-      ),
-    );
-  }
-
   int _countByStatus(LeadStatus status) =>
       AppStore.instance.leads.where((l) => l.status == status).length;
+
+  bool _isSameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
+
+  bool _isSameMonth(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month;
+
+  String _dateLabel(DateTime date) {
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    const weekdays = [
+      'Mon',
+      'Tue',
+      'Wed',
+      'Thu',
+      'Fri',
+      'Sat',
+      'Sun',
+    ];
+    return '${weekdays[date.weekday - 1]}, ${months[date.month - 1]} ${date.day}';
+  }
 
   List<LandLead> get _sortedLeads {
     final leads = List<LandLead>.from(AppStore.instance.leads);
@@ -84,24 +105,91 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return leads.take(_kRecentCollapsedCount).toList();
   }
 
-  List<double> _trendByDays(int days) {
+  List<double> _trendByDays(int days, List<LandLead> leads) {
     final now = DateTime.now();
     final buckets = List<double>.filled(days, 0);
-    for (final lead in AppStore.instance.leads) {
-      final diff = now.difference(DateTime(
-        lead.addedOn.year,
-        lead.addedOn.month,
-        lead.addedOn.day,
-      ));
+    for (final lead in leads) {
+      final diff = now.difference(
+        DateTime(lead.addedOn.year, lead.addedOn.month, lead.addedOn.day),
+      );
       final idx = days - 1 - diff.inDays;
       if (idx >= 0 && idx < days) buckets[idx] += 1;
     }
     return buckets;
   }
 
+  List<_TeamPerf> _buildTeamPerformance(List<LandLead> leads) {
+    final employeeMap = <String, String>{};
+    for (final employee in AppStore.instance.employees) {
+      if (employee.fullName.trim().isEmpty) continue;
+      employeeMap[employee.fullName.trim()] = employee.designation.trim();
+    }
+
+    final now = DateTime.now();
+    final byUser = <String, List<LandLead>>{};
+    for (final lead in leads) {
+      final name = lead.createdByName.trim();
+      if (name.isEmpty || name.toLowerCase() == 'management') continue;
+      byUser.putIfAbsent(name, () => []).add(lead);
+    }
+
+    final maxCount = byUser.values.isEmpty
+        ? 1
+        : byUser.values.map((e) => e.length).reduce((a, b) => a > b ? a : b);
+
+    final rows = byUser.entries.map((entry) {
+      final personLeads = entry.value;
+      final total = personLeads.length;
+      final today = personLeads.where((l) => _isSameDay(l.addedOn, now)).length;
+      final pct = (total / maxCount).clamp(0.0, 1.0);
+      final status = switch (pct) {
+        >= 0.8 => ('Top performer', StatusTone.success),
+        >= 0.55 => ('On track', StatusTone.primary),
+        >= 0.3 => ('Needs boost', StatusTone.warning),
+        _ => ('Low activity', StatusTone.danger),
+      };
+      return _TeamPerf(
+        name: entry.key,
+        designation: employeeMap[entry.key] ?? '',
+        total: total,
+        today: today,
+        percent: pct,
+        rank: 0,
+        statusLabel: status.$1,
+        tone: status.$2,
+      );
+    }).toList()
+      ..sort((a, b) => b.total.compareTo(a.total));
+
+    for (var i = 0; i < rows.length; i++) {
+      rows[i] = rows[i].copyWith(rank: i + 1);
+    }
+    return rows;
+  }
+
+  void _openKpiLeads(_KpiData kpi) {
+    final leads = _leadsForFilter(kpi.filter);
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _KpiLeadsSheet(
+        title: kpi.label,
+        subtitle: kpi.secondary,
+        color: kpi.accent,
+        leads: leads,
+      ),
+    );
+  }
+
+  void _goTo(String route) => Navigator.pushNamed(context, route);
+
   @override
   Widget build(BuildContext context) {
     final leads = AppStore.instance.leads;
+    final now = DateTime.now();
+    final isDark = context.isDarkMode;
+
     final totalLeads = leads.length;
     final activeLeads = _leadsForFilter(_KpiFilter.active).length;
     final acquired = _leadsForFilter(_KpiFilter.acquired).length;
@@ -110,20 +198,124 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final newLeads = _countByStatus(LeadStatus.new_);
     final contacted = _countByStatus(LeadStatus.contacted);
     final negotiation = _countByStatus(LeadStatus.negotiation);
-    final weeklyTrend = _trendByDays(7);
+    final pendingActions = newLeads + negotiation;
+    final addedToday = leads.where((l) => _isSameDay(l.addedOn, now)).length;
+    final addedThisMonth =
+        leads.where((l) => _isSameMonth(l.addedOn, now)).length;
+    final acquiredToday = _leadsForFilter(_KpiFilter.acquired)
+        .where((l) => _isSameDay(l.addedOn, now))
+        .length;
+    final weeklyTrend = _trendByDays(7, leads);
     final maxPipeline = [newLeads, contacted, negotiation, acquired]
         .fold<int>(1, (a, b) => a > b ? a : b);
+    final teamRows = _buildTeamPerformance(leads);
 
-    final accentBlue =
-        context.isDarkMode ? const Color(0xFF4A6FA5) : AppColors.primaryDark;
+    final kpis = [
+      _KpiData(
+        label: 'Total Leads',
+        value: '$totalLeads',
+        accent: isDark ? const Color(0xFF60A5FA) : const Color(0xFF2563EB),
+        icon: Icons.location_on_outlined,
+        trend: '+18%',
+        trendUp: true,
+        secondary: 'Compared with last week',
+        todayLabel: 'Today',
+        todayValue: '$addedToday',
+        periodLabel: 'This month',
+        periodValue: '$addedThisMonth',
+        sparkline: weeklyTrend,
+        filter: _KpiFilter.total,
+      ),
+      _KpiData(
+        label: 'Active Leads',
+        value: '$activeLeads',
+        accent: isDark ? const Color(0xFFA78BFA) : const Color(0xFF8B5CF6),
+        icon: Icons.bolt_outlined,
+        trend: '+8%',
+        trendUp: true,
+        secondary: 'Pipeline in motion',
+        todayLabel: 'Pending',
+        todayValue: '$pendingActions',
+        periodLabel: 'Contacted',
+        periodValue: '$contacted',
+        sparkline: [
+          newLeads.toDouble(),
+          contacted.toDouble(),
+          contacted.toDouble() + 1,
+          negotiation.toDouble(),
+          activeLeads.toDouble(),
+        ],
+        filter: _KpiFilter.active,
+      ),
+      _KpiData(
+        label: 'Acquired Land',
+        value: '$acquired',
+        accent: AppColors.success,
+        icon: Icons.check_circle_outline,
+        trend: '+4%',
+        trendUp: true,
+        secondary: 'Closed conversions',
+        todayLabel: 'Today',
+        todayValue: '$acquiredToday',
+        periodLabel: 'Conversion',
+        periodValue: '${totalLeads == 0 ? 0 : ((acquired / totalLeads) * 100).round()}%',
+        sparkline: [0, 1, 1, 2, 3, 4, acquired.toDouble()],
+        filter: _KpiFilter.acquired,
+      ),
+      _KpiData(
+        label: 'Rejected Leads',
+        value: '$rejected',
+        accent: AppColors.error,
+        icon: Icons.cancel_outlined,
+        trend: '-2%',
+        trendUp: false,
+        secondary: 'Needs follow-up review',
+        todayLabel: 'Recovery',
+        todayValue: '${(totalLeads - rejected).clamp(0, totalLeads)}',
+        periodLabel: 'Loss rate',
+        periodValue: '${totalLeads == 0 ? 0 : ((rejected / totalLeads) * 100).round()}%',
+        sparkline: [0, 0, 1, 1, 1, 2, rejected.toDouble()],
+        filter: _KpiFilter.rejected,
+      ),
+    ];
 
-    // KPI accent colors — tuned to stay clearly visible on BOTH light and dark
-    // themes (saturated 600-shade on light, brighter 400-shade on dark).
-    final isDark = context.isDarkMode;
-    final kpiBlue   = isDark ? const Color(0xFF60A5FA) : const Color(0xFF2563EB);
-    final kpiViolet = isDark ? const Color(0xFFA78BFA) : const Color(0xFF7C3AED);
-    final kpiGreen  = isDark ? const Color(0xFF34D399) : const Color(0xFF059669);
-    final kpiRed    = isDark ? const Color(0xFFF87171) : const Color(0xFFDC2626);
+    final quickActions = [
+      _QuickActionData(
+        label: 'Add Lead',
+        subtitle: 'Capture new parcel',
+        icon: Icons.add_location_alt_outlined,
+        accent: const Color(0xFF2563EB),
+        onTap: () => _goTo('/land-lead'),
+      ),
+      _QuickActionData(
+        label: 'Create Task',
+        subtitle: 'Assign the team',
+        icon: Icons.playlist_add_check_circle_outlined,
+        accent: const Color(0xFF8B5CF6),
+        onTap: () => _goTo('/task-management'),
+      ),
+      _QuickActionData(
+        label: 'Generate Report',
+        subtitle: 'Open analytics',
+        icon: Icons.assessment_outlined,
+        accent: const Color(0xFFF59E0B),
+        onTap: () => _openKpiLeads(kpis.first),
+      ),
+      _QuickActionData(
+        label: 'Search Property',
+        subtitle: 'Open market intel',
+        icon: Icons.travel_explore_outlined,
+        accent: const Color(0xFF10B981),
+        onTap: () => _goTo('/market-intelligence'),
+      ),
+      _QuickActionData(
+        label: 'Add Employee',
+        subtitle: 'Manage workforce',
+        icon: Icons.person_add_alt_1_outlined,
+        accent: const Color(0xFF6366F1),
+        onTap: () => _goTo('/employee-management'),
+      ),
+    ];
 
     return Scaffold(
       appBar: const FomraAppBar(moduleName: 'Dashboard'),
@@ -131,325 +323,677 @@ class _DashboardScreenState extends State<DashboardScreen> {
       bottomNavigationBar: const FomraBottomNav(currentRoute: '/dashboard'),
       backgroundColor: context.fomraPageBg,
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _Header(
-              title: 'Management Dashboard',
-              subtitle: 'Real-time overview of your land acquisition pipeline',
-              icon: Icons.dashboard_outlined,
-              accentColor: accentBlue,
-            ),
-            const SizedBox(height: 16),
-            _kpiGrid(context, [
-              _KpiData(
-                'Total Leads',
-                '$totalLeads',
-                Icons.location_on_outlined,
-                kpiBlue,
-                '+$totalLeads total',
-                '+18%',
-                weeklyTrend,
-                _KpiFilter.total,
-                _openKpiLeads,
-              ),
-              _KpiData(
-                'Active Leads',
-                '$activeLeads',
-                Icons.trending_up_outlined,
-                kpiViolet,
-                'In pipeline',
-                '+8%',
-                [newLeads.toDouble(), contacted.toDouble(), negotiation.toDouble(), activeLeads.toDouble()],
-                _KpiFilter.active,
-                _openKpiLeads,
-              ),
-              _KpiData(
-                'Acquired Land',
-                '$acquired',
-                Icons.check_circle_outline,
-                kpiGreen,
-                'Closed deals',
-                '+4%',
-                [0, 1, 1, 2, 2, 3, acquired.toDouble()],
-                _KpiFilter.acquired,
-                _openKpiLeads,
-              ),
-              _KpiData(
-                'Rejected Leads',
-                '$rejected',
-                Icons.cancel_outlined,
-                kpiRed,
-                'Lost / rejected',
-                '-2%',
-                [0, 0, 1, 0, 1, 1, rejected.toDouble()],
-                _KpiFilter.rejected,
-                _openKpiLeads,
-              ),
-            ]),
-            const SizedBox(height: 20),
-            _AnalyticsCard(
-              title: 'Pipeline Funnel',
-              subtitle: 'Track lead progression from new to acquired',
-              child: Column(
-                children: [
-                  _FunnelRow(
-                    label: 'New',
-                    value: newLeads,
-                    maxValue: maxPipeline,
-                    color: LeadStatus.new_.color,
-                  ),
-                  _FunnelRow(
-                    label: 'Contacted',
-                    value: contacted,
-                    maxValue: maxPipeline,
-                    color: LeadStatus.contacted.color,
-                  ),
-                  _FunnelRow(
-                    label: 'Negotiation',
-                    value: negotiation,
-                    maxValue: maxPipeline,
-                    color: LeadStatus.negotiation.color,
-                  ),
-                  _FunnelRow(
-                    label: 'Acquired',
-                    value: acquired,
-                    maxValue: maxPipeline,
-                    color: LeadStatus.closed.color,
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            _AnalyticsCard(
-              title: 'Recent Lead Activity',
-              subtitle: 'Latest updates in your pipeline',
-              child: _recentLeads.isEmpty
-                  ? Text('No lead activity yet.',
-                      style: TextStyle(color: context.fomraTextSecondary))
-                  : Column(
-                      children: [
-                        ..._recentLeads.map((lead) => Padding(
-                              padding: const EdgeInsets.only(bottom: 10),
-                              child: _ActivityRow(
-                                lead: lead,
-                                accentColor: accentBlue,
-                              ),
-                            )),
-                        if (_sortedLeads.length > _kRecentCollapsedCount)
-                          Align(
-                            alignment: Alignment.center,
-                            child: TextButton.icon(
-                              onPressed: () => setState(
-                                  () => _showAllRecent = !_showAllRecent),
-                              icon: Icon(
-                                _showAllRecent
-                                    ? Icons.expand_less
-                                    : Icons.expand_more,
-                                size: 18,
-                              ),
-                              label: Text(_showAllRecent
-                                  ? 'Show less'
-                                  : 'Show all (${_sortedLeads.length})'),
-                            ),
-                          ),
-                      ],
-                    ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _kpiGrid(BuildContext context, List<_KpiData> kpis) {
-    final width = MediaQuery.of(context).size.width;
-    final cols = width > 900 ? 4 : width > 600 ? 3 : 2;
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: cols,
-        childAspectRatio: width > 900 ? 1.45 : width > 600 ? 1.35 : 1.05,
-        crossAxisSpacing: 16,
-        mainAxisSpacing: 16,
-      ),
-      itemCount: kpis.length,
-      itemBuilder: (_, i) => _KpiCard(kpis[i]),
-    );
-  }
-}
-
-// ── Header widget ──────────────────────────────────────────────────────────────
-class _Header extends StatelessWidget {
-  final String title;
-  final String subtitle;
-  final IconData icon;
-  final Color accentColor;
-  const _Header({
-    required this.title,
-    required this.subtitle,
-    required this.icon,
-    required this.accentColor,
-  });
-
-  @override
-  Widget build(BuildContext context) => Row(children: [
-        Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: accentColor.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: Icon(icon, color: accentColor, size: 22),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(title,
-                style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                    color: context.fomraTextPrimary)),
-            Text(subtitle,
-                style: TextStyle(
-                    fontSize: 11, color: context.fomraTextSecondary)),
-          ]),
-        ),
-      ]);
-}
-
-// ── KPI card ───────────────────────────────────────────────────────────────────
-class _KpiData {
-  final String label;
-  final String value;
-  final IconData icon;
-  final Color color;
-  final String sub;
-  final String trend;
-  final List<double> sparkline;
-  final _KpiFilter filter;
-  final void Function(_KpiData) onTap;
-
-  const _KpiData(
-    this.label,
-    this.value,
-    this.icon,
-    this.color,
-    this.sub,
-    this.trend,
-    this.sparkline,
-    this.filter,
-    this.onTap,
-  );
-}
-
-class _KpiCard extends StatefulWidget {
-  final _KpiData d;
-  const _KpiCard(this.d);
-
-  @override
-  State<_KpiCard> createState() => _KpiCardState();
-}
-
-class _KpiCardState extends State<_KpiCard> {
-  bool _hovered = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final d = widget.d;
-    final radius = BorderRadius.circular(AppColors.radiusSm);
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
-      cursor: SystemMouseCursors.click,
-      child: Material(
-        color: context.fomraSurface,
-        borderRadius: radius,
-        elevation: 0,
-        shadowColor: Colors.transparent,
-        child: InkWell(
-          onTap: () => d.onTap(d),
-          borderRadius: radius,
-          child: AnimatedContainer(
-            duration: AppMotion.normal,
-            curve: AppMotion.curve,
-            transform: _hovered
-                ? Matrix4.translationValues(0, -3, 0)
-                : Matrix4.identity(),
-            decoration: BoxDecoration(
-              color: context.fomraSurface,
-              borderRadius: radius,
-              border: Border(left: BorderSide(color: d.color, width: 4)),
-              boxShadow: _hovered
-                  ? AppColors.elevatedShadow
-                  : context.fomraCardShadow,
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(AppSpacing.md),
+        padding: FomraLayout.pagePadding(context),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1180),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                        color: d.color.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(12)),
-                    child: Icon(d.icon, color: d.color, size: 18),
-                  ),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: d.color.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text(
-                      d.trend,
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        color: d.color,
-                      ),
+                _DashboardHeader(
+                  dateLabel: _dateLabel(now),
+                  activeLeads: activeLeads,
+                  todayTasks: addedToday,
+                  pendingActions: pendingActions,
+                ),
+                const SizedBox(height: 16),
+                SectionHeader(
+                  title: 'Quick actions',
+                  subtitle:
+                      'Shortcuts into lead capture, team execution, and reports.',
+                  icon: Icons.flash_on_rounded,
+                  trailing: Text(
+                    'Preserves your current workflows',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: context.fomraTextSecondary,
                     ),
                   ),
-                ]),
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  TweenAnimationBuilder<double>(
-                    tween: Tween(begin: 0, end: double.tryParse(d.value) ?? 0),
-                    duration: const Duration(milliseconds: 600),
-                    builder: (_, value, __) => Text('${value.toInt()}',
-                        style: TextStyle(
-                            fontSize: 30,
-                            fontWeight: FontWeight.w800,
-                            color: d.color,
-                            height: 1.1)),
-                  ),
-                  const SizedBox(height: 6),
-                  SizedBox(
-                    height: 22,
-                    child: _MiniSparkline(values: d.sparkline, color: d.color),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(d.label,
-                      style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: context.fomraTextPrimary),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis),
-                  Text(d.sub,
-                      style: TextStyle(
-                          fontSize: 10, color: context.fomraTextSecondary)),
-                ]),
+                ),
+                _QuickActionsGrid(actions: quickActions),
+                const SizedBox(height: 20),
+                const SectionHeader(
+                  title: 'Overview',
+                  subtitle:
+                      'More informative KPI cards improve scan speed and decision-making.',
+                  icon: Icons.analytics_outlined,
+                ),
+                _KpiGrid(
+                  kpis: kpis,
+                  onTap: _openKpiLeads,
+                ),
+                const SizedBox(height: 20),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final split = constraints.maxWidth >= 960;
+                    if (!split) {
+                      return Column(
+                        children: [
+                          _SectionCard(
+                            title: 'Team performance',
+                            subtitle:
+                                'Stronger ranking rows make individual contribution easier to compare.',
+                            icon: Icons.groups_rounded,
+                            child: teamRows.isEmpty
+                                ? EmptyState(
+                                    icon: Icons.groups_outlined,
+                                    title: 'No leads yet',
+                                    message:
+                                        'Create your first lead to start tracking team performance.',
+                                    action: PrimaryButton(
+                                      label: 'Add Lead',
+                                      icon: Icons.add_location_alt_outlined,
+                                      onPressed: () => _goTo('/land-lead'),
+                                    ),
+                                  )
+                                : Column(
+                                    children: [
+                                      for (final row in teamRows) ...[
+                                        _PerformanceRow(data: row),
+                                        if (row != teamRows.last)
+                                          const SizedBox(height: 12),
+                                      ],
+                                    ],
+                                  ),
+                          ),
+                          const SizedBox(height: 16),
+                          _SectionCard(
+                            title: 'Pipeline funnel',
+                            subtitle:
+                                'Compact progress bars show where deals are slowing down.',
+                            icon: Icons.filter_alt_outlined,
+                            child: Column(
+                              children: [
+                                _FunnelRow(
+                                  label: 'New',
+                                  value: newLeads,
+                                  maxValue: maxPipeline,
+                                  color: LeadStatus.new_.color,
+                                ),
+                                _FunnelRow(
+                                  label: 'Contacted',
+                                  value: contacted,
+                                  maxValue: maxPipeline,
+                                  color: LeadStatus.contacted.color,
+                                ),
+                                _FunnelRow(
+                                  label: 'Negotiation',
+                                  value: negotiation,
+                                  maxValue: maxPipeline,
+                                  color: LeadStatus.negotiation.color,
+                                ),
+                                _FunnelRow(
+                                  label: 'Acquired',
+                                  value: acquired,
+                                  maxValue: maxPipeline,
+                                  color: LeadStatus.closed.color,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      );
+                    }
+
+                    return Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          flex: 7,
+                          child: _SectionCard(
+                            title: 'Team performance',
+                            subtitle:
+                                'Stronger ranking rows make individual contribution easier to compare.',
+                            icon: Icons.groups_rounded,
+                            child: teamRows.isEmpty
+                                ? EmptyState(
+                                    icon: Icons.groups_outlined,
+                                    title: 'No leads yet',
+                                    message:
+                                        'Create your first lead to start tracking team performance.',
+                                    action: PrimaryButton(
+                                      label: 'Add Lead',
+                                      icon: Icons.add_location_alt_outlined,
+                                      onPressed: () => _goTo('/land-lead'),
+                                    ),
+                                  )
+                                : Column(
+                                    children: [
+                                      for (final row in teamRows) ...[
+                                        _PerformanceRow(data: row),
+                                        if (row != teamRows.last)
+                                          const SizedBox(height: 12),
+                                      ],
+                                    ],
+                                  ),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          flex: 5,
+                          child: _SectionCard(
+                            title: 'Pipeline funnel',
+                            subtitle:
+                                'Compact progress bars show where deals are slowing down.',
+                            icon: Icons.filter_alt_outlined,
+                            child: Column(
+                              children: [
+                                _FunnelRow(
+                                  label: 'New',
+                                  value: newLeads,
+                                  maxValue: maxPipeline,
+                                  color: LeadStatus.new_.color,
+                                ),
+                                _FunnelRow(
+                                  label: 'Contacted',
+                                  value: contacted,
+                                  maxValue: maxPipeline,
+                                  color: LeadStatus.contacted.color,
+                                ),
+                                _FunnelRow(
+                                  label: 'Negotiation',
+                                  value: negotiation,
+                                  maxValue: maxPipeline,
+                                  color: LeadStatus.negotiation.color,
+                                ),
+                                _FunnelRow(
+                                  label: 'Acquired',
+                                  value: acquired,
+                                  maxValue: maxPipeline,
+                                  color: LeadStatus.closed.color,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+                const SizedBox(height: 20),
+                _SectionCard(
+                  title: 'Recent activity',
+                  subtitle:
+                      'A denser activity feed reduces empty space and keeps the latest work visible.',
+                  icon: Icons.history_rounded,
+                  child: _recentLeads.isEmpty
+                      ? EmptyState(
+                          icon: Icons.inbox_outlined,
+                          title: 'No leads yet',
+                          message:
+                              'Create your first lead to start tracking activity on the dashboard.',
+                          action: PrimaryButton(
+                            label: 'Add Lead',
+                            icon: Icons.add_location_alt_outlined,
+                            onPressed: () => _goTo('/land-lead'),
+                          ),
+                        )
+                      : Column(
+                          children: [
+                            for (final lead in _recentLeads) ...[
+                              _ActivityRow(lead: lead),
+                              if (lead != _recentLeads.last)
+                                const SizedBox(height: 12),
+                            ],
+                            if (_sortedLeads.length > _kRecentCollapsedCount) ...[
+                              const SizedBox(height: 8),
+                              Align(
+                                alignment: Alignment.centerLeft,
+                                child: TextButton.icon(
+                                  onPressed: () => setState(
+                                    () => _showAllRecent = !_showAllRecent,
+                                  ),
+                                  icon: Icon(
+                                    _showAllRecent
+                                        ? Icons.expand_less
+                                        : Icons.expand_more,
+                                  ),
+                                  label: Text(
+                                    _showAllRecent
+                                        ? 'Show less'
+                                        : 'Show all (${_sortedLeads.length})',
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                ),
               ],
             ),
           ),
-          ),
         ),
+      ),
+    );
+  }
+}
+
+class _DashboardHeader extends StatelessWidget {
+  final String dateLabel;
+  final int todayTasks;
+  final int activeLeads;
+  final int pendingActions;
+
+  const _DashboardHeader({
+    required this.dateLabel,
+    required this.todayTasks,
+    required this.activeLeads,
+    required this.pendingActions,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      padding: const EdgeInsets.all(24),
+      radius: AppColors.radiusLg,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Welcome back',
+                      style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                            fontWeight: FontWeight.w800,
+                            color: context.fomraTextPrimary,
+                          ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '$dateLabel · Premium visibility into lead flow and team output.',
+                      style: TextStyle(
+                        fontSize: 13,
+                        height: 1.5,
+                        color: context.fomraTextSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  gradient: AppColors.primaryGradient,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: AppColors.coloredShadow(AppColors.primary),
+                ),
+                alignment: Alignment.center,
+                child: const Icon(
+                  Icons.dashboard_customize_outlined,
+                  color: Colors.white,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              _SummaryBadge(
+                label: 'Today’s tasks',
+                value: '$todayTasks',
+                icon: Icons.today_outlined,
+                accent: AppColors.primary,
+              ),
+              _SummaryBadge(
+                label: 'Active leads',
+                value: '$activeLeads',
+                icon: Icons.trending_up_rounded,
+                accent: AppColors.success,
+              ),
+              _SummaryBadge(
+                label: 'Pending actions',
+                value: '$pendingActions',
+                icon: Icons.pending_actions_outlined,
+                accent: AppColors.warning,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SummaryBadge extends StatelessWidget {
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color accent;
+
+  const _SummaryBadge({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.accent,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(minWidth: 180),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: accent.withValues(alpha: 0.16)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.8),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            alignment: Alignment.center,
+            child: Icon(icon, color: accent, size: 18),
+          ),
+          const SizedBox(width: 10),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                value,
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: context.fomraTextPrimary,
+                ),
+              ),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: context.fomraTextSecondary,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _QuickActionData {
+  final String label;
+  final String subtitle;
+  final IconData icon;
+  final Color accent;
+  final VoidCallback onTap;
+
+  const _QuickActionData({
+    required this.label,
+    required this.subtitle,
+    required this.icon,
+    required this.accent,
+    required this.onTap,
+  });
+}
+
+class _QuickActionsGrid extends StatelessWidget {
+  final List<_QuickActionData> actions;
+
+  const _QuickActionsGrid({required this.actions});
+
+  @override
+  Widget build(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    final columns = width >= 1100 ? 5 : width >= 860 ? 3 : 2;
+    return GridView.builder(
+      itemCount: actions.length,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: columns,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+        childAspectRatio: width >= 860 ? 1.65 : 1.35,
+      ),
+      itemBuilder: (_, i) => _QuickActionCard(data: actions[i]),
+    );
+  }
+}
+
+class _QuickActionCard extends StatelessWidget {
+  final _QuickActionData data;
+
+  const _QuickActionCard({required this.data});
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      onTap: data.onTap,
+      padding: const EdgeInsets.all(20),
+      radius: AppColors.radiusMd,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: data.accent.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            alignment: Alignment.center,
+            child: Icon(data.icon, color: data.accent, size: 22),
+          ),
+          const Spacer(),
+          Text(
+            data.label,
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: context.fomraTextPrimary,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            data.subtitle,
+            style: TextStyle(
+              fontSize: 12,
+              color: context.fomraTextSecondary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _KpiData {
+  final String label;
+  final String value;
+  final Color accent;
+  final IconData icon;
+  final String trend;
+  final bool trendUp;
+  final String secondary;
+  final String todayLabel;
+  final String todayValue;
+  final String periodLabel;
+  final String periodValue;
+  final List<double> sparkline;
+  final _KpiFilter filter;
+
+  const _KpiData({
+    required this.label,
+    required this.value,
+    required this.accent,
+    required this.icon,
+    required this.trend,
+    required this.trendUp,
+    required this.secondary,
+    required this.todayLabel,
+    required this.todayValue,
+    required this.periodLabel,
+    required this.periodValue,
+    required this.sparkline,
+    required this.filter,
+  });
+}
+
+class _KpiGrid extends StatelessWidget {
+  final List<_KpiData> kpis;
+  final void Function(_KpiData) onTap;
+
+  const _KpiGrid({required this.kpis, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    final cols = width > 1100 ? 4 : width > 760 ? 2 : 1;
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: kpis.length,
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: cols,
+        childAspectRatio: width > 1100 ? 1.32 : width > 760 ? 1.22 : 1.5,
+        crossAxisSpacing: 16,
+        mainAxisSpacing: 16,
+      ),
+      itemBuilder: (_, i) => _KpiCard(data: kpis[i], onTap: () => onTap(kpis[i])),
+    );
+  }
+}
+
+class _KpiCard extends StatelessWidget {
+  final _KpiData data;
+  final VoidCallback onTap;
+
+  const _KpiCard({required this.data, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      onTap: onTap,
+      padding: const EdgeInsets.all(22),
+      radius: AppColors.radiusLg,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: data.accent.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                alignment: Alignment.center,
+                child: Icon(data.icon, color: data.accent),
+              ),
+              const Spacer(),
+              StatusChip(
+                label: data.trend,
+                tone: data.trendUp ? StatusTone.success : StatusTone.danger,
+                icon: data.trendUp
+                    ? Icons.arrow_upward_rounded
+                    : Icons.arrow_downward_rounded,
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          AnimatedCounter(
+            value: int.tryParse(data.value) ?? 0,
+            style: Theme.of(context).textTheme.displayMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  color: context.fomraTextPrimary,
+                ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            data.label,
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: context.fomraTextPrimary,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            data.secondary,
+            style: TextStyle(
+              fontSize: 12,
+              color: context.fomraTextSecondary,
+            ),
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            height: 30,
+            child: _MiniSparkline(values: data.sparkline, color: data.accent),
+          ),
+          const Spacer(),
+          Row(
+            children: [
+              Expanded(
+                child: _KpiMetaBlock(
+                  label: data.todayLabel,
+                  value: data.todayValue,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _KpiMetaBlock(
+                  label: data.periodLabel,
+                  value: data.periodValue,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _KpiMetaBlock extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _KpiMetaBlock({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: context.fomraSurfaceVar,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              color: context.fomraTextSecondary,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: context.fomraTextPrimary,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -458,6 +1002,7 @@ class _KpiCardState extends State<_KpiCard> {
 class _MiniSparkline extends StatelessWidget {
   final List<double> values;
   final Color color;
+
   const _MiniSparkline({required this.values, required this.color});
 
   @override
@@ -467,56 +1012,233 @@ class _MiniSparkline extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: values
-          .map((v) => Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 1.5),
-                  child: Container(
-                    height: ((v / maxV) * 20).clamp(4, 20),
-                    decoration: BoxDecoration(
-                      color: color.withValues(alpha: 0.8),
-                      borderRadius: BorderRadius.circular(2),
-                    ),
+          .map(
+            (v) => Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 2),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  height: ((v / maxV) * 28).clamp(5, 28),
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.85),
+                    borderRadius: BorderRadius.circular(999),
                   ),
                 ),
-              ))
+              ),
+            ),
+          )
           .toList(),
     );
   }
 }
 
-class _AnalyticsCard extends StatelessWidget {
+class _TeamPerf {
+  final String name;
+  final String designation;
+  final int total;
+  final int today;
+  final double percent;
+  final int rank;
+  final String statusLabel;
+  final StatusTone tone;
+
+  const _TeamPerf({
+    required this.name,
+    required this.designation,
+    required this.total,
+    required this.today,
+    required this.percent,
+    required this.rank,
+    required this.statusLabel,
+    required this.tone,
+  });
+
+  _TeamPerf copyWith({int? rank}) => _TeamPerf(
+        name: name,
+        designation: designation,
+        total: total,
+        today: today,
+        percent: percent,
+        rank: rank ?? this.rank,
+        statusLabel: statusLabel,
+        tone: tone,
+      );
+}
+
+class _PerformanceRow extends StatelessWidget {
+  final _TeamPerf data;
+
+  const _PerformanceRow({required this.data});
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = data.rank == 1
+        ? AppColors.warning
+        : data.rank == 2
+            ? AppColors.primary
+            : AppColors.purple;
+    final initials = data.name.trim().isEmpty
+        ? '?'
+        : data.name.trim().split(RegExp(r'\s+')).take(2).map((e) => e[0]).join();
+
+    return AppCard(
+      padding: const EdgeInsets.all(18),
+      radius: AppColors.radiusMd,
+      interactive: false,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: accent.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              initials.toUpperCase(),
+              style: TextStyle(
+                fontWeight: FontWeight.w800,
+                color: accent,
+              ),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        data.name,
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: context.fomraTextPrimary,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      '#${data.rank}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                        color: accent,
+                      ),
+                    ),
+                  ],
+                ),
+                if (data.designation.isNotEmpty) ...[
+                  const SizedBox(height: 3),
+                  Text(
+                    data.designation,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: context.fomraTextSecondary,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(999),
+                        child: LinearProgressIndicator(
+                          value: data.percent,
+                          minHeight: 10,
+                          backgroundColor: accent.withValues(alpha: 0.12),
+                          valueColor: AlwaysStoppedAnimation<Color>(accent),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      '${(data.percent * 100).round()}%',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: context.fomraTextPrimary,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    StatusChip(label: data.statusLabel, tone: data.tone),
+                    _TinyStat(label: 'Lead count', value: '${data.total}'),
+                    _TinyStat(label: 'Today', value: '${data.today}'),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TinyStat extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _TinyStat({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: context.fomraSurfaceVar,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        '$label: $value',
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: context.fomraTextSecondary,
+        ),
+      ),
+    );
+  }
+}
+
+class _SectionCard extends StatelessWidget {
   final String title;
   final String subtitle;
+  final IconData icon;
   final Widget child;
-  const _AnalyticsCard({
+
+  const _SectionCard({
     required this.title,
     required this.subtitle,
+    required this.icon,
     required this.child,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: context.fomraSurface,
-        borderRadius: BorderRadius.circular(AppColors.radiusMd),
-        border: Border.all(color: context.fomraBorder),
-        boxShadow: context.fomraCardShadow,
-      ),
+    return AppCard(
+      padding: const EdgeInsets.all(22),
+      radius: AppColors.radiusLg,
+      interactive: false,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title,
-              style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  color: context.fomraTextPrimary)),
-          const SizedBox(height: 4),
-          Text(subtitle,
-              style: TextStyle(fontSize: 12, color: context.fomraTextSecondary)),
-          const SizedBox(height: 14),
+          SectionHeader(
+            title: title,
+            subtitle: subtitle,
+            icon: icon,
+            padding: const EdgeInsets.only(bottom: 16),
+          ),
           child,
         ],
       ),
@@ -529,6 +1251,7 @@ class _FunnelRow extends StatelessWidget {
   final int value;
   final int maxValue;
   final Color color;
+
   const _FunnelRow({
     required this.label,
     required this.value,
@@ -541,31 +1264,42 @@ class _FunnelRow extends StatelessWidget {
     final factor =
         maxValue <= 0 ? 0.0 : (value / maxValue).toDouble().clamp(0.0, 1.0);
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Row(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            width: 100,
-            child: Text(label,
-                style: TextStyle(fontSize: 12, color: context.fomraTextSecondary)),
-          ),
-          Expanded(
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(999),
-              child: LinearProgressIndicator(
-                value: factor,
-                minHeight: 8,
-                backgroundColor: color.withValues(alpha: 0.15),
-                color: color,
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: context.fomraTextPrimary,
+                  ),
+                ),
               ),
+              Text(
+                '$value',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  color: context.fomraTextPrimary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: LinearProgressIndicator(
+              value: factor,
+              minHeight: 10,
+              backgroundColor: color.withValues(alpha: 0.12),
+              color: color,
             ),
           ),
-          const SizedBox(width: 8),
-          Text('$value',
-              style: TextStyle(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 12,
-                  color: context.fomraTextPrimary)),
         ],
       ),
     );
@@ -574,53 +1308,111 @@ class _FunnelRow extends StatelessWidget {
 
 class _ActivityRow extends StatelessWidget {
   final LandLead lead;
-  final Color accentColor;
-  const _ActivityRow({required this.lead, required this.accentColor});
+
+  const _ActivityRow({required this.lead});
 
   @override
   Widget build(BuildContext context) {
-    final location = [lead.location, lead.village]
+    final statusColor = lead.status.color;
+    final location = [lead.location, lead.village, lead.district]
         .where((s) => s.isNotEmpty)
         .join(', ');
-    return Row(
-      children: [
-        CircleAvatar(
-          radius: 16,
-          backgroundColor: accentColor.withValues(alpha: 0.12),
-          child: Icon(Icons.location_on_outlined,
-              size: 16, color: accentColor),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
+
+    return Material(
+      color: context.fomraSurfaceVar,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => LeadDetailScreen(lead: lead)),
+          );
+        },
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('${lead.leadId} · ${lead.ownerName}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: context.fomraTextPrimary)),
-              if (location.isNotEmpty)
-                Text(location,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                        fontSize: 11, color: context.fomraTextSecondary)),
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                alignment: Alignment.center,
+                child: Icon(
+                  Icons.location_on_outlined,
+                  color: statusColor,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            '${lead.leadId} · ${lead.ownerName}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: context.fomraTextPrimary,
+                            ),
+                          ),
+                        ),
+                        StatusChip(
+                          label: lead.status.label,
+                          tone: switch (lead.status) {
+                            LeadStatus.closed => StatusTone.success,
+                            LeadStatus.lost => StatusTone.danger,
+                            LeadStatus.negotiation => StatusTone.purple,
+                            _ => StatusTone.primary,
+                          },
+                        ),
+                      ],
+                    ),
+                    if (location.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        location,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: context.fomraTextSecondary,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 6,
+                      children: [
+                        if (lead.surveyNumber.isNotEmpty)
+                          _DetailChip(Icons.tag, 'Survey ${lead.surveyNumber}'),
+                        if (lead.landExtent.isNotEmpty)
+                          _DetailChip(Icons.straighten, lead.landExtent),
+                        _DetailChip(Icons.terrain_outlined, lead.landType.label),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
         ),
-        Text(
-          '${lead.addedOn.day}/${lead.addedOn.month}',
-          style: TextStyle(fontSize: 11, color: context.fomraTextSecondary),
-        ),
-      ],
+      ),
     );
   }
 }
 
-// ── KPI leads bottom sheet ─────────────────────────────────────────────────────
 class _KpiLeadsSheet extends StatelessWidget {
   final String title;
   final String subtitle;
