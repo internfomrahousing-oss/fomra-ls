@@ -91,6 +91,47 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return buckets;
   }
 
+  DateTime _dayOnly(DateTime d) => DateTime(d.year, d.month, d.day);
+
+  int _countLeadsBetween(List<LandLead> leads, DateTime start, DateTime end) {
+    final s = _dayOnly(start);
+    final e = _dayOnly(end);
+    return leads.where((l) {
+      final d = _dayOnly(l.addedOn);
+      return !d.isBefore(s) && !d.isAfter(e);
+    }).length;
+  }
+
+  /// Week-over-week % change from real lead dates (not placeholders).
+  ({String label, bool up, bool neutral}) _weekOverWeekTrend(
+    List<LandLead> leads, {
+    bool lowerIsBetter = false,
+  }) {
+    final today = _dayOnly(DateTime.now());
+    final thisWeekStart = today.subtract(const Duration(days: 6));
+    final lastWeekEnd = today.subtract(const Duration(days: 7));
+    final lastWeekStart = today.subtract(const Duration(days: 13));
+
+    final thisWeek = _countLeadsBetween(leads, thisWeekStart, today);
+    final lastWeek = _countLeadsBetween(leads, lastWeekStart, lastWeekEnd);
+
+    if (thisWeek == 0 && lastWeek == 0) {
+      return (label: '0%', up: true, neutral: true);
+    }
+    if (lastWeek == 0) {
+      final up = lowerIsBetter ? false : true;
+      return (label: '+100%', up: up, neutral: false);
+    }
+
+    final pct = (((thisWeek - lastWeek) / lastWeek) * 100).round();
+    if (pct == 0) return (label: '0%', up: true, neutral: true);
+
+    final improved = pct > 0;
+    final up = lowerIsBetter ? !improved : improved;
+    final sign = pct > 0 ? '+' : '';
+    return (label: '$sign$pct%', up: up, neutral: false);
+  }
+
   void _openKpiLeads(_KpiData kpi) {
     final leads = _leadsForFilter(kpi.filter);
     showModalBottomSheet(
@@ -129,7 +170,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final acquiredToday = _leadsForFilter(_KpiFilter.acquired)
         .where((l) => _isSameDay(l.addedOn, now))
         .length;
-    final weeklyTrend = _trendByDays(7, leads);
+
+    final totalLeadsList = _leadsForFilter(_KpiFilter.total);
+    final activeLeadsList = _leadsForFilter(_KpiFilter.active);
+    final acquiredList = _leadsForFilter(_KpiFilter.acquired);
+    final rejectedList = _leadsForFilter(_KpiFilter.rejected);
+
+    final totalTrend = _weekOverWeekTrend(totalLeadsList);
+    final activeTrend = _weekOverWeekTrend(activeLeadsList);
+    final acquiredTrend = _weekOverWeekTrend(acquiredList);
+    final rejectedTrend =
+        _weekOverWeekTrend(rejectedList, lowerIsBetter: true);
+
+    final weeklyTrend = _trendByDays(7, totalLeadsList);
     final maxPipeline = [newLeads, contacted, negotiation, acquired]
         .fold<int>(1, (a, b) => a > b ? a : b);
 
@@ -139,8 +192,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
         value: '$totalLeads',
         accent: isDark ? const Color(0xFF60A5FA) : const Color(0xFF2563EB),
         icon: Icons.location_on_outlined,
-        trend: '+18%',
-        trendUp: true,
+        trend: totalTrend.label,
+        trendUp: totalTrend.up,
+        trendNeutral: totalTrend.neutral,
         secondary: 'Compared with last week',
         todayLabel: 'Today',
         todayValue: '$addedToday',
@@ -154,20 +208,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
         value: '$activeLeads',
         accent: isDark ? const Color(0xFFA78BFA) : const Color(0xFF8B5CF6),
         icon: Icons.bolt_outlined,
-        trend: '+8%',
-        trendUp: true,
+        trend: activeTrend.label,
+        trendUp: activeTrend.up,
+        trendNeutral: activeTrend.neutral,
         secondary: 'Pipeline in motion',
         todayLabel: 'Pending',
         todayValue: '$pendingActions',
         periodLabel: 'Contacted',
         periodValue: '$contacted',
-        sparkline: [
-          newLeads.toDouble(),
-          contacted.toDouble(),
-          contacted.toDouble() + 1,
-          negotiation.toDouble(),
-          activeLeads.toDouble(),
-        ],
+        sparkline: _trendByDays(7, activeLeadsList),
         filter: _KpiFilter.active,
       ),
       _KpiData(
@@ -175,14 +224,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
         value: '$acquired',
         accent: AppColors.success,
         icon: Icons.check_circle_outline,
-        trend: '+4%',
-        trendUp: true,
+        trend: acquiredTrend.label,
+        trendUp: acquiredTrend.up,
+        trendNeutral: acquiredTrend.neutral,
         secondary: 'Closed conversions',
         todayLabel: 'Today',
         todayValue: '$acquiredToday',
         periodLabel: 'Conversion',
         periodValue: '${totalLeads == 0 ? 0 : ((acquired / totalLeads) * 100).round()}%',
-        sparkline: [0, 1, 1, 2, 3, 4, acquired.toDouble()],
+        sparkline: _trendByDays(7, acquiredList),
         filter: _KpiFilter.acquired,
       ),
       _KpiData(
@@ -190,14 +240,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
         value: '$rejected',
         accent: AppColors.error,
         icon: Icons.cancel_outlined,
-        trend: '-2%',
-        trendUp: false,
+        trend: rejectedTrend.label,
+        trendUp: rejectedTrend.up,
+        trendNeutral: rejectedTrend.neutral,
         secondary: 'Needs follow-up review',
         todayLabel: 'Recovery',
         todayValue: '${(totalLeads - rejected).clamp(0, totalLeads)}',
         periodLabel: 'Loss rate',
         periodValue: '${totalLeads == 0 ? 0 : ((rejected / totalLeads) * 100).round()}%',
-        sparkline: [0, 0, 1, 1, 1, 2, rejected.toDouble()],
+        sparkline: _trendByDays(7, rejectedList),
         filter: _KpiFilter.rejected,
       ),
     ];
@@ -323,6 +374,7 @@ class _KpiData {
   final IconData icon;
   final String trend;
   final bool trendUp;
+  final bool trendNeutral;
   final String secondary;
   final String todayLabel;
   final String todayValue;
@@ -338,6 +390,7 @@ class _KpiData {
     required this.icon,
     required this.trend,
     required this.trendUp,
+    this.trendNeutral = false,
     required this.secondary,
     required this.todayLabel,
     required this.todayValue,
@@ -403,10 +456,16 @@ class _KpiCard extends StatelessWidget {
               const Spacer(),
               StatusChip(
                 label: data.trend,
-                tone: data.trendUp ? StatusTone.success : StatusTone.danger,
-                icon: data.trendUp
-                    ? Icons.arrow_upward_rounded
-                    : Icons.arrow_downward_rounded,
+                tone: data.trendNeutral
+                    ? StatusTone.neutral
+                    : data.trendUp
+                        ? StatusTone.success
+                        : StatusTone.danger,
+                icon: data.trendNeutral
+                    ? Icons.remove_rounded
+                    : data.trendUp
+                        ? Icons.arrow_upward_rounded
+                        : Icons.arrow_downward_rounded,
               ),
             ],
           ),
@@ -511,27 +570,46 @@ class _MiniSparkline extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (values.length < 2) return const SizedBox.shrink();
-    final maxV = values.fold<double>(1, (a, b) => a > b ? a : b);
+    if (values.isEmpty) return const SizedBox.shrink();
+
+    final maxV = values.fold<double>(0, (a, b) => a > b ? a : b);
+    if (maxV <= 0) {
+      return Align(
+        alignment: Alignment.bottomLeft,
+        child: Container(
+          height: 3,
+          width: double.infinity,
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.18),
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+      );
+    }
+
     return Row(
       crossAxisAlignment: CrossAxisAlignment.end,
-      children: values
-          .map(
-            (v) => Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 2),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 180),
-                  height: ((v / maxV) * 28).clamp(5, 28),
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.85),
-                    borderRadius: BorderRadius.circular(999),
+      children: values.map((v) {
+        final height = v <= 0 ? 3.0 : ((v / maxV) * 28).clamp(6.0, 28.0);
+        return Expanded(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 2),
+            child: Align(
+              alignment: Alignment.bottomCenter,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                height: height,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: v <= 0 ? 0.22 : 0.88),
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(4),
                   ),
                 ),
               ),
             ),
-          )
-          .toList(),
+          ),
+        );
+      }).toList(),
     );
   }
 }
