@@ -116,8 +116,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     final accentBlue =
         context.isDarkMode ? const Color(0xFF4A6FA5) : AppColors.primaryDark;
-    final infoBlue =
-        context.isDarkMode ? const Color(0xFF3D5F8F) : const Color(0xFF1E4A8C);
+
+    // KPI accent colors — tuned to stay clearly visible on BOTH light and dark
+    // themes (saturated 600-shade on light, brighter 400-shade on dark).
+    final isDark = context.isDarkMode;
+    final kpiBlue   = isDark ? const Color(0xFF60A5FA) : const Color(0xFF2563EB);
+    final kpiViolet = isDark ? const Color(0xFFA78BFA) : const Color(0xFF7C3AED);
+    final kpiGreen  = isDark ? const Color(0xFF34D399) : const Color(0xFF059669);
+    final kpiRed    = isDark ? const Color(0xFFF87171) : const Color(0xFFDC2626);
 
     return Scaffold(
       appBar: const FomraAppBar(moduleName: 'Dashboard'),
@@ -141,7 +147,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 'Total Leads',
                 '$totalLeads',
                 Icons.location_on_outlined,
-                infoBlue,
+                kpiBlue,
                 '+$totalLeads total',
                 '+18%',
                 weeklyTrend,
@@ -152,7 +158,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 'Active Leads',
                 '$activeLeads',
                 Icons.trending_up_outlined,
-                accentBlue,
+                kpiViolet,
                 'In pipeline',
                 '+8%',
                 [newLeads.toDouble(), contacted.toDouble(), negotiation.toDouble(), activeLeads.toDouble()],
@@ -163,7 +169,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 'Acquired Land',
                 '$acquired',
                 Icons.check_circle_outline,
-                AppColors.success,
+                kpiGreen,
                 'Closed deals',
                 '+4%',
                 [0, 1, 1, 2, 2, 3, acquired.toDouble()],
@@ -174,7 +180,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 'Rejected Leads',
                 '$rejected',
                 Icons.cancel_outlined,
-                AppColors.error,
+                kpiRed,
                 'Lost / rejected',
                 '-2%',
                 [0, 0, 1, 0, 1, 1, rejected.toDouble()],
