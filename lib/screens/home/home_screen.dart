@@ -16,7 +16,6 @@ import '../../models/app_notification.dart';
 import '../../widgets/app_drawer.dart';
 import '../../widgets/fomra_app_bar.dart';
 import '../../widgets/fomra_bottom_nav.dart';
-import '../../widgets/fomra_portal_body.dart';
 import '../../widgets/ui/app_components.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -331,15 +330,9 @@ class _HomeScreenState extends State<HomeScreen> {
       drawer: const AppDrawer(currentRoute: '/home'),
       bottomNavigationBar: const FomraBottomNav(currentRoute: '/home'),
       backgroundColor: context.fomraPageBg,
-      body: FomraPortalBody(
+      body: SafeArea(
         child: SingleChildScrollView(
-        padding: FomraLayout.pagePadding(context),
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxWidth: FomraLayout.isDesktop(context)
-                ? FomraLayout.maxContentWidth
-                : double.infinity,
-          ),
+          padding: FomraLayout.pagePadding(context),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -386,7 +379,6 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
         ),
-      ),
     );
   }
 }
