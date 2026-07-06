@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../theme/app_theme.dart';
+
 enum InputSource { broker, landowner, referral, internalTeam, existingDatabase }
 
 enum LandType { agricultural, nonAgricultural, residential, commercial, industrial, other }
@@ -138,7 +140,7 @@ extension LeadStatusLabel on LeadStatus {
 extension LeadStatusColor on LeadStatus {
   Color get color => switch (this) {
         LeadStatus.new_ => const Color(0xFF2563EB), // blue
-        LeadStatus.contacted => const Color(0xFF7C3AED), // violet
+        LeadStatus.contacted => AppColors.secondary,
         LeadStatus.siteVisit => const Color(0xFFD97706), // amber
         LeadStatus.negotiation => const Color(0xFFEA580C), // orange
         LeadStatus.closed => const Color(0xFF16A34A), // green

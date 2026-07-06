@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../screens/home/home_screen.dart';
+import '../theme/app_theme.dart';
+import '../theme/fomra_layout.dart';
 import '../theme/fomra_theme_context.dart';
 import 'fomra_theme_toggle.dart';
 
@@ -12,9 +14,20 @@ class FomraAppBar extends StatelessWidget implements PreferredSizeWidget {
 
   @override
   Widget build(BuildContext context) {
+    final wide = MediaQuery.sizeOf(context).width >= FomraLayout.desktopBreakpoint;
     return AppBar(
+      toolbarHeight: wide ? 64 : kToolbarHeight,
       flexibleSpace: Container(
-        decoration: BoxDecoration(gradient: context.fomraHeroGradient),
+        decoration: BoxDecoration(
+          gradient: context.fomraHeroGradient,
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.primary.withValues(alpha: 0.22),
+              blurRadius: 18,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
       ),
       backgroundColor: Colors.transparent,
       surfaceTintColor: Colors.transparent,

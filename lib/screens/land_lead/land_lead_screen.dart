@@ -8,6 +8,7 @@ import '../../services/employee_service.dart';
 import '../../services/land_lead_service.dart';
 import '../../services/notifications_service.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/fomra_layout.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../widgets/app_drawer.dart';
 import '../../widgets/fomra_app_bar.dart';
@@ -244,11 +245,7 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
 
     final fab = Container(
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF1D4ED8), Color(0xFF3B82F6)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        gradient: AppColors.primaryGradient,
         borderRadius: BorderRadius.circular(999),
         boxShadow: AppColors.coloredShadow(AppColors.primary),
       ),
@@ -343,8 +340,8 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
           onTap: _openLeadsMap,
           icon: Icons.map_outlined,
           label: 'Show all projects',
-          foreground: const Color(0xFF0F766E),
-          background: const Color(0xFF0F766E).withValues(alpha: 0.10),
+          foreground: AppColors.primaryDark,
+          background: AppColors.primary.withValues(alpha: 0.10),
         ),
       ],
     );
@@ -549,9 +546,12 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
       );
     }
 
-    return CustomScrollView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      slivers: slivers,
+    return FomraLayout.constrain(
+      context,
+      child: CustomScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        slivers: slivers,
+      ),
     );
   }
 
@@ -1217,7 +1217,7 @@ class _StatusBadge extends StatelessWidget {
 Color _sourceColor(InputSource s) => switch (s) {
       InputSource.broker => AppColors.info,
       InputSource.landowner => AppColors.primary,
-      InputSource.referral => const Color(0xFF8B5CF6),
+      InputSource.referral => AppColors.primaryLight,
       InputSource.internalTeam => AppColors.secondary,
       InputSource.existingDatabase => AppColors.success,
     };
