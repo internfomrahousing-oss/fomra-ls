@@ -333,13 +333,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final greeting = portalTimeGreeting(_clock, displayName);
     final dateLabel = portalHomeDateLabel(_clock);
     final leads = AppStore.instance.leads;
-    final newLeads =
-        leads.where((l) => l.status == LeadStatus.new_).length;
-    final negotiation =
-        leads.where((l) => l.status == LeadStatus.negotiation).length;
-    final pendingActions = newLeads + negotiation;
-    final addedToday =
-        leads.where((l) => portalIsSameDay(l.addedOn, _clock)).length;
+    final totalLeads = leads.length;
+    final brokerLeads =
+        leads.where((l) => l.inputSource == InputSource.broker).length;
     final teamRows = buildPortalTeamPerformance(leads);
 
     final quickActions = [
@@ -431,9 +427,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   dateLabel: dateLabel,
                   profileName: _isManagement ? 'Management' : userName,
                   profileRole: _profileRole,
-                  todayTasks: addedToday,
+                  totalLeads: totalLeads,
                   activeLeads: _activeLeads,
-                  pendingActions: pendingActions,
+                  brokerLeads: brokerLeads,
                   onProfileTap: () =>
                       _showProfileMenu(userName, userEmail),
                 ),

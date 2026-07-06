@@ -118,9 +118,9 @@ class PortalWelcomeHeader extends StatelessWidget {
   final String dateLabel;
   final String profileName;
   final String profileRole;
-  final int todayTasks;
+  final int totalLeads;
   final int activeLeads;
-  final int pendingActions;
+  final int brokerLeads;
   final VoidCallback? onProfileTap;
 
   const PortalWelcomeHeader({
@@ -129,9 +129,9 @@ class PortalWelcomeHeader extends StatelessWidget {
     required this.dateLabel,
     required this.profileName,
     required this.profileRole,
-    required this.todayTasks,
+    required this.totalLeads,
     required this.activeLeads,
-    required this.pendingActions,
+    required this.brokerLeads,
     this.onProfileTap,
   });
 
@@ -201,9 +201,9 @@ class PortalWelcomeHeader extends StatelessWidget {
               final stacked = constraints.maxWidth < 640;
               final tiles = [
                 PortalSummaryTile(
-                  label: "Today's tasks",
-                  value: todayTasks,
-                  icon: Icons.today_outlined,
+                  label: 'Total leads',
+                  value: totalLeads,
+                  icon: Icons.location_on_outlined,
                   accent: AppColors.primary,
                 ),
                 PortalSummaryTile(
@@ -213,9 +213,9 @@ class PortalWelcomeHeader extends StatelessWidget {
                   accent: AppColors.success,
                 ),
                 PortalSummaryTile(
-                  label: 'Pending actions',
-                  value: pendingActions,
-                  icon: Icons.pending_actions_outlined,
+                  label: 'Broker leads',
+                  value: brokerLeads,
+                  icon: Icons.handshake_outlined,
                   accent: AppColors.warning,
                 ),
               ];
