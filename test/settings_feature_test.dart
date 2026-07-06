@@ -102,9 +102,11 @@ void main() {
 
     expect(find.text('Password updated successfully.'), findsOneWidget);
 
-    // The new password is now the active one for the management portal.
-    expect(await AuthService.instance.passwordForPortal(LoginPortal.management),
-        'brandnew99');
+    // New password is active for this account.
+    await AuthService.instance.logout();
+    await AuthService.instance.loginWithPortal(
+        'management@fomrahousing.in', 'brandnew99', LoginPortal.management);
+    expect(AuthService.instance.isManagement, isTrue);
   });
 
   test('login rejects the old password after a change', () async {
