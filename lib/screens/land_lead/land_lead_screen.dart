@@ -753,16 +753,9 @@ class _LeadSummary extends StatelessWidget {
               width: 152,
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
+                color: context.fomraSurface,
                 borderRadius: BorderRadius.circular(AppColors.radiusMd),
-                gradient: LinearGradient(
-                  colors: [
-                    color.withValues(alpha: 0.18),
-                    color.withValues(alpha: 0.06)
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                border: Border.all(color: color.withValues(alpha: 0.18)),
+                border: Border.all(color: context.fomraBorder),
                 boxShadow: context.fomraCardShadow,
               ),
               child: Column(
