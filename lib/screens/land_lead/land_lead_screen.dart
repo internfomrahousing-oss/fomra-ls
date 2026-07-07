@@ -292,21 +292,9 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
   Widget build(BuildContext context) {
     final body = _buildScrollableBody();
 
+    // The "+" button goes straight to Add Lead — no expanding menu.
     final fab = LandWorkspaceSpeedDial(
       onAddLead: _openAddLead,
-      onImportLead: () => ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Import lead — connect your CSV source in settings.'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      ),
-      onScanDocument: () => ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Document scan — use site photos when adding a lead.'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      ),
-      onGpsCapture: _openAddLead,
     );
 
     if (widget.isTab) {

@@ -504,7 +504,6 @@ class _LandWorkspaceSpeedDialState extends State<LandWorkspaceSpeedDial>
   @override
   Widget build(BuildContext context) {
     final actions = <(IconData, String, VoidCallback)>[
-      (Icons.add_location_alt_outlined, 'Add Lead', widget.onAddLead),
       if (widget.onImportLead != null)
         (Icons.upload_file_outlined, 'Import Lead', widget.onImportLead!),
       if (widget.onScanDocument != null)
@@ -512,6 +511,9 @@ class _LandWorkspaceSpeedDialState extends State<LandWorkspaceSpeedDial>
       if (widget.onGpsCapture != null)
         (Icons.my_location_outlined, 'GPS Capture', widget.onGpsCapture!),
     ];
+
+    // No secondary actions → the "+" goes straight to Add Lead (no menu).
+    final hasMenu = actions.isNotEmpty;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -546,13 +548,14 @@ class _LandWorkspaceSpeedDialState extends State<LandWorkspaceSpeedDial>
             boxShadow: AppColors.coloredShadow(AppColors.primary),
           ),
           child: FloatingActionButton(
-            onPressed: _open ? _toggle : _toggle,
+            onPressed: hasMenu ? _toggle : widget.onAddLead,
             backgroundColor: Colors.transparent,
             elevation: 0,
             child: AnimatedRotation(
-              turns: _open ? 0.125 : 0,
+              turns: hasMenu && _open ? 0.125 : 0,
               duration: AppMotion.normal,
-              child: Icon(_open ? Icons.close : Icons.add, color: Colors.white),
+              child: Icon(hasMenu && _open ? Icons.close : Icons.add,
+                  color: Colors.white),
             ),
           ),
         ),
