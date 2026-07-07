@@ -905,28 +905,20 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
 
 // ── Terms Dropdown ──────────────────────────────────────────────────────────
 
-// On wide screens the dropdown's right edge stays anchored here (px from the
-// card's left edge); the box is narrower than this, so its left edge sits in.
-const double _kCompactDropdownRightEdge = 340.0;
-const double _kCompactDropdownWidth = 250.0;
+double _compactDropdownWidth(BuildContext context) {
+  final screenW = MediaQuery.sizeOf(context).width;
+  return screenW > 520 ? 340.0 : screenW - 48;
+}
 
 Widget _compactDropdownShell({
   required BuildContext context,
   required Widget child,
 }) {
-  final screenW = MediaQuery.sizeOf(context).width;
-  if (screenW <= 520) {
-    // Mobile: keep the field full-width so options aren't cramped.
-    return SizedBox(width: screenW - 48, child: child);
-  }
-  // Wide screens: narrower box, left edge moved right, right edge unchanged.
-  return Padding(
-    padding: const EdgeInsets.only(
-      left: _kCompactDropdownRightEdge - _kCompactDropdownWidth,
-    ),
-    child: Align(
-      alignment: Alignment.centerLeft,
-      child: SizedBox(width: _kCompactDropdownWidth, child: child),
+  return Align(
+    alignment: Alignment.centerLeft,
+    child: SizedBox(
+      width: _compactDropdownWidth(context),
+      child: child,
     ),
   );
 }
@@ -936,18 +928,21 @@ Widget _dropdownOptionRow({
   required String label,
   required Color iconColor,
 }) {
-  return Row(
-    children: [
-      Icon(icon, size: 18, color: iconColor),
-      const SizedBox(width: 10),
-      Expanded(
-        child: Text(
-          label,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(fontSize: 14),
+  return Padding(
+    padding: const EdgeInsets.only(left: 6),
+    child: Row(
+      children: [
+        Icon(icon, size: 18, color: iconColor),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            label,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 14),
+          ),
         ),
-      ),
-    ],
+      ],
+    ),
   );
 }
 
