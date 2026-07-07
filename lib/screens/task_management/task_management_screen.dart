@@ -1117,7 +1117,8 @@ class _AddTaskSheet extends StatefulWidget {
   State<_AddTaskSheet> createState() => _AddTaskSheetState();
 }
 
-class _AddTaskSheetState extends State<_AddTaskSheet> {
+class _AddTaskSheetState extends State<_AddTaskSheet>
+    with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final _titleCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
@@ -1132,10 +1133,20 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
   List<String> _teamNames = List<String>.from(_kTeam);
 
   bool get _isManagement => AuthService.instance.isManagement;
+  late final AnimationController _enterCtrl;
+  late final Animation<double> _fade;
+  late final Animation<double> _scale;
 
   @override
   void initState() {
     super.initState();
+    _enterCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 220),
+    );
+    _fade = CurvedAnimation(parent: _enterCtrl, curve: Curves.easeOutCubic);
+    _scale = Tween<double>(begin: 0.96, end: 1.0).animate(_fade);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _enterCtrl.forward());
     if (_isManagement) _loadEmployees();
   }
 
@@ -1166,6 +1177,7 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
 
   @override
   void dispose() {
+    _enterCtrl.dispose();
     _titleCtrl.dispose();
     _descCtrl.dispose();
     _notesCtrl.dispose();
@@ -1175,251 +1187,417 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
   @override
   Widget build(BuildContext context) {
     return DraggableScrollableSheet(
-      initialChildSize: 0.92,
+      initialChildSize: 0.8,
       maxChildSize: 0.96,
-      minChildSize: 0.5,
+      minChildSize: 0.6,
       expand: false,
-      builder: (_, controller) => Container(
-        decoration: BoxDecoration(
-          color: context.fomraSurface,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        child: Column(children: [
-          _SheetHandle(),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
-            child: SectionHeader(
-              title: 'Create Task',
-              subtitle: 'Assign work with priority, due date and reminders',
-              icon: Icons.add_task_rounded,
-              padding: EdgeInsets.zero,
-              trailing: TextButton(
-                onPressed: _save,
-                child: const Text(
-                  'SAVE',
-                  style: TextStyle(
-                    color: AppColors.primary,
-                    fontWeight: FontWeight.w800,
+      builder: (_, controller) => FadeTransition(
+          opacity: _fade,
+          child: ScaleTransition(
+            scale: _scale,
+            child: Container(
+              decoration: BoxDecoration(
+                color: context.fomraSurface,
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(24)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.08),
+                    blurRadius: 18,
+                    offset: const Offset(0, -4),
                   ),
+                ],
+              ),
+              child: Column(children: [
+                _SheetHandle(),
+                _buildHeader(context),
+                Divider(height: 1, color: context.fomraBorder),
+                Expanded(
+                  child: Form(
+                    key: _formKey,
+                    child: ListView(
+                      controller: controller,
+                      padding: const EdgeInsets.all(20),
+                      children: [
+                        _buildAiCard(context),
+                        const SizedBox(height: 16),
+                        _FormSectionCard(
+                          icon: Icons.edit_note_rounded,
+                          title: 'General',
+                          child: Column(
+                            children: [
+                              const _SectionLabel('Task Title'),
+                              TextFormField(
+                                controller: _titleCtrl,
+                                decoration: _dec(context, 'Enter task title'),
+                                validator: (v) => (v == null || v.trim().isEmpty)
+                                    ? 'Required'
+                                    : null,
+                              ),
+                              const SizedBox(height: 14),
+                              const _SectionLabel('Description'),
+                              TextFormField(
+                                controller: _descCtrl,
+                                decoration: _dec(
+                                  context,
+                                  'Briefly describe the expected outcome',
+                                ),
+                                maxLines: 2,
+                              ),
+                              const SizedBox(height: 14),
+                              const _SectionLabel('Priority'),
+                              _buildPriorityChips(context),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        _FormSectionCard(
+                          icon: Icons.schedule_rounded,
+                          title: 'Schedule',
+                          child: Column(
+                            children: [
+                              const _SectionLabel('Due Date'),
+                              _buildDueDateField(context),
+                              const SizedBox(height: 16),
+                              const _SectionLabel('Reminder System'),
+                              _buildReminderChips(context),
+                            ],
+                          ),
+                        ),
+                        if (_isManagement) ...[
+                          const SizedBox(height: 16),
+                          _FormSectionCard(
+                            icon: Icons.group_outlined,
+                            title: 'Assignment',
+                            child: Column(
+                              children: [
+                                const _SectionLabel('Assign Users'),
+                                _buildAssigneeDropdown(context),
+                                if (_assignedTo.isNotEmpty) ...[
+                                  const SizedBox(height: 10),
+                                  Wrap(
+                                    spacing: 8,
+                                    runSpacing: 8,
+                                    children: _assignedTo.map((name) {
+                                      return Chip(
+                                        label: Text(name,
+                                            style: const TextStyle(
+                                                fontSize: 12,
+                                                color: Colors.white)),
+                                        avatar: CircleAvatar(
+                                          backgroundColor:
+                                              Colors.white.withValues(alpha: 0.3),
+                                          child: Text(
+                                              name.isNotEmpty
+                                                  ? name[0].toUpperCase()
+                                                  : '?',
+                                              style: const TextStyle(
+                                                  fontSize: 11,
+                                                  color: Colors.white,
+                                                  fontWeight: FontWeight.bold)),
+                                        ),
+                                        backgroundColor: AppColors.primary,
+                                        side:
+                                            const BorderSide(color: AppColors.primary),
+                                        deleteIcon: const Icon(Icons.close,
+                                            size: 16, color: Colors.white),
+                                        onDeleted: () => setState(
+                                            () => _assignedTo.remove(name)),
+                                      );
+                                    }).toList(),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 16),
+                        _FormSectionCard(
+                          icon: Icons.notes_rounded,
+                          title: 'Notes',
+                          child: Column(
+                            children: [
+                              const _SectionLabel('Additional Notes'),
+                              TextFormField(
+                                controller: _notesCtrl,
+                                decoration: _dec(context, 'Optional details…'),
+                                maxLines: 4,
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                      ],
+                    ),
+                  ),
+                ),
+                _buildFooter(context),
+              ]),
+            ),
+          ),
+        ),
+    );
+  }
+
+  Widget _buildHeader(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+      child: Row(
+        children: [
+          IconButton(
+            onPressed: () => Navigator.pop(context),
+            icon: const Icon(Icons.close_rounded),
+            tooltip: 'Close',
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Create Task',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w800,
+                    color: context.fomraTextPrimary,
+                  ),
+                ),
+                Text(
+                  'Assign work with priorities, due dates and reminders.',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: context.fomraTextSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAiCard(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            AppColors.primary.withValues(alpha: 0.12),
+            AppColors.accent.withValues(alpha: 0.08),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.auto_awesome_rounded,
+                  color: AppColors.primary, size: 18),
+              const SizedBox(width: 8),
+              Text(
+                'AI Assistant',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: context.fomraTextPrimary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Generate a task with priority, assignee and reminders automatically.',
+            style: TextStyle(
+              fontSize: 12,
+              color: context.fomraTextSecondary,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: OutlinedButton.icon(
+              onPressed: () {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                  content: Text('AI task suggestions are coming soon.'),
+                  behavior: SnackBarBehavior.floating,
+                ));
+              },
+              icon: const Icon(Icons.flash_on_rounded, size: 16),
+              label: const Text('Generate Task'),
+              style: OutlinedButton.styleFrom(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
                 ),
               ),
             ),
           ),
-          Divider(height: 1, color: context.fomraBorder),
-          Expanded(
-            child: Form(
-              key: _formKey,
-              child: ListView(
-                controller: controller,
-                padding: const EdgeInsets.all(20),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPriorityChips(BuildContext context) {
+    final options = [
+      (TaskPriority.low, 'Low', AppColors.success),
+      (TaskPriority.medium, 'Medium', AppColors.info),
+      (TaskPriority.high, 'High', AppColors.warning),
+      (TaskPriority.urgent, 'Urgent', AppColors.error),
+    ];
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: options.map((entry) {
+        final selected = _priority == entry.$1;
+        return ChoiceChip(
+          label: Text(entry.$2),
+          selected: selected,
+          showCheckmark: false,
+          avatar: Container(
+            width: 10,
+            height: 10,
+            decoration:
+                BoxDecoration(color: entry.$3, shape: BoxShape.circle),
+          ),
+          selectedColor: entry.$3.withValues(alpha: 0.18),
+          backgroundColor: context.fomraSurfaceVar,
+          side: BorderSide(
+            color: selected ? entry.$3 : context.fomraBorder,
+          ),
+          labelStyle: TextStyle(
+            color: selected ? entry.$3 : context.fomraTextPrimary,
+            fontWeight: FontWeight.w700,
+          ),
+          onSelected: (_) => setState(() => _priority = entry.$1),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildDueDateField(BuildContext context) {
+    final now = DateTime.now();
+    final dueIn = _dueDate.difference(DateTime(now.year, now.month, now.day)).inDays;
+    return InkWell(
+      onTap: _pickDueDate,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        decoration: BoxDecoration(
+          color: context.fomraSurfaceVar,
+          border: Border.all(color: context.fomraBorder),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.calendar_month_rounded,
+                size: 20,
+                color: context.isDarkMode
+                    ? AppColors.primaryLight
+                    : AppColors.primary),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  AppCard(
-                    padding: const EdgeInsets.all(12),
-                    radius: AppColors.radiusSm,
-                    interactive: false,
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.auto_awesome,
-                          color: context.isDarkMode
-                              ? AppColors.primaryLight
-                              : AppColors.primary,
-                          size: 16,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'Create clear tasks with priority, assignees and reminders.',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: context.isDarkMode
-                                  ? AppColors.primaryLight
-                                  : AppColors.primary,
-                            ),
-                          ),
-                        ),
-                      ],
+                  Text(
+                    '${_dueDate.day}/${_dueDate.month}/${_dueDate.year}',
+                    style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: context.fomraTextPrimary),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    dueIn < 0
+                        ? 'Due date passed'
+                        : dueIn == 0
+                            ? 'Due today'
+                            : 'Due in $dueIn day${dueIn == 1 ? '' : 's'}',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: context.fomraTextSecondary,
                     ),
                   ),
-                  const SizedBox(height: 16),
-                  // Title
-                  const _SectionLabel('Task Title'),
-                  TextFormField(
-                    controller: _titleCtrl,
-                    decoration: _dec(context, 'Enter task title'),
-                    validator: (v) =>
-                        (v == null || v.trim().isEmpty) ? 'Required' : null,
-                  ),
-                  const SizedBox(height: 14),
-
-                  // Description
-                  const _SectionLabel('Description'),
-                  TextFormField(
-                    controller: _descCtrl,
-                    decoration: _dec(context, 'Brief description'),
-                    maxLines: 2,
-                  ),
-                  const SizedBox(height: 14),
-
-                  // Priority
-                  const _SectionLabel('Priority'),
-                  DropdownButtonFormField<TaskPriority>(
-                    initialValue: _priority,
-                    decoration: _dec(context, null),
-                    items: TaskPriority.values
-                        .map((p) => DropdownMenuItem(
-                              value: p,
-                              child: Row(children: [
-                                Container(
-                                    width: 8,
-                                    height: 8,
-                                    decoration: BoxDecoration(
-                                        color: _priorityColor(p),
-                                        shape: BoxShape.circle)),
-                                const SizedBox(width: 6),
-                                Text(_priorityLabel(p)),
-                              ]),
-                            ))
-                        .toList(),
-                    onChanged: (v) => setState(() => _priority = v!),
-                  ),
-                  const SizedBox(height: 14),
-
-                  // Due date
-                  const _SectionLabel('Due Date'),
-                  InkWell(
-                    onTap: _pickDueDate,
-                    borderRadius: BorderRadius.circular(16),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 14),
-                      decoration: BoxDecoration(
-                        color: context.fomraSurfaceVar,
-                        border: Border.all(color: context.fomraBorder),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Row(children: [
-                        Icon(Icons.calendar_today,
-                            size: 18,
-                            color: context.isDarkMode
-                                ? AppColors.primaryLight
-                                : AppColors.primary),
-                        const SizedBox(width: 10),
-                        Text(
-                            '${_dueDate.day}/${_dueDate.month}/${_dueDate.year}',
-                            style: TextStyle(
-                                fontSize: 14, color: context.fomraTextPrimary)),
-                        const Spacer(),
-                        Text(
-                            _slaLabel(_priority),
-                            style: TextStyle(
-                                fontSize: 11,
-                                color: context.fomraTextSecondary)),
-                      ]),
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-
-                  // Reminders
-                  const _SectionLabel('Reminder System'),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: _kReminderOptions.entries.map((e) {
-                      final selected = _reminders.contains(e.value);
-                      return FilterChip(
-                        label: Text(e.key,
-                            style: TextStyle(
-                                fontSize: 12,
-                                color: selected || context.isDarkMode
-                                    ? Colors.white
-                                    : context.fomraTextPrimary)),
-                        selected: selected,
-                        onSelected: (v) => setState(() => v
-                            ? _reminders.add(e.value)
-                            : _reminders.remove(e.value)),
-                        selectedColor: AppColors.info,
-                        backgroundColor: context.fomraSurfaceVar,
-                        side: BorderSide(
-                            color: selected
-                                ? AppColors.info
-                                : context.fomraBorder),
-                        avatar: Icon(Icons.alarm,
-                            size: 14,
-                            color: selected
-                                ? Colors.white
-                                : AppColors.info),
-                        showCheckmark: false,
-                      );
-                    }).toList(),
-                  ),
-                  const SizedBox(height: 18),
-
-                  // Assign Users (management only)
-                  if (_isManagement) ...[
-                    const _SectionLabel('Assign Users'),
-                    _buildAssigneeDropdown(context),
-                    if (_assignedTo.isNotEmpty) ...[
-                      const SizedBox(height: 10),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: _assignedTo.map((name) {
-                          return Chip(
-                            label: Text(name,
-                                style: const TextStyle(
-                                    fontSize: 12, color: Colors.white)),
-                            avatar: CircleAvatar(
-                              backgroundColor:
-                                  Colors.white.withValues(alpha: 0.3),
-                              child: Text(
-                                  name.isNotEmpty ? name[0].toUpperCase() : '?',
-                                  style: const TextStyle(
-                                      fontSize: 11,
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold)),
-                            ),
-                            backgroundColor: AppColors.primary,
-                            side: const BorderSide(color: AppColors.primary),
-                            deleteIcon: const Icon(Icons.close,
-                                size: 16, color: Colors.white),
-                            onDeleted: () =>
-                                setState(() => _assignedTo.remove(name)),
-                          );
-                        }).toList(),
-                      ),
-                    ],
-                    const SizedBox(height: 18),
-                  ],
-
-                  // Notes
-                  const _SectionLabel('Notes'),
-                  TextFormField(
-                    controller: _notesCtrl,
-                    decoration: _dec(context, 'Additional notes…'),
-                    maxLines: 3,
-                  ),
-                  const SizedBox(height: 10),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton.icon(
-                      onPressed: _save,
-                      icon: const Icon(Icons.check_circle_outline, size: 18),
-                      label: const Text('Create Task'),
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 80),
                 ],
               ),
             ),
+            Text(
+              _slaLabel(_priority),
+              style: TextStyle(fontSize: 11, color: context.fomraTextSecondary),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildReminderChips(BuildContext context) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: _kReminderOptions.entries.map((e) {
+        final selected = _reminders.contains(e.value);
+        return FilterChip(
+          label: Text(e.key,
+              style: TextStyle(
+                  fontSize: 12,
+                  color: selected || context.isDarkMode
+                      ? Colors.white
+                      : context.fomraTextPrimary)),
+          selected: selected,
+          onSelected: (v) => setState(
+              () => v ? _reminders.add(e.value) : _reminders.remove(e.value)),
+          selectedColor: AppColors.info,
+          backgroundColor: context.fomraSurfaceVar,
+          side:
+              BorderSide(color: selected ? AppColors.info : context.fomraBorder),
+          avatar: Icon(Icons.alarm,
+              size: 14, color: selected ? Colors.white : AppColors.info),
+          showCheckmark: false,
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildFooter(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+      decoration: BoxDecoration(
+        color: context.fomraSurface,
+        border: Border(top: BorderSide(color: context.fomraBorder)),
+      ),
+      child: Row(
+        children: [
+          OutlinedButton(
+            onPressed: () => Navigator.pop(context),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size(96, 46),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+            ),
+            child: const Text('Cancel'),
           ),
-        ]),
+          const SizedBox(width: 10),
+          Expanded(
+            child: ElevatedButton.icon(
+              onPressed: _save,
+              icon: const Icon(Icons.check_circle_outline, size: 18),
+              label: const Text('Create Task'),
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1495,8 +1673,25 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
         size: 20,
         color: selected ? AppColors.primary : context.fomraTextSecondary,
       ),
-      child: Text(name,
-          style: TextStyle(fontSize: 14, color: context.fomraTextPrimary)),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 10,
+            backgroundColor: AppColors.primary.withValues(alpha: 0.14),
+            child: Text(
+              name.isNotEmpty ? name[0].toUpperCase() : '?',
+              style: const TextStyle(
+                fontSize: 10,
+                color: AppColors.primary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(name,
+              style: TextStyle(fontSize: 14, color: context.fomraTextPrimary)),
+        ],
+      ),
     );
   }
 
@@ -1935,6 +2130,57 @@ class _SheetHandle extends StatelessWidget {
           ),
         ),
       );
+}
+
+class _FormSectionCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final Widget child;
+
+  const _FormSectionCard({
+    required this.icon,
+    required this.title,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      interactive: false,
+      radius: AppColors.radiusMd,
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 30,
+                height: 30,
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                alignment: Alignment.center,
+                child: Icon(icon, size: 16, color: AppColors.primary),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: context.fomraTextPrimary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          child,
+        ],
+      ),
+    );
+  }
 }
 
 class _SectionLabel extends StatelessWidget {
