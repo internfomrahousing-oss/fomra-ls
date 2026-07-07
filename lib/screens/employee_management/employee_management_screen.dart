@@ -221,93 +221,108 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
 
     final pagePad = FomraLayout.pagePadding(context);
 
-    return Align(
-      alignment: Alignment.topCenter,
-      child: portalPageWidthConstraint(
-        context,
-        Column(
-          children: [
-            Padding(
-              padding: pagePad.copyWith(bottom: 8),
-              child: PortalFadeSection(
-                index: 0,
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final stacked = constraints.maxWidth < 640;
-                    if (stacked) {
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          EmployeeManagementSearchBar(
-                            onChanged: (v) => setState(() => _search = v),
-                          ),
-                          const SizedBox(height: 10),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: EmployeeManagementAddButton(
-                                  onPressed: _openAddEmployee,
-                                ),
-                              ),
-                              _moreMenu(),
-                            ],
-                          ),
-                        ],
-                      );
-                    }
-                    return Row(
-                      children: [
-                        Expanded(
-                          child: EmployeeManagementSearchBar(
-                            onChanged: (v) => setState(() => _search = v),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        EmployeeManagementAddButton(
+    final header = Padding(
+      padding: pagePad.copyWith(bottom: 8),
+      child: PortalFadeSection(
+        index: 0,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final stacked = constraints.maxWidth < 640;
+            if (stacked) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  EmployeeManagementSearchBar(
+                    onChanged: (v) => setState(() => _search = v),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: EmployeeManagementAddButton(
                           onPressed: _openAddEmployee,
                         ),
-                        _moreMenu(),
-                      ],
-                    );
-                  },
+                      ),
+                      _moreMenu(),
+                    ],
+                  ),
+                ],
+              );
+            }
+            return Row(
+              children: [
+                Expanded(
+                  child: EmployeeManagementSearchBar(
+                    onChanged: (v) => setState(() => _search = v),
+                  ),
                 ),
-              ),
-            ),
+                const SizedBox(width: 12),
+                EmployeeManagementAddButton(
+                  onPressed: _openAddEmployee,
+                ),
+                _moreMenu(),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+
+    // Full-width list so the scrollbar sits at the window edge; the header and
+    // list items stay centered (~94% width) like the home page.
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final side =
+            FomraLayout.isDesktop(context) ? constraints.maxWidth * 0.03 : 0.0;
+        final listPad = pagePad.copyWith(top: 0, bottom: 24);
+        return Column(
+          children: [
+            portalPageWidthConstraint(context, header),
             Expanded(
               child: _loading
                   ? const _EmployeeLoadingSkeleton()
                   : _loadError != null
-                      ? EmptyState(
-                          icon: Icons.cloud_off_outlined,
-                          title: 'Couldn’t load employees',
-                          message: _loadError,
-                          action: PrimaryButton(
-                            label: 'Retry',
-                            icon: Icons.refresh,
-                            onPressed: _loadEmployees,
+                      ? portalPageWidthConstraint(
+                          context,
+                          EmptyState(
+                            icon: Icons.cloud_off_outlined,
+                            title: 'Couldn’t load employees',
+                            message: _loadError,
+                            action: PrimaryButton(
+                              label: 'Retry',
+                              icon: Icons.refresh,
+                              onPressed: _loadEmployees,
+                            ),
                           ),
                         )
                       : _filtered.isEmpty
-                          ? EmptyState(
-                              icon: Icons.groups_outlined,
-                              title: _employees.isEmpty
-                                  ? 'No employees yet'
-                                  : 'No matches',
-                              message: _employees.isEmpty
-                                  ? 'Add an employee profile to get started.'
-                                  : 'Try a different search term.',
-                              action: _employees.isEmpty
-                                  ? PrimaryButton(
-                                      label: 'Add Employee',
-                                      icon: Icons.person_add_outlined,
-                                      onPressed: _openAddEmployee,
-                                    )
-                                  : null,
+                          ? portalPageWidthConstraint(
+                              context,
+                              EmptyState(
+                                icon: Icons.groups_outlined,
+                                title: _employees.isEmpty
+                                    ? 'No employees yet'
+                                    : 'No matches',
+                                message: _employees.isEmpty
+                                    ? 'Add an employee profile to get started.'
+                                    : 'Try a different search term.',
+                                action: _employees.isEmpty
+                                    ? PrimaryButton(
+                                        label: 'Add Employee',
+                                        icon: Icons.person_add_outlined,
+                                        onPressed: _openAddEmployee,
+                                      )
+                                    : null,
+                              ),
                             )
                           : RefreshIndicator(
                               onRefresh: _loadEmployees,
                               child: ListView.builder(
-                                padding: pagePad.copyWith(top: 0, bottom: 24),
+                                padding: EdgeInsets.fromLTRB(
+                                    listPad.left + side,
+                                    listPad.top,
+                                    listPad.right + side,
+                                    listPad.bottom),
                                 itemCount: _filtered.length,
                                 itemBuilder: (_, i) => PortalFadeSection(
                                   index: i.clamp(0, 6),
@@ -323,8 +338,8 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                             ),
             ),
           ],
-        ),
-      ),
+        );
+      },
     );
   }
 

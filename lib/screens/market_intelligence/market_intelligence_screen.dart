@@ -1978,12 +1978,11 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
       return _buildLeadEmbeddedBody();
     }
 
-    final body = portalPageBody(
+    final body = portalScrollBody(
       context,
-      SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
             PortalFadeSection(index: 0, child: _buildSearchSection()),
             const SizedBox(height: 24),
             PortalFadeSection(index: 1, child: _buildMapSection()),
@@ -2000,7 +1999,6 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
             const SizedBox(height: 32),
           ],
         ),
-      ),
     );
     return Scaffold(
       backgroundColor: context.fomraSurfaceVar,

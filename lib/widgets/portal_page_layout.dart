@@ -18,6 +18,21 @@ Widget portalPageBody(BuildContext context, Widget child) {
   );
 }
 
+/// Home-style scrollable body: the scroll view spans the FULL width so its
+/// scrollbar sits at the window's right edge (like the home page), while the
+/// content stays padded and centered. Pass the inner content (e.g. a Column).
+Widget portalScrollBody(
+  BuildContext context,
+  Widget child, {
+  ScrollController? controller,
+}) {
+  return SingleChildScrollView(
+    controller: controller,
+    padding: FomraLayout.pagePadding(context),
+    child: portalPageWidthConstraint(context, child),
+  );
+}
+
 /// Sub-page app bar with back navigation and premium gradient.
 class FomraSubPageAppBar extends StatelessWidget implements PreferredSizeWidget {
   final String title;

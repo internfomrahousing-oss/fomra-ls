@@ -4,7 +4,6 @@ import '../../models/land_lead.dart';
 import '../../services/app_store.dart';
 import '../../services/land_lead_service.dart';
 import '../../theme/app_theme.dart';
-import '../../theme/fomra_layout.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../widgets/portal_home_sections.dart';
 import '../../widgets/portal_page_layout.dart';
@@ -57,8 +56,6 @@ class _LeadDetailScreenState extends State<LeadDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final pagePad = FomraLayout.pagePadding(context);
-
     return Scaffold(
       backgroundColor: context.fomraPageBg,
       appBar: FomraSubPageAppBar(
@@ -78,42 +75,36 @@ class _LeadDetailScreenState extends State<LeadDetailScreen> {
           ),
         ],
       ),
-      body: Align(
-        alignment: Alignment.topCenter,
-        child: portalPageWidthConstraint(
-          context,
-          SingleChildScrollView(
-            padding: pagePad,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                PortalFadeSection(
-                  index: 0,
-                  child: PortalSectionCard(
-                    title: 'Land lead details',
-                    subtitle: 'Parcel, owner and status overview',
-                    icon: Icons.description_outlined,
-                    child: _LeadDetailsBody(lead: lead),
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.lg),
-                PortalFadeSection(
-                  index: 1,
-                  child: PortalSectionCard(
-                    title: 'Market intelligence',
-                    subtitle: 'Comparable listings near this parcel',
-                    icon: Icons.travel_explore_outlined,
-                    child: MarketIntelligenceScreen(
-                      key: ValueKey(
-                          '${lead.leadId}|${lead.gpsCoordinates}|${lead.landExtent}'),
-                      lead: lead,
-                      embeddedInLead: true,
-                    ),
-                  ),
-                ),
-              ],
+      body: portalScrollBody(
+        context,
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            PortalFadeSection(
+              index: 0,
+              child: PortalSectionCard(
+                title: 'Land lead details',
+                subtitle: 'Parcel, owner and status overview',
+                icon: Icons.description_outlined,
+                child: _LeadDetailsBody(lead: lead),
+              ),
             ),
-          ),
+            const SizedBox(height: AppSpacing.lg),
+            PortalFadeSection(
+              index: 1,
+              child: PortalSectionCard(
+                title: 'Market intelligence',
+                subtitle: 'Comparable listings near this parcel',
+                icon: Icons.travel_explore_outlined,
+                child: MarketIntelligenceScreen(
+                  key: ValueKey(
+                      '${lead.leadId}|${lead.gpsCoordinates}|${lead.landExtent}'),
+                  lead: lead,
+                  embeddedInLead: true,
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

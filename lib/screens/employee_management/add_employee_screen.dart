@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../../services/employee_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_input.dart';
-import '../../theme/fomra_layout.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../widgets/portal_home_sections.dart';
 import '../../widgets/portal_page_layout.dart';
@@ -61,21 +60,15 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final pagePad = FomraLayout.pagePadding(context);
-
     return Scaffold(
       backgroundColor: context.fomraPageBg,
       appBar: FomraSubPageAppBar(title: 'Add Employee'),
-      body: Align(
-        alignment: Alignment.topCenter,
-        child: portalPageWidthConstraint(
-          context,
-          SingleChildScrollView(
-            padding: pagePad,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 480),
-              child: Form(
-                key: _formKey,
+      body: portalScrollBody(
+        context,
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 480),
+          child: Form(
+            key: _formKey,
                 child: PortalFadeSection(
                   index: 0,
                   child: AppCard(
@@ -179,8 +172,6 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
               ),
             ),
           ),
-        ),
-      ),
     );
   }
 

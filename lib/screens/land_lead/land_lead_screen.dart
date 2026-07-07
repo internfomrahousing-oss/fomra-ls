@@ -633,20 +633,24 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
       );
     }
 
-    return Align(
-      alignment: Alignment.topCenter,
-      child: portalPageWidthConstraint(
-        context,
-        CustomScrollView(
+    // Full-width scroll view so the scrollbar sits at the window's right edge;
+    // content is centered via side padding (same ~94% width as home).
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final side =
+            FomraLayout.isDesktop(context) ? constraints.maxWidth * 0.03 : 0.0;
+        final pp = pagePad.copyWith(bottom: 0);
+        return CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
             SliverPadding(
-              padding: pagePad.copyWith(bottom: 0),
+              padding: EdgeInsets.fromLTRB(
+                  pp.left + side, pp.top, pp.right + side, pp.bottom),
               sliver: SliverMainAxisGroup(slivers: slivers),
             ),
           ],
-        ),
-      ),
+        );
+      },
     );
   }
 
