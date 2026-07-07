@@ -112,7 +112,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   String get _profileRole =>
-      _isManagement ? 'Administrator' : 'Team member';
+      _isManagement ? 'Administrator' : 'Employee';
 
   Future<void> _loadNotifications() async {
     try {
@@ -375,7 +375,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       ),
       PortalQuickAction(
         label: 'Create Task',
-        subtitle: 'Assign the team',
+        subtitle: 'Assign employees',
         icon: Icons.playlist_add_check_circle_outlined,
         accent: AppColors.purple,
         onTap: () => _goTo('/task-management'),
@@ -488,10 +488,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 index: 2,
                 child: PortalSectionCard(
                   title: _isManagement
-                      ? 'Team performance'
+                      ? 'Employee performance'
                       : 'My performance',
                   subtitle: _isManagement
-                      ? 'Ranking and activity by team member'
+                      ? 'Ranking and activity by employee'
                       : 'Your lead contribution this period',
                   icon: Icons.groups_rounded,
                   child: _isManagement
@@ -502,7 +502,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                   icon: Icons.groups_outlined,
                                   title: 'No leads yet',
                                   message:
-                                      'Create your first lead to start tracking team performance.',
+                                      'Create your first lead to start tracking employee performance.',
                                   action: PrimaryButton(
                                     label: 'Add Lead',
                                     icon: Icons.add_location_alt_outlined,
@@ -511,7 +511,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                 ),
                                 const PortalEmptyHint(
                                   hint:
-                                      'Leads added by your team will appear here automatically.',
+                                      'Leads added by your employees will appear here automatically.',
                                 ),
                               ],
                             )
