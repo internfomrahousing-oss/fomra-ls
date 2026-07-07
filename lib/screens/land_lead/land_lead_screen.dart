@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../models/add_lead_result.dart';
 import '../../models/land_lead.dart';
 import '../../models/employee_profile.dart';
@@ -13,6 +14,7 @@ import '../../theme/fomra_theme_context.dart';
 import '../../widgets/app_drawer.dart';
 import '../../widgets/fomra_app_bar.dart';
 import '../../widgets/fomra_bottom_nav.dart';
+import '../../widgets/land_workspace_ui.dart';
 import '../../widgets/portal_home_sections.dart';
 import '../../widgets/portal_page_layout.dart';
 import '../../widgets/ui/app_components.dart';
@@ -33,6 +35,11 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
   String _search = '';
   bool _loading = true;
   String? _loadError;
+
+  final Set<LandType> _filterLandTypes = {};
+  bool _filterBroker = false;
+  bool _filterHighPriority = false;
+  bool _filterCompleted = false;
 
   bool _selectMode = false;
   final Set<String> _selectedLeadIds = {};
@@ -238,31 +245,68 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
             l.location.toLowerCase().contains(q) ||
             l.surveyNumber.toLowerCase().contains(q) ||
             l.leadId.toLowerCase().contains(q);
-        return matchStatus && matchSearch;
+        final matchLandType = _filterLandTypes.isEmpty ||
+            _filterLandTypes.contains(l.landType);
+        final matchBroker =
+            !_filterBroker || l.inputSource == InputSource.broker;
+        final matchPriority = !_filterHighPriority ||
+            l.status == LeadStatus.new_ ||
+            l.status == LeadStatus.negotiation;
+        final matchCompleted =
+            !_filterCompleted || l.status == LeadStatus.closed;
+        return matchStatus &&
+            matchSearch &&
+            matchLandType &&
+            matchBroker &&
+            matchPriority &&
+            matchCompleted;
       }).toList();
+
+  int get _activeFilterCount {
+    var n = 0;
+    if (_filterStatus != null) n++;
+    n += _filterLandTypes.length;
+    if (_filterBroker) n++;
+    if (_filterHighPriority) n++;
+    if (_filterCompleted) n++;
+    return n;
+  }
+
+  void _clearAllFilters() {
+    setState(() {
+      _filterStatus = null;
+      _filterLandTypes.clear();
+      _filterBroker = false;
+      _filterHighPriority = false;
+      _filterCompleted = false;
+    });
+  }
+
+  void _toggleLandType(LandType t) {
+    setState(() {
+      if (!_filterLandTypes.remove(t)) _filterLandTypes.add(t);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final body = _buildScrollableBody();
 
-    final fab = Container(
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF1D4ED8), Color(0xFF3B82F6)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+    final fab = LandWorkspaceSpeedDial(
+      onAddLead: _openAddLead,
+      onImportLead: () => ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Import lead — connect your CSV source in settings.'),
+          behavior: SnackBarBehavior.floating,
         ),
-        borderRadius: BorderRadius.circular(999),
-        boxShadow: AppColors.coloredShadow(AppColors.primary),
       ),
-      child: FloatingActionButton.extended(
-        onPressed: _openAddLead,
-        icon: const Icon(Icons.add_location_alt_outlined),
-        label: const Text('Add Lead'),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        foregroundColor: Colors.white,
+      onScanDocument: () => ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Document scan — use site photos when adding a lead.'),
+          behavior: SnackBarBehavior.floating,
+        ),
       ),
+      onGpsCapture: _openAddLead,
     );
 
     if (widget.isTab) {
@@ -487,13 +531,29 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
         SliverToBoxAdapter(
           child: PortalFadeSection(
             index: 1,
-            child: _SearchBar(
-              onChanged: (q) => setState(() => _search = q),
-              filterStatus: _filterStatus,
-              onClearFilter: () => setState(() => _filterStatus = null),
-              onFilter: widget.isTab && _leads.isNotEmpty && !_loading
-                  ? _showFilter
-                  : null,
+            child: Column(
+              children: [
+                LandWorkspaceSearchBar(
+                  onChanged: (q) => setState(() => _search = q),
+                  activeFilterCount: _activeFilterCount,
+                  onFilterTap: _showFilter,
+                ),
+                const SizedBox(height: 10),
+                LandWorkspaceFilterChips(
+                  landTypes: _filterLandTypes,
+                  brokerOnly: _filterBroker,
+                  highPriority: _filterHighPriority,
+                  completedOnly: _filterCompleted,
+                  onToggleLandType: _toggleLandType,
+                  onToggleBroker: () =>
+                      setState(() => _filterBroker = !_filterBroker),
+                  onToggleHighPriority: () =>
+                      setState(() => _filterHighPriority = !_filterHighPriority),
+                  onToggleCompleted: () =>
+                      setState(() => _filterCompleted = !_filterCompleted),
+                  onClearAll: _clearAllFilters,
+                ),
+              ],
             ),
           ),
         ),
@@ -503,7 +563,10 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
       slivers.add(
         SliverFillRemaining(
           hasScrollBody: false,
-          child: _EmptyState(hasLeads: _leads.isNotEmpty),
+          child: _EmptyState(
+            hasLeads: _leads.isNotEmpty,
+            onAddLead: _leads.isNotEmpty ? _clearAllFilters : _openAddLead,
+          ),
         ),
       );
     } else {
@@ -555,6 +618,25 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
                               ),
                             ),
                     onStatusChange: (s) => _updateStatus(lead, s),
+                    onEdit: () => _openEditLead(lead),
+                    onMap: () => _openLeadMap(lead),
+                    onCall: lead.contactDetails.isNotEmpty
+                        ? () {
+                            Clipboard.setData(
+                                ClipboardData(text: lead.contactDetails));
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Contact copied: ${lead.contactDetails}'),
+                                behavior: SnackBarBehavior.floating,
+                              ),
+                            );
+                          }
+                        : null,
+                    onAssignTask: () => Navigator.pushNamed(
+                      context,
+                      '/task-management',
+                    ),
+                    onDocuments: () => _openEditLead(lead),
                   ),
                 );
               },
@@ -630,6 +712,39 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
     });
   }
 
+  Future<void> _openEditLead(LandLead lead) async {
+    final result = await Navigator.push<AddLeadResult>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AddLeadScreen(existingLead: lead),
+      ),
+    );
+    if (result == null) return;
+    try {
+      final saved = await LandLeadService.update(
+        result.lead,
+        sitePhotoBytes: result.sitePhotoBytes,
+      );
+      AppStore.instance.replaceLead(saved);
+    } catch (e) {
+      AppStore.instance.replaceLead(result.lead);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Saved locally; sync failed: $e')),
+        );
+      }
+    }
+  }
+
+  void _openLeadMap(LandLead lead) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => LeadsMapScreen(leads: [lead]),
+      ),
+    );
+  }
+
   Future<void> _openAddLead() async {
     final result = await Navigator.push<AddLeadResult>(
       context,
@@ -697,15 +812,23 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
 
 class _EmptyState extends StatelessWidget {
   final bool hasLeads;
-  const _EmptyState({required this.hasLeads});
+  final VoidCallback? onAddLead;
+  const _EmptyState({required this.hasLeads, this.onAddLead});
 
   @override
   Widget build(BuildContext context) => EmptyState(
         icon: Icons.add_location_alt_outlined,
-        title: hasLeads ? 'No matching leads' : 'No land leads yet',
+        title: hasLeads ? 'No matching leads' : 'No leads yet',
         message: hasLeads
-            ? 'No leads match the current filter. Try clearing it.'
-            : 'Tap Add Lead to capture your first land lead.',
+            ? 'Try adjusting filters or search terms.'
+            : 'Start by adding your first land lead.',
+        action: onAddLead == null
+            ? null
+            : PrimaryButton(
+                label: hasLeads ? 'Clear filters' : 'Add Lead',
+                icon: hasLeads ? Icons.filter_alt_off : Icons.add,
+                onPressed: onAddLead,
+              ),
       );
 }
 
@@ -764,104 +887,27 @@ class _LeadSummary extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.only(top: 12, bottom: 8),
-      child: PortalKpiStrip(
-        items: kpis
-            .map(
-              (k) => PortalKpiItem(
-                label: k.$1.label,
-                value: leads.where((l) => l.status == k.$1).length,
-                icon: k.$2,
-                accent: k.$1.color,
-              ),
-            )
-            .toList(),
+      child: SizedBox(
+        height: 118,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          itemCount: kpis.length,
+          separatorBuilder: (_, __) => const SizedBox(width: 12),
+          itemBuilder: (_, i) {
+            final status = kpis[i].$1;
+            final icon = kpis[i].$2;
+            final count = leads.where((l) => l.status == status).length;
+            return LandWorkspaceStatusCard(
+              statusName: status.label,
+              subtitle: 'Leads',
+              value: count,
+              icon: icon,
+              accent: status.color,
+            );
+          },
+        ),
       ),
     );
-  }
-}
-
-// ── Search + Filter Bar ───────────────────────────────────────────────────────
-
-class _SearchBar extends StatelessWidget {
-  final ValueChanged<String> onChanged;
-  final LeadStatus? filterStatus;
-  final VoidCallback onClearFilter;
-  final VoidCallback? onFilter;
-
-  const _SearchBar({
-    required this.onChanged,
-    required this.filterStatus,
-    required this.onClearFilter,
-    this.onFilter,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(children: [
-      AppCard(
-        padding: const EdgeInsets.all(10),
-        radius: AppColors.radiusLg,
-        interactive: false,
-        child: Row(children: [
-          Expanded(
-            child: TextField(
-              onChanged: onChanged,
-              style: TextStyle(color: context.fomraTextPrimary),
-              decoration: InputDecoration(
-                hintText: 'Search by owner, location, survey no…',
-                hintStyle: TextStyle(color: context.fomraTextSecondary),
-                prefixIcon: Icon(Icons.search, color: context.fomraTextSecondary),
-                filled: true,
-                fillColor: context.fomraSurfaceVar,
-                border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: BorderSide.none),
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              ),
-            ),
-          ),
-          if (onFilter != null) ...[
-            const SizedBox(width: 10),
-            Material(
-              color: AppColors.primary.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(16),
-              child: InkWell(
-                onTap: onFilter,
-                borderRadius: BorderRadius.circular(16),
-                child: const Padding(
-                  padding: EdgeInsets.all(11),
-                  child: Icon(Icons.tune_rounded,
-                      color: AppColors.primary, size: 19),
-                ),
-              ),
-            ),
-          ],
-        ]),
-      ),
-      if (filterStatus != null)
-        Container(
-          margin: const EdgeInsets.only(top: 10, bottom: 4),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-          decoration: BoxDecoration(
-            color: AppColors.primary.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: Row(children: [
-            Text('Filtered: ${filterStatus!.label}',
-                style: const TextStyle(
-                    fontSize: 12,
-                    color: AppColors.primary,
-                    fontWeight: FontWeight.w500)),
-            const Spacer(),
-            GestureDetector(
-              onTap: onClearFilter,
-              child: const Icon(Icons.close,
-                  size: 16, color: AppColors.primary),
-            ),
-          ]),
-        ),
-    ]);
   }
 }
 
@@ -873,6 +919,11 @@ class _LeadCard extends StatelessWidget {
   final VoidCallback? onTap;
   final bool selectionMode;
   final bool selected;
+  final VoidCallback? onEdit;
+  final VoidCallback? onMap;
+  final VoidCallback? onCall;
+  final VoidCallback? onAssignTask;
+  final VoidCallback? onDocuments;
 
   const _LeadCard({
     required this.lead,
@@ -880,15 +931,16 @@ class _LeadCard extends StatelessWidget {
     this.onTap,
     this.selectionMode = false,
     this.selected = false,
+    this.onEdit,
+    this.onMap,
+    this.onCall,
+    this.onAssignTask,
+    this.onDocuments,
   });
 
   @override
   Widget build(BuildContext context) {
     final statusColor = lead.status.color;
-    final sourceColor = _sourceColor(lead.inputSource);
-    final locationText = [lead.location, lead.village, lead.district]
-        .where((s) => s.isNotEmpty)
-        .join(', ');
     final title = lead.ownerName.trim().isNotEmpty
         ? lead.ownerName.trim()
         : 'Lead #${lead.leadId}';
@@ -981,76 +1033,41 @@ class _LeadCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 14),
-              _LeadFieldRow(
-                icon: Icons.place_outlined,
-                text: locationText.isEmpty
-                    ? 'Location not provided'
-                    : locationText,
-              ),
-              if (lead.surveyNumber.isNotEmpty ||
-                  lead.subDivision.isNotEmpty ||
-                  lead.landExtent.isNotEmpty) ...[
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    if (lead.surveyNumber.isNotEmpty)
-                      _Chip(Icons.tag, 'Survey ${lead.surveyNumber}'),
-                    if (lead.subDivision.isNotEmpty)
-                      _Chip(Icons.call_split_outlined,
-                          'Sub ${lead.subDivision}'),
-                    if (lead.landExtent.isNotEmpty)
-                      _Chip(Icons.straighten, lead.landExtent),
-                  ],
-                ),
-              ],
-              const SizedBox(height: 14),
-              Divider(height: 1, color: context.fomraBorder),
-              const SizedBox(height: 12),
-              Row(children: [
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  decoration: BoxDecoration(
-                      color: sourceColor.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(999)),
-                  child: Row(mainAxisSize: MainAxisSize.min, children: [
-                    Icon(_sourceIcon(lead.inputSource),
-                        size: 12, color: sourceColor),
-                    const SizedBox(width: 5),
-                    Text(lead.inputSource.label,
-                        style: TextStyle(
-                            fontSize: 10,
-                            color: sourceColor,
-                            fontWeight: FontWeight.w700)),
-                  ]),
-                ),
-                if (lead.createdByName.isNotEmpty) ...[
-                  const SizedBox(width: 8),
-                  Icon(Icons.person_outline,
-                      size: 12, color: context.fomraTextTertiary),
-                  const SizedBox(width: 4),
-                  Flexible(
-                    child: Text(
-                      lead.createdByName,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                          fontSize: 11,
-                          color: context.fomraTextSecondary,
-                          fontWeight: FontWeight.w600),
-                    ),
+              Wrap(
+                spacing: 12,
+                runSpacing: 8,
+                children: [
+                  _infoChip(context, Icons.tag, 'ID', lead.leadId),
+                  _infoChip(context, Icons.landscape_outlined, 'Type', lead.landType.label),
+                  if (lead.surveyNumber.isNotEmpty)
+                    _infoChip(context, Icons.numbers, 'Survey', lead.surveyNumber),
+                  if (lead.landExtent.isNotEmpty)
+                    _infoChip(context, Icons.straighten, 'Area', lead.landExtent),
+                  if (lead.village.isNotEmpty)
+                    _infoChip(context, Icons.home_work_outlined, 'Village', lead.village),
+                  if (lead.inputSource == InputSource.broker)
+                    _infoChip(context, Icons.handshake_outlined, 'Broker', 'Yes'),
+                  if (lead.createdByName.isNotEmpty)
+                    _infoChip(context, Icons.person_outline, 'Assigned', lead.createdByName),
+                  _infoChip(
+                    context,
+                    Icons.calendar_today_outlined,
+                    'Created',
+                    '${lead.addedOn.day}/${lead.addedOn.month}/${lead.addedOn.year}',
                   ),
                 ],
-                const Spacer(),
-                Icon(Icons.calendar_today_outlined,
-                    size: 12, color: context.fomraTextTertiary),
-                const SizedBox(width: 5),
-                Text(
-                    '${lead.addedOn.day}/${lead.addedOn.month}/${lead.addedOn.year}',
-                    style: TextStyle(
-                        fontSize: 11, color: context.fomraTextSecondary)),
-              ]),
+              ),
+              if (!selectionMode) ...[
+                const SizedBox(height: 12),
+                LandWorkspaceLeadActions(
+                  lead: lead,
+                  onCall: onCall,
+                  onMap: onMap,
+                  onEdit: onEdit,
+                  onAssignTask: onAssignTask,
+                  onDocuments: onDocuments,
+                ),
+              ],
               if (!selectionMode) ...[
                 const SizedBox(height: 12),
                 SingleChildScrollView(
@@ -1090,55 +1107,42 @@ class _LeadCard extends StatelessWidget {
       ),
     );
   }
-}
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-class _Chip extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  const _Chip(this.icon, this.label);
-
-  @override
-  Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(
-          color: context.fomraSurfaceVar,
-          borderRadius: BorderRadius.circular(999),
-        ),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Icon(icon, size: 12, color: AppColors.textSecondary),
+  Widget _infoChip(BuildContext context, IconData icon, String label, String value) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: context.fomraSurfaceVar,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: context.fomraTextSecondary),
           const SizedBox(width: 4),
-          Text(label,
-              style: const TextStyle(
-                  fontSize: 11, color: AppColors.textSecondary)),
-        ]),
-      );
-}
-
-class _LeadFieldRow extends StatelessWidget {
-  final IconData icon;
-  final String text;
-  const _LeadFieldRow({required this.icon, required this.text});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Icon(icon, size: 14, color: context.fomraTextSecondary),
-        const SizedBox(width: 5),
-        Expanded(
-          child: Text(
-            text,
-            style: TextStyle(fontSize: 12, color: context.fomraTextSecondary),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
+          Text(
+            '$label: ',
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: context.fomraTextSecondary,
+            ),
           ),
-        ),
-      ],
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              color: context.fomraTextPrimary,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 class _StatusBadge extends StatelessWidget {
   final LeadStatus status;
@@ -1158,19 +1162,3 @@ class _StatusBadge extends StatelessWidget {
     );
   }
 }
-
-Color _sourceColor(InputSource s) => switch (s) {
-      InputSource.broker => AppColors.info,
-      InputSource.landowner => AppColors.primary,
-      InputSource.referral => const Color(0xFF8B5CF6),
-      InputSource.internalTeam => AppColors.secondary,
-      InputSource.existingDatabase => AppColors.success,
-    };
-
-IconData _sourceIcon(InputSource s) => switch (s) {
-      InputSource.broker => Icons.handshake_outlined,
-      InputSource.landowner => Icons.person_pin_outlined,
-      InputSource.referral => Icons.group_outlined,
-      InputSource.internalTeam => Icons.business_center_outlined,
-      InputSource.existingDatabase => Icons.storage_outlined,
-    };
