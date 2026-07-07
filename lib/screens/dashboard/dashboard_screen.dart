@@ -27,7 +27,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   static const _kAllEmployees = 'All';
   bool _showAllRecent = false;
   bool _generatingReport = false;
-  bool _showReportOptions = false;
   int _selectedChartRange = 1;
   int _chartAnimToken = 0;
   LeadReportType _selectedReportType = LeadReportType.all;
@@ -45,10 +44,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
     final sorted = names.toList()..sort((a, b) => a.compareTo(b));
     return [_kAllEmployees, ...sorted];
-  }
-
-  void _toggleReportOptions() {
-    setState(() => _showReportOptions = !_showReportOptions);
   }
 
   String _reportTypeLabel(LeadReportType type) => switch (type) {
@@ -88,103 +83,95 @@ class _DashboardScreenState extends State<DashboardScreen> {
   /// Inline report options shown under the "Create PDF Report" button.
   Widget _buildReportOptions(BuildContext context) {
     final employees = _employeeNames;
-    return Padding(
-      padding: const EdgeInsets.only(top: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Divider(height: 1, color: context.fomraBorder),
-          const SizedBox(height: 12),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Choose what to include in the exported report.',
+          style: TextStyle(
+            fontSize: 13,
+            color: context.fomraTextSecondary,
+          ),
+        ),
+        const SizedBox(height: 10),
+        ...LeadReportType.values.map((type) {
+          final selected = _selectedReportType == type;
+          return InkWell(
+            borderRadius: BorderRadius.circular(10),
+            onTap: () => setState(() => _selectedReportType = type),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Row(
+                children: [
+                  Icon(
+                    selected
+                        ? Icons.radio_button_checked
+                        : Icons.radio_button_off,
+                    size: 20,
+                    color:
+                        selected ? AppColors.primary : context.fomraTextTertiary,
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    _reportTypeLabel(type),
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                      color: context.fomraTextPrimary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }),
+        if (_selectedReportType == LeadReportType.employeeLeads) ...[
+          const SizedBox(height: 8),
           Text(
-            'Choose what to include',
+            'Employee',
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w700,
               color: context.fomraTextPrimary,
             ),
           ),
-          const SizedBox(height: 4),
-          ...LeadReportType.values.map((type) {
-            final selected = _selectedReportType == type;
-            return InkWell(
-              borderRadius: BorderRadius.circular(10),
-              onTap: () => setState(() => _selectedReportType = type),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Row(
-                  children: [
-                    Icon(
-                      selected
-                          ? Icons.radio_button_checked
-                          : Icons.radio_button_off,
-                      size: 20,
-                      color: selected
-                          ? AppColors.primary
-                          : context.fomraTextTertiary,
-                    ),
-                    const SizedBox(width: 10),
-                    Text(
-                      _reportTypeLabel(type),
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight:
-                            selected ? FontWeight.w700 : FontWeight.w500,
-                        color: context.fomraTextPrimary,
-                      ),
-                    ),
-                  ],
-                ),
+          const SizedBox(height: 8),
+          DropdownButtonFormField<String>(
+            initialValue: employees.contains(_selectedEmployeeReport)
+                ? _selectedEmployeeReport
+                : employees.first,
+            isExpanded: true,
+            items: employees
+                .map((name) => DropdownMenuItem<String>(
+                      value: name,
+                      child: Text(name),
+                    ))
+                .toList(),
+            onChanged: (value) {
+              if (value == null) return;
+              setState(() => _selectedEmployeeReport = value);
+            },
+            decoration: InputDecoration(
+              isDense: true,
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
               ),
-            );
-          }),
-          if (_selectedReportType == LeadReportType.employeeLeads) ...[
-            const SizedBox(height: 8),
-            Text(
-              'Employee',
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: context.fomraTextPrimary,
-              ),
-            ),
-            const SizedBox(height: 8),
-            DropdownButtonFormField<String>(
-              initialValue: employees.contains(_selectedEmployeeReport)
-                  ? _selectedEmployeeReport
-                  : employees.first,
-              isExpanded: true,
-              items: employees
-                  .map((name) => DropdownMenuItem<String>(
-                        value: name,
-                        child: Text(name),
-                      ))
-                  .toList(),
-              onChanged: (value) {
-                if (value == null) return;
-                setState(() => _selectedEmployeeReport = value);
-              },
-              decoration: InputDecoration(
-                isDense: true,
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-            ),
-          ],
-          const SizedBox(height: 16),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: PrimaryButton(
-              label: _generatingReport ? 'Preparing PDF…' : 'Generate PDF',
-              icon: Icons.picture_as_pdf_outlined,
-              loading: _generatingReport,
-              onPressed: _generatingReport ? null : _generateReport,
             ),
           ),
         ],
-      ),
+        const SizedBox(height: 16),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: PrimaryButton(
+            label: _generatingReport ? 'Preparing PDF…' : 'Generate PDF',
+            icon: Icons.picture_as_pdf_outlined,
+            loading: _generatingReport,
+            onPressed: _generatingReport ? null : _generateReport,
+          ),
+        ),
+      ],
     );
   }
 
@@ -496,30 +483,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   subtitle:
                       'Export a PDF covering all leads, acquired leads, broker leads, and each employee’s lead performance.',
                   icon: Icons.picture_as_pdf_outlined,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: PrimaryButton(
-                          label: 'Create PDF Report',
-                          icon: _showReportOptions
-                              ? Icons.expand_less_rounded
-                              : Icons.tune_rounded,
-                          onPressed:
-                              leads.isEmpty ? null : _toggleReportOptions,
-                        ),
-                      ),
-                      AnimatedSize(
-                        duration: const Duration(milliseconds: 220),
-                        curve: Curves.easeOut,
-                        alignment: Alignment.topCenter,
-                        child: _showReportOptions
-                            ? _buildReportOptions(context)
-                            : const SizedBox(width: double.infinity),
-                      ),
-                    ],
-                  ),
+                  child: leads.isEmpty
+                      ? Text(
+                          'No leads available for report generation yet.',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: context.fomraTextSecondary,
+                          ),
+                        )
+                      : _buildReportOptions(context),
                 ),
                 const SizedBox(height: 20),
                 _SectionCard(
