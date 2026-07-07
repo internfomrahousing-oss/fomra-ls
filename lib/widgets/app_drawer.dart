@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/fomra_theme_context.dart';
+import 'ui/app_components.dart';
 
 class _MenuItem {
   final String title;
@@ -279,7 +280,9 @@ class _DrawerFooter extends StatelessWidget {
                 color: isDark ? context.fomraTextSecondary : const Color(0xFF90A4AE),
                 size: 20),
             tooltip: 'Sign Out',
-            onPressed: () {
+            onPressed: () async {
+              final confirmed = await confirmSignOut(context);
+              if (!confirmed || !context.mounted) return;
               Navigator.pop(context);
               AuthService.instance.logout();
               Navigator.pushNamedAndRemoveUntil(

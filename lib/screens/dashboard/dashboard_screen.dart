@@ -1,3 +1,4 @@
+import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
 import '../../models/land_lead.dart';
@@ -241,8 +242,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _weekOverWeekTrend(rejectedList, lowerIsBetter: true);
 
     final weeklyTrend = _trendByDays(7, totalLeadsList);
-    final maxPipeline = [newLeads, contacted, negotiation, acquired]
-        .fold<int>(1, (a, b) => a > b ? a : b);
 
     final kpis = [
       _KpiData(
@@ -329,6 +328,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   subtitle: 'Pipeline KPIs with trends and drill-down detail.',
                   icon: Icons.analytics_outlined,
                 ),
+                _SectionCard(
+                  title: 'Leads at a glance',
+                  subtitle:
+                      'Total, active, acquired and rejected leads in one view.',
+                  icon: Icons.bar_chart_rounded,
+                  child: _KpiOverviewChart(
+                    items: [
+                      (label: 'Total', value: totalLeads, color: kpis[0].accent),
+                      (label: 'Active', value: activeLeads, color: kpis[1].accent),
+                      (label: 'Acquired', value: acquired, color: kpis[2].accent),
+                      (label: 'Rejected', value: rejected, color: kpis[3].accent),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
                 _KpiGrid(
                   kpis: kpis,
                   onTap: _openKpiLeads,
@@ -349,41 +363,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       loading: _generatingReport,
                       onPressed: leads.isEmpty ? null : _createReport,
                     ),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                _SectionCard(
-                  title: 'Pipeline funnel',
-                  subtitle:
-                      'Track lead progression from new to acquired.',
-                  icon: Icons.filter_alt_outlined,
-                  child: Column(
-                    children: [
-                      _FunnelRow(
-                        label: 'New',
-                        value: newLeads,
-                        maxValue: maxPipeline,
-                        color: LeadStatus.new_.color,
-                      ),
-                      _FunnelRow(
-                        label: 'Contacted',
-                        value: contacted,
-                        maxValue: maxPipeline,
-                        color: LeadStatus.contacted.color,
-                      ),
-                      _FunnelRow(
-                        label: 'Negotiation',
-                        value: negotiation,
-                        maxValue: maxPipeline,
-                        color: LeadStatus.negotiation.color,
-                      ),
-                      _FunnelRow(
-                        label: 'Acquired',
-                        value: acquired,
-                        maxValue: maxPipeline,
-                        color: LeadStatus.closed.color,
-                      ),
-                    ],
                   ),
                 ),
                 const SizedBox(height: 20),
@@ -820,62 +799,147 @@ class _SectionCard extends StatelessWidget {
   }
 }
 
-class _FunnelRow extends StatelessWidget {
-  final String label;
-  final int value;
-  final int maxValue;
-  final Color color;
-
-  const _FunnelRow({
-    required this.label,
-    required this.value,
-    required this.maxValue,
-    required this.color,
-  });
+/// Single combined bar chart summarising the four headline lead metrics.
+class _KpiOverviewChart extends StatelessWidget {
+  final List<({String label, int value, Color color})> items;
+  const _KpiOverviewChart({required this.items});
 
   @override
   Widget build(BuildContext context) {
-    final factor =
-        maxValue <= 0 ? 0.0 : (value / maxValue).toDouble().clamp(0.0, 1.0);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: context.fomraTextPrimary,
+    final maxVal = items.fold<int>(0, (m, e) => e.value > m ? e.value : m);
+    final maxY = maxVal <= 0 ? 1.0 : maxVal * 1.25;
+    final interval = (maxY / 4).ceilToDouble();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(
+          height: 230,
+          child: BarChart(
+            BarChartData(
+              alignment: BarChartAlignment.spaceAround,
+              maxY: maxY,
+              minY: 0,
+              barTouchData: BarTouchData(
+                enabled: false,
+                touchTooltipData: BarTouchTooltipData(
+                  tooltipBgColor: Colors.transparent,
+                  tooltipPadding: EdgeInsets.zero,
+                  tooltipMargin: 2,
+                  getTooltipItem: (group, gi, rod, ri) => BarTooltipItem(
+                    '${rod.toY.round()}',
+                    TextStyle(
+                      color: context.fomraTextPrimary,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 13,
+                    ),
                   ),
                 ),
               ),
-              Text(
-                '$value',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w800,
-                  color: context.fomraTextPrimary,
+              gridData: FlGridData(
+                show: true,
+                drawVerticalLine: false,
+                horizontalInterval: interval,
+                getDrawingHorizontalLine: (_) =>
+                    FlLine(color: context.fomraBorder, strokeWidth: 1),
+              ),
+              borderData: FlBorderData(show: false),
+              titlesData: FlTitlesData(
+                topTitles: const AxisTitles(
+                    sideTitles: SideTitles(showTitles: false)),
+                rightTitles: const AxisTitles(
+                    sideTitles: SideTitles(showTitles: false)),
+                leftTitles: AxisTitles(
+                  sideTitles: SideTitles(
+                    showTitles: true,
+                    reservedSize: 34,
+                    interval: interval,
+                    getTitlesWidget: (v, meta) {
+                      if (v == 0 || v > maxY) return const SizedBox.shrink();
+                      return Text('${v.round()}',
+                          style: TextStyle(
+                              fontSize: 10,
+                              color: context.fomraTextSecondary));
+                    },
+                  ),
+                ),
+                bottomTitles: AxisTitles(
+                  sideTitles: SideTitles(
+                    showTitles: true,
+                    reservedSize: 30,
+                    getTitlesWidget: (v, meta) {
+                      final i = v.toInt();
+                      if (i < 0 || i >= items.length) {
+                        return const SizedBox.shrink();
+                      }
+                      return Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: Text(
+                          items[i].label,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: context.fomraTextPrimary,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
                 ),
               ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(999),
-            child: LinearProgressIndicator(
-              value: factor,
-              minHeight: 10,
-              backgroundColor: color.withValues(alpha: 0.12),
-              color: color,
+              barGroups: [
+                for (var i = 0; i < items.length; i++)
+                  BarChartGroupData(
+                    x: i,
+                    showingTooltipIndicators: const [0],
+                    barRods: [
+                      BarChartRodData(
+                        toY: items[i].value.toDouble(),
+                        color: items[i].color,
+                        width: 30,
+                        borderRadius: const BorderRadius.vertical(
+                            top: Radius.circular(6)),
+                        backDrawRodData: BackgroundBarChartRodData(
+                          show: true,
+                          toY: maxY,
+                          color: items[i].color.withValues(alpha: 0.08),
+                        ),
+                      ),
+                    ],
+                  ),
+              ],
             ),
           ),
-        ],
-      ),
+        ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 18,
+          runSpacing: 8,
+          children: [
+            for (final it in items)
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 10,
+                    height: 10,
+                    decoration:
+                        BoxDecoration(color: it.color, shape: BoxShape.circle),
+                  ),
+                  const SizedBox(width: 6),
+                  Text('${it.label}: ',
+                      style: TextStyle(
+                          fontSize: 12, color: context.fomraTextSecondary)),
+                  Text('${it.value}',
+                      style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                          color: context.fomraTextPrimary)),
+                ],
+              ),
+          ],
+        ),
+      ],
     );
   }
 }

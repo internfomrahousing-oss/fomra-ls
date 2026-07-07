@@ -484,7 +484,9 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
     );
   }
 
-  void _logout() {
+  Future<void> _logout() async {
+    final confirmed = await confirmSignOut(context);
+    if (!confirmed || !mounted) return;
     AuthService.instance.logout();
     Navigator.pushNamedAndRemoveUntil(context, '/login', (_) => false);
   }

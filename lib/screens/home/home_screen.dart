@@ -215,135 +215,56 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     setState(() {}); // repaint the bell in its active state
   }
 
-  void _showProfileMenu(String name, String email) {
-    final initial =
-        name.trim().isNotEmpty ? name.trim()[0].toUpperCase() : '?';
-    showModalBottomSheet(
+  Future<void> _showProfileMenu(TapDownDetails details) async {
+    final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
+    final position = RelativeRect.fromRect(
+      Rect.fromLTWH(
+        details.globalPosition.dx,
+        details.globalPosition.dy,
+        1,
+        1,
+      ),
+      Offset.zero & overlay.size,
+    );
+    final action = await showMenu<String>(
       context: context,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        margin: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-        child: AppCard(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
-          radius: AppColors.radiusLg,
-          interactive: false,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  Container(
-                    width: 56,
-                    height: 56,
-                    decoration: BoxDecoration(
-                      gradient: AppColors.primaryGradient,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    alignment: Alignment.center,
-                    child: Text(
-                      initial,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 22,
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    right: -2,
-                    bottom: -2,
-                    child: Container(
-                      width: 14,
-                      height: 14,
-                      decoration: BoxDecoration(
-                        color: AppColors.success,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: ctx.fomraSurface, width: 2),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Text(
-                name,
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  color: ctx.fomraTextPrimary,
-                ),
-              ),
-              Text(
-                _profileRole,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: ctx.fomraTextSecondary,
-                ),
-              ),
-              if (email.isNotEmpty) ...[
-                const SizedBox(height: 4),
-                Text(
-                  email,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: ctx.fomraTextSecondary,
-                  ),
-                ),
-              ],
-              const SizedBox(height: 16),
-              const Divider(height: 1),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: AppColors.primary.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: const Icon(Icons.lock_outline,
-                      size: 20, color: AppColors.primary),
-                ),
-                title: const Text('Change Password',
-                    style: TextStyle(fontWeight: FontWeight.w600)),
-                trailing: const Icon(Icons.chevron_right_rounded, size: 20),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (_) => const ChangePasswordScreen()),
-                  );
-                },
-              ),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: AppColors.error.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: const Icon(Icons.logout_rounded,
-                      size: 20, color: AppColors.error),
-                ),
-                title: const Text('Sign Out',
-                    style: TextStyle(
-                        fontWeight: FontWeight.w600, color: AppColors.error)),
-                trailing: const Icon(Icons.chevron_right_rounded,
-                    size: 20, color: AppColors.error),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  AuthService.instance.logout();
-                  Navigator.pushNamedAndRemoveUntil(
-                      context, '/login', (_) => false);
-                },
-              ),
-            ],
+      position: position,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      items: const [
+        PopupMenuItem<String>(
+          value: 'change_password',
+          child: ListTile(
+            dense: true,
+            leading: Icon(Icons.lock_outline),
+            title: Text('Change Password'),
+            contentPadding: EdgeInsets.zero,
           ),
         ),
-      ),
+        PopupMenuItem<String>(
+          value: 'sign_out',
+          child: ListTile(
+            dense: true,
+            leading: Icon(Icons.logout_rounded, color: AppColors.error),
+            title: Text('Sign Out', style: TextStyle(color: AppColors.error)),
+            contentPadding: EdgeInsets.zero,
+          ),
+        ),
+      ],
     );
+    if (!mounted) return;
+    if (action == 'change_password') {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const ChangePasswordScreen()),
+      );
+      return;
+    }
+    if (action == 'sign_out') {
+      final confirmed = await confirmSignOut(context);
+      if (!confirmed || !mounted) return;
+      AuthService.instance.logout();
+      Navigator.pushNamedAndRemoveUntil(context, '/login', (_) => false);
+    }
   }
 
   void _goTo(String route) => Navigator.pushNamed(context, route);
@@ -352,7 +273,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     final user = AuthService.instance.currentUser;
     final userName = user?.fullName ?? 'User';
-    final userEmail = user?.email ?? '';
     final displayName = portalHomeDisplayName(
       fullName: userName,
       isManagement: _isManagement,
@@ -465,8 +385,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   totalLeads: totalLeads,
                   activeLeads: _activeLeads,
                   brokerLeads: brokerLeads,
-                  onProfileTap: () =>
-                      _showProfileMenu(userName, userEmail),
+                  onProfileTapDown: _showProfileMenu,
                 ),
               ),
               const SizedBox(height: AppSpacing.lg),

@@ -3,6 +3,30 @@ import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_theme_context.dart';
 
+/// Shows a "Sign out?" confirmation dialog. Returns true if the user confirms.
+Future<bool> confirmSignOut(BuildContext context) async {
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: const Text('Sign out?'),
+      content: const Text('Are you sure you want to sign out?'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(ctx, true),
+          style: FilledButton.styleFrom(backgroundColor: AppColors.error),
+          child: const Text('Sign Out'),
+        ),
+      ],
+    ),
+  );
+  return ok == true;
+}
+
 /// ============================================================================
 /// FomraLS reusable UI component library.
 ///

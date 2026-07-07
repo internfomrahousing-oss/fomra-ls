@@ -6,6 +6,7 @@ import '../../theme/app_theme.dart';
 import '../../widgets/app_drawer.dart';
 import '../../widgets/fomra_app_bar.dart';
 import '../../widgets/fomra_bottom_nav.dart';
+import '../../widgets/ui/app_components.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -506,7 +507,9 @@ class _SignOutSection extends StatelessWidget {
       child: SizedBox(
         width: double.infinity,
         child: OutlinedButton.icon(
-          onPressed: () {
+          onPressed: () async {
+            final confirmed = await confirmSignOut(context);
+            if (!confirmed || !context.mounted) return;
             AuthService.instance.logout();
             Navigator.pushNamedAndRemoveUntil(context, '/login', (_) => false);
           },
