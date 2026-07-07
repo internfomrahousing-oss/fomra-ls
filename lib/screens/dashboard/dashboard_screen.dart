@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../models/land_lead.dart';
 import '../../services/app_store.dart';
+import '../../services/report_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_layout.dart';
 import '../../theme/fomra_theme_context.dart';
@@ -23,6 +24,28 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   static const _kRecentCollapsedCount = 6;
   bool _showAllRecent = false;
+  bool _generatingReport = false;
+
+  Future<void> _createReport() async {
+    if (_generatingReport) return;
+    setState(() => _generatingReport = true);
+    try {
+      await ReportService.generateLeadsReport(
+        AppStore.instance.leads,
+        employees: AppStore.instance.employees,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(
+            'Couldn’t create report: ${e.toString().replaceFirst('Exception: ', '')}'),
+        backgroundColor: AppColors.error,
+        behavior: SnackBarBehavior.floating,
+      ));
+    } finally {
+      if (mounted) setState(() => _generatingReport = false);
+    }
+  }
 
   @override
   void initState() {
@@ -274,6 +297,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 _KpiGrid(
                   kpis: kpis,
                   onTap: _openKpiLeads,
+                ),
+                const SizedBox(height: 20),
+                _SectionCard(
+                  title: 'Reports',
+                  subtitle:
+                      'Export a PDF covering all leads, acquired leads, broker leads, and each employee’s lead performance.',
+                  icon: Icons.picture_as_pdf_outlined,
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: PrimaryButton(
+                      label: _generatingReport
+                          ? 'Preparing PDF…'
+                          : 'Create PDF Report',
+                      icon: Icons.download_rounded,
+                      loading: _generatingReport,
+                      onPressed: leads.isEmpty ? null : _createReport,
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 20),
                 _SectionCard(
