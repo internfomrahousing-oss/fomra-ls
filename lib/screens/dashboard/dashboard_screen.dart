@@ -86,14 +86,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Choose what to include in the exported report.',
-          style: TextStyle(
-            fontSize: 13,
-            color: context.fomraTextSecondary,
-          ),
-        ),
-        const SizedBox(height: 10),
         ...LeadReportType.values.map((type) {
           final selected = _selectedReportType == type;
           return InkWell(
@@ -479,9 +471,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
                 const SizedBox(height: 20),
                 _SectionCard(
-                  title: 'Reports',
+                  title: 'Create PDF Report',
                   subtitle:
-                      'Export a PDF covering all leads, acquired leads, broker leads, and each employee’s lead performance.',
+                      'Choose what to include in the exported report.',
                   icon: Icons.picture_as_pdf_outlined,
                   child: leads.isEmpty
                       ? Text(
