@@ -981,6 +981,18 @@ class _LeadCard extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: statusColor.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: statusColor.withValues(alpha: 0.65),
+                        width: 1.5,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: statusColor.withValues(alpha: 0.35),
+                          blurRadius: 12,
+                          spreadRadius: 1,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
                     ),
                     child: Icon(Icons.location_on_rounded,
                         color: statusColor, size: 24),
