@@ -433,14 +433,14 @@ class _PortalSummaryTileState extends State<PortalSummaryTile> {
 
 class PortalQuickAction {
   final String label;
-  final String subtitle;
+  final String? subtitle;
   final IconData icon;
   final Color accent;
   final VoidCallback onTap;
 
   const PortalQuickAction({
     required this.label,
-    required this.subtitle,
+    this.subtitle,
     required this.icon,
     required this.accent,
     required this.onTap,
@@ -525,17 +525,19 @@ class _QuickActionCard extends StatelessWidget {
               color: context.fomraTextPrimary,
             ),
           ),
-          const SizedBox(height: 2),
-          Text(
-            data.subtitle,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 11,
-              height: 1.3,
-              color: context.fomraTextSecondary,
+          if ((data.subtitle ?? '').isNotEmpty) ...[
+            const SizedBox(height: 2),
+            Text(
+              data.subtitle!,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 11,
+                height: 1.3,
+                color: context.fomraTextSecondary,
+              ),
             ),
-          ),
+          ],
         ],
       ),
     );

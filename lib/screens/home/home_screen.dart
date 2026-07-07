@@ -288,28 +288,24 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final quickActions = [
       PortalQuickAction(
         label: 'Add Lead',
-        subtitle: 'Capture new parcel',
         icon: Icons.add_location_alt_outlined,
         accent: AppColors.primary,
         onTap: () => _goTo('/land-lead'),
       ),
       PortalQuickAction(
         label: 'Create Task',
-        subtitle: 'Assign employees',
         icon: Icons.playlist_add_check_circle_outlined,
         accent: AppColors.purple,
         onTap: () => _goTo('/task-management'),
       ),
       PortalQuickAction(
         label: 'View Dashboard',
-        subtitle: 'KPIs and funnel',
         icon: Icons.assessment_outlined,
         accent: AppColors.warning,
         onTap: () => _goTo('/dashboard'),
       ),
       PortalQuickAction(
         label: 'Search Property',
-        subtitle: 'Open market intel',
         icon: Icons.travel_explore_outlined,
         accent: AppColors.success,
         onTap: () => _goTo('/market-intelligence'),
@@ -317,7 +313,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       if (_isManagement)
         PortalQuickAction(
           label: 'Add Employee',
-          subtitle: 'Manage workforce',
           icon: Icons.person_add_alt_1_outlined,
           accent: AppColors.secondary,
           onTap: () => _goTo('/employee-management'),
