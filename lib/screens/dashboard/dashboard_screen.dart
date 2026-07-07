@@ -339,16 +339,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   runSpacing: 10,
                   children: [
                     _InsightChip(
-                      icon: Icons.trending_up_rounded,
-                      label: 'Total Growth',
-                      value: totalTrend.label,
-                      tone: totalTrend.neutral
-                          ? AppColors.textSecondary
-                          : totalTrend.up
-                              ? AppColors.success
-                              : AppColors.error,
-                    ),
-                    _InsightChip(
                       icon: Icons.track_changes_rounded,
                       label: 'Conversion Rate',
                       value:
@@ -1184,11 +1174,6 @@ class _KpiOverviewChartState extends State<_KpiOverviewChart>
                   onPressed: widget.onRefresh,
                   icon: const Icon(Icons.refresh_rounded, size: 18),
                   tooltip: 'Refresh',
-                ),
-                IconButton.filledTonal(
-                  onPressed: widget.onExport,
-                  icon: const Icon(Icons.file_download_outlined, size: 18),
-                  tooltip: 'Export',
                 ),
               ],
             );
