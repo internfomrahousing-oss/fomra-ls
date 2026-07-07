@@ -27,6 +27,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   static const _kAllEmployees = 'All';
   bool _showAllRecent = false;
   bool _generatingReport = false;
+  int _selectedChartRange = 1;
   LeadReportType _selectedReportType = LeadReportType.all;
   String _selectedEmployeeReport = _kAllEmployees;
 
@@ -208,6 +209,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   void _goTo(String route) => Navigator.pushNamed(context, route);
 
+  void _refreshChart() => setState(() {});
+
   @override
   Widget build(BuildContext context) {
     final leads = AppStore.instance.leads;
@@ -324,14 +327,52 @@ class _DashboardScreenState extends State<DashboardScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SectionHeader(
-                  title: 'Overview',
-                  subtitle: 'Pipeline KPIs with trends and drill-down detail.',
+                  title: 'Dashboard Overview',
+                  subtitle:
+                      'Monitor the health of your lead acquisition pipeline and business performance in real time.',
                   icon: Icons.analytics_outlined,
                 ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: [
+                    _InsightChip(
+                      icon: Icons.trending_up_rounded,
+                      label: 'Total Growth',
+                      value: totalTrend.label,
+                      tone: totalTrend.neutral
+                          ? AppColors.textSecondary
+                          : totalTrend.up
+                              ? AppColors.success
+                              : AppColors.error,
+                    ),
+                    _InsightChip(
+                      icon: Icons.track_changes_rounded,
+                      label: 'Conversion Rate',
+                      value:
+                          '${totalLeads == 0 ? 0 : ((acquired / totalLeads) * 100).round()}%',
+                      tone: AppColors.primary,
+                    ),
+                    _InsightChip(
+                      icon: Icons.bubble_chart_outlined,
+                      label: 'Active Pipeline',
+                      value: '$activeLeads',
+                      tone: AppColors.info,
+                    ),
+                    _InsightChip(
+                      icon: Icons.workspace_premium_outlined,
+                      label: 'Best Metric',
+                      value: acquiredTrend.up ? 'Acquired' : 'Total',
+                      tone: AppColors.warning,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
                 _SectionCard(
-                  title: 'Leads at a glance',
+                  title: 'Lead Performance',
                   subtitle:
-                      'Total, active, acquired and rejected leads in one view.',
+                      'Monitor total, active, acquired and rejected leads.',
                   icon: Icons.bar_chart_rounded,
                   child: _KpiOverviewChart(
                     items: [
@@ -340,9 +381,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       (label: 'Acquired', value: acquired, color: kpis[2].accent),
                       (label: 'Rejected', value: rejected, color: kpis[3].accent),
                     ],
+                    selectedRange: _selectedChartRange,
+                    onRangeSelected: (v) => setState(() => _selectedChartRange = v),
+                    onRefresh: _refreshChart,
+                    onExport: _createReport,
                   ),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 16),
                 _KpiGrid(
                   kpis: kpis,
                   onTap: _openKpiLeads,
@@ -799,10 +844,61 @@ class _SectionCard extends StatelessWidget {
   }
 }
 
+class _InsightChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color tone;
+
+  const _InsightChip({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.tone,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+      decoration: BoxDecoration(
+        color: tone.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: tone.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: tone),
+          const SizedBox(width: 6),
+          Text(
+            '$label · $value',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: tone,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// Single combined bar chart summarising the four headline lead metrics.
 class _KpiOverviewChart extends StatelessWidget {
   final List<({String label, int value, Color color})> items;
-  const _KpiOverviewChart({required this.items});
+  final int selectedRange;
+  final ValueChanged<int> onRangeSelected;
+  final VoidCallback onRefresh;
+  final VoidCallback onExport;
+  const _KpiOverviewChart({
+    required this.items,
+    required this.selectedRange,
+    required this.onRangeSelected,
+    required this.onRefresh,
+    required this.onExport,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -847,8 +943,45 @@ class _KpiOverviewChart extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        Row(
+          children: [
+            Expanded(
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final entry in const [
+                    (0, 'Today'),
+                    (1, '7 Days'),
+                    (2, '30 Days'),
+                    (3, '90 Days'),
+                  ])
+                    ChoiceChip(
+                      label: Text(entry.$2),
+                      selected: selectedRange == entry.$1,
+                      showCheckmark: false,
+                      onSelected: (_) => onRangeSelected(entry.$1),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            IconButton.filledTonal(
+              onPressed: onRefresh,
+              icon: const Icon(Icons.refresh_rounded, size: 18),
+              tooltip: 'Refresh',
+            ),
+            const SizedBox(width: 6),
+            IconButton.filledTonal(
+              onPressed: onExport,
+              icon: const Icon(Icons.file_download_outlined, size: 18),
+              tooltip: 'Export',
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
         SizedBox(
-          height: 230,
+          height: 356,
           child: LineChart(
             LineChartData(
               minX: 0,
@@ -857,16 +990,21 @@ class _KpiOverviewChart extends StatelessWidget {
               maxY: maxY,
               lineBarsData: [lineBar],
               lineTouchData: LineTouchData(
-                enabled: false,
+                enabled: true,
                 getTouchedSpotIndicator: (bar, indexes) => indexes
-                    .map((_) => const TouchedSpotIndicatorData(
-                          FlLine(color: Colors.transparent),
+                    .map((_) => TouchedSpotIndicatorData(
+                          FlLine(
+                            color: AppColors.primary.withValues(alpha: 0.25),
+                            strokeWidth: 1.5,
+                          ),
                           FlDotData(show: false),
                         ))
                     .toList(),
                 touchTooltipData: LineTouchTooltipData(
-                  tooltipBgColor: Colors.transparent,
-                  tooltipPadding: EdgeInsets.zero,
+                  tooltipBgColor: context.fomraSurface,
+                  tooltipRoundedRadius: 10,
+                  tooltipPadding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   fitInsideHorizontally: true,
                   fitInsideVertically: true,
                   getTooltipItems: (touched) => touched
@@ -881,12 +1019,6 @@ class _KpiOverviewChart extends StatelessWidget {
                       .toList(),
                 ),
               ),
-              showingTooltipIndicators: [
-                for (var i = 0; i < spots.length; i++)
-                  ShowingTooltipIndicators([
-                    LineBarSpot(lineBar, 0, spots[i]),
-                  ]),
-              ],
               gridData: FlGridData(
                 show: true,
                 drawVerticalLine: false,
@@ -944,7 +1076,7 @@ class _KpiOverviewChart extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 12),
         Wrap(
           spacing: 18,
           runSpacing: 8,

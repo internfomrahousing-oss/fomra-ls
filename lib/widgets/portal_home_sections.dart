@@ -121,7 +121,7 @@ class PortalWelcomeHeader extends StatelessWidget {
   final int totalLeads;
   final int activeLeads;
   final int brokerLeads;
-  final VoidCallback? onProfileTap;
+  final ValueChanged<TapDownDetails>? onProfileTapDown;
 
   const PortalWelcomeHeader({
     super.key,
@@ -132,7 +132,7 @@ class PortalWelcomeHeader extends StatelessWidget {
     required this.totalLeads,
     required this.activeLeads,
     required this.brokerLeads,
-    this.onProfileTap,
+    this.onProfileTapDown,
   });
 
   @override
@@ -191,7 +191,7 @@ class PortalWelcomeHeader extends StatelessWidget {
                 initial: initial,
                 name: profileName,
                 role: profileRole,
-                onTap: onProfileTap,
+                onTapDown: onProfileTapDown,
               ),
             ],
           ),
@@ -251,13 +251,13 @@ class _PortalProfileChip extends StatelessWidget {
   final String initial;
   final String name;
   final String role;
-  final VoidCallback? onTap;
+  final ValueChanged<TapDownDetails>? onTapDown;
 
   const _PortalProfileChip({
     required this.initial,
     required this.name,
     required this.role,
-    this.onTap,
+    this.onTapDown,
   });
 
   @override
@@ -329,10 +329,10 @@ class _PortalProfileChip extends StatelessWidget {
       ],
     );
 
-    if (onTap == null) return chip;
+    if (onTapDown == null) return chip;
     return MouseRegion(
       cursor: SystemMouseCursors.click,
-      child: GestureDetector(onTap: onTap, child: chip),
+      child: GestureDetector(onTapDown: onTapDown, child: chip),
     );
   }
 }
