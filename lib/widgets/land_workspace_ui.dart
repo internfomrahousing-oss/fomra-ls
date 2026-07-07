@@ -637,8 +637,6 @@ class LandWorkspaceLeadActions extends StatelessWidget {
           _action(context, Icons.call_outlined, 'Call', onCall),
         _action(context, Icons.map_outlined, 'View Map', onMap),
         _action(context, Icons.edit_outlined, 'Edit', onEdit),
-        _action(context, Icons.assignment_outlined, 'Assign Task', onAssignTask),
-        _action(context, Icons.folder_open_outlined, 'Documents', onDocuments),
       ],
     );
   }
