@@ -376,8 +376,7 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
   }
 
   Widget _buildIdleManagementActions() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.end,
+    return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         _actionPill(
@@ -385,7 +384,7 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
           icon: Icons.checklist_rtl,
           label: 'Select',
         ),
-        const SizedBox(height: 8),
+        const SizedBox(width: 8),
         _actionPill(
           onTap: _openLeadsMap,
           icon: Icons.map_outlined,
@@ -511,19 +510,18 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
         SliverToBoxAdapter(
           child: PortalFadeSection(
             index: 0,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                if (_isManagement && !_selectMode)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 14, bottom: 4),
-                    child: Align(
-                      alignment: Alignment.centerRight,
-                      child: _buildIdleManagementActions(),
-                    ),
-                  ),
-                _LeadSummary(leads: _leads),
-              ],
+            child: Padding(
+              padding: const EdgeInsets.only(top: 8, bottom: 4),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(child: _LeadSummary(leads: _leads)),
+                  if (_isManagement && !_selectMode) ...[
+                    const SizedBox(width: 8),
+                    _buildIdleManagementActions(),
+                  ],
+                ],
+              ),
             ),
           ),
         ),
@@ -885,27 +883,24 @@ class _LeadSummary extends StatelessWidget {
       (LeadStatus.lost, Icons.cancel_outlined),
     ];
 
-    return Padding(
-      padding: const EdgeInsets.only(top: 12, bottom: 8),
-      child: SizedBox(
-        height: 118,
-        child: ListView.separated(
-          scrollDirection: Axis.horizontal,
-          itemCount: kpis.length,
-          separatorBuilder: (_, __) => const SizedBox(width: 12),
-          itemBuilder: (_, i) {
-            final status = kpis[i].$1;
-            final icon = kpis[i].$2;
-            final count = leads.where((l) => l.status == status).length;
-            return LandWorkspaceStatusCard(
-              statusName: status.label,
-              subtitle: 'Leads',
-              value: count,
-              icon: icon,
-              accent: status.color,
-            );
-          },
-        ),
+    return SizedBox(
+      height: 118,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: kpis.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 12),
+        itemBuilder: (_, i) {
+          final status = kpis[i].$1;
+          final icon = kpis[i].$2;
+          final count = leads.where((l) => l.status == status).length;
+          return LandWorkspaceStatusCard(
+            statusName: status.label,
+            subtitle: 'Leads',
+            value: count,
+            icon: icon,
+            accent: status.color,
+          );
+        },
       ),
     );
   }
