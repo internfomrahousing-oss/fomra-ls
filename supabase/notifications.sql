@@ -30,34 +30,32 @@ CREATE POLICY "anyone can manage notifications"
   USING (true)
   WITH CHECK (true);
 
--- Make sure the uploader-name and uploader-role columns exist (see land_leads.sql).
+-- Make sure the uploader-name column exists (see land_leads.sql).
 ALTER TABLE land_leads ADD COLUMN IF NOT EXISTS created_by_name TEXT DEFAULT '';
-ALTER TABLE land_leads ADD COLUMN IF NOT EXISTS created_by_role TEXT DEFAULT 'employee';
 
--- Notify management whenever an EMPLOYEE uploads a new land lead, naming the
--- employee. Leads uploaded by management itself do NOT notify management.
--- Runs with definer rights so it fires regardless of role.
+-- Notify on every new land lead, naming the employee who uploaded it. The
+-- notification is dropped into BOTH the management and employee bells (one row
+-- per audience). Runs with definer rights so it fires regardless of role.
 CREATE OR REPLACE FUNCTION notify_management_on_new_lead()
 RETURNS TRIGGER AS $$
+DECLARE
+  v_title   TEXT;
+  v_message TEXT;
 BEGIN
-  -- Skip notifications for leads management added themselves.
-  IF COALESCE(NEW.created_by_role, '') = 'management' THEN
-    RETURN NEW;
-  END IF;
+  v_title := 'New lead uploaded'
+    || CASE WHEN COALESCE(NEW.created_by_name, '') <> ''
+            THEN ' by ' || NEW.created_by_name ELSE '' END;
+
+  v_message := COALESCE(NULLIF(NEW.owner_name, ''), 'A new land lead')
+    || CASE WHEN COALESCE(NEW.location, '') <> ''
+            THEN ' — ' || NEW.location ELSE '' END
+    || ' (' || NEW.id || ')';
 
   INSERT INTO notifications (audience, type, title, message, lead_id)
-  VALUES (
-    'management',
-    'lead',
-    'New lead uploaded'
-      || CASE WHEN COALESCE(NEW.created_by_name, '') <> ''
-              THEN ' by ' || NEW.created_by_name ELSE '' END,
-    COALESCE(NULLIF(NEW.owner_name, ''), 'A new land lead')
-      || CASE WHEN COALESCE(NEW.location, '') <> ''
-              THEN ' — ' || NEW.location ELSE '' END
-      || ' (' || NEW.id || ')',
-    NEW.id
-  );
+  VALUES
+    ('management', 'lead', v_title, v_message, NEW.id),
+    ('employee',   'lead', v_title, v_message, NEW.id);
+
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
