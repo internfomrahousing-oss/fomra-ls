@@ -933,14 +933,19 @@ class _LeadCard extends StatelessWidget {
         : 'Lead #${lead.leadId}';
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: AppCard(
-        onTap: onTap,
-        padding: const EdgeInsets.all(20),
-        radius: 18,
-        borderColor: selected ? AppColors.primary : context.fomraBorder,
-        borderWidth: selected ? 2 : 1,
-        child: Column(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: DecoratedBox(
+        decoration: selected
+            ? BoxDecoration(
+                borderRadius: BorderRadius.circular(AppColors.radiusLg),
+                border: Border.all(color: AppColors.primary, width: 1.5),
+              )
+            : const BoxDecoration(),
+        child: AppCard(
+          onTap: onTap,
+          padding: const EdgeInsets.all(16),
+          radius: AppColors.radiusLg,
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
@@ -971,16 +976,16 @@ class _LeadCard extends StatelessWidget {
                     const SizedBox(width: 12),
                   ],
                   Container(
-                    width: 44,
-                    height: 44,
+                    width: 46,
+                    height: 46,
                     decoration: BoxDecoration(
-                      color: statusColor.withValues(alpha: 0.10),
+                      color: statusColor.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(14),
                     ),
                     child: Icon(Icons.location_on_rounded,
-                        color: statusColor, size: 22),
+                        color: statusColor, size: 24),
                   ),
-                  const SizedBox(width: 16),
+                  const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -991,18 +996,18 @@ class _LeadCard extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             fontSize: 18,
-                            fontWeight: FontWeight.w700,
+                            fontWeight: FontWeight.w800,
                             letterSpacing: -0.2,
                             color: context.fomraTextPrimary,
                           ),
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 2),
                         Text(
-                          'Lead #${lead.leadId} · ${lead.landType.label} Land',
+                          'Lead #${lead.leadId} · ${lead.landType.label}',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            fontSize: 14,
+                            fontSize: 13,
                             fontWeight: FontWeight.w500,
                             color: context.fomraTextSecondary,
                           ),
@@ -1010,170 +1015,124 @@ class _LeadCard extends StatelessWidget {
                       ],
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      _StatusBadge(status: lead.status),
-                      if (lead.status == LeadStatus.new_ ||
-                          lead.status == LeadStatus.negotiation) ...[
-                        const SizedBox(height: 8),
-                        const _PriorityBadge(),
-                      ],
-                    ],
+                  const SizedBox(width: 8),
+                  _StatusBadge(status: lead.status),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Wrap(
+                spacing: 12,
+                runSpacing: 8,
+                children: [
+                  _infoChip(context, Icons.tag, 'ID', lead.leadId),
+                  _infoChip(context, Icons.landscape_outlined, 'Type', lead.landType.label),
+                  if (lead.surveyNumber.isNotEmpty)
+                    _infoChip(context, Icons.numbers, 'Survey', lead.surveyNumber),
+                  if (lead.landExtent.isNotEmpty)
+                    _infoChip(context, Icons.straighten, 'Area', lead.landExtent),
+                  if (lead.village.isNotEmpty)
+                    _infoChip(context, Icons.home_work_outlined, 'Village', lead.village),
+                  if (lead.inputSource == InputSource.broker)
+                    _infoChip(context, Icons.handshake_outlined, 'Broker', 'Yes'),
+                  if (lead.createdByName.isNotEmpty)
+                    _infoChip(context, Icons.person_outline, 'Assigned', lead.createdByName),
+                  _infoChip(
+                    context,
+                    Icons.calendar_today_outlined,
+                    'Created',
+                    '${lead.addedOn.day}/${lead.addedOn.month}/${lead.addedOn.year}',
                   ),
                 ],
               ),
-              const SizedBox(height: 20),
-              Divider(height: 1, color: context.fomraBorder),
-              const SizedBox(height: 20),
-              // ── BODY: responsive metadata grid ──
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  final meta = <Widget>[
-                    if (lead.surveyNumber.isNotEmpty)
-                      _MetaRow(
-                          icon: Icons.tag_rounded,
-                          label: 'Survey Number',
-                          value: lead.surveyNumber),
-                    if (lead.landExtent.isNotEmpty)
-                      _MetaRow(
-                          icon: Icons.straighten_rounded,
-                          label: 'Area',
-                          value: lead.landExtent),
-                    if (lead.village.isNotEmpty)
-                      _MetaRow(
-                          icon: Icons.location_city_outlined,
-                          label: 'Village',
-                          value: lead.village),
-                    _MetaRow(
-                        icon: Icons.handshake_outlined,
-                        label: 'Broker',
-                        value: lead.inputSource == InputSource.broker
-                            ? 'Yes'
-                            : 'No'),
-                    if (lead.createdByName.isNotEmpty)
-                      _MetaRow(
-                          icon: Icons.person_outline_rounded,
-                          label: 'Assigned Employee',
-                          value: lead.createdByName),
-                    _MetaRow(
-                        icon: Icons.calendar_today_outlined,
-                        label: 'Created Date',
-                        value:
-                            '${lead.addedOn.day}/${lead.addedOn.month}/${lead.addedOn.year}'),
-                  ];
-                  if (constraints.maxWidth < 520) {
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        for (var i = 0; i < meta.length; i++) ...[
-                          meta[i],
-                          if (i != meta.length - 1)
-                            const SizedBox(height: 16),
-                        ],
-                      ],
-                    );
-                  }
-                  final colW =
-                      ((constraints.maxWidth - 24) / 2).floorToDouble();
-                  return Wrap(
-                    spacing: 24,
-                    runSpacing: 16,
-                    children: [
-                      for (final row in meta) SizedBox(width: colW, child: row),
-                    ],
-                  );
-                },
-              ),
               if (!selectionMode) ...[
-                const SizedBox(height: 20),
-                Divider(height: 1, color: context.fomraBorder),
-                const SizedBox(height: 16),
-                // ── FOOTER: primary actions + workflow pills ──
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    final stacked = constraints.maxWidth < 560;
-                    final primary = Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        _LeadActionButton(
-                          icon: Icons.map_outlined,
-                          label: 'View Map',
-                          onTap: onMap,
-                        ),
-                        _LeadActionButton(
-                          icon: Icons.edit_outlined,
-                          label: 'Edit',
-                          onTap: onEdit,
-                        ),
-                        if (lead.contactDetails.isNotEmpty)
-                          _LeadActionButton(
-                            icon: Icons.call_outlined,
-                            label: 'Call',
-                            onTap: onCall,
-                          ),
-                      ],
-                    );
-                    final workflow = Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      alignment:
-                          stacked ? WrapAlignment.start : WrapAlignment.end,
-                      children: [
-                        for (final s in LeadStatus.values
-                            .where((s) => s != LeadStatus.siteVisit))
-                          _WorkflowPill(
-                            label: s.label,
-                            color: s.color,
-                            active: s == lead.status,
-                            onTap: s == lead.status
-                                ? null
-                                : () => onStatusChange(s),
-                          ),
-                      ],
-                    );
-                    if (stacked) {
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          primary,
-                          const SizedBox(height: 12),
-                          workflow,
-                        ],
-                      );
-                    }
-                    return Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Flexible(child: primary),
-                        const SizedBox(width: 16),
-                        Expanded(child: workflow),
-                      ],
-                    );
-                  },
+                const SizedBox(height: 12),
+                LandWorkspaceLeadActions(
+                  lead: lead,
+                  onCall: onCall,
+                  onMap: onMap,
+                  onEdit: onEdit,
+                  onAssignTask: onAssignTask,
+                  onDocuments: onDocuments,
+                ),
+              ],
+              if (!selectionMode) ...[
+                const SizedBox(height: 12),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: LeadStatus.values
+                        .where((s) =>
+                            s != lead.status && s != LeadStatus.siteVisit)
+                        .map((s) => Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: OutlinedButton(
+                                onPressed: () => onStatusChange(s),
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 14, vertical: 8),
+                                  minimumSize: Size.zero,
+                                  tapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
+                                  side: BorderSide(
+                                      color: s.color.withValues(alpha: 0.5)),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
+                                ),
+                                child: Text('→ ${s.label}',
+                                    style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                        color: s.color)),
+                              ),
+                            ))
+                        .toList(),
+                  ),
                 ),
               ],
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _infoChip(BuildContext context, IconData icon, String label, String value) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: context.fomraSurfaceVar,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15, color: context.fomraTextSecondary),
+          const SizedBox(width: 5),
+          Text(
+            '$label: ',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: context.fomraTextSecondary,
+            ),
+          ),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: context.fomraTextPrimary,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-IconData _statusIcon(LeadStatus s) => switch (s) {
-      LeadStatus.new_ => Icons.auto_awesome_outlined,
-      LeadStatus.contacted => Icons.chat_bubble_outline_rounded,
-      LeadStatus.siteVisit => Icons.location_on_outlined,
-      LeadStatus.negotiation => Icons.handshake_outlined,
-      LeadStatus.closed => Icons.check_circle_outline_rounded,
-      LeadStatus.lost => Icons.cancel_outlined,
-    };
-
-/// Compact, soft-background status pill with a small icon.
 class _StatusBadge extends StatelessWidget {
   final LeadStatus status;
   const _StatusBadge({required this.status});
@@ -1182,172 +1141,13 @@ class _StatusBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = status.color;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
       decoration: BoxDecoration(
-        color: c.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(_statusIcon(status), size: 14, color: c),
-          const SizedBox(width: 5),
-          Text(status.label,
-              style:
-                  TextStyle(fontSize: 12, color: c, fontWeight: FontWeight.w700)),
-        ],
-      ),
-    );
-  }
-}
-
-/// Small "High" priority pill (amber accent).
-class _PriorityBadge extends StatelessWidget {
-  const _PriorityBadge();
-
-  @override
-  Widget build(BuildContext context) {
-    const c = AppColors.warning;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: c.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.priority_high_rounded, size: 13, color: c),
-          const SizedBox(width: 3),
-          Text('High',
-              style: TextStyle(
-                  fontSize: 11, color: c, fontWeight: FontWeight.w700)),
-        ],
-      ),
-    );
-  }
-}
-
-/// One metadata row: soft icon chip + label above value.
-class _MetaRow extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String value;
-  const _MetaRow(
-      {required this.icon, required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        Container(
-          width: 36,
-          height: 36,
-          decoration: BoxDecoration(
-            color: context.fomraSurfaceVar,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Icon(icon, size: 18, color: context.fomraTextSecondary),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                  color: context.fomraTextSecondary,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                value,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: context.fomraTextPrimary,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-/// Outlined primary action button (View Map / Edit / Call).
-class _LeadActionButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback? onTap;
-  const _LeadActionButton(
-      {required this.icon, required this.label, this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return OutlinedButton.icon(
-      onPressed: onTap,
-      icon: Icon(icon, size: 18),
-      label: Text(label),
-      style: OutlinedButton.styleFrom(
-        foregroundColor: context.fomraTextPrimary,
-        side: BorderSide(color: context.fomraBorder),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
-        textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-    );
-  }
-}
-
-/// Workflow stage pill — filled when it is the current stage, outlined
-/// otherwise. Tapping an inactive stage moves the lead to it.
-class _WorkflowPill extends StatelessWidget {
-  final String label;
-  final Color color;
-  final bool active;
-  final VoidCallback? onTap;
-  const _WorkflowPill({
-    required this.label,
-    required this.color,
-    required this.active,
-    this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: active ? color : Colors.transparent,
-      shape: StadiumBorder(
-        side: BorderSide(
-          color: active ? color : color.withValues(alpha: 0.45),
-        ),
-      ),
-      child: InkWell(
-        customBorder: const StadiumBorder(),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 12.5,
-              fontWeight: FontWeight.w600,
-              color: active ? Colors.white : color,
-            ),
-          ),
-        ),
-      ),
+          color: c.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(20)),
+      child: Text(status.label,
+          style: TextStyle(
+              fontSize: 12, color: c, fontWeight: FontWeight.w700)),
     );
   }
 }
