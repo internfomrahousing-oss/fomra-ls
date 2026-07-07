@@ -938,7 +938,9 @@ class _LeadCard extends StatelessWidget {
         onTap: onTap,
         padding: const EdgeInsets.all(16),
         radius: AppColors.radiusLg,
-        borderColor: selected ? AppColors.primary : statusColor,
+        color: statusColor.withValues(alpha: 0.08),
+        border: selected,
+        borderColor: selected ? AppColors.primary : null,
         borderWidth: 2,
         child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
