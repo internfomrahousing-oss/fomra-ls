@@ -31,6 +31,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   RealtimeChannel? _notifChannel;
   DateTime _clock = DateTime.now();
 
+  // Anchored notification dropdown (opens under the bell on click).
+  final LayerLink _notifLink = LayerLink();
+  OverlayEntry? _notifOverlay;
+  bool get _notifOpen => _notifOverlay != null;
+
   String get _notifAudience =>
       AuthService.instance.isManagement ? 'management' : 'employee';
 
@@ -92,6 +97,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     AppStore.instance.removeListener(_onStoreUpdate);
     _notifChannel?.unsubscribe();
+    _notifOverlay?.remove();
+    _notifOverlay = null;
     super.dispose();
   }
 
@@ -113,7 +120,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       final filtered = list
           .where((n) => !_isManagementLeadNotification(n) && _isForMe(n))
           .toList();
-      if (mounted) setState(() => _notifications = filtered);
+      if (mounted) {
+        setState(() => _notifications = filtered);
+        _notifOverlay?.markNeedsBuild(); // refresh the open dropdown live
+      }
     } catch (_) {
       // Keep the current list if the fetch fails (e.g. table not created yet).
     }
@@ -143,28 +153,43 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return assignees.contains(me);
   }
 
-  void _showNotifications() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => _NotificationsSheet(
+  void _toggleNotifications() {
+    if (_notifOpen) {
+      _hideNotifications();
+    } else {
+      _openNotifications();
+    }
+  }
+
+  void _hideNotifications() {
+    _notifOverlay?.remove();
+    _notifOverlay = null;
+    if (mounted) setState(() {}); // repaint the bell (pressed state / badge)
+  }
+
+  void _openNotifications() {
+    _notifOverlay = OverlayEntry(
+      builder: (_) => _NotificationsDropdown(
+        link: _notifLink,
         notifications: _notifications,
+        onDismiss: _hideNotifications,
         onMarkRead: (id) {
           setState(() {
             _notifications.firstWhere((n) => n.id == id).isRead = true;
           });
+          _notifOverlay?.markNeedsBuild();
           NotificationsService.markRead(id).catchError((_) {});
         },
         onMarkAllRead: () {
           setState(() {
             for (final n in _notifications) { n.isRead = true; }
           });
+          _notifOverlay?.markNeedsBuild();
           NotificationsService.markAllRead(audience: _notifAudience)
               .catchError((_) {});
         },
         onOpen: (n) {
-          Navigator.pop(context); // close the notifications sheet
+          _hideNotifications();
           if (n.type != NotificationType.lead) return;
           // Open the specific lead's detail when we can resolve it; otherwise
           // fall back to the land lead list.
@@ -186,6 +211,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         },
       ),
     );
+    Overlay.of(context).insert(_notifOverlay!);
+    setState(() {}); // repaint the bell in its active state
   }
 
   void _showProfileMenu(String name, String email) {
@@ -380,10 +407,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return Scaffold(
       appBar: FomraAppBar(
         actions: [
-          Stack(clipBehavior: Clip.none, children: [
+          CompositedTransformTarget(
+            link: _notifLink,
+            child: Stack(clipBehavior: Clip.none, children: [
             IconButton(
-              icon: const Icon(Icons.notifications_outlined, size: 22),
-              onPressed: _showNotifications,
+              icon: Icon(
+                _notifOpen
+                    ? Icons.notifications
+                    : Icons.notifications_outlined,
+                size: 22,
+              ),
+              onPressed: _toggleNotifications,
             ),
             if (_unreadCount > 0)
               Positioned(
@@ -408,6 +442,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 ),
               ),
           ]),
+          ),
         ],
       ),
       drawer: const AppDrawer(currentRoute: '/home'),
@@ -564,15 +599,20 @@ class _EmployeePerformanceCard extends StatelessWidget {
   }
 }
 
-// ── Notifications Sheet ───────────────────────────────────────────────────────
+// ── Notifications Dropdown ────────────────────────────────────────────────────
 
-class _NotificationsSheet extends StatelessWidget {
+/// An anchored dropdown panel that opens under the notification bell on click.
+class _NotificationsDropdown extends StatelessWidget {
+  final LayerLink link;
   final List<AppNotification> notifications;
+  final VoidCallback onDismiss;
   final void Function(String id) onMarkRead;
   final VoidCallback onMarkAllRead;
   final void Function(AppNotification n) onOpen;
-  const _NotificationsSheet({
+  const _NotificationsDropdown({
+    required this.link,
     required this.notifications,
+    required this.onDismiss,
     required this.onMarkRead,
     required this.onMarkAllRead,
     required this.onOpen,
@@ -580,97 +620,135 @@ class _NotificationsSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: context.fomraSurface,
-        borderRadius: const BorderRadius.vertical(
-          top: Radius.circular(AppColors.radiusLg),
+    final screen = MediaQuery.of(context).size;
+    final width = screen.width < 400 ? screen.width - 24 : 380.0;
+    final maxHeight = (screen.height * 0.6).clamp(240.0, 520.0);
+
+    return Stack(
+      children: [
+        // Tap outside to close.
+        Positioned.fill(
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onDismiss,
+          ),
         ),
-      ),
-      child: DraggableScrollableSheet(
-        initialChildSize: 0.5,
-        maxChildSize: 0.9,
-        minChildSize: 0.3,
-        expand: false,
-        builder: (_, controller) => Column(children: [
-          const SizedBox(height: 10),
-          Container(
-            width: 32, height: 4,
-            decoration: BoxDecoration(
-              color: AppColors.border,
-              borderRadius: BorderRadius.circular(2),
+        CompositedTransformFollower(
+          link: link,
+          targetAnchor: Alignment.bottomRight,
+          followerAnchor: Alignment.topRight,
+          offset: const Offset(8, 10),
+          child: Align(
+            alignment: Alignment.topRight,
+            child: Material(
+              color: Colors.transparent,
+              child: Container(
+                width: width,
+                constraints: BoxConstraints(maxHeight: maxHeight),
+                decoration: BoxDecoration(
+                  color: context.fomraSurface,
+                  borderRadius: BorderRadius.circular(AppColors.radiusLg),
+                  border: Border.all(color: context.fomraBorder),
+                  boxShadow: AppColors.elevatedShadow,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Padding(
+                      padding:
+                          const EdgeInsets.fromLTRB(18, 14, 10, 10),
+                      child: Row(children: [
+                        const Text('Notifications',
+                            style: TextStyle(
+                                fontSize: 16, fontWeight: FontWeight.w700)),
+                        const Spacer(),
+                        if (notifications.isNotEmpty)
+                          TextButton(
+                            onPressed: onMarkAllRead,
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 4),
+                              minimumSize: Size.zero,
+                              tapTargetSize:
+                                  MaterialTapTargetSize.shrinkWrap,
+                            ),
+                            child: const Text('Mark all read',
+                                style: TextStyle(fontSize: 12)),
+                          ),
+                        IconButton(
+                          icon: const Icon(Icons.close, size: 18),
+                          visualDensity: VisualDensity.compact,
+                          onPressed: onDismiss,
+                        ),
+                      ]),
+                    ),
+                    const Divider(height: 1),
+                    Flexible(
+                      child: notifications.isEmpty
+                          ? const Padding(
+                              padding: EdgeInsets.symmetric(
+                                  horizontal: 20, vertical: 36),
+                              child: EmptyState(
+                                icon: Icons.notifications_none_rounded,
+                                title: 'No notifications yet',
+                                message:
+                                    'Updates about leads, tasks, and assignments will show up here.',
+                              ),
+                            )
+                          : ListView.separated(
+                              shrinkWrap: true,
+                              padding: EdgeInsets.zero,
+                              itemCount: notifications.length,
+                              separatorBuilder: (_, __) =>
+                                  const Divider(height: 1),
+                              itemBuilder: (_, i) {
+                                final n = notifications[i];
+                                return ListTile(
+                                  dense: true,
+                                  leading: CircleAvatar(
+                                    radius: 16,
+                                    backgroundColor: _typeColor(n.type)
+                                        .withValues(alpha: 0.1),
+                                    child: Icon(_typeIcon(n.type),
+                                        color: _typeColor(n.type), size: 15),
+                                  ),
+                                  title: Text(n.title,
+                                      style: TextStyle(
+                                          fontWeight: n.isRead
+                                              ? FontWeight.normal
+                                              : FontWeight.w600,
+                                          fontSize: 13.5)),
+                                  subtitle: Text(n.message,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(fontSize: 12)),
+                                  trailing: n.isRead
+                                      ? null
+                                      : Container(
+                                          width: 7, height: 7,
+                                          decoration: const BoxDecoration(
+                                              color: AppColors.primary,
+                                              shape: BoxShape.circle),
+                                        ),
+                                  onTap: () {
+                                    onMarkRead(n.id);
+                                    onOpen(n);
+                                  },
+                                  tileColor: n.isRead
+                                      ? null
+                                      : AppColors.primary
+                                          .withValues(alpha: 0.03),
+                                );
+                              },
+                            ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-            child: Row(children: [
-              const Text('Notifications',
-                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
-              const Spacer(),
-              if (notifications.isNotEmpty)
-                TextButton(
-                  onPressed: () {
-                    onMarkAllRead();
-                    Navigator.pop(context);
-                  },
-                  child: const Text('Mark all read'),
-                ),
-            ]),
-          ),
-          const Divider(height: 1),
-          Expanded(
-            child: notifications.isEmpty
-                ? EmptyState(
-                    icon: Icons.notifications_none_rounded,
-                    title: 'No notifications yet',
-                    message:
-                        'Updates about leads, tasks, and assignments will show up here.',
-                  )
-                : ListView.separated(
-                    controller: controller,
-                    itemCount: notifications.length,
-                    separatorBuilder: (_, __) => const Divider(height: 1),
-                    itemBuilder: (_, i) {
-                      final n = notifications[i];
-                      return ListTile(
-                        leading: CircleAvatar(
-                          radius: 18,
-                          backgroundColor:
-                              _typeColor(n.type).withValues(alpha: 0.1),
-                          child: Icon(_typeIcon(n.type),
-                              color: _typeColor(n.type), size: 16),
-                        ),
-                        title: Text(n.title,
-                            style: TextStyle(
-                                fontWeight: n.isRead
-                                    ? FontWeight.normal
-                                    : FontWeight.w600,
-                                fontSize: 14)),
-                        subtitle: Text(n.message,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontSize: 12)),
-                        trailing: n.isRead
-                            ? null
-                            : Container(
-                                width: 7, height: 7,
-                                decoration: const BoxDecoration(
-                                    color: AppColors.primary,
-                                    shape: BoxShape.circle),
-                              ),
-                        onTap: () {
-                          onMarkRead(n.id);
-                          onOpen(n);
-                        },
-                        tileColor: n.isRead
-                            ? null
-                            : AppColors.primary.withValues(alpha: 0.03),
-                      );
-                    },
-                  ),
-          ),
-        ]),
-      ),
+        ),
+      ],
     );
   }
 
