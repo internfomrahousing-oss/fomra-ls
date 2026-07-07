@@ -995,7 +995,7 @@ class _LeadCard extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            fontSize: 16,
+                            fontSize: 18,
                             fontWeight: FontWeight.w800,
                             letterSpacing: -0.2,
                             color: context.fomraTextPrimary,
@@ -1007,7 +1007,7 @@ class _LeadCard extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            fontSize: 12,
+                            fontSize: 13,
                             fontWeight: FontWeight.w500,
                             color: context.fomraTextSecondary,
                           ),
@@ -1069,7 +1069,7 @@ class _LeadCard extends StatelessWidget {
                                 onPressed: () => onStatusChange(s),
                                 style: OutlinedButton.styleFrom(
                                   padding: const EdgeInsets.symmetric(
-                                      horizontal: 12, vertical: 6),
+                                      horizontal: 14, vertical: 8),
                                   minimumSize: Size.zero,
                                   tapTargetSize:
                                       MaterialTapTargetSize.shrinkWrap,
@@ -1081,7 +1081,9 @@ class _LeadCard extends StatelessWidget {
                                 ),
                                 child: Text('→ ${s.label}',
                                     style: TextStyle(
-                                        fontSize: 11, color: s.color)),
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                        color: s.color)),
                               ),
                             ))
                         .toList(),
@@ -1097,7 +1099,7 @@ class _LeadCard extends StatelessWidget {
 
   Widget _infoChip(BuildContext context, IconData icon, String label, String value) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         color: context.fomraSurfaceVar,
         borderRadius: BorderRadius.circular(20),
@@ -1105,12 +1107,12 @@ class _LeadCard extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 12, color: context.fomraTextSecondary),
-          const SizedBox(width: 4),
+          Icon(icon, size: 15, color: context.fomraTextSecondary),
+          const SizedBox(width: 5),
           Text(
             '$label: ',
             style: TextStyle(
-              fontSize: 10,
+              fontSize: 13,
               fontWeight: FontWeight.w600,
               color: context.fomraTextSecondary,
             ),
@@ -1118,7 +1120,7 @@ class _LeadCard extends StatelessWidget {
           Text(
             value,
             style: TextStyle(
-              fontSize: 10,
+              fontSize: 13,
               fontWeight: FontWeight.w700,
               color: context.fomraTextPrimary,
             ),
@@ -1139,13 +1141,13 @@ class _StatusBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = status.color;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
       decoration: BoxDecoration(
           color: c.withValues(alpha: 0.15),
           borderRadius: BorderRadius.circular(20)),
       child: Text(status.label,
           style: TextStyle(
-              fontSize: 10, color: c, fontWeight: FontWeight.w700)),
+              fontSize: 12, color: c, fontWeight: FontWeight.w700)),
     );
   }
 }
