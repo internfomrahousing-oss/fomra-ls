@@ -371,27 +371,33 @@ class _SwooshPainter extends CustomPainter {
     final h = size.height;
     final paint = Paint()
       ..style = PaintingStyle.fill
+      ..isAntiAlias = true
       ..shader = const LinearGradient(
         begin: Alignment.bottomLeft,
         end: Alignment.topRight,
-        colors: [Color(0xFF10245C), Color(0xFF3D74D6)],
+        colors: [Color(0xFF0E1E52), Color(0xFF2E6BD6)],
       ).createShader(Rect.fromLTWH(0, 0, w, h));
 
-    // Upper (larger) sweep
-    final upper = Path()
-      ..moveTo(w * 0.02, h * 0.52)
-      ..quadraticBezierTo(w * 0.52, h * 0.10, w * 1.0, h * 0.02)
-      ..quadraticBezierTo(w * 0.55, h * 0.40, w * 0.10, h * 0.66)
+    // Main swoosh: a bold wing — pointed tail at lower-left,
+    // wide blunt blade at upper-right.
+    final blade = Path()
+      ..moveTo(w * 0.04, h * 0.70)
+      // top edge sweeping up to the right tip
+      ..quadraticBezierTo(w * 0.56, h * 0.50, w * 1.00, h * 0.02)
+      // blunt right end
+      ..quadraticBezierTo(w * 1.00, h * 0.18, w * 0.98, h * 0.30)
+      // bottom edge curving back to the tail point
+      ..quadraticBezierTo(w * 0.54, h * 0.66, w * 0.04, h * 0.70)
       ..close();
-    canvas.drawPath(upper, paint);
+    canvas.drawPath(blade, paint);
 
-    // Lower (smaller) sweep
-    final lower = Path()
-      ..moveTo(w * 0.14, h * 0.86)
-      ..quadraticBezierTo(w * 0.52, h * 0.58, w * 0.90, h * 0.34)
-      ..quadraticBezierTo(w * 0.52, h * 0.74, w * 0.22, h * 0.98)
+    // Slim accent stroke beneath, echoing the logo's double sweep.
+    final accent = Path()
+      ..moveTo(w * 0.16, h * 0.94)
+      ..quadraticBezierTo(w * 0.58, h * 0.66, w * 0.94, h * 0.42)
+      ..quadraticBezierTo(w * 0.62, h * 0.78, w * 0.24, h * 1.00)
       ..close();
-    canvas.drawPath(lower, paint);
+    canvas.drawPath(accent, paint);
   }
 
   @override
