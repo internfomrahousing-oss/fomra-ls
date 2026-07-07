@@ -938,7 +938,22 @@ class _LeadCard extends StatelessWidget {
         onTap: onTap,
         padding: const EdgeInsets.all(16),
         radius: AppColors.radiusLg,
-        color: statusColor.withValues(alpha: 0.08),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            statusColor.withValues(alpha: 0.14),
+            statusColor.withValues(alpha: 0.04),
+          ],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: statusColor.withValues(alpha: 0.16),
+            blurRadius: 16,
+            spreadRadius: -4,
+            offset: const Offset(0, 8),
+          ),
+        ],
         border: selected,
         borderColor: selected ? AppColors.primary : null,
         borderWidth: 2,
@@ -976,8 +991,18 @@ class _LeadCard extends StatelessWidget {
                     width: 46,
                     height: 46,
                     decoration: BoxDecoration(
-                      color: statusColor.withValues(alpha: 0.12),
+                      color: context.fomraSurface,
                       borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: statusColor.withValues(alpha: 0.25),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: statusColor.withValues(alpha: 0.20),
+                          blurRadius: 8,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
                     ),
                     child: Icon(Icons.location_on_rounded,
                         color: statusColor, size: 24),

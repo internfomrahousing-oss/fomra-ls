@@ -46,6 +46,8 @@ class AppCard extends StatefulWidget {
     this.onTap,
     this.radius = AppColors.radiusMd,
     this.color,
+    this.gradient,
+    this.boxShadow,
     this.border = true,
     this.borderColor,
     this.borderWidth = 1,
@@ -57,6 +59,12 @@ class AppCard extends StatefulWidget {
   final VoidCallback? onTap;
   final double radius;
   final Color? color;
+
+  /// Optional background gradient (overrides [color] when set).
+  final Gradient? gradient;
+
+  /// Optional shadow override (falls back to the theme card shadow).
+  final List<BoxShadow>? boxShadow;
   final bool border;
 
   /// Overrides the default border colour (e.g. a status colour). Falls back to
@@ -88,7 +96,8 @@ class _AppCardState extends State<AppCard> {
       transform: _lift ? Matrix4.translationValues(0, -2, 0) : Matrix4.identity(),
       transformAlignment: Alignment.center,
       decoration: BoxDecoration(
-        color: surface,
+        color: widget.gradient == null ? surface : null,
+        gradient: widget.gradient,
         borderRadius: radius,
         border: widget.border
             ? Border.all(
@@ -96,7 +105,8 @@ class _AppCardState extends State<AppCard> {
                 width: widget.borderWidth,
               )
             : null,
-        boxShadow: _lift ? AppColors.elevatedShadow : context.fomraCardShadow,
+        boxShadow: widget.boxShadow ??
+            (_lift ? AppColors.elevatedShadow : context.fomraCardShadow),
       ),
       child: Padding(padding: widget.padding, child: widget.child),
     );
