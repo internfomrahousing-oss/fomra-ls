@@ -1088,9 +1088,13 @@ class _KpiOverviewChartState extends State<_KpiOverviewChart>
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 900),
-    );
+    )..addListener(_onAnimTick);
     _curve = CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic);
     _controller.forward();
+  }
+
+  void _onAnimTick() {
+    if (mounted) setState(() {});
   }
 
   @override
