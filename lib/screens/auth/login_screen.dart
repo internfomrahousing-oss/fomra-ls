@@ -65,7 +65,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget _buildSplitLayout(BuildContext context) {
     return Row(
       children: [
-        // Left: white background — Fomra logo only, no text
+        // Left: white background with the official FOMRA brand mark.
         Expanded(
           flex: 5,
           child: ColoredBox(
@@ -74,12 +74,22 @@ class _LoginScreenState extends State<LoginScreen> {
               child: Padding(
                 padding: const EdgeInsets.all(48),
                 child: Center(
-                  child: Image.asset(
-                    'assets/images/fomra_logo.png',
-                    width: 380,
-                    fit: BoxFit.contain,
-                    errorBuilder: (context, error, stackTrace) =>
-                        const FomraLogo(width: 380),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(
+                      maxWidth: 520,
+                      maxHeight: 220,
+                    ),
+                    child: AspectRatio(
+                      aspectRatio: 3.2,
+                      child: Image.asset(
+                        'assets/images/fomra_logo.png',
+                        fit: BoxFit.contain,
+                        alignment: Alignment.center,
+                        filterQuality: FilterQuality.high,
+                        errorBuilder: (context, error, stackTrace) =>
+                            const FomraLogo(width: 380),
+                      ),
+                    ),
                   ),
                 ),
               ),
