@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../models/land_lead.dart';
 import '../../services/app_store.dart';
+import '../../services/auth_service.dart';
 import '../../services/report_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_layout.dart';
@@ -31,6 +32,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
   int _chartAnimToken = 0;
   LeadReportType _selectedReportType = LeadReportType.all;
   String _selectedEmployeeReport = _kAllEmployees;
+  bool _showReportPreview = true;
+
+  // Visual-only export toggles. These do not alter PDF generation logic.
+  final Map<String, bool> _exportOptions = {
+    'Executive Summary': true,
+    'Charts': true,
+    'Lead Details': true,
+    'Analytics': true,
+    'Property Information': true,
+    'Timestamps': true,
+  };
+
+  static const List<String> _monthNames = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December',
+  ];
 
   List<String> get _employeeNames {
     final names = <String>{};
@@ -46,13 +63,94 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return [_kAllEmployees, ...sorted];
   }
 
-  String _reportTypeLabel(LeadReportType type) => switch (type) {
-        LeadReportType.all => 'All',
-        LeadReportType.totalLeads => 'Total Leads',
-        LeadReportType.acquiredLeads => 'Acquired Leads',
-        LeadReportType.brokerLeads => 'Broker Leads',
-        LeadReportType.employeeLeads => 'Employee Leads',
+  ({IconData icon, String title, String description}) _reportTypeMeta(
+    LeadReportType type,
+  ) =>
+      switch (type) {
+        LeadReportType.all => (
+            icon: Icons.dashboard_customize_outlined,
+            title: 'All Reports',
+            description: 'Complete overview of every section',
+          ),
+        LeadReportType.totalLeads => (
+            icon: Icons.location_on_outlined,
+            title: 'Total Leads',
+            description: 'Every lead in the pipeline',
+          ),
+        LeadReportType.acquiredLeads => (
+            icon: Icons.check_circle_outline,
+            title: 'Acquired Leads',
+            description: 'Closed and converted deals',
+          ),
+        LeadReportType.brokerLeads => (
+            icon: Icons.handshake_outlined,
+            title: 'Broker Leads',
+            description: 'Leads sourced through brokers',
+          ),
+        LeadReportType.employeeLeads => (
+            icon: Icons.badge_outlined,
+            title: 'Employee Leads',
+            description: 'Performance by team member',
+          ),
       };
+
+  Color _reportTypeColor(LeadReportType type) => switch (type) {
+        LeadReportType.all => AppColors.primary,
+        LeadReportType.totalLeads => AppColors.info,
+        LeadReportType.acquiredLeads => AppColors.success,
+        LeadReportType.brokerLeads => AppColors.secondary,
+        LeadReportType.employeeLeads => AppColors.warning,
+      };
+
+  /// Visual-only estimate of how many records the selected report covers.
+  int _estimatedRecords() {
+    final leads = AppStore.instance.leads;
+    switch (_selectedReportType) {
+      case LeadReportType.all:
+      case LeadReportType.totalLeads:
+        return leads.length;
+      case LeadReportType.acquiredLeads:
+        return leads.where((l) => l.status == LeadStatus.closed).length;
+      case LeadReportType.brokerLeads:
+        return leads
+            .where((l) => l.inputSource == InputSource.broker)
+            .length;
+      case LeadReportType.employeeLeads:
+        if (_selectedEmployeeReport == _kAllEmployees) {
+          return (_employeeNames.length - 1).clamp(0, 9999);
+        }
+        return leads
+            .where((l) =>
+                l.createdByName.trim().toLowerCase() ==
+                _selectedEmployeeReport.trim().toLowerCase())
+            .length;
+    }
+  }
+
+  String _estimatedSize(int records) {
+    final mb = 0.35 + records * 0.012;
+    return '${mb.toStringAsFixed(1)} MB';
+  }
+
+  String _formattedDate(DateTime d) =>
+      '${d.day.toString().padLeft(2, '0')} ${_monthNames[d.month - 1]} ${d.year}';
+
+  String _previewFileName() {
+    final now = DateTime.now();
+    final token = switch (_selectedReportType) {
+      LeadReportType.all => 'All',
+      LeadReportType.totalLeads => 'Total_Leads',
+      LeadReportType.acquiredLeads => 'Acquired_Leads',
+      LeadReportType.brokerLeads => 'Broker_Leads',
+      LeadReportType.employeeLeads =>
+        _selectedEmployeeReport == _kAllEmployees
+            ? 'Employee_Leads'
+            : 'Employee_${_selectedEmployeeReport.replaceAll(RegExp(r'[^A-Za-z0-9]+'), '_')}',
+    };
+    final date =
+        '${now.day.toString().padLeft(2, '0')}_${_monthNames[now.month - 1]}_${now.year}';
+    return '${token}_Report_$date.pdf';
+  }
 
   Future<void> _generateReport() async {
     if (_generatingReport) return;
@@ -80,90 +178,416 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  /// Inline report options shown under the "Create PDF Report" button.
-  Widget _buildReportOptions(BuildContext context) {
-    final employees = _employeeNames;
+  void _resetReportForm() {
+    setState(() {
+      _selectedReportType = LeadReportType.all;
+      _selectedEmployeeReport = _kAllEmployees;
+      for (final key in _exportOptions.keys) {
+        _exportOptions[key] = true;
+      }
+    });
+  }
+
+  /// Premium "Export PDF Report" wizard card shown above Recent activity.
+  Widget _buildReportCard(BuildContext context, {required bool leadsEmpty}) {
+    return AppCard(
+      padding: const EdgeInsets.all(24),
+      radius: AppColors.radiusMd,
+      interactive: false,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildReportHeader(context),
+          if (leadsEmpty) ...[
+            const SizedBox(height: 24),
+            const _EmptyReportNotice(),
+          ] else ...[
+            const SizedBox(height: 24),
+            _buildReportTypeSection(context),
+            _buildEmployeeFilter(context),
+            const SizedBox(height: 24),
+            _buildExportOptionsSection(context),
+            const SizedBox(height: 24),
+            _buildPreviewSection(context),
+            const SizedBox(height: 24),
+            _buildReportFooter(context),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReportHeader(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 52,
+          height: 52,
+          decoration: BoxDecoration(
+            color: AppColors.primary.withValues(alpha: 0.12),
+            shape: BoxShape.circle,
+          ),
+          alignment: Alignment.center,
+          child: const Icon(
+            Icons.picture_as_pdf_outlined,
+            color: AppColors.primary,
+            size: 26,
+          ),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Export PDF Report',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.4,
+                  color: context.fomraTextPrimary,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Generate a professional PDF report from your land database.',
+                style: TextStyle(
+                  fontSize: 13,
+                  height: 1.4,
+                  color: context.fomraTextSecondary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildReportTypeSection(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        ...LeadReportType.values.map((type) {
-          final selected = _selectedReportType == type;
-          return InkWell(
-            borderRadius: BorderRadius.circular(10),
-            onTap: () => setState(() => _selectedReportType = type),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Row(
-                children: [
-                  Icon(
-                    selected
-                        ? Icons.radio_button_checked
-                        : Icons.radio_button_off,
-                    size: 20,
-                    color:
-                        selected ? AppColors.primary : context.fomraTextTertiary,
+        const _ReportSectionLabel(
+          icon: Icons.category_outlined,
+          label: 'Report Type',
+        ),
+        const SizedBox(height: 12),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final width = constraints.maxWidth;
+            final cols = width > 860 ? 3 : (width > 520 ? 2 : 1);
+            const spacing = 12.0;
+            final itemWidth =
+                (width - spacing * (cols - 1)) / cols;
+            return Wrap(
+              spacing: spacing,
+              runSpacing: spacing,
+              children: [
+                for (final type in LeadReportType.values)
+                  SizedBox(
+                    width: cols == 1 ? width : itemWidth,
+                    child: _ReportTypeCard(
+                      meta: _reportTypeMeta(type),
+                      accent: _reportTypeColor(type),
+                      selected: _selectedReportType == type,
+                      onTap: () =>
+                          setState(() => _selectedReportType = type),
+                    ),
                   ),
-                  const SizedBox(width: 10),
-                  Text(
-                    _reportTypeLabel(type),
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                      color: context.fomraTextPrimary,
+              ],
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEmployeeFilter(BuildContext context) {
+    final employees = _employeeNames;
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 220),
+      switchInCurve: Curves.easeOut,
+      switchOutCurve: Curves.easeIn,
+      transitionBuilder: (child, animation) => FadeTransition(
+        opacity: animation,
+        child: SizeTransition(
+          sizeFactor: animation,
+          alignment: Alignment.topCenter,
+          child: child,
+        ),
+      ),
+      child: _selectedReportType != LeadReportType.employeeLeads
+          ? const SizedBox(width: double.infinity)
+          : Padding(
+              key: const ValueKey('employee-filter'),
+              padding: const EdgeInsets.only(top: 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const _ReportSectionLabel(
+                    icon: Icons.person_search_outlined,
+                    label: 'Filter by Employee',
+                  ),
+                  const SizedBox(height: 10),
+                  DropdownButtonFormField<String>(
+                    initialValue: employees.contains(_selectedEmployeeReport)
+                        ? _selectedEmployeeReport
+                        : employees.first,
+                    isExpanded: true,
+                    icon: const Icon(Icons.keyboard_arrow_down_rounded),
+                    borderRadius: BorderRadius.circular(14),
+                    items: employees
+                        .map((name) => DropdownMenuItem<String>(
+                              value: name,
+                              child: Text(
+                                name == _kAllEmployees
+                                    ? 'All Employees'
+                                    : name,
+                              ),
+                            ))
+                        .toList(),
+                    onChanged: (value) {
+                      if (value == null) return;
+                      setState(() => _selectedEmployeeReport = value);
+                    },
+                    decoration: InputDecoration(
+                      isDense: true,
+                      prefixIcon: const Icon(
+                        Icons.badge_outlined,
+                        size: 20,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 14,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
-          );
-        }),
-        if (_selectedReportType == LeadReportType.employeeLeads) ...[
-          const SizedBox(height: 8),
-          Text(
-            'Employee',
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: context.fomraTextPrimary,
-            ),
-          ),
-          const SizedBox(height: 8),
-          DropdownButtonFormField<String>(
-            initialValue: employees.contains(_selectedEmployeeReport)
-                ? _selectedEmployeeReport
-                : employees.first,
-            isExpanded: true,
-            items: employees
-                .map((name) => DropdownMenuItem<String>(
-                      value: name,
-                      child: Text(name),
-                    ))
-                .toList(),
-            onChanged: (value) {
-              if (value == null) return;
-              setState(() => _selectedEmployeeReport = value);
-            },
-            decoration: InputDecoration(
-              isDense: true,
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-          ),
-        ],
-        const SizedBox(height: 16),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: PrimaryButton(
-            label: _generatingReport ? 'Preparing PDF…' : 'Generate PDF',
-            icon: Icons.picture_as_pdf_outlined,
-            loading: _generatingReport,
-            onPressed: _generatingReport ? null : _generateReport,
-          ),
+    );
+  }
+
+  Widget _buildExportOptionsSection(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _ReportSectionLabel(
+          icon: Icons.tune_rounded,
+          label: 'Export Options',
+        ),
+        const SizedBox(height: 12),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final twoCol = constraints.maxWidth > 520;
+            const spacing = 10.0;
+            final itemWidth = twoCol
+                ? (constraints.maxWidth - spacing) / 2
+                : constraints.maxWidth;
+            return Wrap(
+              spacing: spacing,
+              runSpacing: spacing,
+              children: [
+                for (final entry in _exportOptions.entries)
+                  SizedBox(
+                    width: itemWidth,
+                    child: _ExportOptionTile(
+                      label: entry.key,
+                      value: entry.value,
+                      onChanged: (v) =>
+                          setState(() => _exportOptions[entry.key] = v),
+                    ),
+                  ),
+              ],
+            );
+          },
         ),
       ],
+    );
+  }
+
+  Widget _buildPreviewSection(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Expanded(
+              child: _ReportSectionLabel(
+                icon: Icons.visibility_outlined,
+                label: 'Report Preview',
+              ),
+            ),
+            TextButton.icon(
+              onPressed: () => setState(
+                () => _showReportPreview = !_showReportPreview,
+              ),
+              icon: Icon(
+                _showReportPreview
+                    ? Icons.expand_less_rounded
+                    : Icons.expand_more_rounded,
+                size: 18,
+              ),
+              label: Text(_showReportPreview ? 'Hide' : 'Show'),
+            ),
+          ],
+        ),
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 220),
+          transitionBuilder: (child, animation) => FadeTransition(
+            opacity: animation,
+            child: SizeTransition(
+              sizeFactor: animation,
+              alignment: Alignment.topCenter,
+              child: child,
+            ),
+          ),
+          child: !_showReportPreview
+              ? const SizedBox(width: double.infinity)
+              : Padding(
+                  key: const ValueKey('preview-card'),
+                  padding: const EdgeInsets.only(top: 8),
+                  child: _buildPreviewCard(context),
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPreviewCard(BuildContext context) {
+    final records = _estimatedRecords();
+    final user = AuthService.instance.currentUser;
+    final generatedBy = (user?.fullName.trim().isNotEmpty ?? false)
+        ? user!.fullName.trim()
+        : 'Current User';
+    final now = DateTime.now();
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: context.fomraSurfaceVar,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: context.fomraBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: AppColors.error.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                alignment: Alignment.center,
+                child: const Icon(
+                  Icons.description_outlined,
+                  color: AppColors.error,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  _previewFileName(),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: context.fomraTextPrimary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 24,
+            runSpacing: 14,
+            children: [
+              _PreviewStat(
+                label: 'Estimated Records',
+                value: '$records Record${records == 1 ? '' : 's'}',
+              ),
+              _PreviewStat(
+                label: 'Estimated Size',
+                value: _estimatedSize(records),
+              ),
+              _PreviewStat(label: 'Generated By', value: generatedBy),
+              _PreviewStat(
+                label: 'Generated On',
+                value: _formattedDate(now),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReportFooter(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.only(top: 20),
+      decoration: BoxDecoration(
+        border: Border(top: BorderSide(color: context.fomraBorder)),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final stacked = constraints.maxWidth < 480;
+          final buttons = <Widget>[
+            SecondaryButton(
+              label: 'Cancel',
+              icon: Icons.close_rounded,
+              expand: stacked,
+              onPressed: _generatingReport ? null : _resetReportForm,
+            ),
+            TextButton.icon(
+              onPressed: _generatingReport
+                  ? null
+                  : () => setState(
+                        () => _showReportPreview = true,
+                      ),
+              icon: const Icon(Icons.visibility_outlined, size: 18),
+              label: const Text('Preview'),
+            ),
+            PrimaryButton(
+              label: _generatingReport ? 'Preparing PDF…' : 'Generate PDF',
+              icon: Icons.picture_as_pdf_outlined,
+              loading: _generatingReport,
+              expand: stacked,
+              onPressed: _generatingReport ? null : _generateReport,
+            ),
+          ];
+          if (stacked) {
+            return Column(
+              children: [
+                buttons[2],
+                const SizedBox(height: 10),
+                buttons[1],
+                const SizedBox(height: 10),
+                buttons[0],
+              ],
+            );
+          }
+          return Row(
+            children: [
+              buttons[0],
+              const SizedBox(width: 12),
+              buttons[1],
+              const Spacer(),
+              buttons[2],
+            ],
+          );
+        },
+      ),
     );
   }
 
@@ -470,21 +894,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   onTap: _openKpiLeads,
                 ),
                 const SizedBox(height: 20),
-                _SectionCard(
-                  title: 'Create PDF Report',
-                  subtitle:
-                      'Choose what to include in the exported report.',
-                  icon: Icons.picture_as_pdf_outlined,
-                  child: leads.isEmpty
-                      ? Text(
-                          'No leads available for report generation yet.',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: context.fomraTextSecondary,
-                          ),
-                        )
-                      : _buildReportOptions(context),
-                ),
+                _buildReportCard(context, leadsEmpty: leads.isEmpty),
                 const SizedBox(height: 20),
                 _SectionCard(
                   title: 'Recent activity',
@@ -1078,6 +1488,243 @@ class _SectionCard extends StatelessWidget {
             padding: const EdgeInsets.only(bottom: 16),
           ),
           child,
+        ],
+      ),
+    );
+  }
+}
+
+class _ReportSectionLabel extends StatelessWidget {
+  final IconData icon;
+  final String label;
+
+  const _ReportSectionLabel({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: context.fomraTextSecondary),
+        const SizedBox(width: 8),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.2,
+            color: context.fomraTextPrimary,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ReportTypeCard extends StatelessWidget {
+  final ({IconData icon, String title, String description}) meta;
+  final Color accent;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _ReportTypeCard({
+    required this.meta,
+    required this.accent,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: selected
+                ? accent.withValues(alpha: 0.08)
+                : context.fomraSurface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: selected ? accent : context.fomraBorder,
+              width: selected ? 1.6 : 1,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: accent.withValues(alpha: 0.14),
+                      borderRadius: BorderRadius.circular(11),
+                    ),
+                    alignment: Alignment.center,
+                    child: Icon(meta.icon, color: accent, size: 20),
+                  ),
+                  const Spacer(),
+                  AnimatedScale(
+                    duration: const Duration(milliseconds: 180),
+                    scale: selected ? 1 : 0,
+                    child: Icon(
+                      Icons.check_circle_rounded,
+                      color: accent,
+                      size: 20,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                meta.title,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: context.fomraTextPrimary,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                meta.description,
+                style: TextStyle(
+                  fontSize: 12,
+                  height: 1.35,
+                  color: context.fomraTextSecondary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ExportOptionTile extends StatelessWidget {
+  final String label;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  const _ExportOptionTile({
+    required this.label,
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => onChanged(!value),
+        borderRadius: BorderRadius.circular(12),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: value
+                ? AppColors.primary.withValues(alpha: 0.06)
+                : context.fomraSurfaceVar,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: value
+                  ? AppColors.primary.withValues(alpha: 0.35)
+                  : context.fomraBorder,
+            ),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: context.fomraTextPrimary,
+                  ),
+                ),
+              ),
+              Switch.adaptive(
+                value: value,
+                onChanged: onChanged,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PreviewStat extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _PreviewStat({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          label.toUpperCase(),
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.6,
+            color: context.fomraTextTertiary,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+            color: context.fomraTextPrimary,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _EmptyReportNotice extends StatelessWidget {
+  const _EmptyReportNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: context.fomraSurfaceVar,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: context.fomraBorder),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.inbox_outlined, color: context.fomraTextTertiary),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'No leads available for report generation yet.',
+              style: TextStyle(
+                fontSize: 13,
+                color: context.fomraTextSecondary,
+              ),
+            ),
+          ),
         ],
       ),
     );
