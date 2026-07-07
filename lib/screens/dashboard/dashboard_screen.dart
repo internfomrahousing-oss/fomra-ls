@@ -810,32 +810,83 @@ class _KpiOverviewChart extends StatelessWidget {
     final maxY = maxVal <= 0 ? 1.0 : maxVal * 1.25;
     final interval = (maxY / 4).ceilToDouble();
 
+    final spots = [
+      for (var i = 0; i < items.length; i++)
+        FlSpot(i.toDouble(), items[i].value.toDouble()),
+    ];
+
+    final lineBar = LineChartBarData(
+      spots: spots,
+      isCurved: true,
+      preventCurveOverShooting: true,
+      color: AppColors.primary,
+      barWidth: 3,
+      isStrokeCapRound: true,
+      dotData: FlDotData(
+        show: true,
+        getDotPainter: (spot, pct, bar, index) => FlDotCirclePainter(
+          radius: 5,
+          color: items[index].color,
+          strokeWidth: 2,
+          strokeColor: Colors.white,
+        ),
+      ),
+      belowBarData: BarAreaData(
+        show: true,
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            AppColors.primary.withValues(alpha: 0.22),
+            AppColors.primary.withValues(alpha: 0.0),
+          ],
+        ),
+      ),
+    );
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         SizedBox(
           height: 230,
-          child: BarChart(
-            BarChartData(
-              alignment: BarChartAlignment.spaceAround,
-              maxY: maxY,
+          child: LineChart(
+            LineChartData(
+              minX: 0,
+              maxX: (items.length - 1).toDouble(),
               minY: 0,
-              barTouchData: BarTouchData(
+              maxY: maxY,
+              lineBarsData: [lineBar],
+              lineTouchData: LineTouchData(
                 enabled: false,
-                touchTooltipData: BarTouchTooltipData(
+                getTouchedSpotIndicator: (bar, indexes) => indexes
+                    .map((_) => const TouchedSpotIndicatorData(
+                          FlLine(color: Colors.transparent),
+                          FlDotData(show: false),
+                        ))
+                    .toList(),
+                touchTooltipData: LineTouchTooltipData(
                   tooltipBgColor: Colors.transparent,
                   tooltipPadding: EdgeInsets.zero,
-                  tooltipMargin: 2,
-                  getTooltipItem: (group, gi, rod, ri) => BarTooltipItem(
-                    '${rod.toY.round()}',
-                    TextStyle(
-                      color: context.fomraTextPrimary,
-                      fontWeight: FontWeight.w800,
-                      fontSize: 13,
-                    ),
-                  ),
+                  fitInsideHorizontally: true,
+                  fitInsideVertically: true,
+                  getTooltipItems: (touched) => touched
+                      .map((s) => LineTooltipItem(
+                            '${s.y.round()}',
+                            TextStyle(
+                              color: context.fomraTextPrimary,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 12,
+                            ),
+                          ))
+                      .toList(),
                 ),
               ),
+              showingTooltipIndicators: [
+                for (var i = 0; i < spots.length; i++)
+                  ShowingTooltipIndicators([
+                    LineBarSpot(lineBar, 0, spots[i]),
+                  ]),
+              ],
               gridData: FlGridData(
                 show: true,
                 drawVerticalLine: false,
@@ -867,9 +918,12 @@ class _KpiOverviewChart extends StatelessWidget {
                   sideTitles: SideTitles(
                     showTitles: true,
                     reservedSize: 30,
+                    interval: 1,
                     getTitlesWidget: (v, meta) {
-                      final i = v.toInt();
-                      if (i < 0 || i >= items.length) {
+                      final i = v.round();
+                      if (i < 0 ||
+                          i >= items.length ||
+                          (v - i).abs() > 0.01) {
                         return const SizedBox.shrink();
                       }
                       return Padding(
@@ -887,27 +941,6 @@ class _KpiOverviewChart extends StatelessWidget {
                   ),
                 ),
               ),
-              barGroups: [
-                for (var i = 0; i < items.length; i++)
-                  BarChartGroupData(
-                    x: i,
-                    showingTooltipIndicators: const [0],
-                    barRods: [
-                      BarChartRodData(
-                        toY: items[i].value.toDouble(),
-                        color: items[i].color,
-                        width: 30,
-                        borderRadius: const BorderRadius.vertical(
-                            top: Radius.circular(6)),
-                        backDrawRodData: BackgroundBarChartRodData(
-                          show: true,
-                          toY: maxY,
-                          color: items[i].color.withValues(alpha: 0.08),
-                        ),
-                      ),
-                    ],
-                  ),
-              ],
             ),
           ),
         ),
