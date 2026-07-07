@@ -65,50 +65,38 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget _buildSplitLayout(BuildContext context) {
     return Row(
       children: [
-        // Left: white form panel
+        // Left: white background — Fomra logo only, no text
+        Expanded(
+          flex: 5,
+          child: ColoredBox(
+            color: Colors.white,
+            child: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(48),
+                child: Center(
+                  child: Image.asset(
+                    'assets/images/fomra_logo.png',
+                    width: 380,
+                    fit: BoxFit.contain,
+                    errorBuilder: (context, error, stackTrace) =>
+                        const FomraLogo(width: 380),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+        // Right: blue panel with the sign-in form
         Expanded(
           flex: 4,
-          child: ColoredBox(
-            color: context.fomraPageBg,
+          child: Container(
+            decoration: const BoxDecoration(gradient: AppColors.heroGradient),
             child: Center(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(40),
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 420),
                   child: _buildFormCard(context, showBranding: false),
-                ),
-              ),
-            ),
-          ),
-        ),
-        // Right: blue branding panel — Fomra logo only, no text
-        Expanded(
-          flex: 5,
-          child: Container(
-            decoration: const BoxDecoration(gradient: AppColors.heroGradient),
-            child: SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.all(48),
-                child: Center(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 40, vertical: 32),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(24),
-                      boxShadow: AppColors.elevatedShadow,
-                    ),
-                    child: Image.asset(
-                      'assets/images/fomra_logo.png',
-                      width: 360,
-                      fit: BoxFit.contain,
-                      errorBuilder: (context, error, stackTrace) => const Icon(
-                        Icons.house_outlined,
-                        color: AppColors.primary,
-                        size: 96,
-                      ),
-                    ),
-                  ),
                 ),
               ),
             ),
@@ -318,4 +306,94 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
     );
   }
+}
+
+/// Vector recreation of the FOMRA Housing & Infrastructure logo.
+/// Used as a fallback until `assets/images/fomra_logo.png` is added.
+class FomraLogo extends StatelessWidget {
+  final double width;
+  const FomraLogo({super.key, this.width = 380});
+
+  static const Color _ink = Color(0xFF1A1A1A);
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: width,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Text(
+                'FOMRA',
+                style: TextStyle(
+                  fontSize: width * 0.215,
+                  fontWeight: FontWeight.w900,
+                  color: _ink,
+                  letterSpacing: -width * 0.006,
+                  height: 1,
+                ),
+              ),
+              SizedBox(width: width * 0.02),
+              CustomPaint(
+                size: Size(width * 0.20, width * 0.185),
+                painter: _SwooshPainter(),
+              ),
+            ],
+          ),
+          SizedBox(height: width * 0.028),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              'HOUSING & INFRASTRUCTURE PVT. LTD.',
+              style: TextStyle(
+                fontSize: width * 0.053,
+                fontWeight: FontWeight.w700,
+                color: _ink,
+                letterSpacing: width * 0.004,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SwooshPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+    final paint = Paint()
+      ..style = PaintingStyle.fill
+      ..shader = const LinearGradient(
+        begin: Alignment.bottomLeft,
+        end: Alignment.topRight,
+        colors: [Color(0xFF10245C), Color(0xFF3D74D6)],
+      ).createShader(Rect.fromLTWH(0, 0, w, h));
+
+    // Upper (larger) sweep
+    final upper = Path()
+      ..moveTo(w * 0.02, h * 0.52)
+      ..quadraticBezierTo(w * 0.52, h * 0.10, w * 1.0, h * 0.02)
+      ..quadraticBezierTo(w * 0.55, h * 0.40, w * 0.10, h * 0.66)
+      ..close();
+    canvas.drawPath(upper, paint);
+
+    // Lower (smaller) sweep
+    final lower = Path()
+      ..moveTo(w * 0.14, h * 0.86)
+      ..quadraticBezierTo(w * 0.52, h * 0.58, w * 0.90, h * 0.34)
+      ..quadraticBezierTo(w * 0.52, h * 0.74, w * 0.22, h * 0.98)
+      ..close();
+    canvas.drawPath(lower, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
