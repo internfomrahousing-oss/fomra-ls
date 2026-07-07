@@ -65,65 +65,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget _buildSplitLayout(BuildContext context) {
     return Row(
       children: [
-        Expanded(
-          flex: 5,
-          child: Container(
-            decoration: const BoxDecoration(gradient: AppColors.heroGradient),
-            child: SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.all(48),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      width: 64,
-                      height: 64,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.16),
-                        borderRadius: BorderRadius.circular(18),
-                        border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.28),
-                        ),
-                      ),
-                      child: const Icon(Icons.house_outlined,
-                          color: Colors.white, size: 34),
-                    ),
-                    const Spacer(),
-                    const Text(
-                      'FomraLS',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 42,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: -0.8,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'Professional land acquisition platform for Fomra Housing — leads, maps, market intelligence, and team workflows in one place.',
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.85),
-                        fontSize: 16,
-                        height: 1.55,
-                      ),
-                    ),
-                    const SizedBox(height: 28),
-                    Wrap(
-                      spacing: 10,
-                      runSpacing: 10,
-                      children: const [
-                        _FeaturePill(Icons.map_outlined, 'Parcel maps'),
-                        _FeaturePill(Icons.analytics_outlined, 'Live KPIs'),
-                        _FeaturePill(Icons.verified_user_outlined, 'Secure access'),
-                      ],
-                    ),
-                    const Spacer(),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
+        // Left: white form panel
         Expanded(
           flex: 4,
           child: ColoredBox(
@@ -134,6 +76,39 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 420),
                   child: _buildFormCard(context, showBranding: false),
+                ),
+              ),
+            ),
+          ),
+        ),
+        // Right: blue branding panel — Fomra logo only, no text
+        Expanded(
+          flex: 5,
+          child: Container(
+            decoration: const BoxDecoration(gradient: AppColors.heroGradient),
+            child: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(48),
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 40, vertical: 32),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(24),
+                      boxShadow: AppColors.elevatedShadow,
+                    ),
+                    child: Image.asset(
+                      'assets/images/fomra_logo.png',
+                      width: 360,
+                      fit: BoxFit.contain,
+                      errorBuilder: (context, error, stackTrace) => const Icon(
+                        Icons.house_outlined,
+                        color: AppColors.primary,
+                        size: 96,
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -340,39 +315,6 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _FeaturePill extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  const _FeaturePill(this.icon, this.label);
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: Colors.white, size: 16),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
       ),
     );
   }
