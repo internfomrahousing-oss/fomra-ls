@@ -934,18 +934,13 @@ class _LeadCard extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
-      child: DecoratedBox(
-        decoration: selected
-            ? BoxDecoration(
-                borderRadius: BorderRadius.circular(AppColors.radiusLg),
-                border: Border.all(color: AppColors.primary, width: 1.5),
-              )
-            : const BoxDecoration(),
-        child: AppCard(
-          onTap: onTap,
-          padding: const EdgeInsets.all(16),
-          radius: AppColors.radiusLg,
-          child: Column(
+      child: AppCard(
+        onTap: onTap,
+        padding: const EdgeInsets.all(16),
+        radius: AppColors.radiusLg,
+        borderColor: selected ? AppColors.primary : statusColor,
+        borderWidth: 2,
+        child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
@@ -1093,7 +1088,6 @@ class _LeadCard extends StatelessWidget {
             ],
           ),
         ),
-      ),
     );
   }
 

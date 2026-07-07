@@ -47,6 +47,8 @@ class AppCard extends StatefulWidget {
     this.radius = AppColors.radiusMd,
     this.color,
     this.border = true,
+    this.borderColor,
+    this.borderWidth = 1,
     this.interactive = true,
   });
 
@@ -56,6 +58,11 @@ class AppCard extends StatefulWidget {
   final double radius;
   final Color? color;
   final bool border;
+
+  /// Overrides the default border colour (e.g. a status colour). Falls back to
+  /// the theme border when null.
+  final Color? borderColor;
+  final double borderWidth;
 
   /// When false, disables the hover/press elevation animation.
   final bool interactive;
@@ -84,7 +91,10 @@ class _AppCardState extends State<AppCard> {
         color: surface,
         borderRadius: radius,
         border: widget.border
-            ? Border.all(color: context.fomraBorder, width: 1)
+            ? Border.all(
+                color: widget.borderColor ?? context.fomraBorder,
+                width: widget.borderWidth,
+              )
             : null,
         boxShadow: _lift ? AppColors.elevatedShadow : context.fomraCardShadow,
       ),
