@@ -28,6 +28,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   bool _showAllRecent = false;
   bool _generatingReport = false;
   int _selectedChartRange = 1;
+  int _chartAnimToken = 0;
   LeadReportType _selectedReportType = LeadReportType.all;
   String _selectedEmployeeReport = _kAllEmployees;
 
@@ -209,7 +210,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   void _goTo(String route) => Navigator.pushNamed(context, route);
 
-  void _refreshChart() => setState(() {});
+  void _refreshChart() => setState(() => _chartAnimToken++);
 
   @override
   Widget build(BuildContext context) {
@@ -382,7 +383,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       (label: 'Rejected', value: rejected, color: kpis[3].accent),
                     ],
                     selectedRange: _selectedChartRange,
-                    onRangeSelected: (v) => setState(() => _selectedChartRange = v),
+                    animToken: _chartAnimToken,
+                    onRangeSelected: (v) => setState(() {
+                      _selectedChartRange = v;
+                      _chartAnimToken++;
+                    }),
                     onRefresh: _refreshChart,
                     onExport: _createReport,
                   ),
@@ -687,22 +692,40 @@ class _MiniSparklineState extends State<_MiniSparkline>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
   late final CurvedAnimation _curve;
+  int? _hoverIndex;
+  final GlobalKey _paintKey = GlobalKey();
 
   @override
   void initState() {
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 380),
+      duration: const Duration(milliseconds: 520),
     );
     _curve = CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic);
     _controller.forward();
   }
 
   @override
+  void didUpdateWidget(_MiniSparkline oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.values != widget.values) {
+      _hoverIndex = null;
+      _controller.forward(from: 0);
+    }
+  }
+
+  @override
   void dispose() {
+    _curve.dispose();
     _controller.dispose();
     super.dispose();
+  }
+
+  int _indexAt(double x, double width) {
+    if (widget.values.length <= 1 || width <= 0) return 0;
+    final ratio = (x / width).clamp(0.0, 1.0);
+    return (ratio * (widget.values.length - 1)).round();
   }
 
   @override
@@ -724,25 +747,122 @@ class _MiniSparklineState extends State<_MiniSparkline>
       );
     }
 
-    return AnimatedBuilder(
-      animation: _curve,
-      builder: (context, _) {
-        final t = _curve.value;
-        return Opacity(
-          opacity: t.clamp(0.0, 1.0),
-          child: Transform.translate(
-            offset: Offset(0, (1 - t) * 6),
-            child: CustomPaint(
-              painter: _SparklinePainter(
-                values: widget.values,
-                color: widget.color,
-                progress: t,
+    final showHover = MediaQuery.sizeOf(context).width >= 600;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final hoverIdx = _hoverIndex;
+        final hoverX = hoverIdx == null
+            ? 0.0
+            : hoverIdx / (widget.values.length - 1) * width;
+
+        return MouseRegion(
+          onExit: showHover ? (_) => setState(() => _hoverIndex = null) : null,
+          onHover: showHover
+              ? (event) {
+                  final box =
+                      _paintKey.currentContext?.findRenderObject() as RenderBox?;
+                  if (box == null) return;
+                  final local = box.globalToLocal(event.position);
+                  final idx = _indexAt(local.dx, width);
+                  if (_hoverIndex != idx) setState(() => _hoverIndex = idx);
+                }
+              : null,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              AnimatedBuilder(
+                animation: _curve,
+                builder: (context, _) {
+                  final t = _curve.value;
+                  return Opacity(
+                    opacity: t.clamp(0.0, 1.0),
+                    child: Transform.translate(
+                      offset: Offset(0, (1 - t) * 6),
+                      child: CustomPaint(
+                        key: _paintKey,
+                        painter: _SparklinePainter(
+                          values: widget.values,
+                          color: widget.color,
+                          progress: t,
+                          hoverIndex: hoverIdx,
+                        ),
+                        size: Size(width, constraints.maxHeight),
+                      ),
+                    ),
+                  );
+                },
               ),
-              size: Size.infinite,
-            ),
+              if (showHover && hoverIdx != null) ...[
+                Positioned(
+                  left: (hoverX - 4).clamp(0.0, width - 8),
+                  bottom: 0,
+                  child: Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: widget.color,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 1.5),
+                      boxShadow: [
+                        BoxShadow(
+                          color: widget.color.withValues(alpha: 0.35),
+                          blurRadius: 6,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                Positioned(
+                  left: (hoverX - 28).clamp(0.0, width - 56),
+                  top: -30,
+                  child: _SparklineTooltip(
+                    value: widget.values[hoverIdx].round(),
+                    color: widget.color,
+                  ),
+                ),
+              ],
+            ],
           ),
         );
       },
+    );
+  }
+}
+
+class _SparklineTooltip extends StatelessWidget {
+  final int value;
+  final Color color;
+
+  const _SparklineTooltip({required this.value, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: context.fomraSurface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: context.fomraBorder),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        child: Text(
+          '$value',
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w800,
+            color: color,
+          ),
+        ),
+      ),
     );
   }
 }
@@ -751,11 +871,13 @@ class _SparklinePainter extends CustomPainter {
   final List<double> values;
   final Color color;
   final double progress;
+  final int? hoverIndex;
 
   const _SparklinePainter({
     required this.values,
     required this.color,
     required this.progress,
+    this.hoverIndex,
   });
 
   @override
@@ -806,7 +928,55 @@ class _SparklinePainter extends CustomPainter {
   bool shouldRepaint(covariant _SparklinePainter oldDelegate) =>
       oldDelegate.values != values ||
       oldDelegate.color != color ||
-      oldDelegate.progress != progress;
+      oldDelegate.progress != progress ||
+      oldDelegate.hoverIndex != hoverIndex;
+}
+
+class _ChartRangePill extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _ChartRangePill({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: selected
+          ? AppColors.primary.withValues(alpha: 0.12)
+          : context.fomraSurfaceVar,
+      borderRadius: BorderRadius.circular(999),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(999),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOutCubic,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color: selected
+                  ? AppColors.primary.withValues(alpha: 0.35)
+                  : context.fomraBorder,
+            ),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+              color: selected ? AppColors.primary : context.fomraTextSecondary,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _SectionCard extends StatelessWidget {
@@ -885,45 +1055,89 @@ class _InsightChip extends StatelessWidget {
   }
 }
 
-/// Single combined bar chart summarising the four headline lead metrics.
-class _KpiOverviewChart extends StatelessWidget {
+/// Hero line chart summarising the four headline lead metrics.
+class _KpiOverviewChart extends StatefulWidget {
   final List<({String label, int value, Color color})> items;
   final int selectedRange;
+  final int animToken;
   final ValueChanged<int> onRangeSelected;
   final VoidCallback onRefresh;
   final VoidCallback onExport;
+
   const _KpiOverviewChart({
     required this.items,
     required this.selectedRange,
+    required this.animToken,
     required this.onRangeSelected,
     required this.onRefresh,
     required this.onExport,
   });
 
   @override
+  State<_KpiOverviewChart> createState() => _KpiOverviewChartState();
+}
+
+class _KpiOverviewChartState extends State<_KpiOverviewChart>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final CurvedAnimation _curve;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    );
+    _curve = CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic);
+    _controller.forward();
+  }
+
+  @override
+  void didUpdateWidget(_KpiOverviewChart oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.animToken != widget.animToken ||
+        oldWidget.items != widget.items) {
+      _controller.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _curve.dispose();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final items = widget.items;
     final maxVal = items.fold<int>(0, (m, e) => e.value > m ? e.value : m);
     final maxY = maxVal <= 0 ? 1.0 : maxVal * 1.25;
     final interval = (maxY / 4).ceilToDouble();
+    final t = _curve.value;
 
     final spots = [
       for (var i = 0; i < items.length; i++)
-        FlSpot(i.toDouble(), items[i].value.toDouble()),
+        FlSpot(i.toDouble(), items[i].value.toDouble() * t),
     ];
 
     final lineBar = LineChartBarData(
       spots: spots,
       isCurved: true,
+      curveSmoothness: 0.28,
       preventCurveOverShooting: true,
-      color: AppColors.primary,
-      barWidth: 3,
+      gradient: LinearGradient(
+        colors: items.map((e) => e.color).toList(),
+      ),
+      barWidth: 3.5,
       isStrokeCapRound: true,
       dotData: FlDotData(
         show: true,
         getDotPainter: (spot, pct, bar, index) => FlDotCirclePainter(
-          radius: 5,
+          radius: 7,
           color: items[index].color,
-          strokeWidth: 2,
+          strokeWidth: 2.5,
           strokeColor: Colors.white,
         ),
       ),
@@ -933,7 +1147,7 @@ class _KpiOverviewChart extends StatelessWidget {
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            AppColors.primary.withValues(alpha: 0.22),
+            AppColors.primary.withValues(alpha: 0.12),
             AppColors.primary.withValues(alpha: 0.0),
           ],
         ),
@@ -943,140 +1157,193 @@ class _KpiOverviewChart extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  for (final entry in const [
-                    (0, 'Today'),
-                    (1, '7 Days'),
-                    (2, '30 Days'),
-                    (3, '90 Days'),
-                  ])
-                    ChoiceChip(
-                      label: Text(entry.$2),
-                      selected: selectedRange == entry.$1,
-                      showCheckmark: false,
-                      onSelected: (_) => onRangeSelected(entry.$1),
-                    ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 10),
-            IconButton.filledTonal(
-              onPressed: onRefresh,
-              icon: const Icon(Icons.refresh_rounded, size: 18),
-              tooltip: 'Refresh',
-            ),
-            const SizedBox(width: 6),
-            IconButton.filledTonal(
-              onPressed: onExport,
-              icon: const Icon(Icons.file_download_outlined, size: 18),
-              tooltip: 'Export',
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        SizedBox(
-          height: 356,
-          child: LineChart(
-            LineChartData(
-              minX: 0,
-              maxX: (items.length - 1).toDouble(),
-              minY: 0,
-              maxY: maxY,
-              lineBarsData: [lineBar],
-              lineTouchData: LineTouchData(
-                enabled: true,
-                getTouchedSpotIndicator: (bar, indexes) => indexes
-                    .map((_) => TouchedSpotIndicatorData(
-                          FlLine(
-                            color: AppColors.primary.withValues(alpha: 0.25),
-                            strokeWidth: 1.5,
-                          ),
-                          FlDotData(show: false),
-                        ))
-                    .toList(),
-                touchTooltipData: LineTouchTooltipData(
-                  tooltipBgColor: context.fomraSurface,
-                  tooltipRoundedRadius: 10,
-                  tooltipPadding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  fitInsideHorizontally: true,
-                  fitInsideVertically: true,
-                  getTooltipItems: (touched) => touched
-                      .map((s) => LineTooltipItem(
-                            '${s.y.round()}',
-                            TextStyle(
-                              color: context.fomraTextPrimary,
-                              fontWeight: FontWeight.w800,
-                              fontSize: 12,
-                            ),
-                          ))
-                      .toList(),
-                ),
-              ),
-              gridData: FlGridData(
-                show: true,
-                drawVerticalLine: false,
-                horizontalInterval: interval,
-                getDrawingHorizontalLine: (_) =>
-                    FlLine(color: context.fomraBorder, strokeWidth: 1),
-              ),
-              borderData: FlBorderData(show: false),
-              titlesData: FlTitlesData(
-                topTitles: const AxisTitles(
-                    sideTitles: SideTitles(showTitles: false)),
-                rightTitles: const AxisTitles(
-                    sideTitles: SideTitles(showTitles: false)),
-                leftTitles: AxisTitles(
-                  sideTitles: SideTitles(
-                    showTitles: true,
-                    reservedSize: 34,
-                    interval: interval,
-                    getTitlesWidget: (v, meta) {
-                      if (v == 0 || v > maxY) return const SizedBox.shrink();
-                      return Text('${v.round()}',
-                          style: TextStyle(
-                              fontSize: 10,
-                              color: context.fomraTextSecondary));
-                    },
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final stacked = constraints.maxWidth < 560;
+            final controls = Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              alignment: WrapAlignment.end,
+              children: [
+                for (final entry in const [
+                  (0, 'Today'),
+                  (1, '7 Days'),
+                  (2, '30 Days'),
+                  (3, '90 Days'),
+                ])
+                  _ChartRangePill(
+                    label: entry.$2,
+                    selected: widget.selectedRange == entry.$1,
+                    onTap: () => widget.onRangeSelected(entry.$1),
                   ),
+                IconButton.filledTonal(
+                  onPressed: widget.onRefresh,
+                  icon: const Icon(Icons.refresh_rounded, size: 18),
+                  tooltip: 'Refresh',
                 ),
-                bottomTitles: AxisTitles(
-                  sideTitles: SideTitles(
-                    showTitles: true,
-                    reservedSize: 30,
-                    interval: 1,
-                    getTitlesWidget: (v, meta) {
-                      final i = v.round();
-                      if (i < 0 ||
-                          i >= items.length ||
-                          (v - i).abs() > 0.01) {
-                        return const SizedBox.shrink();
-                      }
-                      return Padding(
-                        padding: const EdgeInsets.only(top: 8),
-                        child: Text(
-                          items[i].label,
-                          style: TextStyle(
-                            fontSize: 12,
+                IconButton.filledTonal(
+                  onPressed: widget.onExport,
+                  icon: const Icon(Icons.file_download_outlined, size: 18),
+                  tooltip: 'Export',
+                ),
+              ],
+            );
+            if (stacked) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [controls],
+              );
+            }
+            return Row(
+              children: [
+                const Spacer(),
+                Flexible(child: controls),
+              ],
+            );
+          },
+        ),
+        const SizedBox(height: 16),
+        AnimatedOpacity(
+          opacity: t.clamp(0.0, 1.0),
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeOut,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(4, 0, 8, 0),
+            child: SizedBox(
+              height: 368,
+              child: LineChart(
+                LineChartData(
+                  minX: 0,
+                  maxX: (items.length - 1).toDouble(),
+                  minY: 0,
+                  maxY: maxY,
+                  lineBarsData: [lineBar],
+                  lineTouchData: LineTouchData(
+                    enabled: true,
+                    getTouchedSpotIndicator: (bar, indexes) => indexes
+                        .map((i) => TouchedSpotIndicatorData(
+                              FlLine(
+                                color: items[i].color.withValues(alpha: 0.3),
+                                strokeWidth: 1.5,
+                                dashArray: [4, 4],
+                              ),
+                              FlDotData(
+                                show: true,
+                                getDotPainter: (spot, pct, barData, index) =>
+                                    FlDotCirclePainter(
+                                  radius: 8,
+                                  color: items[index].color,
+                                  strokeWidth: 2.5,
+                                  strokeColor: Colors.white,
+                                ),
+                              ),
+                            ))
+                        .toList(),
+                    touchTooltipData: LineTouchTooltipData(
+                      tooltipBgColor: context.fomraSurface,
+                      tooltipRoundedRadius: 12,
+                      tooltipPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      fitInsideHorizontally: true,
+                      fitInsideVertically: true,
+                      getTooltipItems: (touched) => touched.map((s) {
+                        final i = s.spotIndex;
+                        return LineTooltipItem(
+                          '${items[i].label}\n',
+                          TextStyle(
+                            color: context.fomraTextSecondary,
                             fontWeight: FontWeight.w600,
-                            color: context.fomraTextPrimary,
+                            fontSize: 11,
+                            height: 1.3,
                           ),
-                        ),
-                      );
-                    },
+                          children: [
+                            TextSpan(
+                              text: '${s.y.round()}',
+                              style: TextStyle(
+                                color: items[i].color,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ],
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                  gridData: FlGridData(
+                    show: true,
+                    drawVerticalLine: false,
+                    horizontalInterval: interval,
+                    getDrawingHorizontalLine: (_) => FlLine(
+                      color: context.fomraBorder.withValues(alpha: 0.55),
+                      strokeWidth: 1,
+                    ),
+                  ),
+                  borderData: FlBorderData(show: false),
+                  titlesData: FlTitlesData(
+                    topTitles: const AxisTitles(
+                      sideTitles: SideTitles(showTitles: false),
+                    ),
+                    rightTitles: const AxisTitles(
+                      sideTitles: SideTitles(showTitles: false),
+                    ),
+                    leftTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        reservedSize: 40,
+                        interval: interval,
+                        getTitlesWidget: (v, meta) {
+                          if (v == 0 || v > maxY) return const SizedBox.shrink();
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: Text(
+                              '${v.round()}',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w500,
+                                color: context.fomraTextSecondary
+                                    .withValues(alpha: 0.85),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    bottomTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        reservedSize: 36,
+                        interval: 1,
+                        getTitlesWidget: (v, meta) {
+                          final i = v.round();
+                          if (i < 0 ||
+                              i >= items.length ||
+                              (v - i).abs() > 0.01) {
+                            return const SizedBox.shrink();
+                          }
+                          return Padding(
+                            padding: const EdgeInsets.only(top: 10),
+                            child: Text(
+                              items[i].label,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: context.fomraTextSecondary,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
                   ),
                 ),
               ),
             ),
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 16),
         Wrap(
           spacing: 18,
           runSpacing: 8,
@@ -1088,18 +1355,28 @@ class _KpiOverviewChart extends StatelessWidget {
                   Container(
                     width: 10,
                     height: 10,
-                    decoration:
-                        BoxDecoration(color: it.color, shape: BoxShape.circle),
+                    decoration: BoxDecoration(
+                      color: it.color,
+                      shape: BoxShape.circle,
+                    ),
                   ),
                   const SizedBox(width: 6),
-                  Text('${it.label}: ',
-                      style: TextStyle(
-                          fontSize: 12, color: context.fomraTextSecondary)),
-                  Text('${it.value}',
-                      style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w800,
-                          color: context.fomraTextPrimary)),
+                  Text(
+                    '${it.label}: ',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: context.fomraTextSecondary,
+                    ),
+                  ),
+                  AnimatedCounter(
+                    value: it.value,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                      color: context.fomraTextPrimary,
+                    ),
+                    duration: const Duration(milliseconds: 500),
+                  ),
                 ],
               ),
           ],

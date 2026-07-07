@@ -829,8 +829,8 @@ class DangerButton extends StatelessWidget {
   }
 }
 
-/// A number that animates from 0 → [value] whenever [value] changes.
-class AnimatedCounter extends StatelessWidget {
+/// A number that animates from the previous value → [value] whenever [value] changes.
+class AnimatedCounter extends StatefulWidget {
   const AnimatedCounter({
     super.key,
     required this.value,
@@ -847,16 +847,61 @@ class AnimatedCounter extends StatelessWidget {
   final Duration duration;
 
   @override
+  State<AnimatedCounter> createState() => _AnimatedCounterState();
+}
+
+class _AnimatedCounterState extends State<AnimatedCounter>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late CurvedAnimation _curve;
+  int _from = 0;
+  int _to = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _to = widget.value;
+    _controller = AnimationController(vsync: this, duration: widget.duration);
+    _curve = CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic);
+    _controller.forward();
+  }
+
+  @override
+  void didUpdateWidget(AnimatedCounter oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.value != widget.value) {
+      _from = (_from + (_to - _from) * _curve.value).round();
+      _to = widget.value;
+      _controller.duration = widget.duration;
+      _controller.forward(from: 0);
+    } else if (oldWidget.duration != widget.duration) {
+      _controller.duration = widget.duration;
+    }
+  }
+
+  @override
+  void dispose() {
+    _curve.dispose();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final effective = (style ??
+    final effective = (widget.style ??
             Theme.of(context).textTheme.headlineLarge ??
             const TextStyle())
         .copyWith(fontWeight: FontWeight.w800, color: context.fomraTextPrimary);
-    return TweenAnimationBuilder<int>(
-      tween: IntTween(begin: 0, end: value),
-      duration: duration,
-      curve: Curves.easeOutCubic,
-      builder: (context, v, _) => Text('$prefix$v$suffix', style: effective),
+    return AnimatedBuilder(
+      animation: _curve,
+      builder: (context, _) {
+        final t = _curve.value;
+        final display = (_from + (_to - _from) * t).round();
+        return Text(
+          '${widget.prefix}$display${widget.suffix}',
+          style: effective,
+        );
+      },
     );
   }
 }
