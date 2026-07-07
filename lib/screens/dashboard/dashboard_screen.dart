@@ -34,16 +34,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   String _selectedEmployeeReport = _kAllEmployees;
   bool _showReportPreview = true;
 
-  // Visual-only export toggles. These do not alter PDF generation logic.
-  final Map<String, bool> _exportOptions = {
-    'Executive Summary': true,
-    'Charts': true,
-    'Lead Details': true,
-    'Analytics': true,
-    'Property Information': true,
-    'Timestamps': true,
-  };
-
   static const List<String> _monthNames = [
     'January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December',
@@ -182,9 +172,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     setState(() {
       _selectedReportType = LeadReportType.all;
       _selectedEmployeeReport = _kAllEmployees;
-      for (final key in _exportOptions.keys) {
-        _exportOptions[key] = true;
-      }
     });
   }
 
@@ -205,8 +192,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
             const SizedBox(height: 24),
             _buildReportTypeSection(context),
             _buildEmployeeFilter(context),
-            const SizedBox(height: 24),
-            _buildExportOptionsSection(context),
             const SizedBox(height: 24),
             _buildPreviewSection(context),
             const SizedBox(height: 24),
@@ -370,44 +355,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ],
               ),
             ),
-    );
-  }
-
-  Widget _buildExportOptionsSection(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const _ReportSectionLabel(
-          icon: Icons.tune_rounded,
-          label: 'Export Options',
-        ),
-        const SizedBox(height: 12),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final twoCol = constraints.maxWidth > 520;
-            const spacing = 10.0;
-            final itemWidth = twoCol
-                ? (constraints.maxWidth - spacing) / 2
-                : constraints.maxWidth;
-            return Wrap(
-              spacing: spacing,
-              runSpacing: spacing,
-              children: [
-                for (final entry in _exportOptions.entries)
-                  SizedBox(
-                    width: itemWidth,
-                    child: _ExportOptionTile(
-                      label: entry.key,
-                      value: entry.value,
-                      onChanged: (v) =>
-                          setState(() => _exportOptions[entry.key] = v),
-                    ),
-                  ),
-              ],
-            );
-          },
-        ),
-      ],
     );
   }
 
@@ -1598,63 +1545,6 @@ class _ReportTypeCard extends StatelessWidget {
                   height: 1.35,
                   color: context.fomraTextSecondary,
                 ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ExportOptionTile extends StatelessWidget {
-  final String label;
-  final bool value;
-  final ValueChanged<bool> onChanged;
-
-  const _ExportOptionTile({
-    required this.label,
-    required this.value,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () => onChanged(!value),
-        borderRadius: BorderRadius.circular(12),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 160),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            color: value
-                ? AppColors.primary.withValues(alpha: 0.06)
-                : context.fomraSurfaceVar,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: value
-                  ? AppColors.primary.withValues(alpha: 0.35)
-                  : context.fomraBorder,
-            ),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: context.fomraTextPrimary,
-                  ),
-                ),
-              ),
-              Switch.adaptive(
-                value: value,
-                onChanged: onChanged,
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
             ],
           ),

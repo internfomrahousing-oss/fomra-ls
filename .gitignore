@@ -52,3 +52,5 @@ app.*.map.json
 
 # Backend debug scripts & captured artifacts (sessions, captchas, html dumps)
 backend/scripts/
+
+node_modules/

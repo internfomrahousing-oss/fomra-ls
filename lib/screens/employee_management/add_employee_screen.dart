@@ -62,7 +62,7 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: context.fomraPageBg,
-      appBar: FomraSubPageAppBar(title: 'Add Employee'),
+      appBar: const FomraSubPageAppBar(title: 'Add Employee'),
       body: portalScrollBody(
         context,
         ConstrainedBox(

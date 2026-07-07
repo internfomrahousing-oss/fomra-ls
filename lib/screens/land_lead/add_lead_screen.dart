@@ -907,7 +907,7 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
 
 double _compactDropdownWidth(BuildContext context) {
   final screenW = MediaQuery.sizeOf(context).width;
-  return screenW > 520 ? 380.0 : screenW - 48;
+  return screenW > 520 ? 340.0 : screenW - 48;
 }
 
 Widget _compactDropdownShell({
@@ -928,18 +928,21 @@ Widget _dropdownOptionRow({
   required String label,
   required Color iconColor,
 }) {
-  return Row(
-    children: [
-      Icon(icon, size: 18, color: iconColor),
-      const SizedBox(width: 10),
-      Expanded(
-        child: Text(
-          label,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(fontSize: 14),
+  return Padding(
+    padding: const EdgeInsets.only(left: 6),
+    child: Row(
+      children: [
+        Icon(icon, size: 18, color: iconColor),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            label,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 14),
+          ),
         ),
-      ),
-    ],
+      ],
+    ),
   );
 }
 

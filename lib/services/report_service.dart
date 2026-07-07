@@ -105,7 +105,7 @@ class ReportService {
         children: [
           pw.Text(
             'Fomra Housing & Infrastructure Pvt. Ltd.',
-            style: pw.TextStyle(
+            style: const pw.TextStyle(
                 fontSize: 18, fontWeight: pw.FontWeight.bold, color: _brand),
           ),
           pw.SizedBox(height: 2),
@@ -133,7 +133,7 @@ class ReportService {
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
                 pw.Text(value,
-                    style: pw.TextStyle(
+                    style: const pw.TextStyle(
                         fontSize: 16,
                         fontWeight: pw.FontWeight.bold,
                         color: _brand)),
@@ -161,7 +161,7 @@ class ReportService {
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
               pw.Text('$rejected',
-                  style: pw.TextStyle(
+                  style: const pw.TextStyle(
                       fontSize: 16,
                       fontWeight: pw.FontWeight.bold,
                       color: _brand)),
@@ -181,7 +181,7 @@ class ReportService {
           crossAxisAlignment: pw.CrossAxisAlignment.center,
           children: [
             pw.Text(title,
-                style: pw.TextStyle(
+                style: const pw.TextStyle(
                     fontSize: 13,
                     fontWeight: pw.FontWeight.bold,
                     color: _ink)),
@@ -196,7 +196,7 @@ class ReportService {
       {String emptyMsg = 'No leads.'}) {
     if (leads.isEmpty) {
       return pw.Text(emptyMsg,
-          style: pw.TextStyle(
+          style: const pw.TextStyle(
               fontSize: 10,
               color: _muted,
               fontStyle: pw.FontStyle.italic));
@@ -225,7 +225,7 @@ class ReportService {
               ])
           .toList(),
       border: pw.TableBorder.all(color: _border, width: 0.5),
-      headerStyle: pw.TextStyle(
+      headerStyle: const pw.TextStyle(
           fontSize: 9, fontWeight: pw.FontWeight.bold, color: PdfColors.white),
       headerDecoration: const pw.BoxDecoration(color: _brand),
       cellStyle: const pw.TextStyle(fontSize: 8.5, color: _ink),
@@ -239,7 +239,7 @@ class ReportService {
   static pw.Widget _performanceTable(List<_Perf> perf) {
     if (perf.isEmpty) {
       return pw.Text('No employee activity yet.',
-          style: pw.TextStyle(
+          style: const pw.TextStyle(
               fontSize: 10,
               color: _muted,
               fontStyle: pw.FontStyle.italic));
@@ -262,7 +262,7 @@ class ReportService {
               ])
           .toList(),
       border: pw.TableBorder.all(color: _border, width: 0.5),
-      headerStyle: pw.TextStyle(
+      headerStyle: const pw.TextStyle(
           fontSize: 9, fontWeight: pw.FontWeight.bold, color: PdfColors.white),
       headerDecoration: const pw.BoxDecoration(color: _brand),
       cellStyle: const pw.TextStyle(fontSize: 9, color: _ink),
@@ -380,7 +380,7 @@ class ReportService {
               children: [
                 pw.Text(
                   value,
-                  style: pw.TextStyle(
+                  style: const pw.TextStyle(
                     fontSize: 14,
                     fontWeight: pw.FontWeight.bold,
                     color: _brand,
@@ -397,7 +397,7 @@ class ReportService {
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
         pw.Text('Employee: $employee',
-            style: pw.TextStyle(
+            style: const pw.TextStyle(
                 fontSize: 11, fontWeight: pw.FontWeight.bold, color: _ink)),
         pw.SizedBox(height: 6),
         pw.Row(
@@ -417,7 +417,7 @@ class ReportService {
                   crossAxisAlignment: pw.CrossAxisAlignment.start,
                   children: [
                     pw.Text('$conversion%',
-                        style: pw.TextStyle(
+                        style: const pw.TextStyle(
                             fontSize: 14,
                             fontWeight: pw.FontWeight.bold,
                             color: _brand)),
