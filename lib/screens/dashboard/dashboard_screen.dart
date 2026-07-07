@@ -581,7 +581,7 @@ class _KpiCard extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               SizedBox(
-                height: 28,
+                height: 36,
                 child: _MiniSparkline(values: data.sparkline, color: data.accent),
               ),
             ],
@@ -649,17 +649,43 @@ class _KpiMetaBlock extends StatelessWidget {
   }
 }
 
-class _MiniSparkline extends StatelessWidget {
+class _MiniSparkline extends StatefulWidget {
   final List<double> values;
   final Color color;
 
   const _MiniSparkline({required this.values, required this.color});
 
   @override
-  Widget build(BuildContext context) {
-    if (values.isEmpty) return const SizedBox.shrink();
+  State<_MiniSparkline> createState() => _MiniSparklineState();
+}
 
-    final maxV = values.fold<double>(0, (a, b) => a > b ? a : b);
+class _MiniSparklineState extends State<_MiniSparkline>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final CurvedAnimation _curve;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 380),
+    );
+    _curve = CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic);
+    _controller.forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.values.isEmpty) return const SizedBox.shrink();
+
+    final maxV = widget.values.fold<double>(0, (a, b) => a > b ? a : b);
     if (maxV <= 0) {
       return Align(
         alignment: Alignment.bottomLeft,
@@ -667,38 +693,96 @@ class _MiniSparkline extends StatelessWidget {
           height: 3,
           width: double.infinity,
           decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.18),
+            color: widget.color.withValues(alpha: 0.18),
             borderRadius: BorderRadius.circular(2),
           ),
         ),
       );
     }
 
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: values.map((v) {
-        final height = v <= 0 ? 3.0 : ((v / maxV) * 28).clamp(6.0, 28.0);
-        return Expanded(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 2),
-            child: Align(
-              alignment: Alignment.bottomCenter,
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
-                height: height,
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: v <= 0 ? 0.22 : 0.88),
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(4),
-                  ),
-                ),
+    return AnimatedBuilder(
+      animation: _curve,
+      builder: (context, _) {
+        final t = _curve.value;
+        return Opacity(
+          opacity: t.clamp(0.0, 1.0),
+          child: Transform.translate(
+            offset: Offset(0, (1 - t) * 6),
+            child: CustomPaint(
+              painter: _SparklinePainter(
+                values: widget.values,
+                color: widget.color,
+                progress: t,
               ),
+              size: Size.infinite,
             ),
           ),
         );
-      }).toList(),
+      },
     );
   }
+}
+
+class _SparklinePainter extends CustomPainter {
+  final List<double> values;
+  final Color color;
+  final double progress;
+
+  const _SparklinePainter({
+    required this.values,
+    required this.color,
+    required this.progress,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (values.length < 2 || size.width <= 0 || size.height <= 0) return;
+
+    final minV = values.reduce((a, b) => a < b ? a : b);
+    final maxV = values.reduce((a, b) => a > b ? a : b);
+    final range = (maxV - minV).abs();
+    final usableHeight = (size.height - 4).clamp(1.0, size.height);
+    final dx = size.width / (values.length - 1);
+
+    final points = <Offset>[];
+    for (var i = 0; i < values.length; i++) {
+      final normalized =
+          range <= 0 ? 0.5 : ((values[i] - minV) / range).clamp(0.0, 1.0);
+      final y = size.height - 2 - (normalized * usableHeight);
+      points.add(Offset(i * dx, y));
+    }
+
+    final path = Path()..moveTo(points.first.dx, points.first.dy);
+    for (var i = 0; i < points.length - 1; i++) {
+      final p0 = points[i];
+      final p1 = points[i + 1];
+      final cx = (p0.dx + p1.dx) / 2;
+      path.cubicTo(cx, p0.dy, cx, p1.dy, p1.dx, p1.dy);
+    }
+
+    final paint = Paint()
+      ..color = color.withValues(alpha: 0.95)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.4
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..isAntiAlias = true;
+
+    final metrics = path.computeMetrics();
+    if (metrics.isEmpty) return;
+    final metric = metrics.first;
+    final drawPath = metric.extractPath(
+      0,
+      metric.length * progress.clamp(0.0, 1.0),
+    );
+    canvas.drawPath(drawPath, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _SparklinePainter oldDelegate) =>
+      oldDelegate.values != values ||
+      oldDelegate.color != color ||
+      oldDelegate.progress != progress;
 }
 
 class _SectionCard extends StatelessWidget {
