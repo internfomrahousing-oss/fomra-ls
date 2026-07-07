@@ -1,10 +1,20 @@
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
-import 'package:printing/printing.dart';
 
 import '../models/employee_profile.dart';
 import '../models/land_lead.dart';
+import 'pdf_saver_stub.dart'
+    if (dart.library.html) 'pdf_saver_web.dart'
+    if (dart.library.io) 'pdf_saver_io.dart';
+
+enum LeadReportType {
+  all,
+  totalLeads,
+  acquiredLeads,
+  brokerLeads,
+  employeeLeads,
+}
 
 /// Builds and downloads a PDF report covering all leads, acquired leads,
 /// broker leads, and each employee's lead performance.
@@ -30,6 +40,8 @@ class ReportService {
   static Future<void> generateLeadsReport(
     List<LandLead> leads, {
     List<EmployeeProfile> employees = const [],
+    LeadReportType reportType = LeadReportType.all,
+    String? employeeName,
   }) async {
     final now = DateTime.now();
 
@@ -57,25 +69,32 @@ class ReportService {
           _summary(leads.length, acquired.length, broker.length, active,
               rejected),
           pw.SizedBox(height: 20),
-          _sectionTitle('All Leads', leads.length),
-          _leadsTable(leads, emptyMsg: 'No leads yet.'),
-          pw.SizedBox(height: 20),
-          _sectionTitle('Acquired Leads', acquired.length),
-          _leadsTable(acquired, emptyMsg: 'No acquired leads yet.'),
-          pw.SizedBox(height: 20),
-          _sectionTitle('Broker Leads', broker.length),
-          _leadsTable(broker, emptyMsg: 'No broker leads yet.'),
-          pw.SizedBox(height: 20),
-          _sectionTitle('Employee Lead Performance', perf.length),
-          _performanceTable(perf),
+          ..._buildSelectedSections(
+            leads: leads,
+            acquired: acquired,
+            broker: broker,
+            perf: perf,
+            reportType: reportType,
+            employeeName: employeeName,
+          ),
         ],
       ),
     );
 
     final bytes = await doc.save();
-    await Printing.sharePdf(
-      bytes: bytes,
-      filename: 'FomraLS_Report_${DateFormat('yyyyMMdd').format(now)}.pdf',
+    final suffix = switch (reportType) {
+      LeadReportType.all => 'All',
+      LeadReportType.totalLeads => 'Total_Leads',
+      LeadReportType.acquiredLeads => 'Acquired_Leads',
+      LeadReportType.brokerLeads => 'Broker_Leads',
+      LeadReportType.employeeLeads =>
+        employeeName == null || employeeName.trim().isEmpty
+            ? 'Employee_Leads_All'
+            : 'Employee_${_fileSafe(employeeName)}',
+    };
+    await savePdf(
+      bytes,
+      'FomraLS_Report_${suffix}_${DateFormat('yyyyMMdd').format(now)}.pdf',
     );
   }
 
@@ -268,6 +287,158 @@ class ReportService {
           style: const pw.TextStyle(fontSize: 8, color: _muted),
         ),
       );
+
+  static List<pw.Widget> _buildSelectedSections({
+    required List<LandLead> leads,
+    required List<LandLead> acquired,
+    required List<LandLead> broker,
+    required List<_Perf> perf,
+    required LeadReportType reportType,
+    String? employeeName,
+  }) {
+    switch (reportType) {
+      case LeadReportType.all:
+        return [
+          _sectionTitle('All Leads', leads.length),
+          _leadsTable(leads, emptyMsg: 'No leads yet.'),
+          pw.SizedBox(height: 20),
+          _sectionTitle('Acquired Leads', acquired.length),
+          _leadsTable(acquired, emptyMsg: 'No acquired leads yet.'),
+          pw.SizedBox(height: 20),
+          _sectionTitle('Broker Leads', broker.length),
+          _leadsTable(broker, emptyMsg: 'No broker leads yet.'),
+          pw.SizedBox(height: 20),
+          _sectionTitle('Employee Lead Performance', perf.length),
+          _performanceTable(perf),
+        ];
+      case LeadReportType.totalLeads:
+        return [
+          _sectionTitle('Total Leads', leads.length),
+          _leadsTable(leads, emptyMsg: 'No leads yet.'),
+        ];
+      case LeadReportType.acquiredLeads:
+        return [
+          _sectionTitle('Acquired Leads', acquired.length),
+          _leadsTable(acquired, emptyMsg: 'No acquired leads yet.'),
+        ];
+      case LeadReportType.brokerLeads:
+        return [
+          _sectionTitle('Broker Leads', broker.length),
+          _leadsTable(broker, emptyMsg: 'No broker leads yet.'),
+        ];
+      case LeadReportType.employeeLeads:
+        final requested = employeeName?.trim() ?? '';
+        if (requested.isEmpty || requested.toLowerCase() == 'all') {
+          return [
+            _sectionTitle('Employee Lead Performance', perf.length),
+            _performanceTable(perf),
+          ];
+        }
+        final employeeLeads = leads
+            .where((l) => l.createdByName.trim().toLowerCase() ==
+                requested.toLowerCase())
+            .toList();
+        final empAcquired =
+            employeeLeads.where((l) => l.status == LeadStatus.closed).length;
+        final empBroker = employeeLeads
+            .where((l) => l.inputSource == InputSource.broker)
+            .length;
+        final conversion = employeeLeads.isEmpty
+            ? 0
+            : ((empAcquired / employeeLeads.length) * 100).round();
+        return [
+          _sectionTitle('Employee Leads · $requested', employeeLeads.length),
+          _employeeSummary(requested, employeeLeads.length, empAcquired,
+              empBroker, conversion),
+          pw.SizedBox(height: 10),
+          _leadsTable(
+            employeeLeads,
+            emptyMsg: 'No leads found for $requested.',
+          ),
+        ];
+    }
+  }
+
+  static pw.Widget _employeeSummary(
+    String employee,
+    int total,
+    int acquired,
+    int broker,
+    int conversion,
+  ) {
+    pw.Widget tile(String label, String value) => pw.Expanded(
+          child: pw.Container(
+            margin: const pw.EdgeInsets.only(right: 8),
+            padding: const pw.EdgeInsets.all(10),
+            decoration: pw.BoxDecoration(
+              color: _tileBg,
+              borderRadius: pw.BorderRadius.circular(6),
+              border: pw.Border.all(color: _border),
+            ),
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Text(
+                  value,
+                  style: pw.TextStyle(
+                    fontSize: 14,
+                    fontWeight: pw.FontWeight.bold,
+                    color: _brand,
+                  ),
+                ),
+                pw.SizedBox(height: 2),
+                pw.Text(label,
+                    style: const pw.TextStyle(fontSize: 9, color: _muted)),
+              ],
+            ),
+          ),
+        );
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Text('Employee: $employee',
+            style: pw.TextStyle(
+                fontSize: 11, fontWeight: pw.FontWeight.bold, color: _ink)),
+        pw.SizedBox(height: 6),
+        pw.Row(
+          children: [
+            tile('Total Leads', '$total'),
+            tile('Acquired', '$acquired'),
+            tile('Broker Leads', '$broker'),
+            pw.Expanded(
+              child: pw.Container(
+                padding: const pw.EdgeInsets.all(10),
+                decoration: pw.BoxDecoration(
+                  color: _tileBg,
+                  borderRadius: pw.BorderRadius.circular(6),
+                  border: pw.Border.all(color: _border),
+                ),
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Text('$conversion%',
+                        style: pw.TextStyle(
+                            fontSize: 14,
+                            fontWeight: pw.FontWeight.bold,
+                            color: _brand)),
+                    pw.SizedBox(height: 2),
+                    pw.Text('Conversion',
+                        style:
+                            const pw.TextStyle(fontSize: 9, color: _muted)),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  static String _fileSafe(String value) => value
+      .trim()
+      .replaceAll(RegExp(r'\s+'), '_')
+      .replaceAll(RegExp(r'[^a-zA-Z0-9_]+'), '');
 
   // ── Data ────────────────────────────────────────────────────────────────
 

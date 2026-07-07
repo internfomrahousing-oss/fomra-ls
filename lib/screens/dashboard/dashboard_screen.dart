@@ -23,16 +23,51 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   static const _kRecentCollapsedCount = 6;
+  static const _kAllEmployees = 'All';
   bool _showAllRecent = false;
   bool _generatingReport = false;
+  LeadReportType _selectedReportType = LeadReportType.all;
+  String _selectedEmployeeReport = _kAllEmployees;
+
+  List<String> get _employeeNames {
+    final names = <String>{};
+    for (final e in AppStore.instance.employees) {
+      final name = e.fullName.trim();
+      if (name.isNotEmpty) names.add(name);
+    }
+    for (final l in AppStore.instance.leads) {
+      final name = l.createdByName.trim();
+      if (name.isNotEmpty) names.add(name);
+    }
+    final sorted = names.toList()..sort((a, b) => a.compareTo(b));
+    return [_kAllEmployees, ...sorted];
+  }
 
   Future<void> _createReport() async {
     if (_generatingReport) return;
+    final opts = await showModalBottomSheet<_ReportOptions>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _ReportOptionsSheet(
+        initialType: _selectedReportType,
+        initialEmployeeName: _selectedEmployeeReport,
+        employeeNames: _employeeNames,
+      ),
+    );
+    if (opts == null) return;
+
+    _selectedReportType = opts.type;
+    _selectedEmployeeReport = opts.employeeName;
     setState(() => _generatingReport = true);
     try {
       await ReportService.generateLeadsReport(
         AppStore.instance.leads,
         employees: AppStore.instance.employees,
+        reportType: opts.type,
+        employeeName: opts.type == LeadReportType.employeeLeads
+            ? opts.employeeName
+            : null,
       );
     } catch (e) {
       if (!mounted) return;
@@ -1090,4 +1125,169 @@ class _DetailChip extends StatelessWidget {
                   fontSize: 11, color: context.fomraTextSecondary)),
         ],
       );
+}
+
+class _ReportOptions {
+  final LeadReportType type;
+  final String employeeName;
+
+  const _ReportOptions({
+    required this.type,
+    required this.employeeName,
+  });
+}
+
+class _ReportOptionsSheet extends StatefulWidget {
+  final LeadReportType initialType;
+  final String initialEmployeeName;
+  final List<String> employeeNames;
+
+  const _ReportOptionsSheet({
+    required this.initialType,
+    required this.initialEmployeeName,
+    required this.employeeNames,
+  });
+
+  @override
+  State<_ReportOptionsSheet> createState() => _ReportOptionsSheetState();
+}
+
+class _ReportOptionsSheetState extends State<_ReportOptionsSheet> {
+  late LeadReportType _type;
+  late String _employeeName;
+
+  @override
+  void initState() {
+    super.initState();
+    _type = widget.initialType;
+    _employeeName = widget.employeeNames.contains(widget.initialEmployeeName)
+        ? widget.initialEmployeeName
+        : widget.employeeNames.first;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: context.fomraSurface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: context.fomraBorder,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              'Create PDF Report',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: context.fomraTextPrimary,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Choose what to include in the exported report.',
+              style: TextStyle(fontSize: 13, color: context.fomraTextSecondary),
+            ),
+            const SizedBox(height: 16),
+            ...LeadReportType.values.map((type) {
+              final selected = _type == type;
+              return ListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                title: Text(
+                  _labelFor(type),
+                  style: TextStyle(
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                    color: context.fomraTextPrimary,
+                  ),
+                ),
+                trailing: Icon(
+                  selected
+                      ? Icons.radio_button_checked
+                      : Icons.radio_button_off,
+                  color: selected ? AppColors.primary : context.fomraTextTertiary,
+                  size: 20,
+                ),
+                onTap: () => setState(() => _type = type),
+              );
+            }),
+            if (_type == LeadReportType.employeeLeads) ...[
+              const SizedBox(height: 4),
+              Text(
+                'Employee',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: context.fomraTextPrimary,
+                ),
+              ),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<String>(
+                initialValue: widget.employeeNames.contains(_employeeName)
+                    ? _employeeName
+                    : widget.employeeNames.first,
+                items: widget.employeeNames
+                    .map(
+                      (name) => DropdownMenuItem<String>(
+                        value: name,
+                        child: Text(name),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (value) {
+                  if (value == null) return;
+                  setState(() => _employeeName = value);
+                },
+                decoration: InputDecoration(
+                  isDense: true,
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ],
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: PrimaryButton(
+                label: 'Generate PDF',
+                icon: Icons.picture_as_pdf_outlined,
+                onPressed: () => Navigator.pop(
+                  context,
+                  _ReportOptions(type: _type, employeeName: _employeeName),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _labelFor(LeadReportType type) {
+    return switch (type) {
+      LeadReportType.all => 'All',
+      LeadReportType.totalLeads => 'Total Leads',
+      LeadReportType.acquiredLeads => 'Acquired Leads',
+      LeadReportType.brokerLeads => 'Broker Leads',
+      LeadReportType.employeeLeads => 'Employee Leads',
+    };
+  }
 }
