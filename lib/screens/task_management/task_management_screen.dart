@@ -545,90 +545,78 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
     return Scaffold(
       appBar: _portalAppBar('Management · Tasks'),
       floatingActionButton: _buildAddTaskFab(),
-      // Whole page scrolls (the add-task card included) — matches home.
-      body: CustomScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        slivers: [
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-              child: Material(
-                color: AppColors.primary.withValues(alpha: 0.08),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: Material(
+              color: AppColors.primary.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(16),
+              child: InkWell(
+                onTap: _openAddTask,
                 borderRadius: BorderRadius.circular(16),
-                child: InkWell(
-                  onTap: _openAddTask,
-                  borderRadius: BorderRadius.circular(16),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Row(children: [
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: AppColors.primary,
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: const Icon(Icons.add_task,
-                            color: Colors.white, size: 24),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary,
+                        borderRadius: BorderRadius.circular(14),
                       ),
-                      const SizedBox(width: 14),
-                      const Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Add New Task',
-                                style: TextStyle(
-                                    fontSize: 15, fontWeight: FontWeight.w700)),
-                            SizedBox(height: 2),
-                            Text('Assign work to employees',
-                                style: TextStyle(
-                                    fontSize: 12,
-                                    color: AppColors.textSecondary)),
-                          ],
-                        ),
+                      child: const Icon(Icons.add_task,
+                          color: Colors.white, size: 24),
+                    ),
+                    const SizedBox(width: 14),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Add New Task',
+                              style: TextStyle(
+                                  fontSize: 15, fontWeight: FontWeight.w700)),
+                          SizedBox(height: 2),
+                          Text('Assign work to employees',
+                              style: TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.textSecondary)),
+                        ],
                       ),
-                      const Icon(Icons.chevron_right,
-                          color: AppColors.textSecondary),
-                    ]),
-                  ),
+                    ),
+                    const Icon(Icons.chevron_right,
+                        color: AppColors.textSecondary),
+                  ]),
                 ),
               ),
             ),
           ),
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Text(
-                'Created tasks (${_tasks.length})',
-                style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textSecondary),
-              ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Text(
+              'Created tasks (${_tasks.length})',
+              style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textSecondary),
             ),
           ),
-          const SliverToBoxAdapter(child: SizedBox(height: 8)),
-          if (_tasks.isEmpty)
-            const SliverFillRemaining(
-              hasScrollBody: false,
-              child: Center(
-                child: Text('No tasks created yet',
-                    style: TextStyle(color: AppColors.textSecondary)),
-              ),
-            )
-          else
-            SliverPadding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              sliver: SliverList(
-                delegate: SliverChildBuilderDelegate(
-                  (_, i) => _TaskCard(
-                    task: _tasks[i],
-                    onTap: () => _showTaskDetail(_tasks[i]),
-                    onStatusChange: (_, __) {},
+          const SizedBox(height: 8),
+          Expanded(
+            child: _tasks.isEmpty
+                ? const Center(
+                    child: Text('No tasks created yet',
+                        style: TextStyle(color: AppColors.textSecondary)))
+                : ListView.builder(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    itemCount: _tasks.length,
+                    itemBuilder: (_, i) => _TaskCard(
+                      task: _tasks[i],
+                      onTap: () => _showTaskDetail(_tasks[i]),
+                      onStatusChange: (_, __) {},
+                    ),
                   ),
-                  childCount: _tasks.length,
-                ),
-              ),
-            ),
+          ),
         ],
       ),
     );

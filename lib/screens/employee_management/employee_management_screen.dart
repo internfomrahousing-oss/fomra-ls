@@ -221,121 +221,108 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
 
     final pagePad = FomraLayout.pagePadding(context);
 
-    final header = Padding(
-      padding: pagePad.copyWith(bottom: 8),
-      child: PortalFadeSection(
-        index: 0,
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final stacked = constraints.maxWidth < 640;
-            if (stacked) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  EmployeeManagementSearchBar(
-                    onChanged: (v) => setState(() => _search = v),
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: EmployeeManagementAddButton(
-                          onPressed: _openAddEmployee,
-                        ),
-                      ),
-                      _moreMenu(),
-                    ],
-                  ),
-                ],
-              );
-            }
-            return Row(
-              children: [
-                Expanded(
-                  child: EmployeeManagementSearchBar(
-                    onChanged: (v) => setState(() => _search = v),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                EmployeeManagementAddButton(
-                  onPressed: _openAddEmployee,
-                ),
-                _moreMenu(),
-              ],
-            );
-          },
-        ),
-      ),
-    );
-
-    // Whole page scrolls (header included) — matches the home page.
     return Align(
       alignment: Alignment.topCenter,
       child: portalPageWidthConstraint(
         context,
-        RefreshIndicator(
-          onRefresh: _loadEmployees,
-          child: CustomScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            slivers: [
-              SliverToBoxAdapter(child: header),
-              if (_loading)
-                const SliverFillRemaining(
-                  hasScrollBody: true,
-                  child: _EmployeeLoadingSkeleton(),
-                )
-              else if (_loadError != null)
-                SliverFillRemaining(
-                  hasScrollBody: false,
-                  child: EmptyState(
-                    icon: Icons.cloud_off_outlined,
-                    title: 'Couldn’t load employees',
-                    message: _loadError,
-                    action: PrimaryButton(
-                      label: 'Retry',
-                      icon: Icons.refresh,
-                      onPressed: _loadEmployees,
-                    ),
-                  ),
-                )
-              else if (_filtered.isEmpty)
-                SliverFillRemaining(
-                  hasScrollBody: false,
-                  child: EmptyState(
-                    icon: Icons.groups_outlined,
-                    title: _employees.isEmpty ? 'No employees yet' : 'No matches',
-                    message: _employees.isEmpty
-                        ? 'Add an employee profile to get started.'
-                        : 'Try a different search term.',
-                    action: _employees.isEmpty
-                        ? PrimaryButton(
-                            label: 'Add Employee',
-                            icon: Icons.person_add_outlined,
-                            onPressed: _openAddEmployee,
-                          )
-                        : null,
-                  ),
-                )
-              else
-                SliverPadding(
-                  padding: pagePad.copyWith(top: 0, bottom: 24),
-                  sliver: SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (_, i) => PortalFadeSection(
-                        index: i.clamp(0, 6),
-                        child: EmployeeManagementCard(
-                          employee: _filtered[i],
-                          onRemoveAccess: () =>
-                              _confirmRemoveAccess(_filtered[i]),
-                          onResetPassword: () => _resetPassword(_filtered[i]),
+        Column(
+          children: [
+            Padding(
+              padding: pagePad.copyWith(bottom: 8),
+              child: PortalFadeSection(
+                index: 0,
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final stacked = constraints.maxWidth < 640;
+                    if (stacked) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          EmployeeManagementSearchBar(
+                            onChanged: (v) => setState(() => _search = v),
+                          ),
+                          const SizedBox(height: 10),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: EmployeeManagementAddButton(
+                                  onPressed: _openAddEmployee,
+                                ),
+                              ),
+                              _moreMenu(),
+                            ],
+                          ),
+                        ],
+                      );
+                    }
+                    return Row(
+                      children: [
+                        Expanded(
+                          child: EmployeeManagementSearchBar(
+                            onChanged: (v) => setState(() => _search = v),
+                          ),
                         ),
-                      ),
-                      childCount: _filtered.length,
-                    ),
-                  ),
+                        const SizedBox(width: 12),
+                        EmployeeManagementAddButton(
+                          onPressed: _openAddEmployee,
+                        ),
+                        _moreMenu(),
+                      ],
+                    );
+                  },
                 ),
-            ],
-          ),
+              ),
+            ),
+            Expanded(
+              child: _loading
+                  ? const _EmployeeLoadingSkeleton()
+                  : _loadError != null
+                      ? EmptyState(
+                          icon: Icons.cloud_off_outlined,
+                          title: 'Couldn’t load employees',
+                          message: _loadError,
+                          action: PrimaryButton(
+                            label: 'Retry',
+                            icon: Icons.refresh,
+                            onPressed: _loadEmployees,
+                          ),
+                        )
+                      : _filtered.isEmpty
+                          ? EmptyState(
+                              icon: Icons.groups_outlined,
+                              title: _employees.isEmpty
+                                  ? 'No employees yet'
+                                  : 'No matches',
+                              message: _employees.isEmpty
+                                  ? 'Add an employee profile to get started.'
+                                  : 'Try a different search term.',
+                              action: _employees.isEmpty
+                                  ? PrimaryButton(
+                                      label: 'Add Employee',
+                                      icon: Icons.person_add_outlined,
+                                      onPressed: _openAddEmployee,
+                                    )
+                                  : null,
+                            )
+                          : RefreshIndicator(
+                              onRefresh: _loadEmployees,
+                              child: ListView.builder(
+                                padding: pagePad.copyWith(top: 0, bottom: 24),
+                                itemCount: _filtered.length,
+                                itemBuilder: (_, i) => PortalFadeSection(
+                                  index: i.clamp(0, 6),
+                                  child: EmployeeManagementCard(
+                                    employee: _filtered[i],
+                                    onRemoveAccess: () =>
+                                        _confirmRemoveAccess(_filtered[i]),
+                                    onResetPassword: () =>
+                                        _resetPassword(_filtered[i]),
+                                  ),
+                                ),
+                              ),
+                            ),
+            ),
+          ],
         ),
       ),
     );
