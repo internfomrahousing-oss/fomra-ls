@@ -8,10 +8,13 @@ import '../../services/employee_service.dart';
 import '../../services/land_lead_service.dart';
 import '../../services/notifications_service.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/fomra_layout.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../widgets/app_drawer.dart';
 import '../../widgets/fomra_app_bar.dart';
 import '../../widgets/fomra_bottom_nav.dart';
+import '../../widgets/portal_home_sections.dart';
+import '../../widgets/portal_page_layout.dart';
 import '../../widgets/ui/app_components.dart';
 import 'add_lead_screen.dart';
 import 'lead_detail_screen.dart';
@@ -355,7 +358,7 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
     final count = _selectedLeadIds.length;
     final canAssign = count > 0;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 2),
+      padding: const EdgeInsets.only(top: 14, bottom: 2),
       child: Container(
         padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
         decoration: BoxDecoration(
@@ -434,51 +437,64 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
 
   Widget _buildScrollableBody() {
     if (_loading) {
-      return const _LeadsLoadingSkeleton();
+      return portalPageBody(context, const _LeadsLoadingSkeleton());
     }
 
     if (_loadError != null) {
-      return EmptyState(
-        icon: Icons.cloud_off_outlined,
-        title: 'Couldn’t load leads',
-        message: _loadError,
-        action: PrimaryButton(
-          label: 'Retry',
-          icon: Icons.refresh,
-          onPressed: _loadLeads,
+      return portalPageBody(
+        context,
+        EmptyState(
+          icon: Icons.cloud_off_outlined,
+          title: 'Couldn’t load leads',
+          message: _loadError,
+          action: PrimaryButton(
+            label: 'Retry',
+            icon: Icons.refresh,
+            onPressed: _loadLeads,
+          ),
         ),
       );
     }
 
+    final pagePad = FomraLayout.pagePadding(context);
+
     final slivers = <Widget>[
       if (_isManagement && _selectMode && _leads.isNotEmpty)
-        SliverToBoxAdapter(child: _buildSelectBar()),
+        SliverToBoxAdapter(
+          child: PortalFadeSection(index: 0, child: _buildSelectBar()),
+        ),
       if (_leads.isNotEmpty)
         SliverToBoxAdapter(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (_isManagement && !_selectMode)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
-                  child: Align(
-                    alignment: Alignment.centerRight,
-                    child: _buildIdleManagementActions(),
+          child: PortalFadeSection(
+            index: 0,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (_isManagement && !_selectMode)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 14, bottom: 4),
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: _buildIdleManagementActions(),
+                    ),
                   ),
-                ),
-              _LeadSummary(leads: _leads),
-            ],
+                _LeadSummary(leads: _leads),
+              ],
+            ),
           ),
         ),
       if (_leads.isNotEmpty)
         SliverToBoxAdapter(
-          child: _SearchBar(
-            onChanged: (q) => setState(() => _search = q),
-            filterStatus: _filterStatus,
-            onClearFilter: () => setState(() => _filterStatus = null),
-            onFilter: widget.isTab && _leads.isNotEmpty && !_loading
-                ? _showFilter
-                : null,
+          child: PortalFadeSection(
+            index: 1,
+            child: _SearchBar(
+              onChanged: (q) => setState(() => _search = q),
+              filterStatus: _filterStatus,
+              onClearFilter: () => setState(() => _filterStatus = null),
+              onFilter: widget.isTab && _leads.isNotEmpty && !_loading
+                  ? _showFilter
+                  : null,
+            ),
           ),
         ),
     ];
@@ -493,7 +509,7 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
     } else {
       slivers.add(
         SliverPadding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
+          padding: pagePad.copyWith(top: 8, bottom: 96),
           sliver: SliverList(
             delegate: SliverChildBuilderDelegate(
               (_, i) {
@@ -549,9 +565,20 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
       );
     }
 
-    return CustomScrollView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      slivers: slivers,
+    return Align(
+      alignment: Alignment.topCenter,
+      child: portalPageWidthConstraint(
+        context,
+        CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            SliverPadding(
+              padding: pagePad.copyWith(bottom: 0),
+              sliver: SliverMainAxisGroup(slivers: slivers),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -735,84 +762,19 @@ class _LeadSummary extends StatelessWidget {
       (LeadStatus.lost, Icons.cancel_outlined),
     ];
 
-    return Container(
-      color: context.fomraPageBg,
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-      child: SizedBox(
-        height: 122,
-        child: ListView.separated(
-          scrollDirection: Axis.horizontal,
-          itemCount: kpis.length,
-          separatorBuilder: (_, __) => const SizedBox(width: 12),
-          itemBuilder: (_, i) {
-            final status = kpis[i].$1;
-            final icon = kpis[i].$2;
-            final count = leads.where((l) => l.status == status).length;
-            final color = status.color;
-            return Container(
-              width: 152,
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: context.fomraSurface,
-                borderRadius: BorderRadius.circular(AppColors.radiusMd),
-                border: Border.all(color: context.fomraBorder),
-                boxShadow: context.fomraCardShadow,
+    return Padding(
+      padding: const EdgeInsets.only(top: 12, bottom: 8),
+      child: PortalKpiStrip(
+        items: kpis
+            .map(
+              (k) => PortalKpiItem(
+                label: k.$1.label,
+                value: leads.where((l) => l.status == k.$1).length,
+                icon: k.$2,
+                accent: k.$1.color,
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(7),
-                    decoration: BoxDecoration(
-                      color: color.withValues(alpha: 0.16),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Icon(icon, color: color, size: 16),
-                  ),
-                  const Spacer(),
-                  Text(
-                    '$count',
-                    style: TextStyle(
-                      color: color,
-                      fontSize: 28,
-                      fontWeight: FontWeight.w800,
-                      height: 1,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    status.label,
-                    style: TextStyle(
-                      color: context.fomraTextPrimary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Container(
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: color.withValues(alpha: 0.22),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: FractionallySizedBox(
-                      alignment: Alignment.centerLeft,
-                      widthFactor: leads.isEmpty
-                          ? 0
-                          : (count / leads.length).clamp(0, 1),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: color,
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-        ),
+            )
+            .toList(),
       ),
     );
   }
@@ -836,15 +798,10 @@ class _SearchBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(children: [
-      Container(
-        margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      AppCard(
         padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: context.fomraSurface,
-          borderRadius: BorderRadius.circular(AppColors.radiusSm),
-          border: Border.all(color: context.fomraBorder.withValues(alpha: 0.7)),
-          boxShadow: context.fomraCardShadow,
-        ),
+        radius: AppColors.radiusLg,
+        interactive: false,
         child: Row(children: [
           Expanded(
             child: TextField(
@@ -884,7 +841,7 @@ class _SearchBar extends StatelessWidget {
       ),
       if (filterStatus != null)
         Container(
-          margin: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+          margin: const EdgeInsets.only(top: 10, bottom: 4),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
           decoration: BoxDecoration(
             color: AppColors.primary.withValues(alpha: 0.08),
@@ -936,210 +893,198 @@ class _LeadCard extends StatelessWidget {
         ? lead.ownerName.trim()
         : 'Lead #${lead.leadId}';
 
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 14),
-        clipBehavior: Clip.antiAlias,
-        decoration: BoxDecoration(
-          color: context.fomraSurface,
-          borderRadius: BorderRadius.circular(AppColors.radiusMd),
-          border: Border.all(
-            color: selected ? AppColors.primary : context.fomraBorder,
-            width: selected ? 1.5 : 1,
-          ),
-          boxShadow: context.fomraCardShadow,
-        ),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: onTap,
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: DecoratedBox(
+        decoration: selected
+            ? BoxDecoration(
+                borderRadius: BorderRadius.circular(AppColors.radiusLg),
+                border: Border.all(color: AppColors.primary, width: 1.5),
+              )
+            : const BoxDecoration(),
+        child: AppCard(
+          onTap: onTap,
+          padding: const EdgeInsets.all(16),
+          radius: AppColors.radiusLg,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  // ── Header: [checkbox] avatar · name/ID · status pill ──
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      if (selectionMode) ...[
-                        AnimatedContainer(
-                          duration: const Duration(milliseconds: 160),
-                          curve: Curves.easeOut,
-                          width: 24,
-                          height: 24,
-                          decoration: BoxDecoration(
-                            color:
-                                selected ? AppColors.primary : Colors.transparent,
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: selected
-                                  ? AppColors.primary
-                                  : context.fomraBorder,
-                              width: 2,
-                            ),
-                          ),
-                          child: selected
-                              ? const Icon(Icons.check,
-                                  size: 15, color: Colors.white)
-                              : null,
-                        ),
-                        const SizedBox(width: 12),
-                      ],
-                      Container(
-                        width: 46,
-                        height: 46,
-                        decoration: BoxDecoration(
-                          color: statusColor.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: Icon(Icons.location_on_rounded,
-                            color: statusColor, size: 24),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: -0.2,
-                                color: context.fomraTextPrimary,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              'Lead #${lead.leadId} · ${lead.landType.label}',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                                color: context.fomraTextSecondary,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      _StatusBadge(status: lead.status),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  _LeadFieldRow(
-                    icon: Icons.place_outlined,
-                    text: locationText.isEmpty
-                        ? 'Location not provided'
-                        : locationText,
-                  ),
-                  if (lead.surveyNumber.isNotEmpty ||
-                      lead.subDivision.isNotEmpty ||
-                      lead.landExtent.isNotEmpty) ...[
-                    const SizedBox(height: 10),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        if (lead.surveyNumber.isNotEmpty)
-                          _Chip(Icons.tag, 'Survey ${lead.surveyNumber}'),
-                        if (lead.subDivision.isNotEmpty)
-                          _Chip(Icons.call_split_outlined,
-                              'Sub ${lead.subDivision}'),
-                        if (lead.landExtent.isNotEmpty)
-                          _Chip(Icons.straighten, lead.landExtent),
-                      ],
-                    ),
-                  ],
-                  const SizedBox(height: 14),
-                  Divider(height: 1, color: context.fomraBorder),
-                  const SizedBox(height: 12),
-                  // ── Footer: source · creator · date ──
-                  Row(children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 5),
+                  if (selectionMode) ...[
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 160),
+                      curve: Curves.easeOut,
+                      width: 24,
+                      height: 24,
                       decoration: BoxDecoration(
-                          color: sourceColor.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(999)),
-                      child: Row(mainAxisSize: MainAxisSize.min, children: [
-                        Icon(_sourceIcon(lead.inputSource),
-                            size: 12, color: sourceColor),
-                        const SizedBox(width: 5),
-                        Text(lead.inputSource.label,
-                            style: TextStyle(
-                                fontSize: 10,
-                                color: sourceColor,
-                                fontWeight: FontWeight.w700)),
-                      ]),
+                        color:
+                            selected ? AppColors.primary : Colors.transparent,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: selected
+                              ? AppColors.primary
+                              : context.fomraBorder,
+                          width: 2,
+                        ),
+                      ),
+                      child: selected
+                          ? const Icon(Icons.check,
+                              size: 15, color: Colors.white)
+                          : null,
                     ),
-                    if (lead.createdByName.isNotEmpty) ...[
-                      const SizedBox(width: 8),
-                      Icon(Icons.person_outline,
-                          size: 12, color: context.fomraTextTertiary),
-                      const SizedBox(width: 4),
-                      Flexible(
-                        child: Text(
-                          lead.createdByName,
+                    const SizedBox(width: 12),
+                  ],
+                  Container(
+                    width: 46,
+                    height: 46,
+                    decoration: BoxDecoration(
+                      color: statusColor.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Icon(Icons.location_on_rounded,
+                        color: statusColor, size: 24),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                              fontSize: 11,
-                              color: context.fomraTextSecondary,
-                              fontWeight: FontWeight.w600),
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.2,
+                            color: context.fomraTextPrimary,
+                          ),
                         ),
-                      ),
-                    ],
-                    const Spacer(),
-                    Icon(Icons.calendar_today_outlined,
-                        size: 12, color: context.fomraTextTertiary),
-                    const SizedBox(width: 5),
-                    Text(
-                        '${lead.addedOn.day}/${lead.addedOn.month}/${lead.addedOn.year}',
-                        style: TextStyle(
-                            fontSize: 11, color: context.fomraTextSecondary)),
-                  ]),
-                  if (!selectionMode) ...[
-                    const SizedBox(height: 12),
-                    SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: LeadStatus.values
-                            .where((s) =>
-                                s != lead.status && s != LeadStatus.siteVisit)
-                            .map((s) => Padding(
-                                  padding: const EdgeInsets.only(right: 8),
-                                  child: OutlinedButton(
-                                    onPressed: () => onStatusChange(s),
-                                    style: OutlinedButton.styleFrom(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 12, vertical: 6),
-                                      minimumSize: Size.zero,
-                                      tapTargetSize:
-                                          MaterialTapTargetSize.shrinkWrap,
-                                      side: BorderSide(
-                                          color:
-                                              s.color.withValues(alpha: 0.5)),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(999),
-                                      ),
-                                    ),
-                                    child: Text('→ ${s.label}',
-                                        style: TextStyle(
-                                            fontSize: 11, color: s.color)),
-                                  ),
-                                ))
-                            .toList(),
-                      ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Lead #${lead.leadId} · ${lead.landType.label}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: context.fomraTextSecondary,
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
+                  const SizedBox(width: 8),
+                  _StatusBadge(status: lead.status),
                 ],
               ),
-            ),
+              const SizedBox(height: 14),
+              _LeadFieldRow(
+                icon: Icons.place_outlined,
+                text: locationText.isEmpty
+                    ? 'Location not provided'
+                    : locationText,
+              ),
+              if (lead.surveyNumber.isNotEmpty ||
+                  lead.subDivision.isNotEmpty ||
+                  lead.landExtent.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    if (lead.surveyNumber.isNotEmpty)
+                      _Chip(Icons.tag, 'Survey ${lead.surveyNumber}'),
+                    if (lead.subDivision.isNotEmpty)
+                      _Chip(Icons.call_split_outlined,
+                          'Sub ${lead.subDivision}'),
+                    if (lead.landExtent.isNotEmpty)
+                      _Chip(Icons.straighten, lead.landExtent),
+                  ],
+                ),
+              ],
+              const SizedBox(height: 14),
+              Divider(height: 1, color: context.fomraBorder),
+              const SizedBox(height: 12),
+              Row(children: [
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                      color: sourceColor.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(999)),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(_sourceIcon(lead.inputSource),
+                        size: 12, color: sourceColor),
+                    const SizedBox(width: 5),
+                    Text(lead.inputSource.label,
+                        style: TextStyle(
+                            fontSize: 10,
+                            color: sourceColor,
+                            fontWeight: FontWeight.w700)),
+                  ]),
+                ),
+                if (lead.createdByName.isNotEmpty) ...[
+                  const SizedBox(width: 8),
+                  Icon(Icons.person_outline,
+                      size: 12, color: context.fomraTextTertiary),
+                  const SizedBox(width: 4),
+                  Flexible(
+                    child: Text(
+                      lead.createdByName,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                          fontSize: 11,
+                          color: context.fomraTextSecondary,
+                          fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ],
+                const Spacer(),
+                Icon(Icons.calendar_today_outlined,
+                    size: 12, color: context.fomraTextTertiary),
+                const SizedBox(width: 5),
+                Text(
+                    '${lead.addedOn.day}/${lead.addedOn.month}/${lead.addedOn.year}',
+                    style: TextStyle(
+                        fontSize: 11, color: context.fomraTextSecondary)),
+              ]),
+              if (!selectionMode) ...[
+                const SizedBox(height: 12),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: LeadStatus.values
+                        .where((s) =>
+                            s != lead.status && s != LeadStatus.siteVisit)
+                        .map((s) => Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: OutlinedButton(
+                                onPressed: () => onStatusChange(s),
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 6),
+                                  minimumSize: Size.zero,
+                                  tapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
+                                  side: BorderSide(
+                                      color: s.color.withValues(alpha: 0.5)),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
+                                ),
+                                child: Text('→ ${s.label}',
+                                    style: TextStyle(
+                                        fontSize: 11, color: s.color)),
+                              ),
+                            ))
+                        .toList(),
+                  ),
+                ),
+              ],
+            ],
           ),
         ),
       ),

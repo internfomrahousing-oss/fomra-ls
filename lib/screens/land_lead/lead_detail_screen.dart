@@ -4,7 +4,10 @@ import '../../models/land_lead.dart';
 import '../../services/app_store.dart';
 import '../../services/land_lead_service.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/fomra_layout.dart';
 import '../../theme/fomra_theme_context.dart';
+import '../../widgets/portal_home_sections.dart';
+import '../../widgets/portal_page_layout.dart';
 import '../market_intelligence/market_intelligence_screen.dart';
 import 'add_lead_screen.dart';
 
@@ -54,172 +57,142 @@ class _LeadDetailScreenState extends State<LeadDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final pagePad = FomraLayout.pagePadding(context);
+
     return Scaffold(
       backgroundColor: context.fomraPageBg,
-      appBar: AppBar(
-        flexibleSpace: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [AppColors.primaryDark, AppColors.primaryLight],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
+      appBar: FomraSubPageAppBar(
+        title: lead.ownerName,
+        subtitle: lead.leadId,
+        actions: [
+          TextButton.icon(
+            onPressed: _openEdit,
+            icon: const Icon(Icons.edit_outlined, size: 16, color: Colors.white),
+            label: const Text(
+              'Edit',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
-        ),
-        backgroundColor: Colors.transparent,
-        surfaceTintColor: Colors.transparent,
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              lead.ownerName,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-            ),
-            Text(
-              lead.leadId,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-            ),
-          ],
-        ),
+        ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _LeadDetailsCard(lead: lead, onEdit: _openEdit),
-            const SizedBox(height: 20),
-            MarketIntelligenceScreen(
-              key: ValueKey('${lead.leadId}|${lead.gpsCoordinates}|${lead.landExtent}'),
-              lead: lead,
-              embeddedInLead: true,
+      body: Align(
+        alignment: Alignment.topCenter,
+        child: portalPageWidthConstraint(
+          context,
+          SingleChildScrollView(
+            padding: pagePad,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                PortalFadeSection(
+                  index: 0,
+                  child: PortalSectionCard(
+                    title: 'Land lead details',
+                    subtitle: 'Parcel, owner and status overview',
+                    icon: Icons.description_outlined,
+                    child: _LeadDetailsBody(lead: lead),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                PortalFadeSection(
+                  index: 1,
+                  child: PortalSectionCard(
+                    title: 'Market intelligence',
+                    subtitle: 'Comparable listings near this parcel',
+                    icon: Icons.travel_explore_outlined,
+                    child: MarketIntelligenceScreen(
+                      key: ValueKey(
+                          '${lead.leadId}|${lead.gpsCoordinates}|${lead.landExtent}'),
+                      lead: lead,
+                      embeddedInLead: true,
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
   }
 }
 
-class _LeadDetailsCard extends StatelessWidget {
+class _LeadDetailsBody extends StatelessWidget {
   final LandLead lead;
-  final VoidCallback? onEdit;
-  const _LeadDetailsCard({required this.lead, this.onEdit});
+  const _LeadDetailsBody({required this.lead});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: context.fomraSurface,
-        borderRadius: BorderRadius.circular(AppColors.radiusMd),
-        border: Border.all(color: context.fomraBorder),
-        boxShadow: context.fomraCardShadow,
-      ),
-      padding: const EdgeInsets.all(AppSpacing.md),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(AppColors.radiusXs),
-                ),
-                child: const Icon(
-                  Icons.description_outlined,
-                  color: AppColors.primary,
-                  size: AppIconSize.secondary,
-                ),
-              ),
-              const SizedBox(width: 10),
-              const Text(
-                'Land Lead Details',
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const Spacer(),
-              if (onEdit != null)
-                TextButton.icon(
-                  onPressed: onEdit,
-                  icon: const Icon(Icons.edit_outlined, size: 16),
-                  label: const Text('Edit', style: TextStyle(fontSize: 12)),
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    minimumSize: Size.zero,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                ),
-              if (onEdit != null) const SizedBox(width: 8),
-              _StatusChip(status: lead.status),
-            ],
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Align(
+          alignment: Alignment.centerLeft,
+          child: _StatusChip(status: lead.status),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        _DetailRow('Owner', lead.ownerName),
+        if (lead.contactDetails.isNotEmpty)
+          _DetailRow('Contact', lead.contactDetails),
+        _DetailRow('Input Source', lead.inputSource.label),
+        _DetailRow('Land Type', lead.landType.label),
+        _DetailRow('Status', lead.status.label),
+        const Divider(height: 24),
+        Text(
+          'Land Location',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: context.fomraTextSecondary,
           ),
-          const SizedBox(height: 14),
-          _DetailRow('Owner', lead.ownerName),
-          if (lead.contactDetails.isNotEmpty)
-            _DetailRow('Contact', lead.contactDetails),
-          _DetailRow('Input Source', lead.inputSource.label),
-          _DetailRow('Land Type', lead.landType.label),
-          _DetailRow('Status', lead.status.label),
+        ),
+        const SizedBox(height: 4),
+        _DetailRow('Location', lead.location),
+        if (lead.village.isNotEmpty) _DetailRow('Village', lead.village),
+        if (lead.taluk.isNotEmpty) _DetailRow('Taluk', lead.taluk),
+        if (lead.district.isNotEmpty) _DetailRow('District', lead.district),
+        if (lead.pincode.isNotEmpty) _DetailRow('Pincode', lead.pincode),
+        if (lead.gpsCoordinates.isNotEmpty)
+          _DetailRow('GPS', lead.gpsCoordinates),
+        if (lead.surveyNumber.isNotEmpty)
+          _DetailRow('Survey No.', lead.surveyNumber),
+        if (lead.subDivision.isNotEmpty)
+          _DetailRow('Sub Division', lead.subDivision),
+        if (lead.landExtent.isNotEmpty)
+          _DetailRow('Land Extent', lead.landExtent),
+        if (lead.roadWidth.isNotEmpty)
+          _DetailRow('Road Width', lead.roadWidth),
+        if (lead.accessDetails.isNotEmpty)
+          _DetailRow('Terms', lead.accessDetails),
+        if (lead.notes.isNotEmpty) ...[
+          const Divider(height: 24),
+          _DetailRow('Notes', lead.notes),
+        ],
+        if (lead.sitePhotoUrls.isNotEmpty || lead.sitePhotoUrl.isNotEmpty) ...[
           const Divider(height: 24),
           Text(
-            'Land Location',
+            _sitePhotoUrls(lead).length == 1 ? 'Site Photo' : 'Site Photos',
             style: TextStyle(
               fontSize: 12,
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.w600,
               color: context.fomraTextSecondary,
             ),
           ),
-          const SizedBox(height: 4),
-          _DetailRow('Location', lead.location),
-          if (lead.village.isNotEmpty) _DetailRow('Village', lead.village),
-          if (lead.taluk.isNotEmpty) _DetailRow('Taluk', lead.taluk),
-          if (lead.district.isNotEmpty) _DetailRow('District', lead.district),
-          if (lead.pincode.isNotEmpty) _DetailRow('Pincode', lead.pincode),
-          if (lead.gpsCoordinates.isNotEmpty)
-            _DetailRow('GPS', lead.gpsCoordinates),
-          if (lead.surveyNumber.isNotEmpty)
-            _DetailRow('Survey No.', lead.surveyNumber),
-          if (lead.subDivision.isNotEmpty)
-            _DetailRow('Sub Division', lead.subDivision),
-          if (lead.landExtent.isNotEmpty)
-            _DetailRow('Land Extent', lead.landExtent),
-          if (lead.roadWidth.isNotEmpty)
-            _DetailRow('Road Width', lead.roadWidth),
-          if (lead.accessDetails.isNotEmpty)
-            _DetailRow('Terms', lead.accessDetails),
-          if (lead.notes.isNotEmpty) ...[
-            const Divider(height: 24),
-            _DetailRow('Notes', lead.notes),
-          ],
-          if (lead.sitePhotoUrls.isNotEmpty ||
-              lead.sitePhotoUrl.isNotEmpty) ...[
-            const Divider(height: 24),
-            Text(
-              _sitePhotoUrls(lead).length == 1 ? 'Site Photo' : 'Site Photos',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: context.fomraTextSecondary,
-              ),
-            ),
-            const SizedBox(height: 8),
-            _sitePhotosRow(context, _sitePhotoUrls(lead)),
-          ],
           const SizedBox(height: 8),
-          Text(
-            'Added ${lead.addedOn.day}/${lead.addedOn.month}/${lead.addedOn.year}',
-            style: const TextStyle(
-              fontSize: 11,
-              color: AppColors.textSecondary,
-            ),
-          ),
+          _sitePhotosRow(context, _sitePhotoUrls(lead)),
         ],
-      ),
+        const SizedBox(height: 8),
+        Text(
+          'Added ${lead.addedOn.day}/${lead.addedOn.month}/${lead.addedOn.year}',
+          style: TextStyle(
+            fontSize: 11,
+            color: context.fomraTextSecondary,
+          ),
+        ),
+      ],
     );
   }
 }

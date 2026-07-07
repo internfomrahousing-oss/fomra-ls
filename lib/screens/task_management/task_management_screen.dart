@@ -6,10 +6,14 @@ import '../../services/employee_service.dart';
 import '../../services/notifications_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_input.dart';
+import '../../theme/fomra_layout.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../widgets/app_drawer.dart';
 import '../../widgets/fomra_app_bar.dart';
 import '../../widgets/fomra_bottom_nav.dart';
+import '../../widgets/portal_home_sections.dart';
+import '../../widgets/portal_page_layout.dart';
+import '../../widgets/ui/app_components.dart';
 
 // ── Portal modes ──────────────────────────────────────────────────────────────
 
@@ -289,16 +293,32 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
   int _statusCount(TaskStatus status) =>
       _tasks.where((t) => t.status == status).length;
 
-  Widget _buildTaskStatsStrip() {
+  Widget _buildTaskStatsStrip({bool onPageBg = false}) {
+    final stats = [
+      ('To Do', _statusCount(TaskStatus.todo), AppColors.textSecondary, Icons.radio_button_unchecked_rounded),
+      ('In Progress', _statusCount(TaskStatus.inProgress), AppColors.info, Icons.autorenew_rounded),
+      ('Done', _statusCount(TaskStatus.done), AppColors.success, Icons.check_circle_outline_rounded),
+      ('Overdue', _statusCount(TaskStatus.overdue), AppColors.error, Icons.warning_amber_rounded),
+    ];
+
+    if (onPageBg) {
+      return PortalKpiStrip(
+        items: stats
+            .map(
+              (s) => PortalKpiItem(
+                label: s.$1,
+                value: s.$2,
+                icon: s.$4,
+                accent: s.$3,
+              ),
+            )
+            .toList(),
+      );
+    }
+
     final isDark = context.isDarkMode;
     final glass = Colors.white.withValues(alpha: isDark ? 0.08 : 0.14);
     final glassBorder = Colors.white.withValues(alpha: isDark ? 0.12 : 0.16);
-    final stats = [
-      ('To Do', _statusCount(TaskStatus.todo), AppColors.textSecondary),
-      ('In Progress', _statusCount(TaskStatus.inProgress), AppColors.info),
-      ('Done', _statusCount(TaskStatus.done), AppColors.success),
-      ('Overdue', _statusCount(TaskStatus.overdue), AppColors.error),
-    ];
     return SizedBox(
       height: 82,
       child: ListView.separated(
@@ -365,99 +385,104 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
         ),
       );
 
-  Widget _buildTaskHeader() {
+  Widget _buildTaskHeader({bool onPageBg = false}) {
     final isDark = context.isDarkMode;
     final glass = Colors.white.withValues(alpha: isDark ? 0.08 : 0.14);
-    final indicator = Colors.white.withValues(alpha: isDark ? 0.16 : 0.24);
+    final pagePad = FomraLayout.pagePadding(context);
 
-    return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const SizedBox(height: 8),
-          _buildTaskStatsStrip(),
-          const SizedBox(height: 10),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-            child: Row(children: [
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: glass,
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: TabBar(
-                    controller: _tabController,
-                    dividerColor: Colors.transparent,
-                    indicatorSize: TabBarIndicatorSize.tab,
-                    indicator: BoxDecoration(
-                      borderRadius: BorderRadius.circular(14),
-                      color: indicator,
-                    ),
-                    labelColor: Colors.white,
-                    unselectedLabelColor: isDark
-                        ? const Color(0xFF94A3B8)
-                        : const Color(0xFFD0D9E3),
-                    labelStyle: const TextStyle(
-                        fontSize: 12, fontWeight: FontWeight.w700),
-                    isScrollable: true,
-                    tabs: [
-                      _tabLabel('All', _tasks.length),
-                      _tabLabel('To Do', _statusCount(TaskStatus.todo)),
-                      _tabLabel(
-                          'In Progress', _statusCount(TaskStatus.inProgress)),
-                      _tabLabel('Done', _statusCount(TaskStatus.done)),
-                      _tabLabel('Overdue', _statusCount(TaskStatus.overdue)),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Stack(clipBehavior: Clip.none, children: [
-                Material(
-                  color: glass,
-                  borderRadius: BorderRadius.circular(16),
-                  child: InkWell(
-                    onTap: _showNotificationsSheet,
-                    borderRadius: BorderRadius.circular(16),
-                    child: const Padding(
-                      padding: EdgeInsets.all(10),
-                      child: Icon(Icons.notifications_outlined,
-                          color: Colors.white70, size: 19),
-                    ),
-                  ),
-                ),
-                if (_unread > 0)
-                  Positioned(
-                    right: -2,
-                    top: -2,
-                    child: Container(
-                      width: 16,
-                      height: 16,
-                      decoration: const BoxDecoration(
-                          color: AppColors.error, shape: BoxShape.circle),
-                      child: Center(
-                        child: Text('$_unread',
-                            style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 9,
-                                fontWeight: FontWeight.bold)),
+    final tabs = PortalFrostedTabBar(
+      controller: _tabController,
+      onDarkBackground: !onPageBg,
+      tabs: [
+        _tabLabel('All', _tasks.length),
+        _tabLabel('To Do', _statusCount(TaskStatus.todo)),
+        _tabLabel('In Progress', _statusCount(TaskStatus.inProgress)),
+        _tabLabel('Done', _statusCount(TaskStatus.done)),
+        _tabLabel('Overdue', _statusCount(TaskStatus.overdue)),
+      ],
+    );
+
+    final content = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(height: onPageBg ? pagePad.top : 8),
+        _buildTaskStatsStrip(onPageBg: onPageBg),
+        const SizedBox(height: 10),
+        Padding(
+          padding: EdgeInsets.fromLTRB(
+            onPageBg ? 0 : 16,
+            0,
+            onPageBg ? 0 : 16,
+            12,
+          ),
+          child: onPageBg
+              ? tabs
+              : Row(children: [
+                  Expanded(child: tabs),
+                  const SizedBox(width: 8),
+                  Stack(clipBehavior: Clip.none, children: [
+                    Material(
+                      color: glass,
+                      borderRadius: BorderRadius.circular(16),
+                      child: InkWell(
+                        onTap: _showNotificationsSheet,
+                        borderRadius: BorderRadius.circular(16),
+                        child: const Padding(
+                          padding: EdgeInsets.all(10),
+                          child: Icon(Icons.notifications_outlined,
+                              color: Colors.white70, size: 19),
+                        ),
                       ),
                     ),
-                  ),
-              ]),
-            ]),
+                    if (_unread > 0)
+                      Positioned(
+                        right: -2,
+                        top: -2,
+                        child: Container(
+                          width: 16,
+                          height: 16,
+                          decoration: const BoxDecoration(
+                              color: AppColors.error, shape: BoxShape.circle),
+                          child: Center(
+                            child: Text('$_unread',
+                                style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.bold)),
+                          ),
+                        ),
+                      ),
+                  ]),
+                ]),
+        ),
+      ],
+    );
+
+    if (onPageBg) {
+      return Container(
+        color: context.fomraPageBg,
+        child: portalPageWidthConstraint(
+          context,
+          Padding(
+            padding: pagePad.copyWith(top: 0, bottom: 0),
+            child: content,
           ),
-        ],
+        ),
       );
+    }
+
+    return content;
   }
 
-  Widget _buildTaskTabBar() => Container(
-        color: context.isDarkMode
-            ? const Color(0xFF0F1A2E)
-            : AppColors.primaryDark,
-        child: _buildTaskHeader(),
-      );
+  Widget _buildTaskTabBar({bool onPageBg = false}) {
+    if (onPageBg) return _buildTaskHeader(onPageBg: true);
+    return Container(
+      color: context.isDarkMode
+          ? const Color(0xFF0F1A2E)
+          : AppColors.primaryDark,
+      child: _buildTaskHeader(onPageBg: false),
+    );
+  }
 
   void _logout() {
     AuthService.instance.logout();
@@ -634,7 +659,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
       return Scaffold(
         backgroundColor: context.fomraPageBg,
         body: Column(children: [
-          _buildTaskTabBar(),
+          _buildTaskTabBar(onPageBg: true),
           Expanded(child: taskListView),
         ]),
         floatingActionButton: fab,
@@ -817,15 +842,25 @@ class _TaskList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (tasks.isEmpty) {
-      return _buildEmptyState(context);
+      return portalPageBody(context, _buildEmptyState(context));
     }
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: tasks.length,
-      itemBuilder: (_, i) => _TaskCard(
-        task: tasks[i],
-        onStatusChange: onStatusChange,
-        onTap: () => onTap(tasks[i]),
+    final pagePad = FomraLayout.pagePadding(context);
+    return Align(
+      alignment: Alignment.topCenter,
+      child: portalPageWidthConstraint(
+        context,
+        ListView.builder(
+          padding: pagePad.copyWith(top: 8, bottom: 96),
+          itemCount: tasks.length,
+          itemBuilder: (_, i) => PortalFadeSection(
+            index: i.clamp(0, 6),
+            child: _TaskCard(
+              task: tasks[i],
+              onStatusChange: onStatusChange,
+              onTap: () => onTap(tasks[i]),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -848,12 +883,12 @@ class _TaskCard extends StatelessWidget {
     final pColor = _priorityColor(task.priority);
     final isOverdue = task.status == TaskStatus.overdue;
 
-    return GestureDetector(
-      onTap: onTap,
-      child: Card(
-        margin: const EdgeInsets.only(bottom: 16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        elevation: 0,
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: AppCard(
+        onTap: onTap,
+        padding: EdgeInsets.zero,
+        radius: AppColors.radiusLg,
         child: IntrinsicHeight(
           child: Row(children: [
             Container(
@@ -861,8 +896,9 @@ class _TaskCard extends StatelessWidget {
               decoration: BoxDecoration(
                 color: pColor,
                 borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(20),
-                    bottomLeft: Radius.circular(20)),
+                  topLeft: Radius.circular(AppColors.radiusLg),
+                  bottomLeft: Radius.circular(AppColors.radiusLg),
+                ),
               ),
             ),
             Expanded(
@@ -1152,23 +1188,21 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
           _SheetHandle(),
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
-            child: Column(
-              children: [
-                Row(children: [
-                  Text('Create Task',
-                      style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w800,
-                          color: context.fomraTextPrimary)),
-                  const Spacer(),
-                  TextButton(
-                    onPressed: _save,
-                    child: const Text('SAVE',
-                        style: TextStyle(
-                            color: AppColors.primary, fontWeight: FontWeight.bold)),
+            child: SectionHeader(
+              title: 'Create Task',
+              subtitle: 'Assign work with priority, due date and reminders',
+              icon: Icons.add_task_rounded,
+              padding: EdgeInsets.zero,
+              trailing: TextButton(
+                onPressed: _save,
+                child: const Text(
+                  'SAVE',
+                  style: TextStyle(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w800,
                   ),
-                ]),
-              ],
+                ),
+              ),
             ),
           ),
           Divider(height: 1, color: context.fomraBorder),
@@ -1179,34 +1213,29 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
                 controller: controller,
                 padding: const EdgeInsets.all(20),
                 children: [
-                  Container(
+                  AppCard(
                     padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          AppColors.primary.withValues(alpha: 0.08),
-                          AppColors.accent.withValues(alpha: 0.05),
-                        ],
-                      ),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
-                    ),
+                    radius: AppColors.radiusSm,
+                    interactive: false,
                     child: Row(
                       children: [
-                        Icon(Icons.auto_awesome,
-                            color: context.isDarkMode
-                                ? AppColors.primaryLight
-                                : AppColors.primary,
-                            size: 16),
+                        Icon(
+                          Icons.auto_awesome,
+                          color: context.isDarkMode
+                              ? AppColors.primaryLight
+                              : AppColors.primary,
+                          size: 16,
+                        ),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
                             'Create clear tasks with priority, assignees and reminders.',
                             style: TextStyle(
-                                fontSize: 12,
-                                color: context.isDarkMode
-                                    ? AppColors.primaryLight
-                                    : AppColors.primary),
+                              fontSize: 12,
+                              color: context.isDarkMode
+                                  ? AppColors.primaryLight
+                                  : AppColors.primary,
+                            ),
                           ),
                         ),
                       ],

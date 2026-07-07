@@ -9,9 +9,12 @@ import 'package:latlong2/latlong.dart';
 import '../../models/add_lead_result.dart';
 import '../../models/land_lead.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/fomra_layout.dart';
 import '../../config/maptiler_tiles.dart';
 import '../../theme/fomra_input.dart';
 import '../../theme/fomra_theme_context.dart';
+import '../../widgets/portal_home_sections.dart';
+import '../../widgets/portal_page_layout.dart';
 import '../../services/api_client.dart';
 import '../../utils/image_compressor.dart';
 import '../../utils/lead_location_parser.dart';
@@ -452,27 +455,22 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
   }
 
   Widget _buildSitePhotosSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _SectionHeader(
-          number: _isEdit ? '1' : '4',
-          title: 'Site Photos',
-          subtitle: _isEdit
-              ? 'Remove existing photos or upload new ones (max 4)'
-              : 'Upload up to 4 photos of the land',
-        ),
-        const SizedBox(height: 14),
-        _MultiPhotoUpload(
-          existingPhotoUrls: _keptPhotoUrls,
-          photos: _photos,
-          maxPhotos: _kMaxSitePhotos,
-          compressing: _compressingPhoto,
-          onPick: _pickPhoto,
-          onRemove: _removePhoto,
-          onRemoveExisting: _isEdit ? _removeExistingPhoto : null,
-        ),
-      ],
+    return PortalFormSection(
+      number: _isEdit ? '1' : '4',
+      title: 'Site Photos',
+      subtitle: _isEdit
+          ? 'Remove existing photos or upload new ones (max 4)'
+          : 'Upload up to 4 photos of the land',
+      icon: Icons.photo_library_outlined,
+      child: _MultiPhotoUpload(
+        existingPhotoUrls: _keptPhotoUrls,
+        photos: _photos,
+        maxPhotos: _kMaxSitePhotos,
+        compressing: _compressingPhoto,
+        onPick: _pickPhoto,
+        onRemove: _removePhoto,
+        onRemoveExisting: _isEdit ? _removeExistingPhoto : null,
+      ),
     );
   }
 
@@ -532,281 +530,305 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final pagePad = FomraLayout.pagePadding(context);
+
     return Scaffold(
       backgroundColor: context.fomraPageBg,
-      appBar: AppBar(
-        flexibleSpace: Container(
-          decoration: const BoxDecoration(
-            gradient: AppColors.heroGradient,
-          ),
-        ),
-        backgroundColor: Colors.transparent,
-        surfaceTintColor: Colors.transparent,
-        title: Text(_isEdit ? 'Edit Land Lead' : 'Add Land Lead',
-            style: const TextStyle(fontWeight: FontWeight.w700)),
+      appBar: FomraSubPageAppBar(
+        title: _isEdit ? 'Edit Land Lead' : 'Add Land Lead',
         actions: [
           Padding(
-            padding: const EdgeInsets.only(right: 10),
+            padding: const EdgeInsets.only(right: 8),
             child: TextButton.icon(
               onPressed: _submit,
               icon: const Icon(Icons.save_outlined, size: 16, color: Colors.white),
-              label: const Text('SAVE',
-                  style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14)),
+              label: const Text(
+                'Save',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
             ),
           ),
         ],
       ),
-      body: Form(
-        key: _formKey,
-        child: ListView(
-          padding: const EdgeInsets.all(24),
-          children: [
-            if (_isEdit) ...[
-              _buildSitePhotosSection(),
-              const SizedBox(height: 24),
-            ],
-
-            // ── Section 1: Input Source ──────────────────────────────
-            _SectionHeader(
-              number: _isEdit ? '2' : '1',
-              title: 'Input Source',
-              subtitle: 'Who brought this lead?',
-            ),
-            const SizedBox(height: 12),
-            _InputSourceDropdown(
-              value: _inputSource,
-              onChanged: (s) => setState(() => _inputSource = s),
-            ),
-            if (_inputSource == null)
-              const Padding(
-                padding: EdgeInsets.only(top: 6, left: 4),
-                child: Text('* Required',
-                    style: TextStyle(color: AppColors.error, fontSize: 12)),
-              ),
-
-            const SizedBox(height: 24),
-
-            // ── Section 2: Data Captured ─────────────────────────────
-            _SectionHeader(
-              number: _isEdit ? '3' : '2',
-              title: 'Data Captured',
-              subtitle: 'Pre-survey land details',
-            ),
-            const SizedBox(height: 16),
-
-            const _ReadOnlyField(
-              label: 'Lead ID',
-              value: 'Auto-generated (1, 2, 3 …)',
-            ),
-            const SizedBox(height: 16),
-
-            _LocationModeToggle(
-              mode: _locationMode,
-              onChanged: _onLocationModeChanged,
-            ),
-            const SizedBox(height: 14),
-
-            if (_locationMode == _LocationMode.manual) ...[
-              _LocationPinMap(
-                mapController: _mapController,
-                tileUrl: _kMapTileUrl,
-                defaultCenter: _kDefaultMapCenter,
-                pinnedPoint: _pinnedPoint,
-                resolving: _resolvingPin,
-                status: _locationStatus,
-                fetchingMyLocation: _fetchingLocation,
-                onMapReady: _onMapReady,
-                onTap: _onMapPin,
-                onMyLocation: _centerMapOnMyLocation,
-              ),
-              const SizedBox(height: 14),
-            ],
-
-            if (_locationMode == _LocationMode.live) ...[
-              _LiveLocationButton(
-                fetching: _fetchingLocation,
-                status: _locationStatus,
-                onTap: _fetchingLocation ? null : _fetchLiveLocation,
-              ),
-              const SizedBox(height: 14),
-            ],
-
-            _Field(
-              ctrl: _gpsCtrl,
-              label: 'GPS Coordinates',
-              hint: _locationMode == _LocationMode.live
-                  ? 'Auto-filled after capture'
-                  : 'Pin on map or type manually',
-              icon: Icons.gps_fixed,
-            ),
-            const SizedBox(height: 12),
-
-            _Field(
-              ctrl: _locationCtrl,
-              label: 'Location',
-              hint: _locationMode == _LocationMode.live
-                  ? 'Auto-filled after capture'
-                  : 'Pin on map or type manually',
-              icon: Icons.location_on_outlined,
-              required: true,
-            ),
-            const SizedBox(height: 12),
-
-            Row(children: [
-              Expanded(
-                  child: _Field(
-                      ctrl: _villageCtrl,
-                      label: 'Village',
-                      hint: 'Village name',
-                      icon: Icons.home_outlined)),
-              const SizedBox(width: 10),
-              Expanded(
-                  child: _Field(
-                      ctrl: _talukCtrl,
-                      label: 'Taluk',
-                      hint: 'Taluk',
-                      icon: Icons.account_balance_outlined)),
-            ]),
-            const SizedBox(height: 12),
-
-            _Field(
-                ctrl: _districtCtrl,
-                label: 'District',
-                hint: 'e.g. Bangalore Rural',
-                icon: Icons.map_outlined),
-            const SizedBox(height: 12),
-
-            _Field(
-              ctrl: _pincodeCtrl,
-              label: 'Pincode',
-              hint: 'e.g. 560066',
-              icon: Icons.local_post_office_outlined,
-              keyboardType: TextInputType.number,
-            ),
-            const SizedBox(height: 12),
-
-            Row(children: [
-              Expanded(
-                child: _Field(
-                  ctrl: _surveyCtrl,
-                  label: 'Survey Number',
-                  hint: 'e.g. 42/3A',
-                  icon: Icons.tag,
-                  required: true,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _Field(
-                  ctrl: _subDivCtrl,
-                  label: 'Sub Division',
-                  hint: 'e.g. 1  (optional)',
-                  icon: Icons.call_split_outlined,
-                ),
-              ),
-            ]),
-            const SizedBox(height: 12),
-
-            _Field(
-              ctrl: _extentCtrl,
-              label: 'Land Extent',
-              hint: 'e.g. 2.5 acres / 50 cents',
-              icon: Icons.straighten,
-              required: true,
-            ),
-            const SizedBox(height: 12),
-
-            _Field(
-              ctrl: _ownerCtrl,
-              label: 'Owner Name',
-              hint: 'Full name of the land owner',
-              icon: Icons.person_outline,
-            ),
-            const SizedBox(height: 12),
-
-            _Field(
-              ctrl: _contactCtrl,
-              label: 'Contact Details',
-              hint: 'Phone / Email',
-              icon: Icons.phone_outlined,
-              keyboardType: TextInputType.phone,
-            ),
-            const SizedBox(height: 12),
-
-            _LandTypeDropdown(
-              value: _landType,
-              onChanged: (v) => setState(() => _landType = v!),
-            ),
-            const SizedBox(height: 12),
-
-            _Field(
-              ctrl: _roadWidthCtrl,
-              label: 'Road Width',
-              hint: 'e.g. 30 ft / 9 m',
-              icon: Icons.open_in_full,
-            ),
-            const SizedBox(height: 20),
-
-            // ── Section 3: Terms ─────────────────────────────────────
-            _SectionHeader(
-              number: _isEdit ? '4' : '3',
-              title: 'Terms',
-              subtitle: 'Select the deal terms',
-            ),
-            const SizedBox(height: 14),
-
-            _TermsDropdown(
-              value: _termsType,
-              onChanged: (v) => setState(() => _termsType = v),
-            ),
-            const SizedBox(height: 12),
-
-
-            _Field(
-              ctrl: _notesCtrl,
-              label: 'Notes',
-              hint: 'Any additional observations',
-              icon: Icons.notes_outlined,
-              maxLines: 3,
-            ),
-            const SizedBox(height: 20),
-
-            if (!_isEdit) ...[
-              _buildSitePhotosSection(),
-              const SizedBox(height: 28),
-            ] else
-              const SizedBox(height: 8),
-
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: AppColors.primaryGradient,
-                  borderRadius: BorderRadius.circular(AppColors.radiusSm),
-                  boxShadow: AppColors.coloredShadow(AppColors.primary),
-                ),
-                child: ElevatedButton.icon(
-                  onPressed: _submit,
-                  icon: const Icon(Icons.save_outlined),
-                  label: const Text('Save Lead',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.transparent,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shadowColor: Colors.transparent,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(AppColors.radiusSm)),
+      body: Align(
+        alignment: Alignment.topCenter,
+        child: portalPageWidthConstraint(
+          context,
+          Form(
+            key: _formKey,
+            child: ListView(
+              padding: pagePad,
+              children: [
+                if (_isEdit) ...[
+                  PortalFadeSection(
+                    index: 0,
+                    child: _buildSitePhotosSection(),
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                ],
+                PortalFadeSection(
+                  index: _isEdit ? 1 : 0,
+                  child: PortalFormSection(
+                    number: _isEdit ? '2' : '1',
+                    title: 'Input Source',
+                    subtitle: 'Who brought this lead?',
+                    icon: Icons.source_outlined,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _InputSourceDropdown(
+                          value: _inputSource,
+                          onChanged: (s) => setState(() => _inputSource = s),
+                        ),
+                        if (_inputSource == null)
+                          const Padding(
+                            padding: EdgeInsets.only(top: 6, left: 4),
+                            child: Text(
+                              '* Required',
+                              style: TextStyle(
+                                color: AppColors.error,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
+                const SizedBox(height: AppSpacing.lg),
+                PortalFadeSection(
+                  index: _isEdit ? 2 : 1,
+                  child: PortalFormSection(
+                    number: _isEdit ? '3' : '2',
+                    title: 'Data Captured',
+                    subtitle: 'Pre-survey land details',
+                    icon: Icons.map_outlined,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const _ReadOnlyField(
+                          label: 'Lead ID',
+                          value: 'Auto-generated (1, 2, 3 …)',
+                        ),
+                        const SizedBox(height: 16),
+                        _LocationModeToggle(
+                          mode: _locationMode,
+                          onChanged: _onLocationModeChanged,
+                        ),
+                        const SizedBox(height: 14),
+                        if (_locationMode == _LocationMode.manual) ...[
+                          _LocationPinMap(
+                            mapController: _mapController,
+                            tileUrl: _kMapTileUrl,
+                            defaultCenter: _kDefaultMapCenter,
+                            pinnedPoint: _pinnedPoint,
+                            resolving: _resolvingPin,
+                            status: _locationStatus,
+                            fetchingMyLocation: _fetchingLocation,
+                            onMapReady: _onMapReady,
+                            onTap: _onMapPin,
+                            onMyLocation: _centerMapOnMyLocation,
+                          ),
+                          const SizedBox(height: 14),
+                        ],
+                        if (_locationMode == _LocationMode.live) ...[
+                          _LiveLocationButton(
+                            fetching: _fetchingLocation,
+                            status: _locationStatus,
+                            onTap: _fetchingLocation ? null : _fetchLiveLocation,
+                          ),
+                          const SizedBox(height: 14),
+                        ],
+                        _Field(
+                          ctrl: _gpsCtrl,
+                          label: 'GPS Coordinates',
+                          hint: _locationMode == _LocationMode.live
+                              ? 'Auto-filled after capture'
+                              : 'Pin on map or type manually',
+                          icon: Icons.gps_fixed,
+                        ),
+                        const SizedBox(height: 12),
+                        _Field(
+                          ctrl: _locationCtrl,
+                          label: 'Location',
+                          hint: _locationMode == _LocationMode.live
+                              ? 'Auto-filled after capture'
+                              : 'Pin on map or type manually',
+                          icon: Icons.location_on_outlined,
+                          required: true,
+                        ),
+                        const SizedBox(height: 12),
+                        Row(children: [
+                          Expanded(
+                            child: _Field(
+                              ctrl: _villageCtrl,
+                              label: 'Village',
+                              hint: 'Village name',
+                              icon: Icons.home_outlined,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: _Field(
+                              ctrl: _talukCtrl,
+                              label: 'Taluk',
+                              hint: 'Taluk',
+                              icon: Icons.account_balance_outlined,
+                            ),
+                          ),
+                        ]),
+                        const SizedBox(height: 12),
+                        _Field(
+                          ctrl: _districtCtrl,
+                          label: 'District',
+                          hint: 'e.g. Bangalore Rural',
+                          icon: Icons.map_outlined,
+                        ),
+                        const SizedBox(height: 12),
+                        _Field(
+                          ctrl: _pincodeCtrl,
+                          label: 'Pincode',
+                          hint: 'e.g. 560066',
+                          icon: Icons.local_post_office_outlined,
+                          keyboardType: TextInputType.number,
+                        ),
+                        const SizedBox(height: 12),
+                        Row(children: [
+                          Expanded(
+                            child: _Field(
+                              ctrl: _surveyCtrl,
+                              label: 'Survey Number',
+                              hint: 'e.g. 42/3A',
+                              icon: Icons.tag,
+                              required: true,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: _Field(
+                              ctrl: _subDivCtrl,
+                              label: 'Sub Division',
+                              hint: 'e.g. 1  (optional)',
+                              icon: Icons.call_split_outlined,
+                            ),
+                          ),
+                        ]),
+                        const SizedBox(height: 12),
+                        _Field(
+                          ctrl: _extentCtrl,
+                          label: 'Land Extent',
+                          hint: 'e.g. 2.5 acres / 50 cents',
+                          icon: Icons.straighten,
+                          required: true,
+                        ),
+                        const SizedBox(height: 12),
+                        _Field(
+                          ctrl: _ownerCtrl,
+                          label: 'Owner Name',
+                          hint: 'Full name of the land owner',
+                          icon: Icons.person_outline,
+                        ),
+                        const SizedBox(height: 12),
+                        _Field(
+                          ctrl: _contactCtrl,
+                          label: 'Contact Details',
+                          hint: 'Phone / Email',
+                          icon: Icons.phone_outlined,
+                          keyboardType: TextInputType.phone,
+                        ),
+                        const SizedBox(height: 12),
+                        _LandTypeDropdown(
+                          value: _landType,
+                          onChanged: (v) => setState(() => _landType = v!),
+                        ),
+                        const SizedBox(height: 12),
+                        _Field(
+                          ctrl: _roadWidthCtrl,
+                          label: 'Road Width',
+                          hint: 'e.g. 30 ft / 9 m',
+                          icon: Icons.open_in_full,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                PortalFadeSection(
+                  index: _isEdit ? 3 : 2,
+                  child: PortalFormSection(
+                    number: _isEdit ? '4' : '3',
+                    title: 'Terms',
+                    subtitle: 'Select the deal terms',
+                    icon: Icons.handshake_outlined,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _TermsDropdown(
+                          value: _termsType,
+                          onChanged: (v) => setState(() => _termsType = v),
+                        ),
+                        const SizedBox(height: 12),
+                        _Field(
+                          ctrl: _notesCtrl,
+                          label: 'Notes',
+                          hint: 'Any additional observations',
+                          icon: Icons.notes_outlined,
+                          maxLines: 3,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                if (!_isEdit) ...[
+                  PortalFadeSection(
+                    index: 3,
+                    child: _buildSitePhotosSection(),
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                ],
+                PortalFadeSection(
+                  index: _isEdit ? 4 : 4,
+                  child: SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: AppColors.primaryGradient,
+                        borderRadius: BorderRadius.circular(AppColors.radiusSm),
+                        boxShadow: AppColors.coloredShadow(AppColors.primary),
+                      ),
+                      child: ElevatedButton.icon(
+                        onPressed: _submit,
+                        icon: const Icon(Icons.save_outlined),
+                        label: const Text(
+                          'Save Lead',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.transparent,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shadowColor: Colors.transparent,
+                          shape: RoundedRectangleBorder(
+                            borderRadius:
+                                BorderRadius.circular(AppColors.radiusSm),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+              ],
             ),
-            const SizedBox(height: 24),
-          ],
+          ),
         ),
       ),
     );
@@ -1554,63 +1576,6 @@ class _LiveLocationButton extends StatelessWidget {
           ]),
         ),
       ),
-    );
-  }
-}
-
-// ── Section Header ──────────────────────────────────────────────────────────
-
-class _SectionHeader extends StatelessWidget {
-  final String number;
-  final String title;
-  final String subtitle;
-
-  const _SectionHeader({
-    required this.number,
-    required this.title,
-    required this.subtitle,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: context.fomraSurface,
-        borderRadius: BorderRadius.circular(AppColors.radiusSm),
-        border: Border.all(color: context.fomraBorder),
-        boxShadow: context.fomraCardShadow,
-      ),
-      child: Row(children: [
-        Container(
-          width: 34,
-          height: 34,
-          decoration: BoxDecoration(
-            gradient: AppColors.primaryGradient,
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Center(
-            child: Text(number,
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 15)),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(title,
-                style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                    color: context.fomraTextPrimary)),
-            Text(subtitle,
-                style: TextStyle(
-                    fontSize: 12, color: context.fomraTextSecondary)),
-          ]),
-        ),
-      ]),
     );
   }
 }
