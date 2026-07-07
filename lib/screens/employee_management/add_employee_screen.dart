@@ -3,7 +3,11 @@ import 'package:flutter/material.dart';
 import '../../services/employee_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_input.dart';
+import '../../theme/fomra_layout.dart';
 import '../../theme/fomra_theme_context.dart';
+import '../../widgets/portal_home_sections.dart';
+import '../../widgets/portal_page_layout.dart';
+import '../../widgets/ui/app_components.dart';
 
 class AddEmployeeScreen extends StatefulWidget {
   const AddEmployeeScreen({super.key});
@@ -57,50 +61,45 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final pagePad = FomraLayout.pagePadding(context);
+
     return Scaffold(
       backgroundColor: context.fomraPageBg,
-      appBar: AppBar(
-        flexibleSpace: Container(
-          decoration: const BoxDecoration(gradient: AppColors.heroGradient),
-        ),
-        backgroundColor: Colors.transparent,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        title: const Text('Add Employee'),
-      ),
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 420),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: context.fomraSurface,
-                      borderRadius: BorderRadius.circular(AppColors.radiusMd),
-                      border: Border.all(color: context.fomraBorder),
-                      boxShadow: context.fomraCardShadow,
-                    ),
+      appBar: FomraSubPageAppBar(title: 'Add Employee'),
+      body: Align(
+        alignment: Alignment.topCenter,
+        child: portalPageWidthConstraint(
+          context,
+          SingleChildScrollView(
+            padding: pagePad,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 480),
+              child: Form(
+                key: _formKey,
+                child: PortalFadeSection(
+                  index: 0,
+                  child: AppCard(
+                    padding: const EdgeInsets.all(24),
+                    radius: 16,
+                    interactive: false,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         Row(
                           children: [
                             Container(
-                              padding: const EdgeInsets.all(10),
+                              padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
-                                color: AppColors.primary.withValues(alpha: 0.12),
-                                borderRadius: BorderRadius.circular(16),
+                                color: AppColors.primary.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(14),
                               ),
-                              child: const Icon(Icons.badge_outlined,
-                                  color: AppColors.primary, size: 20),
+                              child: const Icon(
+                                Icons.badge_outlined,
+                                color: AppColors.primary,
+                                size: 22,
+                              ),
                             ),
-                            const SizedBox(width: 10),
+                            const SizedBox(width: 12),
                             const Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -108,27 +107,31 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
                                   Text(
                                     'Create Employee Profile',
                                     style: TextStyle(
-                                        fontSize: 18, fontWeight: FontWeight.w800),
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w800,
+                                    ),
                                   ),
-                                  SizedBox(height: 2),
+                                  SizedBox(height: 4),
                                   Text(
                                     'Add team member access credentials',
                                     style: TextStyle(
-                                        fontSize: 12, color: AppColors.textSecondary),
+                                      fontSize: 12,
+                                      color: AppColors.textSecondary,
+                                    ),
                                   ),
                                 ],
                               ),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 18),
+                        const SizedBox(height: 24),
                         _field(
                           controller: _nameCtrl,
                           label: 'Employee Name',
                           icon: Icons.person_outline,
                           required: true,
                         ),
-                        const SizedBox(height: 14),
+                        const SizedBox(height: 16),
                         _field(
                           controller: _emailCtrl,
                           label: 'Work Email',
@@ -143,31 +146,36 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
                             return null;
                           },
                         ),
-                        const SizedBox(height: 24),
+                        const SizedBox(height: 28),
                         SizedBox(
-                          height: 52,
+                          height: 50,
                           child: FilledButton.icon(
                             onPressed: _saving ? null : _save,
-                            icon: const Icon(Icons.add_circle_outline, size: 18),
-                            label: _saving
+                            icon: _saving
                                 ? const SizedBox(
-                                    width: 22,
-                                    height: 22,
+                                    width: 18,
+                                    height: 18,
                                     child: CircularProgressIndicator(
                                       strokeWidth: 2.5,
                                       color: Colors.white,
                                     ),
                                   )
-                                : const Text(
-                                    'Create Employee Profile',
-                                    style: TextStyle(fontWeight: FontWeight.w700),
-                                  ),
+                                : const Icon(Icons.add_circle_outline, size: 18),
+                            label: const Text(
+                              'Create Employee Profile',
+                              style: TextStyle(fontWeight: FontWeight.w700),
+                            ),
+                            style: FilledButton.styleFrom(
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                            ),
                           ),
                         ),
                       ],
                     ),
                   ),
-                ],
+                ),
               ),
             ),
           ),
@@ -192,7 +200,12 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
               ? (v) =>
                   (v == null || v.trim().isEmpty) ? '$label is required' : null
               : null),
-      decoration: FomraInput.decoration(context: context, label: label, icon: icon),
+      decoration: FomraInput.decoration(
+        context: context,
+        label: label,
+        icon: icon,
+        required: required,
+      ),
     );
   }
 }
