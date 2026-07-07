@@ -20,8 +20,11 @@ import '../../widgets/app_drawer.dart';
 import '../../widgets/fomra_app_bar.dart';
 import '../../widgets/fomra_bottom_nav.dart';
 import '../../widgets/fmb_sketch_viewer.dart';
+import '../../widgets/market_intelligence_ui.dart';
 import '../../widgets/patta_document_preview.dart';
 import '../../widgets/patta_html_preview.dart';
+import '../../widgets/portal_home_sections.dart';
+import '../../widgets/portal_page_layout.dart';
 
 // â”€â”€ POI category definitions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -1335,6 +1338,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
 
     return _SectionCard(
       title: 'Competitor Projects',
+      subtitle: 'Market listings in your search radius',
       icon: Icons.business_center_outlined,
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Wrap(
@@ -1803,47 +1807,53 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (loc == null && _geocodingLead)
-          const _SectionCard(
-            title: 'Land Location',
-            icon: Icons.location_on_outlined,
-            child: Row(
-              children: [
-                SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-                SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'Locating this lead on the map…',
-                    style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+          const PortalFadeSection(
+            index: 0,
+            child: _SectionCard(
+              title: 'Land Location',
+              icon: Icons.location_on_outlined,
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
                   ),
-                ),
-              ],
+                  SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Locating this lead on the map…',
+                      style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         if (loc == null && !_geocodingLead)
-          const _SectionCard(
-            title: 'Location',
-            icon: Icons.location_off_outlined,
-            child: Text(
-              'This lead has no GPS coordinates and its address could not be located. Add GPS when creating the lead to load infrastructure score and AI valuation.',
-              style: TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.4),
+          const PortalFadeSection(
+            index: 0,
+            child: _SectionCard(
+              title: 'Location',
+              icon: Icons.location_off_outlined,
+              child: Text(
+                'This lead has no GPS coordinates and its address could not be located. Add GPS when creating the lead to load infrastructure score and AI valuation.',
+                style: TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.4),
+              ),
             ),
           ),
         if (loc != null) ...[
           const SizedBox(height: 20),
-          _buildLeadMapSection(loc),
+          PortalFadeSection(index: 1, child: _buildLeadMapSection(loc)),
           const SizedBox(height: 20),
-          _buildInfrastructureSection(),
+          PortalFadeSection(index: 2, child: _buildInfrastructureSection()),
           const SizedBox(height: 20),
-          _buildMagicBricksSection(),
+          PortalFadeSection(index: 3, child: _buildMagicBricksSection()),
         ],
         const SizedBox(height: 20),
-        _buildGovtDocsSection(),
+        PortalFadeSection(index: 4, child: _buildGovtDocsSection()),
         const SizedBox(height: 20),
-        _buildLeadValuationSection(),
+        PortalFadeSection(index: 5, child: _buildLeadValuationSection()),
       ],
     );
   }
@@ -1851,6 +1861,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
   Widget _buildLeadMapSection(LatLng loc) {
     return _SectionCard(
       title: 'Land Location',
+      subtitle: 'Pinned coordinates for this lead',
       icon: Icons.location_on_outlined,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1967,27 +1978,32 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
       return _buildLeadEmbeddedBody();
     }
 
-    final body = SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
+    final body = portalPageBody(
+      context,
+      SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildSearchSection(),
-            const SizedBox(height: 16),
-            _buildMapSection(),
-            const SizedBox(height: 16),
-            _buildInfrastructureSection(),
-            const SizedBox(height: 16),
-            _buildMagicBricksSection(),
-            const SizedBox(height: 16),
-            _buildGovtDocsSection(),
-            const SizedBox(height: 16),
-            _buildValuationSection(),
-            const SizedBox(height: 40),
+            PortalFadeSection(index: 0, child: _buildSearchSection()),
+            const SizedBox(height: 24),
+            PortalFadeSection(index: 1, child: _buildMapSection()),
+            const SizedBox(height: 24),
+            PortalFadeSection(index: 2, child: _buildParcelSection()),
+            const SizedBox(height: 24),
+            PortalFadeSection(index: 3, child: _buildGovtDocsSection()),
+            const SizedBox(height: 24),
+            PortalFadeSection(index: 4, child: _buildValuationSection()),
+            const SizedBox(height: 24),
+            PortalFadeSection(index: 5, child: _buildInfrastructureSection()),
+            const SizedBox(height: 24),
+            PortalFadeSection(index: 6, child: _buildMagicBricksSection()),
+            const SizedBox(height: 32),
           ],
         ),
-      );
+      ),
+    );
     return Scaffold(
+      backgroundColor: context.fomraSurfaceVar,
       appBar: const FomraAppBar(moduleName: 'Market Intelligence'),
       drawer: const AppDrawer(currentRoute: '/market-intelligence'),
       bottomNavigationBar:
@@ -2044,48 +2060,63 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
   Widget _buildSearchSection() {
     return _SectionCard(
       title: 'Search Location Setup',
-      icon: Icons.search,
+      subtitle: 'Find and pin your analysis area',
+      icon: Icons.search_rounded,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: context.fomraSurfaceVar,
-              borderRadius: BorderRadius.circular(AppColors.radiusMd),
-              border: Border.all(color: context.fomraBorder.withValues(alpha: 0.7)),
-            ),
-            child: Row(children: [
-              Expanded(
-                child: TextField(
-                  controller: _searchCtrl,
-                  decoration: _inputDec(context, 'Search city, area, landmark...').copyWith(
-                    filled: true,
-                    fillColor: context.fomraSurface,
-                    contentPadding:
-                        const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-                    prefixIcon: const Padding(
-                      padding: EdgeInsets.only(left: 10, right: 6),
-                      child: Icon(Icons.search, size: 18, color: AppColors.textSecondary),
-                    ),
-                    prefixIconConstraints: const BoxConstraints(),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final stacked = constraints.maxWidth < 560;
+              final searchField = TextField(
+                controller: _searchCtrl,
+                decoration: _inputDec(context, 'Search city, area, landmark…')
+                    .copyWith(
+                  filled: true,
+                  fillColor: context.fomraSurface,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 16,
                   ),
-                  textInputAction: TextInputAction.search,
-                  onChanged: _onSearchChanged,
-                  onSubmitted: _searchLocation,
+                  prefixIcon: const Icon(
+                    Icons.search_rounded,
+                    size: 22,
+                    color: AppColors.textSecondary,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(
+                      color: context.fomraBorder.withValues(alpha: 0.8),
+                    ),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(
+                      color: context.fomraBorder.withValues(alpha: 0.8),
+                    ),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(
+                      color: AppColors.primary,
+                      width: 1.5,
+                    ),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 10),
-              SizedBox(
-                height: 48,
-                child: ElevatedButton.icon(
+                textInputAction: TextInputAction.search,
+                onChanged: _onSearchChanged,
+                onSubmitted: _searchLocation,
+              );
+              final searchButton = SizedBox(
+                height: 52,
+                child: FilledButton.icon(
                   onPressed: _searchingLocation
                       ? null
                       : () => _searchLocation(_searchCtrl.text),
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 18),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(AppColors.radiusSm),
+                      borderRadius: BorderRadius.circular(14),
                     ),
                   ),
                   icon: _searchingLocation
@@ -2093,12 +2124,35 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                           width: 16,
                           height: 16,
                           child: CircularProgressIndicator(
-                              color: Colors.white, strokeWidth: 2))
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
                       : const Icon(Icons.travel_explore_outlined, size: 18),
-                  label: Text(_searchingLocation ? 'Searching' : 'Search'),
+                  label: Text(
+                    _searchingLocation ? 'Searching…' : 'Search',
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
                 ),
-              ),
-            ]),
+              );
+              if (stacked) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    searchField,
+                    const SizedBox(height: 12),
+                    searchButton,
+                  ],
+                );
+              }
+              return Row(
+                children: [
+                  Expanded(child: searchField),
+                  const SizedBox(width: 12),
+                  searchButton,
+                ],
+              );
+            },
           ),
           if (_searchError != null) ...[
             const SizedBox(height: 6),
@@ -2156,32 +2210,18 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
     );
   }
 
-  Widget _buildZoomButton(IconData icon, VoidCallback onTap) => Material(
-        color: AppColors.primary.withValues(alpha: 0.9),
-        borderRadius: BorderRadius.circular(16),
-        child: InkWell(
-          onTap: _mapReady ? onTap : null,
-          borderRadius: BorderRadius.circular(16),
-          child: Padding(
-            padding: const EdgeInsets.all(10),
-            child: Icon(icon, color: Colors.white, size: 20),
-          ),
-        ),
+  Widget _buildZoomButton(IconData icon, VoidCallback onTap) =>
+      MarketIntelGlassButton(
+        icon: icon,
+        onTap: _mapReady ? onTap : null,
+        primary: true,
       );
 
-  Widget _buildMapOverlayButton(IconData icon, VoidCallback onTap) => Material(
-        color: context.fomraSurface.withValues(alpha: 0.9),
-        elevation: 3,
-        shadowColor: Colors.black26,
-        borderRadius: BorderRadius.circular(16),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(16),
-          child: Padding(
-            padding: const EdgeInsets.all(10),
-            child: Icon(icon, size: 20, color: AppColors.primary),
-          ),
-        ),
+  Widget _buildMapOverlayButton(IconData icon, VoidCallback onTap) =>
+      MarketIntelGlassButton(
+        icon: icon,
+        onTap: onTap,
+        iconColor: AppColors.primary,
       );
 
   void _setMapLayer(_MarketMapLayer layer) {
@@ -2487,17 +2527,30 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
     final activeLoc = _activeLatLng;
     return _SectionCard(
       title: 'Map Visualization',
+      subtitle: 'Explore parcel location and map layers',
       icon: Icons.map_outlined,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           ClipRRect(
-            borderRadius: BorderRadius.circular(AppColors.radiusMd),
-            child: SizedBox(
-              height: 320,
-              child: _mapFullScreen
-                  ? _buildMapFullscreenPlaceholder()
-                  : _buildMapStack(showMaximize: true),
+            borderRadius: BorderRadius.circular(16),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.08),
+                    blurRadius: 16,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: SizedBox(
+                height: 320,
+                child: _mapFullScreen
+                    ? _buildMapFullscreenPlaceholder()
+                    : _buildMapStack(showMaximize: true),
+              ),
             ),
           ),
           const SizedBox(height: 10),
@@ -2555,6 +2608,101 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
     );
   }
 
+  Widget _buildParcelSection() {
+    final preview = _tngisParcelPreview;
+    final hasTiles = preview != null && preview.isNotEmpty;
+    final hasPin = _activeLatLng != null;
+    if (!hasPin && !hasTiles && !_tngisParcelLoading && _tngisParcelError == null) {
+      return const SizedBox.shrink();
+    }
+
+    final tiles = <Widget>[];
+    if (_tngisUlpin?.isNotEmpty == true) {
+      tiles.add(MarketIntelInfoTile(
+        label: 'ULPIN',
+        value: _tngisUlpin!,
+        icon: Icons.fingerprint_outlined,
+      ));
+    }
+    if (_tngisSurvey?.isNotEmpty == true) {
+      tiles.add(MarketIntelInfoTile(
+        label: 'Survey Number',
+        value: _tngisSurvey!,
+        icon: Icons.grid_on_outlined,
+      ));
+    }
+    if (_tngisSubDiv?.isNotEmpty == true) {
+      tiles.add(MarketIntelInfoTile(
+        label: 'Sub Division',
+        value: _tngisSubDiv!,
+        icon: Icons.view_column_outlined,
+      ));
+    }
+    if (preview != null) {
+      for (final entry in preview.entries) {
+        final value = entry.value.trim();
+        if (value.isEmpty || value == '-') continue;
+        tiles.add(MarketIntelInfoTile(
+          label: entry.key,
+          value: value,
+          icon: marketIntelIconForField(entry.key),
+        ));
+      }
+    }
+
+    return _SectionCard(
+      title: 'Parcel Information',
+      subtitle: 'Survey and subdivision from TNGIS',
+      icon: Icons.landscape_outlined,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (_tngisParcelLoading)
+            const Row(
+              children: [
+                SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Reading parcel from TNGIS…',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ),
+              ],
+            )
+          else if (tiles.isEmpty)
+            Text(
+              hasPin
+                  ? 'Tap the land plot on the map to load parcel details from TNGIS.'
+                  : 'Pin a location to load parcel information.',
+              style: TextStyle(
+                fontSize: 13,
+                height: 1.45,
+                color: context.fomraTextSecondary,
+              ),
+            )
+          else
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: tiles,
+            ),
+          if (_tngisParcelError != null && !_tngisParcelLoading) ...[
+            const SizedBox(height: 12),
+            _ErrorBanner(_tngisParcelError!),
+          ],
+        ],
+      ),
+    );
+  }
+
   // â”€â”€ Section: POI Collection â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   void _showPoiList(_PoiCategory cat) {
@@ -2583,6 +2731,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
 
     return _SectionCard(
       title: 'Infrastructure Score',
+      subtitle: 'Nearby infrastructure analytics',
       icon: Icons.analytics_outlined,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2601,15 +2750,9 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
               final selected = _selectedRadius == km;
               return Padding(
                 padding: const EdgeInsets.only(right: 8),
-                child: ChoiceChip(
-                  label: Text('${km}km'),
+                child: MarketIntelFilterChip(
+                  label: '${km}km',
                   selected: selected,
-                  selectedColor: const Color(0xFF00838F),
-                  labelStyle: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: selected ? Colors.white : AppColors.textSecondary,
-                  ),
                   onSelected: (_) {
                     setState(() {
                       _selectedRadius = km;
@@ -2648,9 +2791,10 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                   ? 'Loading from OpenStreetMap…'
                   : 'Refresh Infrastructure Score'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF00838F),
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(14),
                 ),
                 padding: const EdgeInsets.symmetric(vertical: 13),
               ),
@@ -2962,39 +3106,46 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                 runSpacing: 8,
                 children: _kCategories.map((cat) {
                   final count = _poiCounts[cat.name] ?? 0;
-                  return GestureDetector(
-                    onTap: () => _showPoiList(cat),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: cat.color.withValues(alpha: 0.07),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                            color: cat.color.withValues(alpha: 0.3)),
+                  return Material(
+                    color: cat.color.withValues(alpha: 0.07),
+                    borderRadius: BorderRadius.circular(20),
+                    child: InkWell(
+                      onTap: () => _showPoiList(cat),
+                      borderRadius: BorderRadius.circular(20),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: cat.color.withValues(alpha: 0.28),
+                          ),
+                        ),
+                        child: Row(mainAxisSize: MainAxisSize.min, children: [
+                          Icon(cat.icon, color: cat.color, size: 13),
+                          const SizedBox(width: 5),
+                          Text(
+                            '$count',
+                            style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w800,
+                                color: cat.color),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            cat.name,
+                            style: TextStyle(
+                                fontSize: 10,
+                                color: context.fomraTextSecondary),
+                          ),
+                          const SizedBox(width: 3),
+                          Icon(Icons.chevron_right,
+                              size: 12,
+                              color: cat.color.withValues(alpha: 0.6)),
+                        ]),
                       ),
-                      child: Row(mainAxisSize: MainAxisSize.min, children: [
-                        Icon(cat.icon, color: cat.color, size: 13),
-                        const SizedBox(width: 5),
-                        Text(
-                          '$count',
-                          style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w800,
-                              color: cat.color),
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          cat.name,
-                          style: TextStyle(
-                              fontSize: 10,
-                              color: context.fomraTextSecondary),
-                        ),
-                        const SizedBox(width: 3),
-                        Icon(Icons.chevron_right,
-                            size: 12,
-                            color: cat.color.withValues(alpha: 0.6)),
-                      ]),
                     ),
                   );
                 }).toList(),
@@ -3011,6 +3162,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
 
   Widget _buildValuationSection() => _SectionCard(
         title: 'AI Land Valuation Engine',
+        subtitle: 'Estimate value from nearby market data',
         icon: Icons.auto_awesome_outlined,
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           const _FieldLabel('Land Size (sqft)'),
@@ -3027,7 +3179,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
           const SizedBox(height: 16),
           SizedBox(
             width: double.infinity,
-            child: ElevatedButton.icon(
+            child: FilledButton.icon(
               onPressed: _areaPriceStats().hasData && !_fetchingMb
                   ? () => setState(
                         () => _valuationResult = _computeValuation(),
@@ -3035,10 +3187,10 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                   : null,
               icon: const Icon(Icons.auto_awesome, size: 18),
               label: const Text('Generate Valuation'),
-              style: ElevatedButton.styleFrom(
+              style: FilledButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(AppColors.radiusSm),
+                  borderRadius: BorderRadius.circular(14),
                 ),
               ),
             ),
@@ -3309,40 +3461,22 @@ class _PoiListSheet extends StatelessWidget {
 
 class _SectionCard extends StatelessWidget {
   final String title;
+  final String? subtitle;
   final IconData icon;
   final Widget child;
-  const _SectionCard(
-      {required this.title, required this.icon, required this.child});
+  const _SectionCard({
+    required this.title,
+    this.subtitle,
+    required this.icon,
+    required this.child,
+  });
 
   @override
-  Widget build(BuildContext context) => Container(
-        decoration: BoxDecoration(
-          color: context.fomraSurface,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: context.fomraBorder.withValues(alpha: 0.6)),
-          boxShadow: context.fomraCardShadow,
-        ),
-        padding: const EdgeInsets.all(20),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            Container(
-              padding: const EdgeInsets.all(9),
-              decoration: BoxDecoration(
-                color: AppColors.primary.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(AppColors.radiusSm),
-              ),
-              child: Icon(icon, color: AppColors.primary, size: 20),
-            ),
-            const SizedBox(width: 12),
-            Text(title,
-                style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                    color: context.fomraTextPrimary)),
-          ]),
-          const SizedBox(height: 16),
-          child,
-        ]),
+  Widget build(BuildContext context) => MarketIntelSectionCard(
+        title: title,
+        subtitle: subtitle,
+        icon: icon,
+        child: child,
       );
 }
 
@@ -3568,11 +3702,14 @@ class _FieldLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Padding(
         padding: const EdgeInsets.only(bottom: 6),
-        child: Text(text,
-            style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: AppColors.textSecondary)),
+        child: Text(
+          text,
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: context.fomraTextSecondary,
+          ),
+        ),
       );
 }
 
@@ -5337,7 +5474,8 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
   @override
   Widget build(BuildContext context) {
     return _SectionCard(
-      title: 'Land Records',
+      title: 'Government Records',
+      subtitle: 'Patta, FMB, EC, G-Value and Crop from TNGIS',
       icon: Icons.layers_outlined,
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         _buildGiParcelHeader(),
@@ -5468,32 +5606,10 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
   }
 
   Widget _buildGiDataCard(String label, String value) {
-    return Container(
-      width: 180,
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: context.fomraSurface,
-        borderRadius: BorderRadius.circular(AppColors.radiusSm),
-        border: Border.all(color: context.fomraBorder),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label,
-              style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                  color: context.fomraTextSecondary)),
-          const SizedBox(height: 2),
-          Text(value,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: context.fomraTextPrimary)),
-        ],
-      ),
+    return MarketIntelInfoTile(
+      label: label,
+      value: value,
+      icon: marketIntelIconForField(label),
     );
   }
 
@@ -5516,14 +5632,14 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
               color: selected ? svc.color.withValues(alpha: 0.14) : context.fomraSurface,
               elevation: selected ? 2 : 0,
               shadowColor: svc.color.withValues(alpha: 0.3),
-              borderRadius: BorderRadius.circular(AppColors.radiusSm),
+              borderRadius: BorderRadius.circular(16),
               child: InkWell(
                 onTap: () => _onSelectGiService(svc.id),
-                borderRadius: BorderRadius.circular(AppColors.radiusSm),
+                borderRadius: BorderRadius.circular(16),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 6),
+                  padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(AppColors.radiusSm),
+                    borderRadius: BorderRadius.circular(16),
                     border: Border.all(
                       color: selected ? svc.color : svc.color.withValues(alpha: 0.4),
                       width: selected ? 2 : 1,
