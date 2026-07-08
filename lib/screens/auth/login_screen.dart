@@ -65,30 +65,44 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget _buildSplitLayout(BuildContext context) {
     return Row(
       children: [
-        // Left: white background with the official FOMRA brand mark.
+        // Left: blue background with brand text.
         Expanded(
           flex: 5,
-          child: ColoredBox(
-            color: Colors.white,
+          child: Container(
+            decoration: const BoxDecoration(gradient: AppColors.heroGradient),
             child: SafeArea(
               child: Padding(
                 padding: const EdgeInsets.all(48),
                 child: Center(
                   child: ConstrainedBox(
-                    constraints: const BoxConstraints(
-                      maxWidth: 520,
-                      maxHeight: 220,
-                    ),
-                    child: AspectRatio(
-                      aspectRatio: 3.2,
-                      child: Image.asset(
-                        'assets/images/fomra_logo.png',
-                        fit: BoxFit.contain,
-                        alignment: Alignment.center,
-                        filterQuality: FilterQuality.high,
-                        errorBuilder: (context, error, stackTrace) =>
-                            const FomraLogo(width: 380),
-                      ),
+                    constraints: const BoxConstraints(maxWidth: 520),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Text(
+                          'Fomra Housing and Infrastructure',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.92),
+                            fontSize: 24,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.2,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        const Text(
+                          'FomraLS',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 56,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.4,
+                            height: 1,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -96,11 +110,11 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ),
         ),
-        // Right: blue panel with the sign-in form
+        // Right: white panel with the sign-in form
         Expanded(
           flex: 4,
-          child: Container(
-            decoration: const BoxDecoration(gradient: AppColors.heroGradient),
+          child: ColoredBox(
+            color: Colors.white,
             child: Center(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(40),
