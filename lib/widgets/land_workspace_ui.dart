@@ -171,7 +171,149 @@ class _LandWorkspaceStatusCardState extends State<LandWorkspaceStatusCard> {
   }
 }
 
-/// Modern search bar with clear button and filter badge.
+/// Snapshot of workspace list filters (client-side only).
+class LandWorkspaceFilters {
+  LeadStatus? status;
+  final Set<LandType> landTypes;
+  final Set<InputSource> sources;
+  bool highPriority;
+  String? assignedEmployee;
+  DateTime? createdFrom;
+  DateTime? createdTo;
+
+  LandWorkspaceFilters({
+    this.status,
+    Set<LandType>? landTypes,
+    Set<InputSource>? sources,
+    this.highPriority = false,
+    this.assignedEmployee,
+    this.createdFrom,
+    this.createdTo,
+  })  : landTypes = landTypes ?? {},
+        sources = sources ?? {};
+
+  static const propertyTypeOptions = [
+    LandType.agricultural,
+    LandType.residential,
+    LandType.commercial,
+  ];
+
+  static const sourceOptions = [
+    InputSource.broker,
+    InputSource.landowner,
+    InputSource.referral,
+    InputSource.internalTeam,
+  ];
+
+  static const statusOptions = [
+    LeadStatus.new_,
+    LeadStatus.contacted,
+    LeadStatus.negotiation,
+    LeadStatus.closed,
+    LeadStatus.lost,
+  ];
+
+  LandWorkspaceFilters copy() => LandWorkspaceFilters(
+        status: status,
+        landTypes: {...landTypes},
+        sources: {...sources},
+        highPriority: highPriority,
+        assignedEmployee: assignedEmployee,
+        createdFrom: createdFrom,
+        createdTo: createdTo,
+      );
+
+  void clear() {
+    status = null;
+    landTypes.clear();
+    sources.clear();
+    highPriority = false;
+    assignedEmployee = null;
+    createdFrom = null;
+    createdTo = null;
+  }
+
+  int get activeCount {
+    var n = 0;
+    if (status != null) n++;
+    n += landTypes.length;
+    n += sources.length;
+    if (highPriority) n++;
+    if (assignedEmployee != null && assignedEmployee!.trim().isNotEmpty) n++;
+    if (createdFrom != null || createdTo != null) n++;
+    return n;
+  }
+
+  bool get hasActive => activeCount > 0;
+
+  List<({String label, VoidCallback onRemove})> activeChips(
+    VoidCallback notify,
+  ) {
+    final chips = <({String label, VoidCallback onRemove})>[];
+    if (status != null) {
+      final s = status!;
+      chips.add((
+        label: 'Status: ${s.label}',
+        onRemove: () {
+          status = null;
+          notify();
+        },
+      ));
+    }
+    for (final t in [...landTypes]) {
+      chips.add((
+        label: 'Type: ${t.label}',
+        onRemove: () {
+          landTypes.remove(t);
+          notify();
+        },
+      ));
+    }
+    for (final s in [...sources]) {
+      chips.add((
+        label: 'Source: ${s.label}',
+        onRemove: () {
+          sources.remove(s);
+          notify();
+        },
+      ));
+    }
+    if (highPriority) {
+      chips.add((
+        label: 'Priority: High',
+        onRemove: () {
+          highPriority = false;
+          notify();
+        },
+      ));
+    }
+    final emp = assignedEmployee?.trim();
+    if (emp != null && emp.isNotEmpty) {
+      chips.add((
+        label: 'Assigned: $emp',
+        onRemove: () {
+          assignedEmployee = null;
+          notify();
+        },
+      ));
+    }
+    if (createdFrom != null || createdTo != null) {
+      String fmt(DateTime? d) =>
+          d == null ? '…' : '${d.day}/${d.month}/${d.year}';
+      chips.add((
+        label: 'Date: ${fmt(createdFrom)} – ${fmt(createdTo)}',
+        onRemove: () {
+          createdFrom = null;
+          createdTo = null;
+          notify();
+        },
+      ));
+    }
+    return chips;
+  }
+}
+
+/// Modern search bar with outlined Filter button on the far right.
 class LandWorkspaceSearchBar extends StatefulWidget {
   final ValueChanged<String> onChanged;
   final int activeFilterCount;
@@ -208,6 +350,9 @@ class _LandWorkspaceSearchBarState extends State<LandWorkspaceSearchBar> {
 
   @override
   Widget build(BuildContext context) {
+    final count = widget.activeFilterCount;
+    final filterLabel = count > 0 ? 'Filter ($count)' : 'Filter';
+
     return AnimatedContainer(
       duration: AppMotion.normal,
       curve: AppMotion.curve,
@@ -290,45 +435,36 @@ class _LandWorkspaceSearchBarState extends State<LandWorkspaceSearchBar> {
               ),
             ),
             if (widget.onFilterTap != null) ...[
-              const SizedBox(width: 8),
-              Material(
-                color: AppColors.primary.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(14),
-                child: InkWell(
-                  onTap: widget.onFilterTap,
-                  borderRadius: BorderRadius.circular(14),
-                  child: Padding(
-                    padding: const EdgeInsets.all(11),
-                    child: Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        const Icon(
-                          Icons.tune_rounded,
-                          color: AppColors.primary,
-                          size: 20,
-                        ),
-                        if (widget.activeFilterCount > 0)
-                          Positioned(
-                            right: -6,
-                            top: -6,
-                            child: Container(
-                              padding: const EdgeInsets.all(4),
-                              decoration: const BoxDecoration(
-                                color: AppColors.accent,
-                                shape: BoxShape.circle,
-                              ),
-                              child: Text(
-                                '${widget.activeFilterCount}',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
+              const SizedBox(width: 10),
+              OutlinedButton.icon(
+                onPressed: widget.onFilterTap,
+                icon: const Icon(Icons.tune_rounded, size: 18),
+                label: Text(
+                  filterLabel,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                  ),
+                ),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: count > 0
+                      ? AppColors.primary
+                      : context.fomraTextPrimary,
+                  side: BorderSide(
+                    color: count > 0
+                        ? AppColors.primary.withValues(alpha: 0.55)
+                        : context.fomraBorder,
+                    width: count > 0 ? 1.4 : 1,
+                  ),
+                  backgroundColor: count > 0
+                      ? AppColors.primary.withValues(alpha: 0.06)
+                      : context.fomraSurface,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
                   ),
                 ),
               ),
@@ -340,119 +476,523 @@ class _LandWorkspaceSearchBarState extends State<LandWorkspaceSearchBar> {
   }
 }
 
-/// Visible filter chips for land workspace.
-class LandWorkspaceFilterChips extends StatelessWidget {
-  final Set<LandType> landTypes;
-  final bool brokerOnly;
-  final bool highPriority;
-  final bool completedOnly;
-  final ValueChanged<LandType> onToggleLandType;
-  final VoidCallback onToggleBroker;
-  final VoidCallback onToggleHighPriority;
-  final VoidCallback onToggleCompleted;
+/// Compact removable chips for currently applied filters only.
+class LandWorkspaceActiveFilterChips extends StatelessWidget {
+  final LandWorkspaceFilters filters;
+  final VoidCallback onChanged;
   final VoidCallback onClearAll;
 
-  const LandWorkspaceFilterChips({
+  const LandWorkspaceActiveFilterChips({
     super.key,
-    required this.landTypes,
-    required this.brokerOnly,
-    required this.highPriority,
-    required this.completedOnly,
-    required this.onToggleLandType,
-    required this.onToggleBroker,
-    required this.onToggleHighPriority,
-    required this.onToggleCompleted,
+    required this.filters,
+    required this.onChanged,
     required this.onClearAll,
   });
 
   @override
   Widget build(BuildContext context) {
-    final chips = <Widget>[
-      _chip(
-        context,
-        label: 'Agricultural',
-        selected: landTypes.contains(LandType.agricultural),
-        onTap: () => onToggleLandType(LandType.agricultural),
-      ),
-      _chip(
-        context,
-        label: 'Residential',
-        selected: landTypes.contains(LandType.residential),
-        onTap: () => onToggleLandType(LandType.residential),
-      ),
-      _chip(
-        context,
-        label: 'Commercial',
-        selected: landTypes.contains(LandType.commercial),
-        onTap: () => onToggleLandType(LandType.commercial),
-      ),
-      _chip(
-        context,
-        label: 'Broker',
-        selected: brokerOnly,
-        onTap: onToggleBroker,
-      ),
-      _chip(
-        context,
-        label: 'High Priority',
-        selected: highPriority,
-        onTap: onToggleHighPriority,
-      ),
-      _chip(
-        context,
-        label: 'Completed',
-        selected: completedOnly,
-        onTap: onToggleCompleted,
-      ),
-    ];
+    final chips = filters.activeChips(onChanged);
+    if (chips.isEmpty) return const SizedBox.shrink();
 
-    final hasActive =
-        landTypes.isNotEmpty || brokerOnly || highPriority || completedOnly;
+    final showClearAll = chips.length > 1;
 
     return SizedBox(
-      height: 40,
+      height: 36,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
-        itemCount: chips.length + (hasActive ? 1 : 0),
+        itemCount: chips.length + (showClearAll ? 1 : 0),
         separatorBuilder: (_, __) => const SizedBox(width: 8),
         itemBuilder: (_, i) {
-          if (hasActive && i == chips.length) {
+          if (showClearAll && i == chips.length) {
             return ActionChip(
-              label: const Text('Clear all'),
+              label: const Text('Clear All'),
               avatar: const Icon(Icons.clear_all, size: 16),
               onPressed: onClearAll,
+              visualDensity: VisualDensity.compact,
             );
           }
-          return chips[i];
+          final chip = chips[i];
+          return InputChip(
+            label: Text(chip.label),
+            labelStyle: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: context.fomraTextPrimary,
+            ),
+            deleteIcon: const Icon(Icons.close, size: 14),
+            onDeleted: chip.onRemove,
+            backgroundColor: AppColors.primary.withValues(alpha: 0.08),
+            side: BorderSide(
+              color: AppColors.primary.withValues(alpha: 0.22),
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            visualDensity: VisualDensity.compact,
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          );
         },
       ),
     );
   }
+}
 
-  Widget _chip(
-    BuildContext context, {
+/// Opens a right-side premium filter panel; returns applied filters or null.
+Future<LandWorkspaceFilters?> showLandWorkspaceFilterPanel({
+  required BuildContext context,
+  required LandWorkspaceFilters initial,
+  List<String> employeeNames = const [],
+}) {
+  return showGeneralDialog<LandWorkspaceFilters>(
+    context: context,
+    barrierDismissible: true,
+    barrierLabel: 'Filters',
+    barrierColor: Colors.black.withValues(alpha: 0.35),
+    transitionDuration: AppMotion.normal,
+    pageBuilder: (ctx, animation, secondaryAnimation) {
+      return Align(
+        alignment: Alignment.centerRight,
+        child: _LandWorkspaceFilterPanel(
+          initial: initial,
+          employeeNames: employeeNames,
+        ),
+      );
+    },
+    transitionBuilder: (ctx, animation, secondaryAnimation, child) {
+      final curved = CurvedAnimation(parent: animation, curve: AppMotion.curve);
+      return FadeTransition(
+        opacity: curved,
+        child: SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(0.08, 0),
+            end: Offset.zero,
+          ).animate(curved),
+          child: child,
+        ),
+      );
+    },
+  );
+}
+
+class _LandWorkspaceFilterPanel extends StatefulWidget {
+  final LandWorkspaceFilters initial;
+  final List<String> employeeNames;
+
+  const _LandWorkspaceFilterPanel({
+    required this.initial,
+    required this.employeeNames,
+  });
+
+  @override
+  State<_LandWorkspaceFilterPanel> createState() =>
+      _LandWorkspaceFilterPanelState();
+}
+
+class _LandWorkspaceFilterPanelState extends State<_LandWorkspaceFilterPanel> {
+  late LandWorkspaceFilters _draft;
+
+  @override
+  void initState() {
+    super.initState();
+    _draft = widget.initial.copy();
+  }
+
+  Future<void> _pickDate({required bool isFrom}) async {
+    final now = DateTime.now();
+    final initial = (isFrom ? _draft.createdFrom : _draft.createdTo) ?? now;
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(now.year + 1),
+    );
+    if (picked == null) return;
+    setState(() {
+      if (isFrom) {
+        _draft.createdFrom = DateTime(picked.year, picked.month, picked.day);
+      } else {
+        _draft.createdTo =
+            DateTime(picked.year, picked.month, picked.day, 23, 59, 59);
+      }
+    });
+  }
+
+  String _dateLabel(DateTime? d) =>
+      d == null ? 'Any' : '${d.day}/${d.month}/${d.year}';
+
+  @override
+  Widget build(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    final panelWidth = width < 480 ? width * 0.94 : 400.0;
+
+    return Material(
+      color: Colors.transparent,
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+          child: Container(
+            width: panelWidth,
+            decoration: BoxDecoration(
+              color: context.fomraSurface,
+              borderRadius: BorderRadius.circular(AppColors.radiusMd),
+              boxShadow: AppColors.elevatedShadow,
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: Column(
+              children: [
+                // Sticky header
+                Container(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 8, 12),
+                  decoration: BoxDecoration(
+                    color: context.fomraSurface,
+                    border: Border(
+                      bottom: BorderSide(color: context.fomraBorder),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Text(
+                        'Filters',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: context.fomraTextPrimary,
+                        ),
+                      ),
+                      const Spacer(),
+                      TextButton(
+                        onPressed: () => setState(_draft.clear),
+                        child: const Text('Clear All'),
+                      ),
+                      IconButton(
+                        tooltip: 'Close',
+                        onPressed: () => Navigator.pop(context),
+                        icon: const Icon(Icons.close_rounded),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: ListView(
+                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+                    children: [
+                      _sectionTitle('Lead Status'),
+                      const SizedBox(height: 8),
+                      _radioTile(
+                        label: 'All Leads',
+                        selected: _draft.status == null,
+                        onTap: () => setState(() => _draft.status = null),
+                      ),
+                      ...LandWorkspaceFilters.statusOptions.map((s) {
+                        return _radioTile(
+                          label: s.label,
+                          selected: _draft.status == s,
+                          leading: CircleAvatar(
+                            radius: 5,
+                            backgroundColor: s.color,
+                          ),
+                          onTap: () => setState(() => _draft.status = s),
+                        );
+                      }),
+                      const SizedBox(height: 8),
+                      const Divider(height: 28),
+                      _sectionTitle('Property Type'),
+                      const SizedBox(height: 4),
+                      ...LandWorkspaceFilters.propertyTypeOptions.map((t) {
+                        final checked = _draft.landTypes.contains(t);
+                        return _checkTile(
+                          label: t.label,
+                          checked: checked,
+                          onChanged: (v) => setState(() {
+                            if (v) {
+                              _draft.landTypes.add(t);
+                            } else {
+                              _draft.landTypes.remove(t);
+                            }
+                          }),
+                        );
+                      }),
+                      const Divider(height: 28),
+                      _sectionTitle('Lead Source'),
+                      const SizedBox(height: 4),
+                      ...LandWorkspaceFilters.sourceOptions.map((s) {
+                        final checked = _draft.sources.contains(s);
+                        return _checkTile(
+                          label: s.label,
+                          checked: checked,
+                          onChanged: (v) => setState(() {
+                            if (v) {
+                              _draft.sources.add(s);
+                            } else {
+                              _draft.sources.remove(s);
+                            }
+                          }),
+                        );
+                      }),
+                      const Divider(height: 28),
+                      _sectionTitle('Priority'),
+                      const SizedBox(height: 4),
+                      _checkTile(
+                        label: 'High',
+                        checked: _draft.highPriority,
+                        onChanged: (v) =>
+                            setState(() => _draft.highPriority = v),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.only(left: 12, bottom: 4),
+                        child: Text(
+                          'New and Negotiation leads',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: context.fomraTextSecondary,
+                          ),
+                        ),
+                      ),
+                      if (widget.employeeNames.isNotEmpty) ...[
+                        const Divider(height: 28),
+                        _sectionTitle('Assigned Employee'),
+                        const SizedBox(height: 8),
+                        DropdownButtonFormField<String?>(
+                          key: ValueKey(_draft.assignedEmployee ?? 'all'),
+                          initialValue: _draft.assignedEmployee,
+                          isExpanded: true,
+                          decoration: InputDecoration(
+                            filled: true,
+                            fillColor: context.fomraSurfaceVar,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide.none,
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 12,
+                            ),
+                          ),
+                          items: [
+                            const DropdownMenuItem<String?>(
+                              value: null,
+                              child: Text('All employees'),
+                            ),
+                            ...widget.employeeNames.map(
+                              (n) => DropdownMenuItem<String?>(
+                                value: n,
+                                child: Text(n),
+                              ),
+                            ),
+                          ],
+                          onChanged: (v) =>
+                              setState(() => _draft.assignedEmployee = v),
+                        ),
+                      ],
+                      const Divider(height: 28),
+                      _sectionTitle('Created Date Range'),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _dateButton(
+                              label: 'From',
+                              value: _dateLabel(_draft.createdFrom),
+                              onTap: () => _pickDate(isFrom: true),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: _dateButton(
+                              label: 'To',
+                              value: _dateLabel(_draft.createdTo),
+                              onTap: () => _pickDate(isFrom: false),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                // Sticky footer
+                Container(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                  decoration: BoxDecoration(
+                    color: context.fomraSurface,
+                    border: Border(
+                      top: BorderSide(color: context.fomraBorder),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => setState(_draft.clear),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                          ),
+                          child: const Text(
+                            'Reset',
+                            style: TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        flex: 2,
+                        child: FilledButton(
+                          onPressed: () =>
+                              Navigator.pop(context, _draft.copy()),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                          ),
+                          child: const Text(
+                            'Apply Filters',
+                            style: TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _sectionTitle(String text) {
+    return Text(
+      text,
+      style: TextStyle(
+        fontSize: 13,
+        fontWeight: FontWeight.w800,
+        letterSpacing: 0.2,
+        color: context.fomraTextSecondary,
+      ),
+    );
+  }
+
+  Widget _radioTile({
     required String label,
     required bool selected,
     required VoidCallback onTap,
+    Widget? leading,
   }) {
-    return FilterChip(
-      label: Text(label),
-      selected: selected,
-      showCheckmark: false,
-      labelStyle: TextStyle(
-        fontSize: 12,
-        fontWeight: FontWeight.w600,
-        color: selected ? AppColors.primary : context.fomraTextSecondary,
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+        child: Row(
+          children: [
+            Container(
+              width: 20,
+              height: 20,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: selected ? AppColors.primary : context.fomraBorder,
+                  width: selected ? 6 : 1.5,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            if (leading != null) ...[
+              leading,
+              const SizedBox(width: 10),
+            ],
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                  color: context.fomraTextPrimary,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
-      selectedColor: AppColors.primary.withValues(alpha: 0.12),
-      backgroundColor: context.fomraSurface,
-      side: BorderSide(
-        color: selected
-            ? AppColors.primary.withValues(alpha: 0.35)
-            : context.fomraBorder,
+    );
+  }
+
+  Widget _checkTile({
+    required String label,
+    required bool checked,
+    required ValueChanged<bool> onChanged,
+  }) {
+    return CheckboxListTile(
+      value: checked,
+      onChanged: (v) => onChanged(v ?? false),
+      title: Text(
+        label,
+        style: TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
+          color: context.fomraTextPrimary,
+        ),
       ),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      onSelected: (_) => onTap(),
+      controlAffinity: ListTileControlAffinity.leading,
+      contentPadding: EdgeInsets.zero,
+      dense: true,
+      visualDensity: VisualDensity.compact,
+    );
+  }
+
+  Widget _dateButton({
+    required String label,
+    required String value,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: context.fomraSurfaceVar,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: context.fomraTextSecondary,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      value,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: context.fomraTextPrimary,
+                      ),
+                    ),
+                  ),
+                  Icon(
+                    Icons.calendar_today_outlined,
+                    size: 14,
+                    color: context.fomraTextSecondary,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

@@ -31,15 +31,11 @@ class LandLeadScreen extends StatefulWidget {
 }
 
 class _LandLeadScreenState extends State<LandLeadScreen> {
-  LeadStatus? _filterStatus;
   String _search = '';
   bool _loading = true;
   String? _loadError;
 
-  final Set<LandType> _filterLandTypes = {};
-  bool _filterBroker = false;
-  bool _filterHighPriority = false;
-  bool _filterCompleted = false;
+  final LandWorkspaceFilters _filters = LandWorkspaceFilters();
 
   bool _selectMode = false;
   final Set<String> _selectedLeadIds = {};
@@ -242,53 +238,59 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
   }
 
   List<LandLead> get _filtered => _leads.where((l) {
-        final matchStatus = _filterStatus == null || l.status == _filterStatus;
+        final matchStatus =
+            _filters.status == null || l.status == _filters.status;
         final q = _search.toLowerCase();
         final matchSearch = q.isEmpty ||
             l.ownerName.toLowerCase().contains(q) ||
             l.location.toLowerCase().contains(q) ||
             l.surveyNumber.toLowerCase().contains(q) ||
             l.leadId.toLowerCase().contains(q);
-        final matchLandType = _filterLandTypes.isEmpty ||
-            _filterLandTypes.contains(l.landType);
-        final matchBroker =
-            !_filterBroker || l.inputSource == InputSource.broker;
-        final matchPriority = !_filterHighPriority ||
+        final matchLandType = _filters.landTypes.isEmpty ||
+            _filters.landTypes.contains(l.landType);
+        final matchSource = _filters.sources.isEmpty ||
+            _filters.sources.contains(l.inputSource);
+        final matchPriority = !_filters.highPriority ||
             l.status == LeadStatus.new_ ||
             l.status == LeadStatus.negotiation;
-        final matchCompleted =
-            !_filterCompleted || l.status == LeadStatus.closed;
+        final emp = _filters.assignedEmployee?.trim().toLowerCase();
+        final matchEmployee = emp == null ||
+            emp.isEmpty ||
+            l.createdByName.trim().toLowerCase() == emp;
+        final added = l.addedOn.toLocal();
+        final matchFrom = _filters.createdFrom == null ||
+            !added.isBefore(_filters.createdFrom!);
+        final matchTo = _filters.createdTo == null ||
+            !added.isAfter(_filters.createdTo!);
         return matchStatus &&
             matchSearch &&
             matchLandType &&
-            matchBroker &&
+            matchSource &&
             matchPriority &&
-            matchCompleted;
+            matchEmployee &&
+            matchFrom &&
+            matchTo;
       }).toList();
 
-  int get _activeFilterCount {
-    var n = 0;
-    if (_filterStatus != null) n++;
-    n += _filterLandTypes.length;
-    if (_filterBroker) n++;
-    if (_filterHighPriority) n++;
-    if (_filterCompleted) n++;
-    return n;
-  }
+  int get _activeFilterCount => _filters.activeCount;
 
   void _clearAllFilters() {
-    setState(() {
-      _filterStatus = null;
-      _filterLandTypes.clear();
-      _filterBroker = false;
-      _filterHighPriority = false;
-      _filterCompleted = false;
-    });
+    setState(_filters.clear);
   }
 
-  void _toggleLandType(LandType t) {
+  void _applyFilters(LandWorkspaceFilters next) {
     setState(() {
-      if (!_filterLandTypes.remove(t)) _filterLandTypes.add(t);
+      _filters.status = next.status;
+      _filters.landTypes
+        ..clear()
+        ..addAll(next.landTypes);
+      _filters.sources
+        ..clear()
+        ..addAll(next.sources);
+      _filters.highPriority = next.highPriority;
+      _filters.assignedEmployee = next.assignedEmployee;
+      _filters.createdFrom = next.createdFrom;
+      _filters.createdTo = next.createdTo;
     });
   }
 
@@ -311,80 +313,11 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
     return Scaffold(
       appBar: FomraAppBar(
         moduleName: 'Land Lead',
-        actions: [
-          if (_leads.isNotEmpty && !_loading)
-            IconButton(
-                icon: const Icon(Icons.filter_list),
-                onPressed: _showFilter),
-        ],
       ),
       drawer: const AppDrawer(currentRoute: '/land-lead'),
       bottomNavigationBar: const FomraBottomNav(currentRoute: '/land-lead'),
       body: body,
       floatingActionButton: fab,
-    );
-  }
-
-  void _openLeadsMap() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => LeadsMapScreen(leads: _leads),
-      ),
-    );
-  }
-
-  Widget _actionPill({
-    required VoidCallback onTap,
-    required IconData icon,
-    required String label,
-    Color? foreground,
-    Color? background,
-  }) {
-    final fg = foreground ?? AppColors.primary;
-    final bg = background ?? AppColors.primary.withValues(alpha: 0.10);
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(999),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
-          decoration: BoxDecoration(
-            color: bg,
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: fg.withValues(alpha: 0.25)),
-          ),
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
-            Icon(icon, size: 18, color: fg),
-            const SizedBox(width: 7),
-            Text(label,
-                style: TextStyle(
-                    fontSize: 13.5, fontWeight: FontWeight.w700, color: fg)),
-          ]),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildIdleManagementActions() {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _actionPill(
-          onTap: _toggleSelectMode,
-          icon: Icons.checklist_rtl,
-          label: 'Select',
-        ),
-        const SizedBox(width: 8),
-        _actionPill(
-          onTap: _openLeadsMap,
-          icon: Icons.map_outlined,
-          label: 'Show all projects',
-          foreground: const Color(0xFF0F766E),
-          background: const Color(0xFF0F766E).withValues(alpha: 0.10),
-        ),
-      ],
     );
   }
 
@@ -504,16 +437,7 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
             index: 0,
             child: Padding(
               padding: const EdgeInsets.only(top: 8, bottom: 4),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Expanded(child: _LeadSummary(leads: _leads)),
-                  if (_isManagement && !_selectMode) ...[
-                    const SizedBox(width: 8),
-                    _buildIdleManagementActions(),
-                  ],
-                ],
-              ),
+              child: _LeadSummary(leads: _leads),
             ),
           ),
         ),
@@ -522,27 +446,21 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
           child: PortalFadeSection(
             index: 1,
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 LandWorkspaceSearchBar(
                   onChanged: (q) => setState(() => _search = q),
                   activeFilterCount: _activeFilterCount,
-                  onFilterTap: _showFilter,
+                  onFilterTap: _openFilterPanel,
                 ),
-                const SizedBox(height: 10),
-                LandWorkspaceFilterChips(
-                  landTypes: _filterLandTypes,
-                  brokerOnly: _filterBroker,
-                  highPriority: _filterHighPriority,
-                  completedOnly: _filterCompleted,
-                  onToggleLandType: _toggleLandType,
-                  onToggleBroker: () =>
-                      setState(() => _filterBroker = !_filterBroker),
-                  onToggleHighPriority: () =>
-                      setState(() => _filterHighPriority = !_filterHighPriority),
-                  onToggleCompleted: () =>
-                      setState(() => _filterCompleted = !_filterCompleted),
-                  onClearAll: _clearAllFilters,
-                ),
+                if (_filters.hasActive) ...[
+                  const SizedBox(height: 10),
+                  LandWorkspaceActiveFilterChips(
+                    filters: _filters,
+                    onChanged: () => setState(() {}),
+                    onClearAll: _clearAllFilters,
+                  ),
+                ],
               ],
             ),
           ),
@@ -769,36 +687,13 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
     }
   }
 
-  void _showFilter() {
-    showModalBottomSheet(
+  Future<void> _openFilterPanel() async {
+    final applied = await showLandWorkspaceFilterPanel(
       context: context,
-      builder: (_) => Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Padding(
-              padding: EdgeInsets.all(16),
-              child: Text('Filter by Status',
-                  style:
-                      TextStyle(fontSize: 16, fontWeight: FontWeight.bold))),
-          ListTile(
-              title: const Text('All Leads'),
-              leading: const Icon(Icons.list),
-              onTap: () {
-                setState(() => _filterStatus = null);
-                Navigator.pop(context);
-              }),
-          ...LeadStatus.values.where((s) => s != LeadStatus.siteVisit).map((s) => ListTile(
-                leading: CircleAvatar(
-                    radius: 8, backgroundColor: s.color),
-                title: Text(s.label),
-                onTap: () {
-                  setState(() => _filterStatus = s);
-                  Navigator.pop(context);
-                },
-              )),
-        ],
-      ),
+      initial: _filters,
+      employeeNames: _isManagement ? _employeeNames : const [],
     );
+    if (applied != null && mounted) _applyFilters(applied);
   }
 }
 
