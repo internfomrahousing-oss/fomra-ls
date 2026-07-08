@@ -71,7 +71,15 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
                     },
                   ),
                   children: [
-                    MapTilerTiles.tileLayer(urlTemplate: MapTilerTiles.standard),
+                    TileLayer(
+                      // Use the default tile provider on this screen.
+                      // Cancellable provider can occasionally leave the first
+                      // paint blank until interaction on some web builds.
+                      urlTemplate: MapTilerTiles.standard,
+                      fallbackUrl: MapTilerTiles.standardFallback,
+                      userAgentPackageName: 'in.fomrahousing.fomrals',
+                      maxZoom: 22,
+                    ),
                     MarkerLayer(
                       markers: plotted.map((p) {
                         final color = p.lead.status.color;
