@@ -320,10 +320,24 @@ class AuthService {
         message: 'You are not signed in.',
       );
     }
-    if (newPassword.trim().length < 6) {
+    final newTrimmed = newPassword.trim();
+    if (newTrimmed.length < 8) {
       throw const ApiException(
         statusCode: 400,
-        message: 'New password must be at least 6 characters.',
+        message: 'New password must be at least 8 characters.',
+      );
+    }
+    if (!RegExp(r'[A-Za-z]').hasMatch(newTrimmed) ||
+        !RegExp(r'\d').hasMatch(newTrimmed)) {
+      throw const ApiException(
+        statusCode: 400,
+        message: 'New password must include at least one letter and one number.',
+      );
+    }
+    if (newTrimmed.toLowerCase() == portalPassword.toLowerCase()) {
+      throw const ApiException(
+        statusCode: 400,
+        message: 'Please choose a password other than the default.',
       );
     }
 

@@ -3,14 +3,24 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const pool = require('../db');
 const authMiddleware = require('../middleware/auth');
+const respondError = require('../lib/respondError');
+const rateLimit = require('../middleware/rateLimit');
 
 const router = express.Router();
 
+// Throttle credential endpoints to blunt brute-force / credential stuffing.
+const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10 });
+
 // POST /api/auth/register
-router.post('/register', async (req, res) => {
+router.post('/register', loginLimiter, async (req, res) => {
   const { email, password, full_name, phone, role } = req.body;
   if (!email || !password || !full_name) {
     return res.status(400).json({ error: 'email, password and full_name are required' });
+  }
+  if (String(password).length < 8 || !/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) {
+    return res.status(400).json({
+      error: 'Password must be at least 8 characters and include a letter and a number',
+    });
   }
   try {
     const hash = await bcrypt.hash(password, 10);
@@ -29,12 +39,12 @@ router.post('/register', async (req, res) => {
     if (err.code === '23505') {
       return res.status(409).json({ error: 'Email already registered' });
     }
-    res.status(500).json({ error: err.message });
+    respondError(res, err, 'auth');
   }
 });
 
 // POST /api/auth/login
-router.post('/login', async (req, res) => {
+router.post('/login', loginLimiter, async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) {
     return res.status(400).json({ error: 'email and password are required' });
@@ -54,7 +64,7 @@ router.post('/login', async (req, res) => {
     const { password_hash, ...safe } = user;
     res.json({ token, user: safe });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    respondError(res, err, 'auth');
   }
 });
 
@@ -68,7 +78,7 @@ router.get('/me', authMiddleware, async (req, res) => {
     if (!rows[0]) return res.status(404).json({ error: 'User not found' });
     res.json(rows[0]);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    respondError(res, err, 'auth');
   }
 });
 

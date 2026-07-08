@@ -19,7 +19,27 @@ const competitorsRoutes  = require('./routes/competitors');
 
 const app = express();
 
-app.use(cors());
+// CORS: only allow our own web origins. Configure extra origins via
+// ALLOWED_ORIGINS (comma-separated). Requests with no Origin header
+// (server-to-server, curl, health checks) are allowed through.
+const DEFAULT_ORIGINS = [
+  'https://fomra-ls.vercel.app',
+  'http://localhost:3000',
+  'http://localhost:8080',
+];
+const allowedOrigins = new Set(
+  (process.env.ALLOWED_ORIGINS
+    ? process.env.ALLOWED_ORIGINS.split(',').map((s) => s.trim()).filter(Boolean)
+    : DEFAULT_ORIGINS)
+);
+app.use(
+  cors({
+    origin(origin, cb) {
+      if (!origin || allowedOrigins.has(origin)) return cb(null, true);
+      return cb(new Error('Not allowed by CORS'));
+    },
+  })
+);
 app.use(express.json());
 
 app.get('/health', (_, res) => res.json({ status: 'ok' }));

@@ -14,10 +14,20 @@
 // Auth: caller must send `Authorization: Bearer <management access token>`.
 // The token is validated against Supabase and must belong to MANAGEMENT_EMAIL.
 
-const DEFAULT_PASSWORD = 'fomra@2024';
+const DEFAULT_PASSWORD = process.env.DEFAULT_ACCOUNT_PASSWORD || 'fomra@2024';
 
-function cors(res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
+// Only reflect an allow-listed origin. Configure via ALLOWED_ORIGINS
+// (comma-separated); defaults to the production web app origin.
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',').map((s) => s.trim()).filter(Boolean)
+  : ['https://fomra-ls.vercel.app']);
+
+function cors(req, res) {
+  const origin = req.headers.origin;
+  if (origin && ALLOWED_ORIGINS.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Vary', 'Origin');
+  }
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
 }
@@ -49,7 +59,7 @@ async function findUserIdByEmail(base, headers, email) {
 }
 
 module.exports = async (req, res) => {
-  cors(res);
+  cors(req, res);
   if (req.method === 'OPTIONS') return res.status(204).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'method not allowed' });
 

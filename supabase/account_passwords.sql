@@ -75,6 +75,17 @@ begin
     return false;
   end if;
 
+  -- Password policy: min 8 chars, at least one letter and one digit, and the
+  -- new password may not be the built-in default (forces users off it).
+  if length(trim(p_new)) < 8
+     or p_new !~ '[A-Za-z]'
+     or p_new !~ '[0-9]' then
+    raise exception 'weak_password';
+  end if;
+  if trim(p_new) = _default_account_password() then
+    raise exception 'default_password_not_allowed';
+  end if;
+
   insert into account_passwords(account, password_hash, updated_at)
   values (acct, crypt(p_new, gen_salt('bf')), now())
   on conflict (account) do update
@@ -83,5 +94,19 @@ begin
 end;
 $$;
 
+-- TRUE when the account has no custom password yet (still on the built-in
+-- default). The app uses this after login to force a password change.
+create or replace function account_uses_default_password(p_account text)
+returns boolean
+language sql
+security definer
+set search_path = public, extensions
+as $$
+  select not exists (
+    select 1 from account_passwords where account = lower(trim(p_account))
+  );
+$$;
+
 grant execute on function verify_account_password(text, text) to anon, authenticated;
 grant execute on function set_account_password(text, text, text) to anon, authenticated;
+grant execute on function account_uses_default_password(text) to anon, authenticated;
