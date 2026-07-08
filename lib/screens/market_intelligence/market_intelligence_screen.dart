@@ -2288,11 +2288,6 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
               initialZoom: _zoomForRadius(_selectedRadius),
               onMapReady: () => setState(() => _mapReady = true),
               onTap: (_, point) => _handleMapTap(point),
-              // Don't hijack the mouse wheel — let the page scroll over the map.
-              // Zoom is still available via the on-map +/- buttons and pinch.
-              interactionOptions: const InteractionOptions(
-                flags: InteractiveFlag.all & ~InteractiveFlag.scrollWheelZoom,
-              ),
             ),
             children: [
               MapTilerTiles.tileLayer(
