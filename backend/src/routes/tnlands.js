@@ -1820,9 +1820,8 @@ async function tryFmbSourcesForCodes(codes, ctx = {}) {
     lastErr = err.message;
   }
 
-  const collabHit = await tryCollab();
-  if (collabHit) return collabHit;
-
+  // Keep government-seal TNGIS sketch_fmb as top priority:
+  // try alternate land types before falling back to CollabLand.
   for (const landType of altTypes) {
     try {
       const hit = await tryTngis(landType);
@@ -1831,6 +1830,9 @@ async function tryFmbSourcesForCodes(codes, ctx = {}) {
       lastErr = err.message;
     }
   }
+
+  const collabHit = await tryCollab();
+  if (collabHit) return collabHit;
 
   return { ok: false, error: lastErr };
 }

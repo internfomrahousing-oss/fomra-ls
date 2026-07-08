@@ -212,17 +212,41 @@ async function fetchGiLandDetails(lat, lon) {
 
   if (json && json.success === 1 && json.data) {
     const d = json.data;
+    const pickFirst = (...vals) => {
+      for (const v of vals) {
+        if (v === null || v === undefined) continue;
+        const s = String(v).trim();
+        if (!s || s === '-') continue;
+        return s;
+      }
+      return null;
+    };
     const result = {
       ok: true,
       source: 'TNGIS GI Viewer land_details',
       ulpin: d.ulpin || null,
       centroid: d.centroid || `${lat}, ${lon}`,
-      surveyNumber: d.survey_number || null,
-      subDivision: d.sub_division || null,
-      districtCode: d.district_code || null,
-      talukCode: d.taluk_code || null,
-      villageCode: d.village_code || null,
-      ruralUrban: d.rural_urban || null,
+      // Urban responses can use TS/block keys instead of survey/sub_division.
+      surveyNumber: pickFirst(
+        d.survey_number,
+        d.survey_no,
+        d.ts_number,
+        d.ts_no,
+        d.tslr_survey_no,
+        d.town_survey_no,
+      ),
+      subDivision: pickFirst(
+        d.sub_division,
+        d.sub_division_number,
+        d.subdivision,
+        d.block_number,
+        d.block_no,
+        d.ward_block_no,
+      ),
+      districtCode: pickFirst(d.district_code, d.districtCode),
+      talukCode: pickFirst(d.taluk_code, d.talukCode),
+      villageCode: pickFirst(d.village_code, d.villageCode),
+      ruralUrban: pickFirst(d.rural_urban, d.ruralUrban, d.land_type),
       isFmb: d.is_fmb,
       raw: d,
     };
@@ -408,8 +432,12 @@ async function fetchGiFmbSketch({
   };
   const { status, json } = await postForm(FMB_SKETCH_URL, params);
   if (!json) return { ok: false, error: `HTTP ${status}` };
-  if (json.success === 1 && json.data) {
-    const pdfBase64 = String(json.data);
+  const ok = json?.success === 1 || json?.success === '1';
+  const rawPdf = ok
+    ? (json.data?.pdfBase64 ?? json.data?.pdf ?? json.data?.data ?? json.data)
+    : null;
+  if (ok && rawPdf) {
+    const pdfBase64 = String(rawPdf);
     if (pdfBase64.length > 100 && !isInvalidFmbPdfBase64(pdfBase64)) {
       return {
         ok: true,
