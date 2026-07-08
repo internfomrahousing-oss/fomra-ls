@@ -377,6 +377,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   DateTime _dayOnly(DateTime d) => DateTime(d.year, d.month, d.day);
 
+  /// Number of days covered by each chart time-range pill.
+  static int _rangeDays(int rangeIndex) => switch (rangeIndex) {
+        0 => 1, // Today
+        1 => 7, // 7 Days
+        2 => 30, // 30 Days
+        3 => 90, // 90 Days
+        _ => 7,
+      };
+
+  /// Leads from [source] whose added date falls within the selected window.
+  List<LandLead> _leadsWithinRange(List<LandLead> source, int rangeIndex) {
+    final days = _rangeDays(rangeIndex);
+    final today = _dayOnly(DateTime.now());
+    final start = today.subtract(Duration(days: days - 1));
+    return source.where((l) {
+      final d = _dayOnly(l.addedOn);
+      return !d.isBefore(start) && !d.isAfter(today);
+    }).toList();
+  }
+
   int _countLeadsBetween(List<LandLead> leads, DateTime start, DateTime end) {
     final s = _dayOnly(start);
     final e = _dayOnly(end);
@@ -461,6 +481,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final activeLeadsList = _leadsForFilter(_KpiFilter.active);
     final acquiredList = _leadsForFilter(_KpiFilter.acquired);
     final rejectedList = _leadsForFilter(_KpiFilter.rejected);
+
+    // Chart counts filtered by the selected time-range pill (based on added date).
+    final chartTotal =
+        _leadsWithinRange(totalLeadsList, _selectedChartRange).length;
+    final chartActive =
+        _leadsWithinRange(activeLeadsList, _selectedChartRange).length;
+    final chartAcquired =
+        _leadsWithinRange(acquiredList, _selectedChartRange).length;
+    final chartRejected =
+        _leadsWithinRange(rejectedList, _selectedChartRange).length;
 
     final totalTrend = _weekOverWeekTrend(totalLeadsList);
     final activeTrend = _weekOverWeekTrend(activeLeadsList);
@@ -590,10 +620,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   icon: Icons.bar_chart_rounded,
                   child: _KpiOverviewChart(
                     items: [
-                      (label: 'Total', value: totalLeads, color: kpis[0].accent),
-                      (label: 'Active', value: activeLeads, color: kpis[1].accent),
-                      (label: 'Acquired', value: acquired, color: kpis[2].accent),
-                      (label: 'Rejected', value: rejected, color: kpis[3].accent),
+                      (label: 'Total', value: chartTotal, color: kpis[0].accent),
+                      (label: 'Active', value: chartActive, color: kpis[1].accent),
+                      (label: 'Acquired', value: chartAcquired, color: kpis[2].accent),
+                      (label: 'Rejected', value: chartRejected, color: kpis[3].accent),
                     ],
                     selectedRange: _selectedChartRange,
                     animToken: _chartAnimToken,

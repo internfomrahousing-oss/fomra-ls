@@ -216,40 +216,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _showProfileMenu(TapDownDetails details) async {
-    final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
-    final position = RelativeRect.fromRect(
-      Rect.fromLTWH(
-        details.globalPosition.dx,
-        details.globalPosition.dy,
-        1,
-        1,
-      ),
-      Offset.zero & overlay.size,
-    );
-    final action = await showMenu<String>(
+    final user = AuthService.instance.currentUser;
+    final userName = user?.fullName ?? 'User';
+    final profileName = _isManagement ? 'Management' : userName;
+    final initial =
+        profileName.isNotEmpty ? profileName[0].toUpperCase() : 'U';
+
+    final action = await showPortalProfileMenu(
       context: context,
-      position: position,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      items: const [
-        PopupMenuItem<String>(
-          value: 'change_password',
-          child: ListTile(
-            dense: true,
-            leading: Icon(Icons.lock_outline),
-            title: Text('Change Password'),
-            contentPadding: EdgeInsets.zero,
-          ),
-        ),
-        PopupMenuItem<String>(
-          value: 'sign_out',
-          child: ListTile(
-            dense: true,
-            leading: Icon(Icons.logout_rounded, color: AppColors.error),
-            title: Text('Sign Out', style: TextStyle(color: AppColors.error)),
-            contentPadding: EdgeInsets.zero,
-          ),
-        ),
-      ],
+      anchor: details.globalPosition,
+      name: profileName,
+      role: _profileRole,
+      initial: initial,
     );
     if (!mounted) return;
     if (action == 'change_password') {

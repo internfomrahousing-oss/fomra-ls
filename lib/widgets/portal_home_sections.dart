@@ -858,3 +858,302 @@ class PortalEmptyHint extends StatelessWidget {
     );
   }
 }
+
+/// Premium profile dropdown anchored to a tap on the home header chip.
+Future<String?> showPortalProfileMenu({
+  required BuildContext context,
+  required Offset anchor,
+  required String name,
+  required String role,
+  required String initial,
+}) {
+  final media = MediaQuery.of(context);
+  const menuWidth = 252.0;
+  var left = anchor.dx - menuWidth + 48;
+  left = left.clamp(12.0, media.size.width - menuWidth - 12.0);
+  final top = (anchor.dy + 10).clamp(
+    media.padding.top + 8,
+    media.size.height - 280,
+  );
+
+  return showGeneralDialog<String>(
+    context: context,
+    barrierDismissible: true,
+    barrierLabel: 'Dismiss profile menu',
+    barrierColor: Colors.black.withValues(alpha: 0.08),
+    transitionDuration: const Duration(milliseconds: 180),
+    pageBuilder: (context, animation, secondaryAnimation) {
+      return Stack(
+        children: [
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => Navigator.of(context).pop(),
+            ),
+          ),
+          Positioned(
+            left: left,
+            top: top,
+            width: menuWidth,
+            child: _PortalProfileMenuPanel(
+              name: name,
+              role: role,
+              initial: initial,
+              onSelect: (value) => Navigator.of(context).pop(value),
+            ),
+          ),
+        ],
+      );
+    },
+    transitionBuilder: (context, animation, secondaryAnimation, child) {
+      final curved = CurvedAnimation(
+        parent: animation,
+        curve: Curves.easeOutCubic,
+        reverseCurve: Curves.easeInCubic,
+      );
+      return FadeTransition(
+        opacity: curved,
+        child: ScaleTransition(
+          scale: Tween<double>(begin: 0.96, end: 1).animate(curved),
+          alignment: Alignment.topCenter,
+          child: child,
+        ),
+      );
+    },
+  );
+}
+
+class _PortalProfileMenuPanel extends StatelessWidget {
+  final String name;
+  final String role;
+  final String initial;
+  final ValueChanged<String> onSelect;
+
+  const _PortalProfileMenuPanel({
+    required this.name,
+    required this.role,
+    required this.initial,
+    required this.onSelect,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        decoration: BoxDecoration(
+          color: context.fomraSurface,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: context.fomraBorder),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x1F0F172A),
+              blurRadius: 32,
+              offset: Offset(0, 12),
+            ),
+            BoxShadow(
+              color: Color(0x0A0F172A),
+              blurRadius: 8,
+              offset: Offset(0, 2),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(18),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: const BoxDecoration(
+                        gradient: AppColors.primaryGradient,
+                        shape: BoxShape.circle,
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        initial,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: context.fomraTextPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            role,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: context.fomraTextSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Divider(height: 1, color: context.fomraBorder),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
+                child: _PortalProfileMenuItem(
+                  icon: Icons.lock_outline_rounded,
+                  label: 'Change Password',
+                  subtitle: 'Update your password',
+                  onTap: () => onSelect('change_password'),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                child: Divider(height: 1, color: context.fomraBorder),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                child: _PortalProfileMenuItem(
+                  icon: Icons.logout_rounded,
+                  label: 'Sign Out',
+                  destructive: true,
+                  onTap: () => onSelect('sign_out'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PortalProfileMenuItem extends StatefulWidget {
+  final IconData icon;
+  final String label;
+  final String? subtitle;
+  final bool destructive;
+  final VoidCallback onTap;
+
+  const _PortalProfileMenuItem({
+    required this.icon,
+    required this.label,
+    this.subtitle,
+    this.destructive = false,
+    required this.onTap,
+  });
+
+  @override
+  State<_PortalProfileMenuItem> createState() => _PortalProfileMenuItemState();
+}
+
+class _PortalProfileMenuItemState extends State<_PortalProfileMenuItem> {
+  bool _hovered = false;
+
+  static const _destructive = Color(0xFFDC2626);
+  static const _hoverBg = Color(0xFFF8FAFC);
+  static const _iconBg = Color(0xFFF1F5F9);
+
+  @override
+  Widget build(BuildContext context) {
+    final accent =
+        widget.destructive ? _destructive : context.fomraTextPrimary;
+    final iconColor = widget.destructive ? _destructive : AppColors.primary;
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      cursor: SystemMouseCursors.click,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: widget.onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOut,
+            height: widget.subtitle == null ? 50 : 52,
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            decoration: BoxDecoration(
+              color: _hovered ? _hoverBg : Colors.transparent,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                AnimatedScale(
+                  duration: const Duration(milliseconds: 180),
+                  curve: Curves.easeOut,
+                  scale: _hovered ? 1.06 : 1,
+                  child: Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: widget.destructive
+                          ? _destructive.withValues(alpha: 0.08)
+                          : _iconBg,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    alignment: Alignment.center,
+                    child: Icon(
+                      widget.icon,
+                      size: 20,
+                      color: iconColor,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        widget.label,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: accent,
+                        ),
+                      ),
+                      if (widget.subtitle != null) ...[
+                        const SizedBox(height: 1),
+                        Text(
+                          widget.subtitle!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: context.fomraTextSecondary,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
