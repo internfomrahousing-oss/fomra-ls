@@ -168,10 +168,14 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
       final lead = all.where((l) => l.leadId == id).cast<LandLead?>().firstOrNull;
       if (lead == null || lead.createdByName == name) continue;
       final previousName = lead.createdByName;
-      AppStore.instance.replaceLead(lead.copyWith(createdByName: name));
+      final previousRole = lead.createdByRole;
+      AppStore.instance.replaceLead(
+        lead.copyWith(createdByName: name, createdByRole: 'management'),
+      );
       LandLeadService.assignTo(id, name).catchError((_) {
-        AppStore.instance
-            .replaceLead(lead.copyWith(createdByName: previousName));
+        AppStore.instance.replaceLead(
+          lead.copyWith(createdByName: previousName, createdByRole: previousRole),
+        );
       });
     }
     // One targeted notification for the assignee.
@@ -1035,7 +1039,12 @@ class _LeadCard extends StatelessWidget {
                   if (lead.inputSource == InputSource.broker)
                     _infoChip(context, Icons.handshake_outlined, 'Broker', 'Yes'),
                   if (lead.createdByName.isNotEmpty)
-                    _infoChip(context, Icons.person_outline, 'Assigned', lead.createdByName),
+                    _infoChip(
+                      context,
+                      Icons.person_outline,
+                      lead.ownershipLabel,
+                      lead.createdByName,
+                    ),
                   _infoChip(
                     context,
                     Icons.calendar_today_outlined,

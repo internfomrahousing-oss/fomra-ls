@@ -122,7 +122,24 @@ module.exports = async (req, res) => {
       const err = await r.json().catch(() => ({}));
       const msg = `${err.msg || err.error_description || err.message || ''}`.toLowerCase();
       if (r.status === 422 || msg.includes('already') || msg.includes('registered') || msg.includes('exists')) {
-        return res.status(200).json({ ok: true, invited: false, existed: true });
+        // The user already exists → an invite won't re-send. Send a password
+        // recovery email instead; its link also lands on /set-password (the app
+        // handles type=recovery), so they can (re)set their password.
+        const rec = await fetch(
+          `${SUPABASE_URL}/auth/v1/recover?redirect_to=${encodeURIComponent(REDIRECT_TO)}`,
+          {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ email }),
+          }
+        );
+        if (rec.ok) {
+          return res.status(200).json({ ok: true, invited: false, recovered: true });
+        }
+        const rerr = await rec.json().catch(() => ({}));
+        return res.status(rec.status).json({
+          error: rerr.msg || rerr.message || 'could not send password email',
+        });
       }
       return res.status(r.status).json({ error: err.msg || err.message || 'invite failed' });
     }

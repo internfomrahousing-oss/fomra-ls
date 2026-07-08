@@ -37,6 +37,7 @@ Widget portalScrollBody(
 class FomraSubPageAppBar extends StatelessWidget implements PreferredSizeWidget {
   final String title;
   final String? subtitle;
+  final TextStyle? titleStyle;
   final TextStyle? subtitleStyle;
   final List<Widget>? actions;
 
@@ -44,6 +45,7 @@ class FomraSubPageAppBar extends StatelessWidget implements PreferredSizeWidget 
     super.key,
     required this.title,
     this.subtitle,
+    this.titleStyle,
     this.subtitleStyle,
     this.actions,
   });
@@ -62,20 +64,22 @@ class FomraSubPageAppBar extends StatelessWidget implements PreferredSizeWidget 
       title: subtitle == null
           ? Text(
               title,
-              style: const TextStyle(
-                fontWeight: FontWeight.w700,
-                fontSize: 17,
-              ),
+              style: titleStyle ??
+                  const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 17,
+                  ),
             )
           : Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   title,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 16,
-                  ),
+                  style: titleStyle ??
+                      const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 16,
+                      ),
                 ),
                 Text(
                   subtitle!,

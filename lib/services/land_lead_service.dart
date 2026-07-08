@@ -108,6 +108,8 @@ class LandLeadService {
   static Future<void> assignTo(String leadId, String employeeName) async {
     await _db.from('land_leads').update({
       'created_by_name': employeeName,
+      // Management reassignment — show as "Assigned", not "Posted by".
+      'created_by_role': 'management',
       'updated_at': DateTime.now().toUtc().toIso8601String(),
     }).eq('id', leadId);
   }
@@ -246,6 +248,7 @@ class LandLeadService {
       sitePhotoUrls: photoUrls,
       addedOn: DateTime.parse(r['added_on'] as String),
       createdByName: r['created_by_name'] as String? ?? '',
+      createdByRole: r['created_by_role'] as String? ?? '',
       status: LeadStatus.values.firstWhere(
         (e) => e.name == r['status'],
         orElse: () => LeadStatus.new_,

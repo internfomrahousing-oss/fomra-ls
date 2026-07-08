@@ -59,12 +59,22 @@ class _LeadDetailScreenState extends State<LeadDetailScreen> {
     return Scaffold(
       backgroundColor: context.fomraPageBg,
       appBar: FomraSubPageAppBar(
-        title: lead.ownerName,
-        subtitle: lead.leadId,
+        // Lead ID is the primary identity in this header (especially when
+        // owner name is empty) — keep it large and highly visible.
+        title: 'Lead #${lead.leadId}',
+        titleStyle: const TextStyle(
+          color: Colors.white,
+          fontSize: 22,
+          fontWeight: FontWeight.w800,
+          letterSpacing: -0.3,
+        ),
+        subtitle: lead.ownerName.trim().isEmpty
+            ? null
+            : lead.ownerName.trim(),
         subtitleStyle: TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.w700,
-          color: Colors.white.withValues(alpha: 0.95),
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+          color: Colors.white.withValues(alpha: 0.88),
         ),
         actions: [
           TextButton.icon(

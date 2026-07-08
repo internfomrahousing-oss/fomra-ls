@@ -28,6 +28,9 @@ class LandLead {
   final List<String> sitePhotoUrls;
   final DateTime addedOn;
   final String createdByName;
+  /// `employee` when the named person posted the lead themselves;
+  /// `management` when management created or assigned it.
+  final String createdByRole;
   LeadStatus status;
 
   LandLead({
@@ -52,8 +55,13 @@ class LandLead {
     this.sitePhotoUrls = const [],
     required this.addedOn,
     this.createdByName = '',
+    this.createdByRole = '',
     this.status = LeadStatus.new_,
   });
+
+  /// Chip / summary label: employee-posted leads use "Posted by".
+  String get ownershipLabel =>
+      createdByRole == 'employee' ? 'Posted by' : 'Assigned';
 
   LandLead copyWith({
     InputSource? inputSource,
@@ -75,6 +83,7 @@ class LandLead {
     String? sitePhotoUrl,
     List<String>? sitePhotoUrls,
     String? createdByName,
+    String? createdByRole,
     LeadStatus? status,
   }) =>
       LandLead(
@@ -99,6 +108,7 @@ class LandLead {
         sitePhotoUrls: sitePhotoUrls ?? this.sitePhotoUrls,
         addedOn: addedOn,
         createdByName: createdByName ?? this.createdByName,
+        createdByRole: createdByRole ?? this.createdByRole,
         status: status ?? this.status,
       );
 }
