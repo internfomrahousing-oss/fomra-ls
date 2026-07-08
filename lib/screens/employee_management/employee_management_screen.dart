@@ -67,50 +67,35 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
     }
   }
 
+  /// Re-send the "set your password" invite email. The employee then chooses
+  /// their own new password — management never sets or sees it.
   Future<void> _resetPassword(EmployeeProfile employee) async {
-    final ctrl = TextEditingController(text: 'fomra@2024');
-    final newPw = await showDialog<String>(
+    final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Reset password'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Set a new login password for ${employee.fullName}.',
-                style: TextStyle(fontSize: 13, color: context.fomraTextSecondary)),
-            const SizedBox(height: 12),
-            TextField(
-              controller: ctrl,
-              autofocus: true,
-              decoration: const InputDecoration(labelText: 'New password'),
-            ),
-          ],
+        title: const Text('Resend invite'),
+        content: Text(
+          'Send a new password-setup email to ${employee.email}? '
+          'They will set their own password from the link.',
+          style: TextStyle(fontSize: 13, color: context.fomraTextSecondary),
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
           FilledButton(
-              onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
-              child: const Text('Reset')),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Send invite')),
         ],
       ),
     );
-    if (newPw == null || newPw.length < 6 || !mounted) {
-      if (newPw != null && newPw.length < 6 && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Password must be at least 6 characters.'),
-          behavior: SnackBarBehavior.floating,
-        ));
-      }
-      return;
-    }
+    if (confirm != true || !mounted) return;
     try {
-      await EmployeeService.resetAuthPassword(employee.email, newPw);
+      await EmployeeService.inviteEmployee(employee.email);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Password reset for ${employee.fullName}'),
+        content: Text('Invitation re-sent to ${employee.email}'),
         behavior: SnackBarBehavior.floating,
       ));
     } catch (e) {

@@ -3,7 +3,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:fomra_ls/screens/settings/settings_screen.dart';
-import 'package:fomra_ls/services/api_client.dart';
 import 'package:fomra_ls/services/auth_service.dart';
 import 'package:fomra_ls/services/theme_controller.dart';
 import 'package:fomra_ls/theme/app_theme.dart';
@@ -81,49 +80,7 @@ void main() {
     expect(find.text('Passwords do not match'), findsOneWidget);
   });
 
-  testWidgets('management can change password through the UI', (tester) async {
-    await phoneSurface(tester);
-    // Sign in as management (Supabase calls are guarded, so this works offline).
-    await AuthService.instance.loginWithPortal(
-        'management@fomrahousing.in', 'fomra@2024', LoginPortal.management);
-
-    await tester.pumpWidget(_app());
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.widgetWithText(OutlinedButton, 'Change Password'));
-    await tester.pumpAndSettle();
-
-    final fields = find.byType(TextFormField);
-    await tester.enterText(fields.at(0), 'fomra@2024');
-    await tester.enterText(fields.at(1), 'brandnew99');
-    await tester.enterText(fields.at(2), 'brandnew99');
-    await tester.tap(find.text('Update Password'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Password updated successfully.'), findsOneWidget);
-
-    // New password is active for this account.
-    await AuthService.instance.logout();
-    await AuthService.instance.loginWithPortal(
-        'management@fomrahousing.in', 'brandnew99', LoginPortal.management);
-    expect(AuthService.instance.isManagement, isTrue);
-  });
-
-  test('login rejects the old password after a change', () async {
-    SharedPreferences.setMockInitialValues({});
-    await AuthService.instance.loginWithPortal(
-        'management@fomrahousing.in', 'fomra@2024', LoginPortal.management);
-    await AuthService.instance
-        .changePassword(currentPassword: 'fomra@2024', newPassword: 'fresh123');
-
-    // Old password no longer works.
-    expect(
-      () => AuthService.instance.loginWithPortal(
-          'management@fomrahousing.in', 'fomra@2024', LoginPortal.management),
-      throwsA(isA<ApiException>()),
-    );
-    // New password works.
-    await AuthService.instance.loginWithPortal(
-        'management@fomrahousing.in', 'fresh123', LoginPortal.management);
-  });
+  // Note: login and password-change now go through real Supabase Auth only
+  // (no default/offline fallback), so those end-to-end flows are covered by
+  // manual/live testing rather than these offline widget tests.
 }

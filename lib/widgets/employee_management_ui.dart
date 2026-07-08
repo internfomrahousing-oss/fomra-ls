@@ -312,8 +312,8 @@ class EmployeeManagementCard extends StatelessWidget {
                   value: 'reset',
                   child: ListTile(
                     contentPadding: EdgeInsets.zero,
-                    leading: Icon(Icons.lock_reset_outlined, size: 20),
-                    title: Text('Reset password'),
+                    leading: Icon(Icons.mark_email_read_outlined, size: 20),
+                    title: Text('Resend invite'),
                   ),
                 ),
                 const PopupMenuItem(
