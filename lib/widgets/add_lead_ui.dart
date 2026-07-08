@@ -1,0 +1,1187 @@
+import 'dart:typed_data';
+import 'dart:ui';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart' show LatLng;
+
+import '../config/maptiler_tiles.dart';
+import '../theme/app_theme.dart';
+import '../theme/fomra_theme_context.dart';
+
+/// Design tokens for the Add Land Lead enterprise form.
+abstract final class AddLeadUi {
+  static const pageBg = Color(0xFFF8FAFC);
+  static const cardBorder = Color(0xFFE5E7EB);
+  static const sectionGap = 20.0;
+  static const fieldGap = 12.0;
+  static const fieldHeight = 48.0;
+  static const fieldRadius = 14.0;
+  static const cardRadius = 20.0;
+  static const motion = Duration(milliseconds: 200);
+  static const curve = Curves.easeInOut;
+
+  static List<BoxShadow> cardShadow([bool hovered = false]) => [
+        BoxShadow(
+          color: const Color(0xFF0F172A).withValues(alpha: hovered ? 0.1 : 0.06),
+          blurRadius: hovered ? 20 : 16,
+          offset: Offset(0, hovered ? 6 : 4),
+        ),
+      ];
+}
+
+// ── App bar ─────────────────────────────────────────────────────────────────
+
+class AddLeadAppBar extends StatelessWidget implements PreferredSizeWidget {
+  final String title;
+  final VoidCallback onSave;
+
+  const AddLeadAppBar({
+    super.key,
+    required this.title,
+    required this.onSave,
+  });
+
+  @override
+  Size get preferredSize => const Size.fromHeight(kToolbarHeight);
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bg = isDark ? context.fomraSurface : Colors.white;
+
+    return Material(
+      color: bg,
+      child: SafeArea(
+        bottom: false,
+        child: Container(
+          height: kToolbarHeight,
+          decoration: const BoxDecoration(
+            border: Border(bottom: BorderSide(color: AddLeadUi.cardBorder)),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: Row(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.arrow_back_rounded, size: 22),
+                tooltip: 'Back',
+                onPressed: () => Navigator.maybePop(context),
+                style: IconButton.styleFrom(
+                  foregroundColor: context.fomraTextPrimary,
+                ),
+              ),
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.3,
+                    color: context.fomraTextPrimary,
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: TextButton(
+                  onPressed: onSave,
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.primary,
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                  ),
+                  child: const Text(
+                    'Save',
+                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Progress navigation ───────────────────────────────────────────────────────
+
+class AddLeadProgressStep {
+  final String label;
+  final bool completed;
+  final bool active;
+
+  const AddLeadProgressStep({
+    required this.label,
+    required this.completed,
+    required this.active,
+  });
+}
+
+class AddLeadProgressNav extends StatelessWidget {
+  final List<AddLeadProgressStep> steps;
+  final ValueChanged<int> onStepTap;
+
+  const AddLeadProgressNav({
+    super.key,
+    required this.steps,
+    required this.onStepTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bg = isDark ? context.fomraSurface : Colors.white;
+
+    return Material(
+      color: bg,
+      child: Container(
+        decoration: const BoxDecoration(
+          border: Border(bottom: BorderSide(color: AddLeadUi.cardBorder)),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              for (var i = 0; i < steps.length; i++) ...[
+                if (i > 0)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    child: Icon(
+                      Icons.chevron_right_rounded,
+                      size: 16,
+                      color: context.fomraTextSecondary.withValues(alpha: 0.5),
+                    ),
+                  ),
+                _ProgressChip(
+                  index: i,
+                  step: steps[i],
+                  onTap: () => onStepTap(i),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ProgressChip extends StatefulWidget {
+  final int index;
+  final AddLeadProgressStep step;
+  final VoidCallback onTap;
+
+  const _ProgressChip({
+    required this.index,
+    required this.step,
+    required this.onTap,
+  });
+
+  @override
+  State<_ProgressChip> createState() => _ProgressChipState();
+}
+
+class _ProgressChipState extends State<_ProgressChip> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final active = widget.step.active;
+    final done = widget.step.completed;
+    final bg = active
+        ? AppColors.primary.withValues(alpha: 0.1)
+        : _hovered
+            ? const Color(0xFFF1F5F9)
+            : Colors.transparent;
+    final border = active
+        ? AppColors.primary.withValues(alpha: 0.35)
+        : AddLeadUi.cardBorder.withValues(alpha: 0.8);
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: AddLeadUi.motion,
+          curve: AddLeadUi.curve,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: border),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AnimatedContainer(
+                duration: AddLeadUi.motion,
+                width: 22,
+                height: 22,
+                decoration: BoxDecoration(
+                  color: done
+                      ? AppColors.success
+                      : active
+                          ? AppColors.primary
+                          : const Color(0xFFE2E8F0),
+                  shape: BoxShape.circle,
+                ),
+                alignment: Alignment.center,
+                child: done
+                    ? const Icon(Icons.check_rounded, size: 14, color: Colors.white)
+                    : Text(
+                        '${widget.index + 1}',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: active ? Colors.white : context.fomraTextSecondary,
+                        ),
+                      ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                widget.step.label,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: active ? FontWeight.w700 : FontWeight.w600,
+                  color: active ? AppColors.primary : context.fomraTextPrimary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Section card ──────────────────────────────────────────────────────────────
+
+class AddLeadSectionCard extends StatefulWidget {
+  final String number;
+  final String title;
+  final String? subtitle;
+  final IconData? icon;
+  final Widget child;
+  final bool compact;
+
+  const AddLeadSectionCard({
+    super.key,
+    required this.number,
+    required this.title,
+    this.subtitle,
+    this.icon,
+    required this.child,
+    this.compact = false,
+  });
+
+  @override
+  State<AddLeadSectionCard> createState() => _AddLeadSectionCardState();
+}
+
+class _AddLeadSectionCardState extends State<AddLeadSectionCard> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardColor = isDark ? context.fomraSurface : Colors.white;
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: AnimatedContainer(
+        duration: AddLeadUi.motion,
+        curve: AddLeadUi.curve,
+        transform: Matrix4.translationValues(0, _hovered ? -1 : 0, 0),
+        decoration: BoxDecoration(
+          color: cardColor,
+          borderRadius: BorderRadius.circular(AddLeadUi.cardRadius),
+          border: const Border.fromBorderSide(
+            BorderSide(color: AddLeadUi.cardBorder),
+          ),
+          boxShadow: AddLeadUi.cardShadow(_hovered),
+        ),
+        padding: EdgeInsets.all(widget.compact ? 16 : 18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _SectionHeader(
+              number: widget.number,
+              title: widget.title,
+              subtitle: widget.subtitle,
+              icon: widget.icon,
+            ),
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 14),
+              child: Divider(height: 1, color: AddLeadUi.cardBorder),
+            ),
+            widget.child,
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SectionHeader extends StatelessWidget {
+  final String number;
+  final String title;
+  final String? subtitle;
+  final IconData? icon;
+
+  const _SectionHeader({
+    required this.number,
+    required this.title,
+    this.subtitle,
+    this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Container(
+          width: 28,
+          height: 28,
+          decoration: BoxDecoration(
+            color: AppColors.primary.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            number,
+            style: const TextStyle(
+              color: AppColors.primary,
+              fontWeight: FontWeight.w800,
+              fontSize: 13,
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.2,
+                  color: context.fomraTextPrimary,
+                ),
+              ),
+              if (subtitle != null) ...[
+                const SizedBox(height: 2),
+                Text(
+                  subtitle!,
+                  style: TextStyle(
+                    fontSize: 12,
+                    height: 1.3,
+                    color: context.fomraTextSecondary,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        if (icon != null)
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, size: 18, color: AppColors.primary),
+          ),
+      ],
+    );
+  }
+}
+
+// ── Form layout helpers ───────────────────────────────────────────────────────
+
+Widget addLeadFormRow(BuildContext context, Widget left, Widget right) {
+  final wide = MediaQuery.sizeOf(context).width >= 720;
+  if (!wide) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        left,
+        const SizedBox(height: AddLeadUi.fieldGap),
+        right,
+      ],
+    );
+  }
+  return Row(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Expanded(child: left),
+      const SizedBox(width: AddLeadUi.fieldGap),
+      Expanded(child: right),
+    ],
+  );
+}
+
+Widget addLeadFieldIcon(IconData icon, {Color? color}) {
+  final c = color ?? AppColors.primary;
+  return Padding(
+    padding: const EdgeInsets.only(left: 10, right: 2),
+    child: Container(
+      width: 32,
+      height: 32,
+      decoration: BoxDecoration(
+        color: c.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      alignment: Alignment.center,
+      child: Icon(icon, size: 18, color: c),
+    ),
+  );
+}
+
+InputDecoration addLeadInputDecoration(
+  BuildContext context, {
+  String? label,
+  String? hint,
+  IconData? icon,
+  bool required = false,
+  int maxLines = 1,
+}) {
+  final isDark = Theme.of(context).brightness == Brightness.dark;
+  final fill = isDark ? context.fomraSurfaceVar : Colors.white;
+
+  OutlineInputBorder border([Color? c, double w = 1]) => OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AddLeadUi.fieldRadius),
+        borderSide: BorderSide(color: c ?? AddLeadUi.cardBorder, width: w),
+      );
+
+  return InputDecoration(
+    labelText: label != null ? label + (required ? ' *' : '') : null,
+    hintText: hint,
+    floatingLabelBehavior: FloatingLabelBehavior.auto,
+    isDense: true,
+    filled: true,
+    fillColor: fill,
+    prefixIcon: icon != null ? addLeadFieldIcon(icon) : null,
+    contentPadding: EdgeInsets.symmetric(
+      horizontal: 12,
+      vertical: maxLines > 1 ? 14 : 13,
+    ),
+    border: border(),
+    enabledBorder: border(),
+    focusedBorder: border(AppColors.primary, 1.5),
+    errorBorder: border(AppColors.error),
+    focusedErrorBorder: border(AppColors.error, 1.5),
+  );
+}
+
+// ── Sticky footer ─────────────────────────────────────────────────────────────
+
+class AddLeadStickyFooter extends StatelessWidget {
+  final VoidCallback onCancel;
+  final VoidCallback onSave;
+  final bool saving;
+
+  const AddLeadStickyFooter({
+    super.key,
+    required this.onCancel,
+    required this.onSave,
+    this.saving = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.88),
+            border: const Border(top: BorderSide(color: AddLeadUi.cardBorder)),
+          ),
+          padding: EdgeInsets.fromLTRB(
+            16,
+            12,
+            16,
+            12 + MediaQuery.paddingOf(context).bottom,
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: saving ? null : onCancel,
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(0, 44),
+                    side: const BorderSide(color: AddLeadUi.cardBorder),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: const Text('Cancel'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                flex: 2,
+                child: FilledButton(
+                  onPressed: saving ? null : onSave,
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size(0, 44),
+                    backgroundColor: AppColors.primary,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: saving
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Text(
+                          'Save Lead',
+                          style: TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Segmented control ─────────────────────────────────────────────────────────
+
+enum AddLeadLocationMode { manual, live }
+
+class AddLeadLocationSegment extends StatelessWidget {
+  final AddLeadLocationMode mode;
+  final ValueChanged<AddLeadLocationMode> onChanged;
+
+  const AddLeadLocationSegment({
+    super.key,
+    required this.mode,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AddLeadUi.cardBorder),
+      ),
+      child: Row(
+        children: [
+          _seg(context, 'Manual', Icons.edit_outlined, AddLeadLocationMode.manual),
+          _seg(context, 'Live GPS', Icons.gps_fixed_rounded, AddLeadLocationMode.live),
+        ],
+      ),
+    );
+  }
+
+  Widget _seg(
+    BuildContext context,
+    String label,
+    IconData icon,
+    AddLeadLocationMode value,
+  ) {
+    final active = mode == value;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => onChanged(value),
+        child: AnimatedContainer(
+          duration: AddLeadUi.motion,
+          curve: AddLeadUi.curve,
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: active ? Colors.white : Colors.transparent,
+            borderRadius: BorderRadius.circular(9),
+            boxShadow: active
+                ? [
+                    BoxShadow(
+                      color: const Color(0xFF0F172A).withValues(alpha: 0.06),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                size: 16,
+                color: active ? AppColors.primary : context.fomraTextSecondary,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+                  color: active ? AppColors.primary : context.fomraTextSecondary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Map section ───────────────────────────────────────────────────────────────
+
+class AddLeadMapPicker extends StatelessWidget {
+  final MapController mapController;
+  final String tileUrl;
+  final LatLng defaultCenter;
+  final LatLng? pinnedPoint;
+  final bool resolving;
+  final bool fetchingMyLocation;
+  final String? status;
+  final VoidCallback onMapReady;
+  final Future<void> Function(LatLng) onTap;
+  final Future<void> Function() onMyLocation;
+
+  const AddLeadMapPicker({
+    super.key,
+    required this.mapController,
+    required this.tileUrl,
+    required this.defaultCenter,
+    required this.pinnedPoint,
+    required this.resolving,
+    required this.fetchingMyLocation,
+    required this.status,
+    required this.onMapReady,
+    required this.onTap,
+    required this.onMyLocation,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final showHint = pinnedPoint == null && !resolving;
+
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AddLeadUi.cardBorder),
+        boxShadow: AddLeadUi.cardShadow(),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: SizedBox(
+        height: 280,
+        child: Stack(
+          children: [
+            FlutterMap(
+              mapController: mapController,
+              options: MapOptions(
+                initialCenter: pinnedPoint ?? defaultCenter,
+                initialZoom: pinnedPoint != null ? 16 : 11,
+                onMapReady: onMapReady,
+                onTap: (_, point) => onTap(point),
+                interactionOptions: const InteractionOptions(
+                  flags: InteractiveFlag.all & ~InteractiveFlag.scrollWheelZoom,
+                ),
+              ),
+              children: [
+                MapTilerTiles.tileLayer(urlTemplate: tileUrl),
+                if (pinnedPoint != null)
+                  MarkerLayer(markers: [
+                    Marker(
+                      point: pinnedPoint!,
+                      width: 40,
+                      height: 48,
+                      child: const Icon(
+                        Icons.location_on_rounded,
+                        color: Color(0xFFE53935),
+                        size: 40,
+                      ),
+                    ),
+                  ]),
+              ],
+            ),
+            if (showHint)
+              Positioned(
+                top: 12,
+                left: 12,
+                right: 12,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.92),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: AddLeadUi.cardBorder),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.touch_app_outlined,
+                        size: 16,
+                        color: AppColors.primary.withValues(alpha: 0.9),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Tap the map to drop a pin — location details fill automatically',
+                          style: TextStyle(
+                            fontSize: 11,
+                            height: 1.35,
+                            color: context.fomraTextSecondary,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            Positioned(
+              right: 12,
+              bottom: 12,
+              child: Material(
+                elevation: 3,
+                shadowColor: Colors.black26,
+                borderRadius: BorderRadius.circular(12),
+                color: Colors.white,
+                child: InkWell(
+                  onTap: fetchingMyLocation || resolving ? null : onMyLocation,
+                  borderRadius: BorderRadius.circular(12),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (fetchingMyLocation)
+                          const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        else
+                          const Icon(Icons.my_location_rounded, size: 18, color: AppColors.primary),
+                        const SizedBox(width: 6),
+                        const Text(
+                          'My Location',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            if (resolving)
+              Container(
+                color: Colors.black26,
+                child: const Center(
+                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Live location card ────────────────────────────────────────────────────────
+
+class AddLeadLiveLocationCard extends StatelessWidget {
+  final bool fetching;
+  final String? status;
+  final VoidCallback? onTap;
+
+  const AddLeadLiveLocationCard({
+    super.key,
+    required this.fetching,
+    required this.status,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final filled = status != null && status!.contains('✓');
+
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(AddLeadUi.fieldRadius),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AddLeadUi.fieldRadius),
+        child: Container(
+          height: AddLeadUi.fieldHeight + 8,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(AddLeadUi.fieldRadius),
+            border: Border.all(
+              color: filled
+                  ? AppColors.success.withValues(alpha: 0.45)
+                  : AddLeadUi.cardBorder,
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: (filled ? AppColors.success : AppColors.primary)
+                      .withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                alignment: Alignment.center,
+                child: fetching
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Icon(
+                        filled ? Icons.location_on_rounded : Icons.gps_fixed_rounded,
+                        size: 18,
+                        color: filled ? AppColors.success : AppColors.primary,
+                      ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  fetching
+                      ? 'Getting live location…'
+                      : filled
+                          ? 'Location captured'
+                          : 'Capture live GPS location',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: filled ? AppColors.success : context.fomraTextPrimary,
+                  ),
+                ),
+              ),
+              if (!fetching)
+                Icon(
+                  filled ? Icons.check_circle_rounded : Icons.arrow_forward_rounded,
+                  size: 18,
+                  color: filled ? AppColors.success : context.fomraTextSecondary,
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Photo upload ──────────────────────────────────────────────────────────────
+
+class AddLeadPhotoDraft {
+  final Uint8List bytes;
+  final String name;
+  final int originalSize;
+
+  const AddLeadPhotoDraft({
+    required this.bytes,
+    required this.name,
+    required this.originalSize,
+  });
+}
+
+class AddLeadPhotoUpload extends StatefulWidget {
+  final List<String> existingPhotoUrls;
+  final List<AddLeadPhotoDraft> photos;
+  final int maxPhotos;
+  final bool compressing;
+  final VoidCallback onPick;
+  final ValueChanged<int> onRemove;
+  final ValueChanged<int>? onRemoveExisting;
+
+  const AddLeadPhotoUpload({
+    super.key,
+    this.existingPhotoUrls = const [],
+    required this.photos,
+    required this.maxPhotos,
+    required this.compressing,
+    required this.onPick,
+    required this.onRemove,
+    this.onRemoveExisting,
+  });
+
+  @override
+  State<AddLeadPhotoUpload> createState() => _AddLeadPhotoUploadState();
+}
+
+class _AddLeadPhotoUploadState extends State<AddLeadPhotoUpload> {
+  bool _hoveringDrop = false;
+
+  int get _total => widget.existingPhotoUrls.length + widget.photos.length;
+
+  @override
+  Widget build(BuildContext context) {
+    final canAdd = _total < widget.maxPhotos;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (_total > 0) ...[
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              for (var i = 0; i < widget.existingPhotoUrls.length; i++)
+                _thumb(
+                  context,
+                  Image.network(widget.existingPhotoUrls[i], fit: BoxFit.cover),
+                  onRemove: widget.onRemoveExisting == null
+                      ? null
+                      : () => widget.onRemoveExisting!(i),
+                ),
+              for (var i = 0; i < widget.photos.length; i++)
+                _thumb(
+                  context,
+                  Image.memory(widget.photos[i].bytes, fit: BoxFit.cover),
+                  onRemove: () => widget.onRemove(i),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            '$_total of ${widget.maxPhotos} photos · max 250 KB each',
+            style: TextStyle(fontSize: 11, color: context.fomraTextSecondary),
+          ),
+          const SizedBox(height: 12),
+        ],
+        if (widget.compressing)
+          _dropZone(
+            context,
+            child: const Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(strokeWidth: 2.5),
+                ),
+                SizedBox(height: 8),
+                Text(
+                  'Compressing photo to 250 KB…',
+                  style: TextStyle(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
+            onTap: null,
+          )
+        else if (canAdd)
+          _dropZone(
+            context,
+            onTap: widget.onPick,
+            prominent: _total == 0,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.cloud_upload_outlined,
+                  size: _total == 0 ? 32 : 24,
+                  color: AppColors.primary.withValues(alpha: 0.85),
+                ),
+                SizedBox(height: _total == 0 ? 10 : 6),
+                Text(
+                  _total == 0 ? 'Drop photos here or click to upload' : 'Add another photo',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.primary,
+                  ),
+                ),
+                if (_total == 0) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    'JPG or PNG · up to ${widget.maxPhotos} photos',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: context.fomraTextSecondary,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _thumb(BuildContext context, Widget image, {VoidCallback? onRemove}) {
+    return Stack(
+      children: [
+        Container(
+          width: 88,
+          height: 88,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: AddLeadUi.cardBorder),
+            boxShadow: AddLeadUi.cardShadow(),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: image,
+        ),
+        if (onRemove != null)
+          Positioned(
+            top: 4,
+            right: 4,
+            child: Material(
+              color: Colors.black54,
+              borderRadius: BorderRadius.circular(8),
+              child: InkWell(
+                onTap: onRemove,
+                borderRadius: BorderRadius.circular(8),
+                child: const Padding(
+                  padding: EdgeInsets.all(4),
+                  child: Icon(Icons.close_rounded, size: 14, color: Colors.white),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _dropZone(
+    BuildContext context, {
+    required Widget child,
+    VoidCallback? onTap,
+    bool prominent = false,
+  }) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hoveringDrop = true),
+      onExit: (_) => setState(() => _hoveringDrop = false),
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: AddLeadUi.motion,
+          curve: AddLeadUi.curve,
+          height: prominent ? 140 : 72,
+          transform: Matrix4.translationValues(0, _hoveringDrop && onTap != null ? -2 : 0, 0),
+          decoration: BoxDecoration(
+            color: _hoveringDrop && onTap != null
+                ? AppColors.primary.withValues(alpha: 0.04)
+                : const Color(0xFFF8FAFC),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: _hoveringDrop && onTap != null
+                  ? AppColors.primary.withValues(alpha: 0.45)
+                  : AddLeadUi.cardBorder,
+              width: 1.5,
+              strokeAlign: BorderSide.strokeAlignInside,
+            ),
+          ),
+          child: CustomPaint(
+            painter: _DashedBorderPainter(
+              color: AddLeadUi.cardBorder.withValues(
+                alpha: _hoveringDrop && onTap != null ? 0.0 : 1.0,
+              ),
+              radius: 16,
+            ),
+            child: child,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DashedBorderPainter extends CustomPainter {
+  final Color color;
+  final double radius;
+
+  _DashedBorderPainter({required this.color, required this.radius});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (color.a == 0) return;
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2;
+    final path = Path()
+      ..addRRect(RRect.fromRectAndRadius(
+        Rect.fromLTWH(1, 1, size.width - 2, size.height - 2),
+        Radius.circular(radius),
+      ));
+    canvas.drawPath(
+      _dashPath(path, dashArray: const [6, 4]),
+      paint,
+    );
+  }
+
+  Path _dashPath(Path source, {required List<double> dashArray}) {
+    final dashed = Path();
+    for (final metric in source.computeMetrics()) {
+      var distance = 0.0;
+      while (distance < metric.length) {
+        final len = dashArray[0];
+        dashed.addPath(
+          metric.extractPath(distance, distance + len),
+          Offset.zero,
+        );
+        distance += len + dashArray[1];
+      }
+    }
+    return dashed;
+  }
+
+  @override
+  bool shouldRepaint(covariant _DashedBorderPainter oldDelegate) =>
+      oldDelegate.color != color;
+}
+
+// ── Dropdown option row ───────────────────────────────────────────────────────
+
+Widget addLeadDropdownRow({
+  required IconData icon,
+  required String label,
+  required Color iconColor,
+}) {
+  return Row(
+    children: [
+      Container(
+        width: 28,
+        height: 28,
+        decoration: BoxDecoration(
+          color: iconColor.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        alignment: Alignment.center,
+        child: Icon(icon, size: 16, color: iconColor),
+      ),
+      const SizedBox(width: 10),
+      Expanded(
+        child: Text(
+          label,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+        ),
+      ),
+    ],
+  );
+}

@@ -452,93 +452,159 @@ class PortalQuickActionsGrid extends StatelessWidget {
 
   const PortalQuickActionsGrid({super.key, required this.actions});
 
+  static const _cardWidth = 272.0;
+  static const _cardHeight = 92.0;
+  static const _gridGap = 16.0;
+
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
     if (width < 640) {
-      return SizedBox(
-        height: 132,
-        child: ListView.separated(
-          scrollDirection: Axis.horizontal,
-          itemCount: actions.length,
-          separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.sm),
-          itemBuilder: (_, i) => SizedBox(
-            width: 156,
-            child: _QuickActionCard(data: actions[i]),
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: SizedBox(
+          height: _cardHeight,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: actions.length,
+            separatorBuilder: (_, __) => const SizedBox(width: _gridGap),
+            itemBuilder: (_, i) => SizedBox(
+              width: _cardWidth,
+              height: _cardHeight,
+              child: _QuickActionCard(data: actions[i]),
+            ),
           ),
         ),
       );
     }
 
-    final columns = width >= 1200 ? 5 : width >= 900 ? 3 : 2;
-    return GridView.builder(
-      itemCount: actions.length,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: columns,
-        crossAxisSpacing: AppSpacing.sm,
-        mainAxisSpacing: AppSpacing.sm,
-        mainAxisExtent: 124,
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Wrap(
+        spacing: _gridGap,
+        runSpacing: _gridGap,
+        children: [
+          for (final action in actions)
+            SizedBox(
+              width: _cardWidth,
+              height: _cardHeight,
+              child: _QuickActionCard(data: action),
+            ),
+        ],
       ),
-      itemBuilder: (_, i) => _QuickActionCard(data: actions[i]),
     );
   }
 }
 
-class _QuickActionCard extends StatelessWidget {
+class _QuickActionCard extends StatefulWidget {
   final PortalQuickAction data;
 
   const _QuickActionCard({required this.data});
 
   @override
+  State<_QuickActionCard> createState() => _QuickActionCardState();
+}
+
+class _QuickActionCardState extends State<_QuickActionCard> {
+  bool _hovered = false;
+
+  static const _motion = Duration(milliseconds: 190);
+  static const _curve = Curves.easeInOut;
+  static const _borderColor = Color(0xFFE5E7EB);
+
+  PortalQuickAction get data => widget.data;
+
+  @override
   Widget build(BuildContext context) {
-    return AppCard(
-      onTap: data.onTap,
-      padding: const EdgeInsets.all(AppSpacing.md),
-      radius: AppColors.radiusMd,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: data.accent.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            alignment: Alignment.center,
-            child: Icon(
-              data.icon,
-              color: data.accent,
-              size: AppIconSize.secondary,
-            ),
-          ),
-          const Spacer(),
-          Text(
-            data.label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-              color: context.fomraTextPrimary,
-            ),
-          ),
-          if ((data.subtitle ?? '').isNotEmpty) ...[
-            const SizedBox(height: 2),
-            Text(
-              data.subtitle!,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 11,
-                height: 1.3,
-                color: context.fomraTextSecondary,
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardColor = isDark ? context.fomraSurface : Colors.white;
+    final iconTint = data.accent.withValues(alpha: _hovered ? 0.18 : 0.12);
+    final shadowAlpha = _hovered ? 0.12 : 0.08;
+    final shadowBlur = _hovered ? 32.0 : 24.0;
+    final shadowOffset = _hovered ? 12.0 : 8.0;
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: data.onTap,
+        behavior: HitTestBehavior.opaque,
+        child: AnimatedContainer(
+          duration: _motion,
+          curve: _curve,
+          transform: Matrix4.translationValues(0, _hovered ? -3 : 0, 0),
+          decoration: BoxDecoration(
+            color: cardColor,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: _borderColor, width: 1),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF0F172A).withValues(alpha: shadowAlpha),
+                blurRadius: shadowBlur,
+                offset: Offset(0, shadowOffset),
               ),
-            ),
-          ],
-        ],
+            ],
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Row(
+            children: [
+              AnimatedScale(
+                scale: _hovered ? 1.05 : 1,
+                duration: _motion,
+                curve: _curve,
+                child: AnimatedContainer(
+                  duration: _motion,
+                  curve: _curve,
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: iconTint,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  alignment: Alignment.center,
+                  child: Icon(
+                    data.icon,
+                    size: 21,
+                    color: data.accent,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 24),
+              Expanded(
+                child: Text(
+                  data.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: -0.2,
+                    height: 1.2,
+                    color: context.fomraTextPrimary,
+                  ),
+                ),
+              ),
+              AnimatedOpacity(
+                opacity: _hovered ? 1 : 0,
+                duration: _motion,
+                curve: _curve,
+                child: AnimatedSlide(
+                  duration: _motion,
+                  curve: _curve,
+                  offset: _hovered ? Offset.zero : const Offset(-0.2, 0),
+                  child: Icon(
+                    Icons.arrow_forward_rounded,
+                    size: 18,
+                    color: context.fomraTextSecondary.withValues(
+                      alpha: _hovered ? 0.9 : 0,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

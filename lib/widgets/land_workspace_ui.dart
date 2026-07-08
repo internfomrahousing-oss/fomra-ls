@@ -547,17 +547,32 @@ class _LandWorkspaceSpeedDialState extends State<LandWorkspaceSpeedDial>
             borderRadius: BorderRadius.circular(999),
             boxShadow: AppColors.coloredShadow(AppColors.primary),
           ),
-          child: FloatingActionButton(
-            onPressed: hasMenu ? _toggle : widget.onAddLead,
-            backgroundColor: Colors.transparent,
-            elevation: 0,
-            child: AnimatedRotation(
-              turns: hasMenu && _open ? 0.125 : 0,
-              duration: AppMotion.normal,
-              child: Icon(hasMenu && _open ? Icons.close : Icons.add,
-                  color: Colors.white),
-            ),
-          ),
+          child: hasMenu
+              ? FloatingActionButton(
+                  onPressed: _toggle,
+                  backgroundColor: Colors.transparent,
+                  elevation: 0,
+                  child: AnimatedRotation(
+                    turns: _open ? 0.125 : 0,
+                    duration: AppMotion.normal,
+                    child: Icon(_open ? Icons.close : Icons.add,
+                        color: Colors.white),
+                  ),
+                )
+              : FloatingActionButton.extended(
+                  onPressed: widget.onAddLead,
+                  backgroundColor: Colors.transparent,
+                  elevation: 0,
+                  icon: const Icon(Icons.add, color: Colors.white),
+                  label: const Text(
+                    'Add Lead',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
         ),
       ],
     );

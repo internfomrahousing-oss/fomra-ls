@@ -1,5 +1,4 @@
-import 'dart:convert';
-import 'dart:typed_data';
+﻿import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -9,11 +8,9 @@ import 'package:latlong2/latlong.dart';
 import '../../models/add_lead_result.dart';
 import '../../models/land_lead.dart';
 import '../../theme/app_theme.dart';
-import '../../theme/fomra_layout.dart';
 import '../../config/maptiler_tiles.dart';
-import '../../theme/fomra_input.dart';
 import '../../theme/fomra_theme_context.dart';
-import '../../widgets/portal_home_sections.dart';
+import '../../widgets/add_lead_ui.dart';
 import '../../widgets/portal_page_layout.dart';
 import '../../services/api_client.dart';
 import '../../utils/image_compressor.dart';
@@ -78,15 +75,27 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
   String? _termsType;
 
   // Photos (max 4)
-  final List<_SitePhotoDraft> _photos = [];
+  final List<AddLeadPhotoDraft> _photos = [];
   List<String> _keptPhotoUrls = [];
   bool _compressingPhoto = false;
 
+  final _scrollController = ScrollController();
+  final _sectionKeys = List.generate(4, (_) => GlobalKey());
+  int _activeSection = 0;
+
   bool get _isEdit => widget.existingLead != null;
+
+  static const _kProgressLabels = [
+    'Input Source',
+    'Data Captured',
+    'Terms',
+    'Site Photos',
+  ];
 
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_onScroll);
     final existing = widget.existingLead;
     if (existing == null) return;
 
@@ -117,6 +126,8 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
 
   @override
   void dispose() {
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
     for (final c in [
       _locationCtrl, _gpsCtrl, _villageCtrl, _talukCtrl, _districtCtrl,
       _pincodeCtrl, _surveyCtrl, _subDivCtrl, _extentCtrl, _ownerCtrl,
@@ -429,7 +440,7 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
       final compressed = await ImageCompressor.compressTo250Kb(file.bytes!);
       if (!mounted) return;
       setState(() {
-        _photos.add(_SitePhotoDraft(
+        _photos.add(AddLeadPhotoDraft(
           bytes: compressed,
           name: file.name,
           originalSize: file.bytes!.length,
@@ -454,15 +465,68 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
     setState(() => _keptPhotoUrls.removeAt(index));
   }
 
-  Widget _buildSitePhotosSection() {
-    return PortalFormSection(
-      number: _isEdit ? '1' : '4',
+  void _onScroll() {
+    var best = _activeSection;
+    var bestScore = double.infinity;
+    for (var i = 0; i < _sectionKeys.length; i++) {
+      final ctx = _sectionKeys[i].currentContext;
+      if (ctx == null) continue;
+      final box = ctx.findRenderObject() as RenderBox?;
+      if (box == null || !box.hasSize) continue;
+      final top = box.localToGlobal(Offset.zero).dy;
+      final score = (top - 148).abs();
+      if (top < 220 && score < bestScore) {
+        bestScore = score;
+        best = i;
+      }
+    }
+    if (best != _activeSection) setState(() => _activeSection = best);
+  }
+
+  void _scrollToSection(int index) {
+    final ctx = _sectionKeys[index].currentContext;
+    if (ctx != null) {
+      Scrollable.ensureVisible(
+        ctx,
+        duration: AddLeadUi.motion,
+        curve: AddLeadUi.curve,
+        alignment: 0.06,
+      );
+    }
+    setState(() => _activeSection = index);
+  }
+
+  bool _sectionCompleted(int index) {
+    switch (index) {
+      case 0:
+        return _inputSource != null;
+      case 1:
+        return _locationCtrl.text.trim().isNotEmpty &&
+            _surveyCtrl.text.trim().isNotEmpty &&
+            _extentCtrl.text.trim().isNotEmpty;
+      case 2:
+        return (_termsType ?? '').isNotEmpty ||
+            _notesCtrl.text.trim().isNotEmpty;
+      case 3:
+        return _photos.isNotEmpty || _keptPhotoUrls.isNotEmpty;
+      default:
+        return false;
+    }
+  }
+
+  Widget _sectionAnchor(int index, Widget child) {
+    return KeyedSubtree(key: _sectionKeys[index], child: child);
+  }
+
+  Widget _buildSitePhotosSection(String number) {
+    return AddLeadSectionCard(
+      number: number,
       title: 'Site Photos',
       subtitle: _isEdit
           ? 'Remove existing photos or upload new ones (max 4)'
           : 'Upload up to 4 photos of the land',
       icon: Icons.photo_library_outlined,
-      child: _MultiPhotoUpload(
+      child: AddLeadPhotoUpload(
         existingPhotoUrls: _keptPhotoUrls,
         photos: _photos,
         maxPhotos: _kMaxSitePhotos,
@@ -530,381 +594,335 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final pagePad = FomraLayout.pagePadding(context);
+    final progressSteps = [
+      for (var i = 0; i < _kProgressLabels.length; i++)
+        AddLeadProgressStep(
+          label: _kProgressLabels[i],
+          completed: _sectionCompleted(i),
+          active: _activeSection == i,
+        ),
+    ];
 
     return Scaffold(
-      backgroundColor: context.fomraPageBg,
-      appBar: FomraSubPageAppBar(
+      backgroundColor: AddLeadUi.pageBg,
+      appBar: AddLeadAppBar(
         title: _isEdit ? 'Edit Land Lead' : 'Add Land Lead',
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: TextButton.icon(
-              onPressed: _submit,
-              icon: const Icon(Icons.save_outlined, size: 16, color: Colors.white),
-              label: const Text(
-                'Save',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w800,
+        onSave: _submit,
+      ),
+      bottomNavigationBar: AddLeadStickyFooter(
+        onCancel: () => Navigator.pop(context),
+        onSave: _submit,
+      ),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          AddLeadProgressNav(
+            steps: progressSteps,
+            onStepTap: _scrollToSection,
+          ),
+          Expanded(
+            child: SingleChildScrollView(
+              controller: _scrollController,
+              padding: EdgeInsets.fromLTRB(
+                16,
+                16,
+                16,
+                24 + MediaQuery.paddingOf(context).bottom + 72,
+              ),
+              child: portalPageWidthConstraint(
+                context,
+                Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _sectionAnchor(
+                        0,
+                        AddLeadSectionCard(
+                          number: '1',
+                          title: 'Input Source',
+                          subtitle: 'Who brought this lead?',
+                          icon: Icons.source_outlined,
+                          compact: true,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              _InputSourceDropdown(
+                                value: _inputSource,
+                                onChanged: (s) =>
+                                    setState(() => _inputSource = s),
+                              ),
+                              if (_inputSource == null)
+                                const Padding(
+                                  padding: EdgeInsets.only(top: 6, left: 4),
+                                  child: Text(
+                                    '* Required',
+                                    style: TextStyle(
+                                      color: AppColors.error,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: AddLeadUi.sectionGap),
+                      _sectionAnchor(
+                        1,
+                        AddLeadSectionCard(
+                          number: '2',
+                          title: 'Data Captured',
+                          subtitle: 'Pre-survey land details',
+                          icon: Icons.map_outlined,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              const _ReadOnlyField(
+                                label: 'Lead ID',
+                                value: 'Auto-generated (1, 2, 3 …)',
+                              ),
+                              const SizedBox(height: AddLeadUi.fieldGap),
+                              AddLeadLocationSegment(
+                                mode: _locationMode == _LocationMode.manual
+                                    ? AddLeadLocationMode.manual
+                                    : AddLeadLocationMode.live,
+                                onChanged: (m) => _onLocationModeChanged(
+                                  m == AddLeadLocationMode.manual
+                                      ? _LocationMode.manual
+                                      : _LocationMode.live,
+                                ),
+                              ),
+                              const SizedBox(height: AddLeadUi.fieldGap),
+                              if (_locationMode == _LocationMode.manual) ...[
+                                AddLeadMapPicker(
+                                  mapController: _mapController,
+                                  tileUrl: _kMapTileUrl,
+                                  defaultCenter: _kDefaultMapCenter,
+                                  pinnedPoint: _pinnedPoint,
+                                  resolving: _resolvingPin,
+                                  status: _locationStatus,
+                                  fetchingMyLocation: _fetchingLocation,
+                                  onMapReady: _onMapReady,
+                                  onTap: _onMapPin,
+                                  onMyLocation: _centerMapOnMyLocation,
+                                ),
+                                if (_locationStatus != null) ...[
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    _locationStatus!,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: _locationStatus!.contains('✓')
+                                          ? AppColors.success
+                                          : context.fomraTextSecondary,
+                                      fontWeight: _locationStatus!.contains('✓')
+                                          ? FontWeight.w600
+                                          : FontWeight.normal,
+                                    ),
+                                  ),
+                                ],
+                                const SizedBox(height: AddLeadUi.fieldGap),
+                              ],
+                              if (_locationMode == _LocationMode.live) ...[
+                                AddLeadLiveLocationCard(
+                                  fetching: _fetchingLocation,
+                                  status: _locationStatus,
+                                  onTap: _fetchingLocation
+                                      ? null
+                                      : _fetchLiveLocation,
+                                ),
+                                if (_locationStatus != null) ...[
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    _locationStatus!,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: _locationStatus!.contains('✓')
+                                          ? AppColors.success
+                                          : context.fomraTextSecondary,
+                                    ),
+                                  ),
+                                ],
+                                const SizedBox(height: AddLeadUi.fieldGap),
+                              ],
+                              _Field(
+                                ctrl: _gpsCtrl,
+                                label: 'GPS Coordinates',
+                                hint: _locationMode == _LocationMode.live
+                                    ? 'Auto-filled after capture'
+                                    : 'Pin on map or type manually',
+                                icon: Icons.gps_fixed_rounded,
+                              ),
+                              const SizedBox(height: AddLeadUi.fieldGap),
+                              _Field(
+                                ctrl: _locationCtrl,
+                                label: 'Location',
+                                hint: _locationMode == _LocationMode.live
+                                    ? 'Auto-filled after capture'
+                                    : 'Pin on map or type manually',
+                                icon: Icons.location_on_outlined,
+                                required: true,
+                              ),
+                              const SizedBox(height: AddLeadUi.fieldGap),
+                              addLeadFormRow(
+                                context,
+                                _Field(
+                                  ctrl: _villageCtrl,
+                                  label: 'Village',
+                                  hint: 'Village name',
+                                  icon: Icons.home_outlined,
+                                ),
+                                _Field(
+                                  ctrl: _talukCtrl,
+                                  label: 'Taluk',
+                                  hint: 'Taluk',
+                                  icon: Icons.account_balance_outlined,
+                                ),
+                              ),
+                              const SizedBox(height: AddLeadUi.fieldGap),
+                              addLeadFormRow(
+                                context,
+                                _Field(
+                                  ctrl: _districtCtrl,
+                                  label: 'District',
+                                  hint: 'e.g. Bangalore Rural',
+                                  icon: Icons.map_outlined,
+                                ),
+                                _Field(
+                                  ctrl: _pincodeCtrl,
+                                  label: 'Pincode',
+                                  hint: 'e.g. 560066',
+                                  icon: Icons.local_post_office_outlined,
+                                  keyboardType: TextInputType.number,
+                                ),
+                              ),
+                              const SizedBox(height: AddLeadUi.fieldGap),
+                              addLeadFormRow(
+                                context,
+                                _Field(
+                                  ctrl: _surveyCtrl,
+                                  label: 'Survey Number',
+                                  hint: 'e.g. 42/3A',
+                                  icon: Icons.tag_outlined,
+                                  required: true,
+                                ),
+                                _Field(
+                                  ctrl: _subDivCtrl,
+                                  label: 'Sub Division',
+                                  hint: 'e.g. 1  (optional)',
+                                  icon: Icons.call_split_outlined,
+                                ),
+                              ),
+                              const SizedBox(height: AddLeadUi.fieldGap),
+                              addLeadFormRow(
+                                context,
+                                _Field(
+                                  ctrl: _extentCtrl,
+                                  label: 'Land Extent',
+                                  hint: 'e.g. 2.5 acres / 50 cents',
+                                  icon: Icons.straighten_rounded,
+                                  required: true,
+                                ),
+                                _Field(
+                                  ctrl: _ownerCtrl,
+                                  label: 'Owner Name',
+                                  hint: 'Full name of the land owner',
+                                  icon: Icons.person_outline_rounded,
+                                ),
+                              ),
+                              const SizedBox(height: AddLeadUi.fieldGap),
+                              addLeadFormRow(
+                                context,
+                                _Field(
+                                  ctrl: _contactCtrl,
+                                  label: 'Contact Details',
+                                  hint: 'Phone / Email',
+                                  icon: Icons.phone_outlined,
+                                  keyboardType: TextInputType.phone,
+                                ),
+                                _LandTypeDropdown(
+                                  value: _landType,
+                                  onChanged: (v) =>
+                                      setState(() => _landType = v!),
+                                ),
+                              ),
+                              const SizedBox(height: AddLeadUi.fieldGap),
+                              _Field(
+                                ctrl: _roadWidthCtrl,
+                                label: 'Road Width',
+                                hint: 'e.g. 30 ft / 9 m',
+                                icon: Icons.open_in_full_rounded,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: AddLeadUi.sectionGap),
+                      _sectionAnchor(
+                        2,
+                        AddLeadSectionCard(
+                          number: '3',
+                          title: 'Terms',
+                          subtitle: 'Select the deal terms',
+                          icon: Icons.handshake_outlined,
+                          compact: true,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              _TermsDropdown(
+                                value: _termsType,
+                                onChanged: (v) =>
+                                    setState(() => _termsType = v),
+                              ),
+                              const SizedBox(height: AddLeadUi.fieldGap),
+                              _Field(
+                                ctrl: _notesCtrl,
+                                label: 'Notes',
+                                hint: 'Any additional observations',
+                                icon: Icons.notes_outlined,
+                                maxLines: 3,
+                                light: true,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: AddLeadUi.sectionGap),
+                      _sectionAnchor(
+                        3,
+                        _buildSitePhotosSection('4'),
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+                  ),
                 ),
               ),
             ),
           ),
         ],
       ),
-      body: Align(
-        alignment: Alignment.topCenter,
-        child: portalPageWidthConstraint(
-          context,
-          Form(
-            key: _formKey,
-            child: ListView(
-              padding: pagePad,
-              children: [
-                if (_isEdit) ...[
-                  PortalFadeSection(
-                    index: 0,
-                    child: _buildSitePhotosSection(),
-                  ),
-                  const SizedBox(height: AppSpacing.lg),
-                ],
-                PortalFadeSection(
-                  index: _isEdit ? 1 : 0,
-                  child: PortalFormSection(
-                    number: _isEdit ? '2' : '1',
-                    title: 'Input Source',
-                    subtitle: 'Who brought this lead?',
-                    icon: Icons.source_outlined,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _InputSourceDropdown(
-                          value: _inputSource,
-                          onChanged: (s) => setState(() => _inputSource = s),
-                        ),
-                        if (_inputSource == null)
-                          const Padding(
-                            padding: EdgeInsets.only(top: 6, left: 4),
-                            child: Text(
-                              '* Required',
-                              style: TextStyle(
-                                color: AppColors.error,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.lg),
-                PortalFadeSection(
-                  index: _isEdit ? 2 : 1,
-                  child: PortalFormSection(
-                    number: _isEdit ? '3' : '2',
-                    title: 'Data Captured',
-                    subtitle: 'Pre-survey land details',
-                    icon: Icons.map_outlined,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        const _ReadOnlyField(
-                          label: 'Lead ID',
-                          value: 'Auto-generated (1, 2, 3 …)',
-                        ),
-                        const SizedBox(height: 16),
-                        _LocationModeToggle(
-                          mode: _locationMode,
-                          onChanged: _onLocationModeChanged,
-                        ),
-                        const SizedBox(height: 14),
-                        if (_locationMode == _LocationMode.manual) ...[
-                          _LocationPinMap(
-                            mapController: _mapController,
-                            tileUrl: _kMapTileUrl,
-                            defaultCenter: _kDefaultMapCenter,
-                            pinnedPoint: _pinnedPoint,
-                            resolving: _resolvingPin,
-                            status: _locationStatus,
-                            fetchingMyLocation: _fetchingLocation,
-                            onMapReady: _onMapReady,
-                            onTap: _onMapPin,
-                            onMyLocation: _centerMapOnMyLocation,
-                          ),
-                          const SizedBox(height: 14),
-                        ],
-                        if (_locationMode == _LocationMode.live) ...[
-                          _LiveLocationButton(
-                            fetching: _fetchingLocation,
-                            status: _locationStatus,
-                            onTap: _fetchingLocation ? null : _fetchLiveLocation,
-                          ),
-                          const SizedBox(height: 14),
-                        ],
-                        _Field(
-                          ctrl: _gpsCtrl,
-                          label: 'GPS Coordinates',
-                          hint: _locationMode == _LocationMode.live
-                              ? 'Auto-filled after capture'
-                              : 'Pin on map or type manually',
-                          icon: Icons.gps_fixed,
-                        ),
-                        const SizedBox(height: 12),
-                        _Field(
-                          ctrl: _locationCtrl,
-                          label: 'Location',
-                          hint: _locationMode == _LocationMode.live
-                              ? 'Auto-filled after capture'
-                              : 'Pin on map or type manually',
-                          icon: Icons.location_on_outlined,
-                          required: true,
-                        ),
-                        const SizedBox(height: 12),
-                        Row(children: [
-                          Expanded(
-                            child: _Field(
-                              ctrl: _villageCtrl,
-                              label: 'Village',
-                              hint: 'Village name',
-                              icon: Icons.home_outlined,
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: _Field(
-                              ctrl: _talukCtrl,
-                              label: 'Taluk',
-                              hint: 'Taluk',
-                              icon: Icons.account_balance_outlined,
-                            ),
-                          ),
-                        ]),
-                        const SizedBox(height: 12),
-                        _Field(
-                          ctrl: _districtCtrl,
-                          label: 'District',
-                          hint: 'e.g. Bangalore Rural',
-                          icon: Icons.map_outlined,
-                        ),
-                        const SizedBox(height: 12),
-                        _Field(
-                          ctrl: _pincodeCtrl,
-                          label: 'Pincode',
-                          hint: 'e.g. 560066',
-                          icon: Icons.local_post_office_outlined,
-                          keyboardType: TextInputType.number,
-                        ),
-                        const SizedBox(height: 12),
-                        Row(children: [
-                          Expanded(
-                            child: _Field(
-                              ctrl: _surveyCtrl,
-                              label: 'Survey Number',
-                              hint: 'e.g. 42/3A',
-                              icon: Icons.tag,
-                              required: true,
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: _Field(
-                              ctrl: _subDivCtrl,
-                              label: 'Sub Division',
-                              hint: 'e.g. 1  (optional)',
-                              icon: Icons.call_split_outlined,
-                            ),
-                          ),
-                        ]),
-                        const SizedBox(height: 12),
-                        _Field(
-                          ctrl: _extentCtrl,
-                          label: 'Land Extent',
-                          hint: 'e.g. 2.5 acres / 50 cents',
-                          icon: Icons.straighten,
-                          required: true,
-                        ),
-                        const SizedBox(height: 12),
-                        _Field(
-                          ctrl: _ownerCtrl,
-                          label: 'Owner Name',
-                          hint: 'Full name of the land owner',
-                          icon: Icons.person_outline,
-                        ),
-                        const SizedBox(height: 12),
-                        _Field(
-                          ctrl: _contactCtrl,
-                          label: 'Contact Details',
-                          hint: 'Phone / Email',
-                          icon: Icons.phone_outlined,
-                          keyboardType: TextInputType.phone,
-                        ),
-                        const SizedBox(height: 12),
-                        _LandTypeDropdown(
-                          value: _landType,
-                          onChanged: (v) => setState(() => _landType = v!),
-                        ),
-                        const SizedBox(height: 12),
-                        _Field(
-                          ctrl: _roadWidthCtrl,
-                          label: 'Road Width',
-                          hint: 'e.g. 30 ft / 9 m',
-                          icon: Icons.straighten_rounded,
-                          compactPrefix: true,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.lg),
-                PortalFadeSection(
-                  index: _isEdit ? 3 : 2,
-                  child: PortalFormSection(
-                    number: _isEdit ? '4' : '3',
-                    title: 'Terms',
-                    subtitle: 'Select the deal terms',
-                    icon: Icons.handshake_outlined,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _TermsDropdown(
-                          value: _termsType,
-                          onChanged: (v) => setState(() => _termsType = v),
-                        ),
-                        const SizedBox(height: 12),
-                        _Field(
-                          ctrl: _notesCtrl,
-                          label: 'Notes',
-                          hint: 'Any additional observations',
-                          icon: Icons.notes_outlined,
-                          maxLines: 3,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.lg),
-                if (!_isEdit) ...[
-                  PortalFadeSection(
-                    index: 3,
-                    child: _buildSitePhotosSection(),
-                  ),
-                  const SizedBox(height: AppSpacing.lg),
-                ],
-                PortalFadeSection(
-                  index: _isEdit ? 4 : 4,
-                  child: SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: AppColors.primaryGradient,
-                        borderRadius: BorderRadius.circular(AppColors.radiusSm),
-                        boxShadow: AppColors.coloredShadow(AppColors.primary),
-                      ),
-                      child: ElevatedButton.icon(
-                        onPressed: _submit,
-                        icon: const Icon(Icons.save_outlined),
-                        label: const Text(
-                          'Save Lead',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.transparent,
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          shadowColor: Colors.transparent,
-                          shape: RoundedRectangleBorder(
-                            borderRadius:
-                                BorderRadius.circular(AppColors.radiusSm),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 24),
-              ],
-            ),
-          ),
-        ),
-      ),
     );
   }
 }
 
-// ── Terms Dropdown ──────────────────────────────────────────────────────────
-
-double _compactDropdownWidth(BuildContext context) {
-  final screenW = MediaQuery.sizeOf(context).width;
-  return screenW > 520 ? 340.0 : screenW - 48;
-}
-
-Widget _compactDropdownShell({
-  required BuildContext context,
-  required Widget child,
-}) {
-  return Align(
-    alignment: Alignment.centerLeft,
-    child: SizedBox(
-      width: _compactDropdownWidth(context),
-      child: child,
-    ),
-  );
-}
-
-Widget _compactPrefixIcon(BuildContext context, IconData icon) {
-  final isDark = Theme.of(context).brightness == Brightness.dark;
-  final iconColor = isDark ? AppColors.primaryLight : AppColors.primary;
-  final iconBg =
-      isDark ? iconColor.withValues(alpha: 0.14) : const Color(0xFFEEF4FF);
-
-  return Padding(
-    padding: const EdgeInsets.only(left: 10, right: 4),
-    child: Container(
-      width: 28,
-      height: 28,
-      decoration: BoxDecoration(
-        color: iconBg,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      alignment: Alignment.center,
-      child: Icon(icon, size: 18, color: iconColor),
-    ),
-  );
-}
-
-Widget _compactDropdownOptionRow({
-  required BuildContext context,
-  required IconData icon,
-  required String label,
-  required Color iconColor,
-}) {
-  return _CompactDropdownOptionRow(
-    icon: icon,
-    label: label,
-    iconColor: iconColor,
-  );
-}
+// ── Form widgets ────────────────────────────────────────────────────────────
 
 IconData _inputSourceIcon(InputSource source) => switch (source) {
-      InputSource.broker => Icons.handshake_rounded,
-      InputSource.landowner => Icons.person_pin_circle_rounded,
-      InputSource.referral => Icons.groups_rounded,
-      InputSource.internalTeam => Icons.business_center_rounded,
-      InputSource.existingDatabase => Icons.storage_rounded,
+      InputSource.broker => Icons.handshake_outlined,
+      InputSource.landowner => Icons.person_pin_outlined,
+      InputSource.referral => Icons.group_outlined,
+      InputSource.internalTeam => Icons.business_center_outlined,
+      InputSource.existingDatabase => Icons.storage_outlined,
     };
 
 IconData _landTypeIcon(LandType type) => switch (type) {
-      LandType.agricultural => Icons.agriculture_rounded,
-      LandType.nonAgricultural => Icons.landscape_rounded,
-      LandType.residential => Icons.home_rounded,
-      LandType.commercial => Icons.storefront_rounded,
-      LandType.industrial => Icons.factory_rounded,
-      LandType.other => Icons.category_rounded,
+      LandType.agricultural => Icons.agriculture_outlined,
+      LandType.nonAgricultural => Icons.landscape_outlined,
+      LandType.residential => Icons.home_outlined,
+      LandType.commercial => Icons.storefront_outlined,
+      LandType.industrial => Icons.factory_outlined,
+      LandType.other => Icons.category_outlined,
     };
 
 class _TermsDropdown extends StatelessWidget {
@@ -918,686 +936,46 @@ class _TermsDropdown extends StatelessWidget {
         ? AppColors.primaryLight
         : AppColors.primary;
 
-    return _compactDropdownShell(
-      context: context,
-      child: DropdownButtonFormField<String>(
-        isExpanded: true,
-        initialValue: value,
-        onChanged: onChanged,
-        menuMaxHeight: 260,
-        itemHeight: 48,
-        borderRadius: BorderRadius.circular(16),
-        decoration: FomraInput.decoration(
-          context: context,
-          label: 'Terms',
-          hint: 'Select deal terms',
-          prefixIcon: _compactPrefixIcon(context, Icons.handshake_rounded),
-        ),
-        items: _kTermsOptions
-            .map(
-              (t) => DropdownMenuItem(
-                value: t.$1,
-                child: _compactDropdownOptionRow(
-                  context: context,
-                  icon: t.$2,
-                  label: t.$1,
-                  iconColor: iconColor,
-                ),
-              ),
-            )
-            .toList(),
-        selectedItemBuilder: (ctx) => _kTermsOptions
-            .map(
-              (t) => Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  t.$1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 14),
-                ),
-              ),
-            )
-            .toList(),
+    return DropdownButtonFormField<String>(
+      isExpanded: true,
+      initialValue: value,
+      onChanged: onChanged,
+      menuMaxHeight: 260,
+      borderRadius: BorderRadius.circular(AddLeadUi.fieldRadius),
+      decoration: addLeadInputDecoration(
+        context,
+        label: 'Terms',
+        hint: 'Select deal terms',
+        icon: Icons.handshake_outlined,
       ),
+      items: _kTermsOptions
+          .map(
+            (t) => DropdownMenuItem(
+              value: t.$1,
+              child: addLeadDropdownRow(
+                icon: t.$2,
+                label: t.$1,
+                iconColor: iconColor,
+              ),
+            ),
+          )
+          .toList(),
+      selectedItemBuilder: (ctx) => _kTermsOptions
+          .map(
+            (t) => Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                t.$1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 14),
+              ),
+            ),
+          )
+          .toList(),
     );
   }
 }
 
-
-// ── Site photo draft ─────────────────────────────────────────────────────────
-
-class _SitePhotoDraft {
-  final Uint8List bytes;
-  final String name;
-  final int originalSize;
-
-  const _SitePhotoDraft({
-    required this.bytes,
-    required this.name,
-    required this.originalSize,
-  });
-}
-
-// ── Multi photo upload ───────────────────────────────────────────────────────
-
-class _MultiPhotoUpload extends StatelessWidget {
-  final List<String> existingPhotoUrls;
-  final List<_SitePhotoDraft> photos;
-  final int maxPhotos;
-  final bool compressing;
-  final VoidCallback onPick;
-  final ValueChanged<int> onRemove;
-  final ValueChanged<int>? onRemoveExisting;
-
-  const _MultiPhotoUpload({
-    this.existingPhotoUrls = const [],
-    required this.photos,
-    required this.maxPhotos,
-    required this.compressing,
-    required this.onPick,
-    required this.onRemove,
-    this.onRemoveExisting,
-  });
-
-  int get _totalCount => existingPhotoUrls.length + photos.length;
-
-  @override
-  Widget build(BuildContext context) {
-    final canAdd = _totalCount < maxPhotos;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (existingPhotoUrls.isNotEmpty) ...[
-          Text(
-            'Current photos',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: context.fomraTextSecondary,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Column(
-            children: [
-              for (var i = 0; i < existingPhotoUrls.length; i++)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: _verticalPhotoTile(
-                    context,
-                    label: 'Photo ${i + 1}',
-                    child: Image.network(
-                      existingPhotoUrls[i],
-                      fit: BoxFit.cover,
-                      loadingBuilder: (_, child, progress) {
-                        if (progress == null) return child;
-                        return Container(
-                          color: context.fomraSurface,
-                          child: const Center(
-                            child: SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            ),
-                          ),
-                        );
-                      },
-                      errorBuilder: (_, __, ___) => _photoPlaceholder(),
-                    ),
-                    onRemove: onRemoveExisting == null
-                        ? null
-                        : () => onRemoveExisting!(i),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 8),
-        ],
-        if (photos.isNotEmpty) ...[
-          Text(
-            'New photos (saved when you tap Save)',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: context.fomraTextSecondary,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Column(
-            children: [
-              for (var i = 0; i < photos.length; i++)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: _verticalPhotoTile(
-                    context,
-                    label: 'New ${i + 1}',
-                    child: Image.memory(photos[i].bytes, fit: BoxFit.cover),
-                    onRemove: () => onRemove(i),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 8),
-        ],
-        if (_totalCount > 0) ...[
-          Text(
-            '$_totalCount of $maxPhotos photos · max 250 KB each',
-            style: TextStyle(fontSize: 11, color: context.fomraTextSecondary),
-          ),
-          const SizedBox(height: 12),
-        ],
-        if (compressing)
-          _uploadingIndicator(context)
-        else if (_totalCount == 0)
-          _uploadPrompt(context, onPick: onPick, prominent: true)
-        else if (canAdd)
-          _uploadPrompt(context, onPick: onPick, prominent: false),
-      ],
-    );
-  }
-
-  static const _thumbSize = 72.0;
-
-  static Widget _verticalPhotoTile(
-    BuildContext context, {
-    required Widget child,
-    required String label,
-    VoidCallback? onRemove,
-  }) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(
-          width: _thumbSize,
-          height: _thumbSize,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: child,
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 11,
-                  color: context.fomraTextSecondary,
-                ),
-              ),
-              if (onRemove != null)
-                TextButton.icon(
-                  onPressed: onRemove,
-                  icon: const Icon(Icons.delete_outline, size: 15),
-                  label: const Text('Remove', style: TextStyle(fontSize: 12)),
-                  style: TextButton.styleFrom(
-                    foregroundColor: AppColors.error,
-                    padding: EdgeInsets.zero,
-                    minimumSize: Size.zero,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  static Widget _uploadPrompt(
-    BuildContext context, {
-    required VoidCallback onPick,
-    required bool prominent,
-  }) {
-    return GestureDetector(
-      onTap: onPick,
-      child: Container(
-        width: double.infinity,
-        height: prominent ? 150 : 88,
-        decoration: BoxDecoration(
-          color: context.fomraSurface,
-          borderRadius: BorderRadius.circular(FomraInput.borderRadius),
-          border: Border.all(
-            color: AppColors.primary.withValues(alpha: prominent ? 0.5 : 0.35),
-            width: prominent ? 2 : 1.5,
-          ),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              padding: EdgeInsets.all(prominent ? 14 : 10),
-              decoration: BoxDecoration(
-                color: AppColors.primary.withValues(alpha: 0.08),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                Icons.add_a_photo_outlined,
-                color: AppColors.primary,
-                size: prominent ? 28 : 22,
-              ),
-            ),
-            SizedBox(height: prominent ? 10 : 6),
-            Text(
-              prominent ? 'Upload photo' : 'Add another photo',
-              style: TextStyle(
-                color: AppColors.primary,
-                fontWeight: FontWeight.w700,
-                fontSize: prominent ? 15 : 13,
-              ),
-            ),
-            if (prominent) ...[
-              const SizedBox(height: 4),
-              Text(
-                'JPG or PNG · up to 4 photos',
-                style: TextStyle(
-                  fontSize: 11,
-                  color: context.fomraTextSecondary,
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  static Widget _uploadingIndicator(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      height: 100,
-      decoration: BoxDecoration(
-        color: context.fomraSurface,
-        borderRadius: BorderRadius.circular(FomraInput.borderRadius),
-        border: Border.all(color: AppColors.primary.withValues(alpha: 0.35)),
-      ),
-      child: const Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          SizedBox(
-            width: 24,
-            height: 24,
-            child: CircularProgressIndicator(strokeWidth: 2.5),
-          ),
-          SizedBox(height: 8),
-          Text(
-            'Compressing photo to 250 KB…',
-            style: TextStyle(
-              color: AppColors.primary,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  static Widget _photoPlaceholder() {
-    return Container(
-      color: Colors.black12,
-      child: const Center(
-        child: Icon(Icons.broken_image_outlined, color: Colors.white54),
-      ),
-    );
-  }
-}
-
-// ── Map pin picker (manual mode) ─────────────────────────────────────────────
-
-class _LocationPinMap extends StatelessWidget {
-  final MapController mapController;
-  final String tileUrl;
-  final LatLng defaultCenter;
-  final LatLng? pinnedPoint;
-  final bool resolving;
-  final bool fetchingMyLocation;
-  final String? status;
-  final VoidCallback onMapReady;
-  final Future<void> Function(LatLng) onTap;
-  final Future<void> Function() onMyLocation;
-
-  const _LocationPinMap({
-    required this.mapController,
-    required this.tileUrl,
-    required this.defaultCenter,
-    required this.pinnedPoint,
-    required this.resolving,
-    required this.fetchingMyLocation,
-    required this.status,
-    required this.onMapReady,
-    required this.onTap,
-    required this.onMyLocation,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final filled = status != null && status!.contains('✓');
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(children: [
-          const Icon(Icons.map_outlined, size: 16, color: AppColors.primary),
-          const SizedBox(width: 6),
-          const Expanded(
-            child: Text(
-              'Pin location on map',
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: AppColors.textPrimary,
-              ),
-            ),
-          ),
-          TextButton.icon(
-            onPressed: fetchingMyLocation || resolving ? null : onMyLocation,
-            icon: fetchingMyLocation
-                ? const SizedBox(
-                    width: 14,
-                    height: 14,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.my_location, size: 16),
-            label: const Text('My location', style: TextStyle(fontSize: 12)),
-            style: TextButton.styleFrom(
-              foregroundColor: AppColors.primary,
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-            ),
-          ),
-        ]),
-        const SizedBox(height: 8),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(16),
-          child: SizedBox(
-            height: 240,
-            child: Stack(
-              children: [
-                FlutterMap(
-                  mapController: mapController,
-                  options: MapOptions(
-                    initialCenter: pinnedPoint ?? defaultCenter,
-                    initialZoom: pinnedPoint != null ? 16 : 11,
-                    onMapReady: onMapReady,
-                    onTap: (_, point) => onTap(point),
-                  ),
-                  children: [
-                    MapTilerTiles.tileLayer(urlTemplate: tileUrl),
-                    if (pinnedPoint != null)
-                      MarkerLayer(markers: [
-                        Marker(
-                          point: pinnedPoint!,
-                          width: 40,
-                          height: 48,
-                          child: const Icon(
-                            Icons.location_on,
-                            color: Color(0xFFE53935),
-                            size: 40,
-                          ),
-                        ),
-                      ]),
-                  ],
-                ),
-                if (pinnedPoint == null && !resolving)
-                  Positioned(
-                    left: 12,
-                    right: 12,
-                    bottom: 12,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: context.fomraSurface.withValues(alpha: 0.95),
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.08),
-                            blurRadius: 6,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.touch_app_outlined,
-                              size: 16, color: AppColors.primary),
-                          SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              'Tap the map to drop a pin — GPS, address & survey fill automatically',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: AppColors.textSecondary,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                if (resolving)
-                  Container(
-                    color: Colors.black26,
-                    child: const Center(
-                      child: CircularProgressIndicator(
-                        color: Colors.white,
-                        strokeWidth: 2.5,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ),
-        if (status != null) ...[
-          const SizedBox(height: 8),
-          Text(
-            status!,
-            style: TextStyle(
-              fontSize: 11,
-              color: filled ? AppColors.success : AppColors.textSecondary,
-              fontWeight: filled ? FontWeight.w600 : FontWeight.normal,
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-}
-
-// ── Location Mode Toggle ────────────────────────────────────────────────────
-
-class _LocationModeToggle extends StatelessWidget {
-  final _LocationMode mode;
-  final ValueChanged<_LocationMode> onChanged;
-  const _LocationModeToggle({required this.mode, required this.onChanged});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: context.fomraSurfaceVar,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      padding: const EdgeInsets.all(4),
-      child: Row(children: [
-        _Tab(
-          icon: Icons.edit_outlined,
-          label: 'Fill Manually',
-          active: mode == _LocationMode.manual,
-          onTap: () => onChanged(_LocationMode.manual),
-        ),
-        _Tab(
-          icon: Icons.my_location,
-          label: 'Live Location',
-          active: mode == _LocationMode.live,
-          onTap: () => onChanged(_LocationMode.live),
-        ),
-      ]),
-    );
-  }
-}
-
-class _Tab extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final bool active;
-  final VoidCallback onTap;
-  const _Tab({
-    required this.icon,
-    required this.label,
-    required this.active,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          decoration: BoxDecoration(
-            color: active ? AppColors.primary : Colors.transparent,
-            borderRadius: BorderRadius.circular(9),
-            boxShadow: active
-                ? [
-                    BoxShadow(
-                        color: AppColors.primary.withValues(alpha: 0.25),
-                        blurRadius: 6,
-                        offset: const Offset(0, 2))
-                  ]
-                : null,
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon,
-                  size: 16,
-                  color: active ? Colors.white : context.fomraTextSecondary),
-              const SizedBox(width: 6),
-              Text(label,
-                  style: TextStyle(
-                      fontSize: 13,
-                      fontWeight:
-                          active ? FontWeight.w600 : FontWeight.normal,
-                      color: active
-                          ? Colors.white
-                          : context.fomraTextSecondary)),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ── Live Location Button ────────────────────────────────────────────────────
-
-class _LiveLocationButton extends StatelessWidget {
-  final bool fetching;
-  final String? status;
-  final VoidCallback? onTap;
-
-  const _LiveLocationButton({
-    required this.fetching,
-    required this.status,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final bool filled = status != null && status!.contains('✓');
-
-    return Material(
-      color: filled
-          ? AppColors.success.withValues(alpha: 0.08)
-          : AppColors.primary.withValues(alpha: 0.06),
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          padding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: filled
-                  ? AppColors.success.withValues(alpha: 0.4)
-                  : AppColors.primary.withValues(alpha: 0.3),
-            ),
-          ),
-          child: Row(children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: filled ? AppColors.success : AppColors.primary,
-                shape: BoxShape.circle,
-              ),
-              child: fetching
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                          color: Colors.white, strokeWidth: 2))
-                  : Icon(
-                      filled ? Icons.location_on : Icons.my_location,
-                      color: Colors.white,
-                      size: 18,
-                    ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    fetching
-                        ? 'Getting live location…'
-                        : 'Get Live Location',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color:
-                          filled ? AppColors.success : AppColors.primary,
-                    ),
-                  ),
-                  if (status != null) ...[
-                    const SizedBox(height: 2),
-                    Text(status!,
-                        style: TextStyle(
-                            fontSize: 11,
-                            color: filled
-                                ? AppColors.success
-                                : AppColors.textSecondary)),
-                  ] else
-                    const Text(
-                      'Auto-fills GPS, location, village, taluk, district & survey',
-                      style: TextStyle(
-                          fontSize: 11, color: AppColors.textSecondary),
-                    ),
-                ],
-              ),
-            ),
-            if (!fetching)
-              Icon(
-                filled ? Icons.check_circle : Icons.chevron_right,
-                color: filled
-                    ? AppColors.success
-                    : AppColors.textSecondary,
-              ),
-          ]),
-        ),
-      ),
-    );
-  }
-}
-
-// ── Input Source Dropdown ───────────────────────────────────────────────────
 
 class _InputSourceDropdown extends StatelessWidget {
   final InputSource? value;
@@ -1611,127 +989,43 @@ class _InputSourceDropdown extends StatelessWidget {
         ? AppColors.primaryLight
         : AppColors.primary;
 
-    return _compactDropdownShell(
-      context: context,
-      child: DropdownButtonFormField<InputSource>(
-        isExpanded: true,
-        initialValue: value,
-        onChanged: onChanged,
-        menuMaxHeight: 260,
-        itemHeight: 48,
-        borderRadius: BorderRadius.circular(16),
-        decoration: FomraInput.decoration(
-          context: context,
-          label: 'Input Source',
-          hint: 'Select who brought this lead',
-          prefixIcon: _compactPrefixIcon(context, Icons.source_rounded),
-          required: true,
-        ),
-        items: InputSource.values
-            .map(
-              (s) => DropdownMenuItem(
-                value: s,
-                child: _compactDropdownOptionRow(
-                  context: context,
-                  icon: _inputSourceIcon(s),
-                  label: s.label,
-                  iconColor: iconColor,
-                ),
-              ),
-            )
-            .toList(),
-        selectedItemBuilder: (ctx) => InputSource.values
-            .map(
-              (s) => Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  s.label,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 14),
-                ),
-              ),
-            )
-            .toList(),
+    return DropdownButtonFormField<InputSource>(
+      isExpanded: true,
+      initialValue: value,
+      onChanged: onChanged,
+      menuMaxHeight: 260,
+      borderRadius: BorderRadius.circular(AddLeadUi.fieldRadius),
+      decoration: addLeadInputDecoration(
+        context,
+        label: 'Input Source',
+        hint: 'Select who brought this lead',
+        icon: Icons.source_outlined,
+        required: true,
       ),
-    );
-  }
-}
-
-class _CompactDropdownOptionRow extends StatefulWidget {
-  final IconData icon;
-  final String label;
-  final Color iconColor;
-
-  const _CompactDropdownOptionRow({
-    required this.icon,
-    required this.label,
-    required this.iconColor,
-  });
-
-  @override
-  State<_CompactDropdownOptionRow> createState() =>
-      _CompactDropdownOptionRowState();
-}
-
-class _CompactDropdownOptionRowState extends State<_CompactDropdownOptionRow> {
-  bool _hovered = false;
-
-  static const _iconBg = Color(0xFFEEF4FF);
-  static const _hoverBg = Color(0xFFF5F9FF);
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final iconBg = isDark
-        ? widget.iconColor.withValues(alpha: 0.14)
-        : _iconBg;
-    final hoverBg = isDark
-        ? widget.iconColor.withValues(alpha: 0.08)
-        : _hoverBg;
-
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        curve: Curves.easeOut,
-        height: 46,
-        padding: const EdgeInsets.symmetric(horizontal: 10),
-        decoration: BoxDecoration(
-          color: _hovered ? hoverBg : Colors.transparent,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 28,
-              height: 28,
-              decoration: BoxDecoration(
-                color: iconBg,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              alignment: Alignment.center,
-              child: Icon(
-                widget.icon,
-                size: 18,
-                color: widget.iconColor,
+      items: InputSource.values
+          .map(
+            (s) => DropdownMenuItem(
+              value: s,
+              child: addLeadDropdownRow(
+                icon: _inputSourceIcon(s),
+                label: s.label,
+                iconColor: iconColor,
               ),
             ),
-            const SizedBox(width: 11),
-            Expanded(
+          )
+          .toList(),
+      selectedItemBuilder: (ctx) => InputSource.values
+          .map(
+            (s) => Align(
+              alignment: Alignment.centerLeft,
               child: Text(
-                widget.label,
+                s.label,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  color: context.fomraTextPrimary,
-                ),
+                style: const TextStyle(fontSize: 14),
               ),
             ),
-          ],
-        ),
-      ),
+          )
+          .toList(),
     );
   }
 }
@@ -1746,26 +1040,43 @@ class _ReadOnlyField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      height: AddLeadUi.fieldHeight,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
-        color: context.fomraSurfaceVar,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: context.fomraBorder),
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(AddLeadUi.fieldRadius),
+        border: Border.all(color: AddLeadUi.cardBorder),
       ),
-      child: Row(children: [
-        const Icon(Icons.tag, size: 18, color: AppColors.textSecondary),
-        const SizedBox(width: 10),
-        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(label,
-              style: const TextStyle(
-                  fontSize: 11, color: AppColors.textSecondary)),
-          Text(value,
-              style: const TextStyle(
-                  fontSize: 13,
-                  color: AppColors.textSecondary,
-                  fontStyle: FontStyle.italic)),
-        ]),
-      ]),
+      child: Row(
+        children: [
+          addLeadFieldIcon(Icons.tag_outlined, color: AppColors.textSecondary),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(
+                    fontSize: 10,
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: context.fomraTextSecondary,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -1780,7 +1091,7 @@ class _Field extends StatelessWidget {
   final bool required;
   final int maxLines;
   final TextInputType keyboardType;
-  final bool compactPrefix;
+  final bool light;
 
   const _Field({
     required this.ctrl,
@@ -1790,28 +1101,44 @@ class _Field extends StatelessWidget {
     this.required = false,
     this.maxLines = 1,
     this.keyboardType = TextInputType.text,
-    this.compactPrefix = false,
+    this.light = false,
   });
 
   @override
   Widget build(BuildContext context) {
+    final decoration = addLeadInputDecoration(
+      context,
+      label: label,
+      hint: hint,
+      icon: icon,
+      required: required,
+      maxLines: maxLines,
+    );
+
     return TextFormField(
       controller: ctrl,
       maxLines: maxLines,
       keyboardType: keyboardType,
+      style: TextStyle(
+        fontSize: 14,
+        color: context.fomraTextPrimary,
+        fontWeight: light ? FontWeight.w400 : FontWeight.w500,
+      ),
       validator: required
           ? (v) =>
               (v == null || v.trim().isEmpty) ? '$label is required' : null
           : null,
-      decoration: FomraInput.decoration(
-        context: context,
-        label: label,
-        hint: hint,
-        icon: compactPrefix ? null : icon,
-        prefixIcon:
-            compactPrefix ? _compactPrefixIcon(context, icon) : null,
-        required: required,
-      ),
+      decoration: light
+          ? decoration.copyWith(
+              fillColor: const Color(0xFFFCFDFE),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(AddLeadUi.fieldRadius),
+                borderSide: BorderSide(
+                  color: AddLeadUi.cardBorder.withValues(alpha: 0.9),
+                ),
+              ),
+            )
+          : decoration,
     );
   }
 }
@@ -1830,47 +1157,42 @@ class _LandTypeDropdown extends StatelessWidget {
         ? AppColors.primaryLight
         : AppColors.primary;
 
-    return _compactDropdownShell(
-      context: context,
-      child: DropdownButtonFormField<LandType>(
-        isExpanded: true,
-        initialValue: value,
-        onChanged: onChanged,
-        menuMaxHeight: 280,
-        itemHeight: 48,
-        borderRadius: BorderRadius.circular(16),
-        decoration: FomraInput.decoration(
-          context: context,
-          label: 'Land Type',
-          prefixIcon: _compactPrefixIcon(context, Icons.terrain_rounded),
-          required: true,
-        ),
-        items: LandType.values
-            .map(
-              (t) => DropdownMenuItem(
-                value: t,
-                child: _compactDropdownOptionRow(
-                  context: context,
-                  icon: _landTypeIcon(t),
-                  label: t.label,
-                  iconColor: iconColor,
-                ),
-              ),
-            )
-            .toList(),
-        selectedItemBuilder: (ctx) => LandType.values
-            .map(
-              (t) => Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  t.label,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 14),
-                ),
-              ),
-            )
-            .toList(),
+    return DropdownButtonFormField<LandType>(
+      isExpanded: true,
+      initialValue: value,
+      onChanged: onChanged,
+      menuMaxHeight: 280,
+      borderRadius: BorderRadius.circular(AddLeadUi.fieldRadius),
+      decoration: addLeadInputDecoration(
+        context,
+        label: 'Land Type',
+        icon: Icons.terrain_outlined,
+        required: true,
       ),
+      items: LandType.values
+          .map(
+            (t) => DropdownMenuItem(
+              value: t,
+              child: addLeadDropdownRow(
+                icon: _landTypeIcon(t),
+                label: t.label,
+                iconColor: iconColor,
+              ),
+            ),
+          )
+          .toList(),
+      selectedItemBuilder: (ctx) => LandType.values
+          .map(
+            (t) => Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                t.label,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 14),
+              ),
+            ),
+          )
+          .toList(),
     );
   }
 }
