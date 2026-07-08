@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'services/auth_link.dart';
 import 'services/auth_service.dart';
 import 'services/session_scoped_local_storage.dart';
 import 'services/supabase_config.dart';
@@ -18,6 +19,9 @@ import 'screens/settings/change_password_screen.dart';
 import 'screens/settings/settings_screen.dart';
 
 void main() {
+  // Snapshot the launch URL before Flutter's hash router can rewrite the
+  // fragment (invite / recovery tokens live there).
+  AuthLink.capture();
   runZonedGuarded(() async {
     WidgetsFlutterBinding.ensureInitialized();
     FlutterError.onError = FlutterError.presentError;
@@ -118,23 +122,13 @@ class _StartupScreenState extends State<_StartupScreen> {
     if (!mounted) return;
     if (error != null) {
       setState(() => _error = error);
-    } else if (_isAuthCallback(Uri.base)) {
+    } else if (AuthLink.isAuthCallback) {
       // Arrived from an invite / password-recovery email link.
       Navigator.of(context).pushReplacementNamed('/set-password');
     } else {
       Navigator.of(context)
           .pushReplacementNamed(loggedIn ? '/home' : '/login');
     }
-  }
-
-  /// True when the current URL carries Supabase auth tokens from an email link
-  /// (invite or password recovery), which the set-password screen consumes.
-  static bool _isAuthCallback(Uri uri) {
-    final blob = '${uri.query}&${uri.fragment}';
-    return blob.contains('type=invite') ||
-        blob.contains('type=recovery') ||
-        blob.contains('access_token=') ||
-        blob.contains('error_code=');
   }
 
   @override

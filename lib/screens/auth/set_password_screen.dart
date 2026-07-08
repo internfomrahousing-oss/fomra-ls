@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../services/auth_link.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../widgets/ui/app_components.dart';
@@ -44,8 +45,8 @@ class _SetPasswordScreenState extends State<SetPasswordScreen> {
   /// Turn the tokens in the invite URL into an authenticated session.
   Future<void> _consumeLink() async {
     try {
-      final res =
-          await Supabase.instance.client.auth.getSessionFromUrl(Uri.base);
+      final res = await Supabase.instance.client.auth
+          .getSessionFromUrl(AuthLink.initialUri);
       _email = res.session.user.email;
     } catch (_) {
       _linkError =

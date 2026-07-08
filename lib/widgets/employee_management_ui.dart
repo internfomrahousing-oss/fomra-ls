@@ -188,12 +188,14 @@ class EmployeeManagementCard extends StatelessWidget {
   final EmployeeProfile employee;
   final VoidCallback onRemoveAccess;
   final VoidCallback onResetPassword;
+  final VoidCallback onProvisionLogin;
 
   const EmployeeManagementCard({
     super.key,
     required this.employee,
     required this.onRemoveAccess,
     required this.onResetPassword,
+    required this.onProvisionLogin,
   });
 
   @override
@@ -305,6 +307,7 @@ class EmployeeManagementCard extends StatelessWidget {
               shadowColor: Colors.black26,
               onSelected: (v) {
                 if (v == 'reset') onResetPassword();
+                if (v == 'provision') onProvisionLogin();
                 if (v == 'remove') onRemoveAccess();
               },
               itemBuilder: (_) => [
@@ -314,6 +317,14 @@ class EmployeeManagementCard extends StatelessWidget {
                     contentPadding: EdgeInsets.zero,
                     leading: Icon(Icons.mark_email_read_outlined, size: 20),
                     title: Text('Resend invite'),
+                  ),
+                ),
+                const PopupMenuItem(
+                  value: 'provision',
+                  child: ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(Icons.password_outlined, size: 20),
+                    title: Text('Set login to fomra@2024'),
                   ),
                 ),
                 const PopupMenuItem(

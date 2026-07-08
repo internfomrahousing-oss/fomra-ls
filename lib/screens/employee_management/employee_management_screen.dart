@@ -67,6 +67,47 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
     }
   }
 
+  /// Give a pre-invite employee an immediate login with the shared password
+  /// fomra@2024 (they can change it later). For migrating existing staff.
+  Future<void> _provisionLogin(EmployeeProfile employee) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Set login to fomra@2024'),
+        content: Text(
+          'Create a login for ${employee.email} with the password fomra@2024? '
+          'They can sign in immediately and change it later.',
+          style: TextStyle(fontSize: 13, color: context.fomraTextSecondary),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Set password')),
+        ],
+      ),
+    );
+    if (confirm != true || !mounted) return;
+    try {
+      await EmployeeService.provisionLogin(employee.email);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('${employee.email} can now log in with fomra@2024'),
+        behavior: SnackBarBehavior.floating,
+      ));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(e.toString().replaceFirst('Exception: ', '')),
+        backgroundColor: AppColors.error,
+        behavior: SnackBarBehavior.floating,
+      ));
+    }
+  }
+
   /// Re-send the "set your password" invite email. The employee then chooses
   /// their own new password — management never sets or sees it.
   Future<void> _resetPassword(EmployeeProfile employee) async {
@@ -317,6 +358,8 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                                         _confirmRemoveAccess(_filtered[i]),
                                     onResetPassword: () =>
                                         _resetPassword(_filtered[i]),
+                                    onProvisionLogin: () =>
+                                        _provisionLogin(_filtered[i]),
                                   ),
                                 ),
                               ),

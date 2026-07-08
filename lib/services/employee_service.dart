@@ -102,6 +102,22 @@ class EmployeeService {
     }
   }
 
+  /// Give an existing employee a ready-to-use login with a known [password]
+  /// (default 'fomra@2024'): create the Supabase Auth user if needed, then set
+  /// the password so it works whether or not the account already existed.
+  /// Management only. Used to migrate pre-invite employees.
+  static Future<void> provisionLogin(String email,
+      {String password = 'fomra@2024'}) async {
+    final token = _db.auth.currentSession?.accessToken;
+    if (token == null) {
+      throw Exception(
+          'Sign in as management (with your real password) to set up logins.');
+    }
+    final normalized = email.trim().toLowerCase();
+    await provisionAuthUser(normalized, password: password);
+    await resetAuthPassword(normalized, password);
+  }
+
   /// Provision auth users for every current employee (one-time backfill).
   /// Returns the number attempted. Management only.
   static Future<int> provisionAllEmployees() async {
