@@ -253,6 +253,33 @@ class AuthService {
     }
   }
 
+  /// Sends a "reset your password" email to [email]. The link lands on the
+  /// app's /set-password screen where the user chooses a new password. For
+  /// privacy, Supabase does not reveal whether the address has an account.
+  Future<void> sendPasswordReset(String email) async {
+    final normalized = email.trim().toLowerCase();
+    if (normalized.isEmpty || !normalized.contains('@')) {
+      throw const ApiException(
+        statusCode: 400,
+        message: 'Enter a valid email address.',
+      );
+    }
+    String redirect;
+    try {
+      final origin = Uri.base.origin; // real web origin (dev or prod)
+      redirect = origin.startsWith('http')
+          ? '$origin/set-password'
+          : 'https://fomra-ls.vercel.app/set-password';
+    } catch (_) {
+      redirect = 'https://fomra-ls.vercel.app/set-password';
+    }
+    try {
+      await _client.auth.resetPasswordForEmail(normalized, redirectTo: redirect);
+    } on AuthException catch (e) {
+      throw ApiException(statusCode: 400, message: e.message);
+    }
+  }
+
   Future<void> logout() async {
     try {
       await _client.auth.signOut();
