@@ -61,6 +61,11 @@ class _LeadDetailScreenState extends State<LeadDetailScreen> {
       appBar: FomraSubPageAppBar(
         title: lead.ownerName,
         subtitle: lead.leadId,
+        subtitleStyle: TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.w700,
+          color: Colors.white.withValues(alpha: 0.95),
+        ),
         actions: [
           TextButton.icon(
             onPressed: _openEdit,
