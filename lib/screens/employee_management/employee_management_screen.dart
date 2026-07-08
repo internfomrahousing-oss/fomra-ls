@@ -149,28 +149,6 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
     }
   }
 
-  Future<void> _provisionAllLogins() async {
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-      content: Text('Provisioning employee logins…'),
-      behavior: SnackBarBehavior.floating,
-    ));
-    try {
-      final n = await EmployeeService.provisionAllEmployees();
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Provisioned logins for $n employee(s).'),
-        behavior: SnackBarBehavior.floating,
-      ));
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(e.toString().replaceFirst('Exception: ', '')),
-        backgroundColor: AppColors.error,
-        behavior: SnackBarBehavior.floating,
-      ));
-    }
-  }
-
   Future<void> _confirmRemoveAccess(EmployeeProfile employee) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -262,15 +240,8 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                     onChanged: (v) => setState(() => _search = v),
                   ),
                   const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: EmployeeManagementAddButton(
-                          onPressed: _openAddEmployee,
-                        ),
-                      ),
-                      _moreMenu(),
-                    ],
+                  EmployeeManagementAddButton(
+                    onPressed: _openAddEmployee,
                   ),
                 ],
               );
@@ -286,7 +257,6 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                 EmployeeManagementAddButton(
                   onPressed: _openAddEmployee,
                 ),
-                _moreMenu(),
               ],
             );
           },
@@ -371,28 +341,6 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
     );
   }
 
-  Widget _moreMenu() {
-    return PopupMenuButton<String>(
-      tooltip: 'More',
-      icon: Icon(Icons.more_vert_rounded, color: context.fomraTextSecondary),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      elevation: 8,
-      onSelected: (v) {
-        if (v == 'provision') _provisionAllLogins();
-      },
-      itemBuilder: (_) => const [
-        PopupMenuItem(
-          value: 'provision',
-          child: ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: Icon(Icons.key_outlined, size: 20),
-            title: Text('Provision logins for all'),
-            subtitle: Text('One-time: give every employee a login'),
-          ),
-        ),
-      ],
-    );
-  }
 }
 
 class _EmployeeLoadingSkeleton extends StatelessWidget {
