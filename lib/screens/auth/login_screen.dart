@@ -416,14 +416,17 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
             ),
+            const SizedBox(height: 8),
             Align(
               alignment: Alignment.centerRight,
               child: TextButton(
                 onPressed: _loading ? null : _forgotPassword,
                 style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                  foregroundColor: AppColors.primary,
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
                   minimumSize: Size.zero,
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  visualDensity: VisualDensity.compact,
                 ),
                 child: const Text(
                   'Forgot password?',
