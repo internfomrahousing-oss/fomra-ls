@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -43,6 +45,43 @@ class ReportService {
     LeadReportType reportType = LeadReportType.all,
     String? employeeName,
   }) async {
+    final bytes = await _buildReport(
+      leads,
+      employees: employees,
+      reportType: reportType,
+      employeeName: employeeName,
+    );
+    await savePdf(
+      bytes,
+      reportFileName(reportType: reportType, employeeName: employeeName),
+    );
+  }
+
+  /// The download file name for a given report selection.
+  static String reportFileName({
+    LeadReportType reportType = LeadReportType.all,
+    String? employeeName,
+  }) {
+    final suffix = switch (reportType) {
+      LeadReportType.all => 'All',
+      LeadReportType.totalLeads => 'Total_Leads',
+      LeadReportType.acquiredLeads => 'Acquired_Leads',
+      LeadReportType.brokerLeads => 'Broker_Leads',
+      LeadReportType.employeeLeads =>
+        employeeName == null || employeeName.trim().isEmpty
+            ? 'Employee_Leads_All'
+            : 'Employee_${_fileSafe(employeeName)}',
+    };
+    return 'FomraLS_Report_${suffix}_'
+        '${DateFormat('yyyyMMdd').format(DateTime.now())}.pdf';
+  }
+
+  static Future<Uint8List> _buildReport(
+    List<LandLead> leads, {
+    List<EmployeeProfile> employees = const [],
+    LeadReportType reportType = LeadReportType.all,
+    String? employeeName,
+  }) async {
     final now = DateTime.now();
 
     final acquired =
@@ -81,21 +120,7 @@ class ReportService {
       ),
     );
 
-    final bytes = await doc.save();
-    final suffix = switch (reportType) {
-      LeadReportType.all => 'All',
-      LeadReportType.totalLeads => 'Total_Leads',
-      LeadReportType.acquiredLeads => 'Acquired_Leads',
-      LeadReportType.brokerLeads => 'Broker_Leads',
-      LeadReportType.employeeLeads =>
-        employeeName == null || employeeName.trim().isEmpty
-            ? 'Employee_Leads_All'
-            : 'Employee_${_fileSafe(employeeName)}',
-    };
-    await savePdf(
-      bytes,
-      'FomraLS_Report_${suffix}_${DateFormat('yyyyMMdd').format(now)}.pdf',
-    );
+    return doc.save();
   }
 
   // ── Sections ────────────────────────────────────────────────────────────

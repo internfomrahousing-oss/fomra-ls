@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 
 import '../../models/land_lead.dart';
 import '../../services/app_store.dart';
-import '../../services/auth_service.dart';
 import '../../services/report_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_layout.dart';
@@ -32,12 +31,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   int _chartAnimToken = 0;
   LeadReportType _selectedReportType = LeadReportType.all;
   String _selectedEmployeeReport = _kAllEmployees;
-  bool _showReportPreview = true;
-
-  static const List<String> _monthNames = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December',
-  ];
 
   List<String> get _employeeNames {
     final names = <String>{};
@@ -92,56 +85,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
         LeadReportType.employeeLeads => AppColors.warning,
       };
 
-  /// Visual-only estimate of how many records the selected report covers.
-  int _estimatedRecords() {
-    final leads = AppStore.instance.leads;
-    switch (_selectedReportType) {
-      case LeadReportType.all:
-      case LeadReportType.totalLeads:
-        return leads.length;
-      case LeadReportType.acquiredLeads:
-        return leads.where((l) => l.status == LeadStatus.closed).length;
-      case LeadReportType.brokerLeads:
-        return leads
-            .where((l) => l.inputSource == InputSource.broker)
-            .length;
-      case LeadReportType.employeeLeads:
-        if (_selectedEmployeeReport == _kAllEmployees) {
-          return (_employeeNames.length - 1).clamp(0, 9999);
-        }
-        return leads
-            .where((l) =>
-                l.createdByName.trim().toLowerCase() ==
-                _selectedEmployeeReport.trim().toLowerCase())
-            .length;
-    }
-  }
-
-  String _estimatedSize(int records) {
-    final mb = 0.35 + records * 0.012;
-    return '${mb.toStringAsFixed(1)} MB';
-  }
-
-  String _formattedDate(DateTime d) =>
-      '${d.day.toString().padLeft(2, '0')} ${_monthNames[d.month - 1]} ${d.year}';
-
-  String _previewFileName() {
-    final now = DateTime.now();
-    final token = switch (_selectedReportType) {
-      LeadReportType.all => 'All',
-      LeadReportType.totalLeads => 'Total_Leads',
-      LeadReportType.acquiredLeads => 'Acquired_Leads',
-      LeadReportType.brokerLeads => 'Broker_Leads',
-      LeadReportType.employeeLeads =>
-        _selectedEmployeeReport == _kAllEmployees
-            ? 'Employee_Leads'
-            : 'Employee_${_selectedEmployeeReport.replaceAll(RegExp(r'[^A-Za-z0-9]+'), '_')}',
-    };
-    final date =
-        '${now.day.toString().padLeft(2, '0')}_${_monthNames[now.month - 1]}_${now.year}';
-    return '${token}_Report_$date.pdf';
-  }
-
   Future<void> _generateReport() async {
     if (_generatingReport) return;
     setState(() => _generatingReport = true);
@@ -168,13 +111,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  void _resetReportForm() {
-    setState(() {
-      _selectedReportType = LeadReportType.all;
-      _selectedEmployeeReport = _kAllEmployees;
-    });
-  }
-
   /// Premium "Export PDF Report" wizard card shown above Recent activity.
   Widget _buildReportCard(BuildContext context, {required bool leadsEmpty}) {
     return AppCard(
@@ -192,8 +128,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
             const SizedBox(height: 24),
             _buildReportTypeSection(context),
             _buildEmployeeFilter(context),
-            const SizedBox(height: 24),
-            _buildPreviewSection(context),
             const SizedBox(height: 24),
             _buildReportFooter(context),
           ],
@@ -358,182 +292,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildPreviewSection(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            const Expanded(
-              child: _ReportSectionLabel(
-                icon: Icons.visibility_outlined,
-                label: 'Report Preview',
-              ),
-            ),
-            TextButton.icon(
-              onPressed: () => setState(
-                () => _showReportPreview = !_showReportPreview,
-              ),
-              icon: Icon(
-                _showReportPreview
-                    ? Icons.expand_less_rounded
-                    : Icons.expand_more_rounded,
-                size: 18,
-              ),
-              label: Text(_showReportPreview ? 'Hide' : 'Show'),
-            ),
-          ],
-        ),
-        AnimatedSwitcher(
-          duration: const Duration(milliseconds: 220),
-          transitionBuilder: (child, animation) => FadeTransition(
-            opacity: animation,
-            child: SizeTransition(
-              sizeFactor: animation,
-              alignment: Alignment.topCenter,
-              child: child,
-            ),
-          ),
-          child: !_showReportPreview
-              ? const SizedBox(width: double.infinity)
-              : Padding(
-                  key: const ValueKey('preview-card'),
-                  padding: const EdgeInsets.only(top: 8),
-                  child: _buildPreviewCard(context),
-                ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildPreviewCard(BuildContext context) {
-    final records = _estimatedRecords();
-    final user = AuthService.instance.currentUser;
-    final generatedBy = (user?.fullName.trim().isNotEmpty ?? false)
-        ? user!.fullName.trim()
-        : 'Current User';
-    final now = DateTime.now();
-
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: context.fomraSurfaceVar,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: context.fomraBorder),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: AppColors.error.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                alignment: Alignment.center,
-                child: const Icon(
-                  Icons.description_outlined,
-                  color: AppColors.error,
-                  size: 20,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  _previewFileName(),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: context.fomraTextPrimary,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Wrap(
-            spacing: 24,
-            runSpacing: 14,
-            children: [
-              _PreviewStat(
-                label: 'Estimated Records',
-                value: '$records Record${records == 1 ? '' : 's'}',
-              ),
-              _PreviewStat(
-                label: 'Estimated Size',
-                value: _estimatedSize(records),
-              ),
-              _PreviewStat(label: 'Generated By', value: generatedBy),
-              _PreviewStat(
-                label: 'Generated On',
-                value: _formattedDate(now),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildReportFooter(BuildContext context) {
     return Container(
       padding: const EdgeInsets.only(top: 20),
       decoration: BoxDecoration(
         border: Border(top: BorderSide(color: context.fomraBorder)),
       ),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final stacked = constraints.maxWidth < 480;
-          final buttons = <Widget>[
-            SecondaryButton(
-              label: 'Cancel',
-              icon: Icons.close_rounded,
-              expand: stacked,
-              onPressed: _generatingReport ? null : _resetReportForm,
-            ),
-            TextButton.icon(
-              onPressed: _generatingReport
-                  ? null
-                  : () => setState(
-                        () => _showReportPreview = true,
-                      ),
-              icon: const Icon(Icons.visibility_outlined, size: 18),
-              label: const Text('Preview'),
-            ),
-            PrimaryButton(
-              label: _generatingReport ? 'Preparing PDF…' : 'Generate PDF',
-              icon: Icons.picture_as_pdf_outlined,
-              loading: _generatingReport,
-              expand: stacked,
-              onPressed: _generatingReport ? null : _generateReport,
-            ),
-          ];
-          if (stacked) {
-            return Column(
-              children: [
-                buttons[2],
-                const SizedBox(height: 10),
-                buttons[1],
-                const SizedBox(height: 10),
-                buttons[0],
-              ],
-            );
-          }
-          return Row(
-            children: [
-              buttons[0],
-              const SizedBox(width: 12),
-              buttons[1],
-              const Spacer(),
-              buttons[2],
-            ],
-          );
-        },
+      child: PrimaryButton(
+        label: _generatingReport ? 'Preparing PDF…' : 'Generate PDF',
+        icon: Icons.picture_as_pdf_outlined,
+        loading: _generatingReport,
+        expand: true,
+        onPressed: _generatingReport ? null : _generateReport,
       ),
     );
   }
@@ -1550,41 +1320,6 @@ class _ReportTypeCard extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-class _PreviewStat extends StatelessWidget {
-  final String label;
-  final String value;
-
-  const _PreviewStat({required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          label.toUpperCase(),
-          style: TextStyle(
-            fontSize: 10,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.6,
-            color: context.fomraTextTertiary,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w700,
-            color: context.fomraTextPrimary,
-          ),
-        ),
-      ],
     );
   }
 }
