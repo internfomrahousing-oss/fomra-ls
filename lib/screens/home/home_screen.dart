@@ -262,6 +262,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final brokerLeads =
         leads.where((l) => l.inputSource == InputSource.broker).length;
     final teamRows = buildPortalTeamPerformance(leads);
+    final leadsByEmployee = <String, List<LandLead>>{};
+    for (final lead in leads) {
+      final name = lead.createdByName.trim();
+      if (name.isEmpty || name.toLowerCase() == 'management') continue;
+      leadsByEmployee.putIfAbsent(name, () => []).add(lead);
+    }
 
     final quickActions = [
       PortalQuickAction(
@@ -410,7 +416,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           : Column(
                               children: [
                                 for (final row in teamRows) ...[
-                                  PortalPerformanceRow(data: row),
+                                  PortalPerformanceRow(
+                                    data: row,
+                                    leads: leadsByEmployee[row.name] ?? const [],
+                                    onViewLead: (lead) {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) =>
+                                              LeadDetailScreen(lead: lead),
+                                        ),
+                                      );
+                                    },
+                                  ),
                                   if (row != teamRows.last)
                                     const SizedBox(height: AppSpacing.sm),
                                 ],

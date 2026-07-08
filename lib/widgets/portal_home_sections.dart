@@ -695,14 +695,47 @@ List<PortalTeamPerf> buildPortalTeamPerformance(List<LandLead> leads) {
 
 class PortalPerformanceRow extends StatefulWidget {
   final PortalTeamPerf data;
+  final List<LandLead> leads;
+  final ValueChanged<LandLead>? onViewLead;
 
-  const PortalPerformanceRow({super.key, required this.data});
+  const PortalPerformanceRow({
+    super.key,
+    required this.data,
+    this.leads = const [],
+    this.onViewLead,
+  });
 
   @override
   State<PortalPerformanceRow> createState() => _PortalPerformanceRowState();
 }
 
 class _PortalPerformanceRowState extends State<PortalPerformanceRow> {
+  static const _expandMs = Duration(milliseconds: 280);
+  bool _expanded = false;
+  bool _hovered = false;
+
+  String _priorityLabel(LandLead lead) {
+    return switch (lead.status) {
+      LeadStatus.closed => 'Low',
+      LeadStatus.lost => 'Low',
+      LeadStatus.contacted => 'Medium',
+      LeadStatus.siteVisit => 'Medium',
+      _ => 'High',
+    };
+  }
+
+  StatusTone _priorityTone(LandLead lead) {
+    return switch (lead.status) {
+      LeadStatus.closed => StatusTone.success,
+      LeadStatus.lost => StatusTone.neutral,
+      LeadStatus.contacted => StatusTone.warning,
+      LeadStatus.siteVisit => StatusTone.warning,
+      _ => StatusTone.danger,
+    };
+  }
+
+  String _fmtDate(DateTime dt) => '${dt.day}/${dt.month}/${dt.year}';
+
   @override
   Widget build(BuildContext context) {
     final data = widget.data;
@@ -720,105 +753,387 @@ class _PortalPerformanceRowState extends State<PortalPerformanceRow> {
             .map((e) => e[0])
             .join();
 
-    return AppCard(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      radius: AppColors.radiusMd,
-      interactive: false,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: accent.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            alignment: Alignment.center,
-            child: Text(
-              initials.toUpperCase(),
-              style: TextStyle(fontWeight: FontWeight.w800, color: accent),
-            ),
+    final leads = widget.leads;
+    final activeLeads = leads
+        .where((l) =>
+            l.status != LeadStatus.closed && l.status != LeadStatus.lost)
+        .length;
+    final closedLeads =
+        leads.where((l) => l.status == LeadStatus.closed).length;
+    final conversionRate = leads.isEmpty ? 0 : ((closedLeads / leads.length) * 100).round();
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: AnimatedContainer(
+        duration: _expandMs,
+        curve: Curves.easeOutCubic,
+        decoration: BoxDecoration(
+          color: context.fomraSurface,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: _expanded
+                ? AppColors.primary.withValues(alpha: 0.26)
+                : context.fomraBorder.withValues(alpha: _hovered ? 0.9 : 0.75),
           ),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        data.name,
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          color: context.fomraTextPrimary,
+          boxShadow: _hovered || _expanded ? context.fomraCardShadow : null,
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(20),
+            onTap: () => setState(() => _expanded = !_expanded),
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              child: Column(
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: 42,
+                        height: 42,
+                        decoration: BoxDecoration(
+                          color: accent.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          initials.toUpperCase(),
+                          style: TextStyle(fontWeight: FontWeight.w800, color: accent),
                         ),
                       ),
-                    ),
-                    Text(
-                      '#${data.rank}',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w800,
-                        color: accent,
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    data.name,
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w700,
+                                      color: context.fomraTextPrimary,
+                                    ),
+                                  ),
+                                ),
+                                Text(
+                                  '#${data.rank}',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w800,
+                                    color: accent,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            if (data.designation.isNotEmpty) ...[
+                              const SizedBox(height: 3),
+                              Text(
+                                data.designation,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: context.fomraTextSecondary,
+                                ),
+                              ),
+                            ],
+                            const SizedBox(height: AppSpacing.sm),
+                            TweenAnimationBuilder<double>(
+                              tween: Tween(begin: 0, end: data.percent),
+                              duration: AppMotion.slow,
+                              curve: AppMotion.curve,
+                              builder: (_, value, __) => Row(
+                                children: [
+                                  Expanded(
+                                    child: ClipRRect(
+                                      borderRadius: BorderRadius.circular(999),
+                                      child: LinearProgressIndicator(
+                                        value: value,
+                                        minHeight: 10,
+                                        backgroundColor:
+                                            accent.withValues(alpha: 0.12),
+                                        valueColor:
+                                            AlwaysStoppedAnimation<Color>(accent),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: AppSpacing.sm),
+                                  Text(
+                                    '${(value * 100).round()}%',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                      color: context.fomraTextPrimary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: AppSpacing.sm),
+                            Wrap(
+                              spacing: AppSpacing.xs,
+                              runSpacing: AppSpacing.xs,
+                              children: [
+                                StatusChip(label: data.statusLabel, tone: data.tone),
+                                _TinyStat(label: 'Lead count', value: '${data.total}'),
+                                _TinyStat(label: 'Today', value: '${data.today}'),
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
+                      const SizedBox(width: 8),
+                      AnimatedRotation(
+                        turns: _expanded ? 0.5 : 0,
+                        duration: _expandMs,
+                        curve: Curves.easeOutCubic,
+                        child: Icon(
+                          Icons.keyboard_arrow_down_rounded,
+                          size: 24,
+                          color: context.fomraTextSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                  AnimatedSize(
+                    duration: _expandMs,
+                    curve: Curves.easeOutCubic,
+                    child: !_expanded
+                        ? const SizedBox.shrink()
+                        : Column(
+                            children: [
+                              const SizedBox(height: 14),
+                              const Divider(height: 1),
+                              const SizedBox(height: 14),
+                              _PerformanceSummaryRow(
+                                totalLeads: leads.length,
+                                activeLeads: activeLeads,
+                                closedDeals: closedLeads,
+                                conversionRate: conversionRate,
+                              ),
+                              const SizedBox(height: 12),
+                              if (leads.isEmpty)
+                                _PerformanceEmptyState(name: data.name)
+                              else
+                                _PerformanceLeadList(
+                                  leads: leads,
+                                  fmtDate: _fmtDate,
+                                  priorityLabel: _priorityLabel,
+                                  priorityTone: _priorityTone,
+                                  onViewLead: widget.onViewLead,
+                                ),
+                            ],
+                          ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PerformanceSummaryRow extends StatelessWidget {
+  final int totalLeads;
+  final int activeLeads;
+  final int closedDeals;
+  final int conversionRate;
+
+  const _PerformanceSummaryRow({
+    required this.totalLeads,
+    required this.activeLeads,
+    required this.closedDeals,
+    required this.conversionRate,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        _TinyStat(label: 'Total Leads', value: '$totalLeads'),
+        _TinyStat(label: 'Active Leads', value: '$activeLeads'),
+        _TinyStat(label: 'Closed Deals', value: '$closedDeals'),
+        _TinyStat(label: 'Conversion Rate', value: '$conversionRate%'),
+      ],
+    );
+  }
+}
+
+StatusTone _statusTone(LeadStatus status) {
+  return switch (status) {
+    LeadStatus.new_ => StatusTone.primary,
+    LeadStatus.contacted => StatusTone.warning,
+    LeadStatus.siteVisit => StatusTone.warning,
+    LeadStatus.negotiation => StatusTone.danger,
+    LeadStatus.closed => StatusTone.success,
+    LeadStatus.lost => StatusTone.neutral,
+  };
+}
+
+class _PerformanceLeadList extends StatelessWidget {
+  final List<LandLead> leads;
+  final String Function(DateTime) fmtDate;
+  final String Function(LandLead) priorityLabel;
+  final StatusTone Function(LandLead) priorityTone;
+  final ValueChanged<LandLead>? onViewLead;
+
+  const _PerformanceLeadList({
+    required this.leads,
+    required this.fmtDate,
+    required this.priorityLabel,
+    required this.priorityTone,
+    required this.onViewLead,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        _LeadHeaderRow(),
+        const SizedBox(height: 8),
+        for (final lead in leads) ...[
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: context.fomraSurfaceVar.withValues(alpha: 0.5),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: context.fomraBorder.withValues(alpha: 0.5)),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  flex: 19,
+                  child: Text(
+                    lead.ownerName.trim().isEmpty ? 'Lead #${lead.leadId}' : lead.ownerName.trim(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: context.fomraTextPrimary,
                     ),
-                  ],
+                  ),
                 ),
-                if (data.designation.isNotEmpty) ...[
-                  const SizedBox(height: 3),
-                  Text(
-                    data.designation,
+                Expanded(
+                  flex: 22,
+                  child: Text(
+                    '${lead.landType.label} • ${lead.village.isNotEmpty ? lead.village : lead.location}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontSize: 12,
                       color: context.fomraTextSecondary,
                     ),
                   ),
-                ],
-                const SizedBox(height: AppSpacing.sm),
-                TweenAnimationBuilder<double>(
-                  tween: Tween(begin: 0, end: data.percent),
-                  duration: AppMotion.slow,
-                  curve: AppMotion.curve,
-                  builder: (_, value, __) => Row(
-                    children: [
-                      Expanded(
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(999),
-                          child: LinearProgressIndicator(
-                            value: value,
-                            minHeight: 10,
-                            backgroundColor: accent.withValues(alpha: 0.12),
-                            valueColor: AlwaysStoppedAnimation<Color>(accent),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: AppSpacing.sm),
-                      Text(
-                        '${(value * 100).round()}%',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: context.fomraTextPrimary,
-                        ),
-                      ),
-                    ],
+                ),
+                Expanded(
+                  flex: 12,
+                  child: StatusChip(label: lead.status.label, tone: _statusTone(lead.status)),
+                ),
+                Expanded(
+                  flex: 10,
+                  child: StatusChip(label: priorityLabel(lead), tone: priorityTone(lead)),
+                ),
+                Expanded(
+                  flex: 12,
+                  child: Text(
+                    fmtDate(lead.addedOn.toLocal()),
+                    style: TextStyle(fontSize: 11, color: context.fomraTextSecondary),
                   ),
                 ),
-                const SizedBox(height: AppSpacing.sm),
-                Wrap(
-                  spacing: AppSpacing.xs,
-                  runSpacing: AppSpacing.xs,
-                  children: [
-                    StatusChip(label: data.statusLabel, tone: data.tone),
-                    _TinyStat(label: 'Lead count', value: '${data.total}'),
-                    _TinyStat(label: 'Today', value: '${data.today}'),
-                  ],
+                Expanded(
+                  flex: 12,
+                  child: Text(
+                    fmtDate(lead.addedOn.toLocal()),
+                    style: TextStyle(fontSize: 11, color: context.fomraTextSecondary),
+                  ),
+                ),
+                Expanded(
+                  flex: 8,
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton(
+                      onPressed: onViewLead == null ? null : () => onViewLead!(lead),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      child: const Text('View'),
+                    ),
+                  ),
                 ),
               ],
             ),
+          ),
+          if (lead != leads.last) const SizedBox(height: 8),
+        ],
+      ],
+    );
+  }
+}
+
+class _LeadHeaderRow extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    TextStyle style = TextStyle(
+      fontSize: 11,
+      fontWeight: FontWeight.w700,
+      color: context.fomraTextSecondary,
+    );
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: Row(
+        children: [
+          Expanded(flex: 19, child: Text('Lead Name', style: style)),
+          Expanded(flex: 22, child: Text('Property / Location', style: style)),
+          Expanded(flex: 12, child: Text('Current Stage', style: style)),
+          Expanded(flex: 10, child: Text('Priority', style: style)),
+          Expanded(flex: 12, child: Text('Last Activity', style: style)),
+          Expanded(flex: 12, child: Text('Assigned Date', style: style)),
+          Expanded(flex: 8, child: Text('Action', style: style)),
+        ],
+      ),
+    );
+  }
+}
+
+class _PerformanceEmptyState extends StatelessWidget {
+  final String name;
+  const _PerformanceEmptyState({required this.name});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: context.fomraSurfaceVar.withValues(alpha: 0.6),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: context.fomraBorder.withValues(alpha: 0.6)),
+      ),
+      child: Column(
+        children: [
+          Icon(Icons.inbox_outlined, color: context.fomraTextSecondary),
+          const SizedBox(height: 8),
+          Text(
+            'No leads assigned to $name',
+            style: TextStyle(
+              fontWeight: FontWeight.w700,
+              color: context.fomraTextPrimary,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Leads assigned to this employee will appear here.',
+            style: TextStyle(fontSize: 12, color: context.fomraTextSecondary),
           ),
         ],
       ),
