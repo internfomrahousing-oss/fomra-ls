@@ -101,7 +101,32 @@ module.exports = async (req, res) => {
     'Content-Type': 'application/json',
   };
 
+  // Where the invite email's "set password" link should land the user.
+  const APP_URL = (process.env.APP_URL || 'https://fomra-ls.vercel.app').replace(/\/$/, '');
+  const REDIRECT_TO = `${APP_URL}/set-password`;
+
   try {
+    if (action === 'invite') {
+      // Send an invite email. The recipient clicks the link and sets their own
+      // password (handled by the app's /set-password screen). No password is
+      // ever set here. Idempotent-ish: an already-registered email returns ok.
+      const r = await fetch(
+        `${SUPABASE_URL}/auth/v1/invite?redirect_to=${encodeURIComponent(REDIRECT_TO)}`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ email }),
+        }
+      );
+      if (r.ok) return res.status(200).json({ ok: true, invited: true });
+      const err = await r.json().catch(() => ({}));
+      const msg = `${err.msg || err.error_description || err.message || ''}`.toLowerCase();
+      if (r.status === 422 || msg.includes('already') || msg.includes('registered') || msg.includes('exists')) {
+        return res.status(200).json({ ok: true, invited: false, existed: true });
+      }
+      return res.status(r.status).json({ error: err.msg || err.message || 'invite failed' });
+    }
+
     if (action === 'provision') {
       // Create a confirmed auth user. Idempotent: treat "already exists" as ok.
       const r = await fetch(base, {
@@ -131,7 +156,7 @@ module.exports = async (req, res) => {
       return res.status(r.status).json({ error: err.msg || err.message || 'reset failed' });
     }
 
-    return res.status(400).json({ error: 'unknown action (use "provision" or "reset")' });
+    return res.status(400).json({ error: 'unknown action (use "invite", "provision" or "reset")' });
   } catch (e) {
     return res.status(500).json({ error: String(e && e.message ? e.message : e) });
   }

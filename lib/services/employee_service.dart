@@ -43,6 +43,37 @@ class EmployeeService {
     } catch (_) {/* endpoint not deployed / offline — profile still created */}
   }
 
+  /// Send an invite email so [email] can set their own password and get a real
+  /// Supabase Auth login. Management only (uses the caller's session token).
+  /// Best-effort: if there's no management session the profile is still created,
+  /// and management can re-send the invite later.
+  static Future<void> inviteEmployee(String email) async {
+    final token = _db.auth.currentSession?.accessToken;
+    if (token == null) {
+      throw Exception(
+          'Sign in as management (with your real password) to invite employees.');
+    }
+    final res = await http.post(
+      Uri.parse('${ApiClient.baseUrl}/api/employee-auth'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+      body: jsonEncode({
+        'action': 'invite',
+        'email': email.trim().toLowerCase(),
+      }),
+    );
+    if (res.statusCode >= 400) {
+      String msg = 'Invite failed (${res.statusCode}).';
+      try {
+        final j = jsonDecode(res.body);
+        if (j is Map && j['error'] != null) msg = j['error'].toString();
+      } catch (_) {}
+      throw Exception(msg);
+    }
+  }
+
   /// Reset an employee's login password (management only).
   static Future<void> resetAuthPassword(String email, String password) async {
     final token = _db.auth.currentSession?.accessToken;
@@ -154,8 +185,8 @@ class EmployeeService {
         all.insert(0, profile);
         await _saveCache(all);
       }
-      // Best-effort: give the new employee a real auth login (default password).
-      await provisionAuthUser(profile.email);
+      // The invite email (so the employee sets their own password) is sent by
+      // the caller via [inviteEmployee], so its outcome can be surfaced.
       return profile;
     } catch (e) {
       final profile = EmployeeProfile(

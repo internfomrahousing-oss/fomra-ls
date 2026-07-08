@@ -36,11 +36,22 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
         fullName: _nameCtrl.text,
         email: _emailCtrl.text,
       );
+      // Send the "set your password" invite email. If it fails, the profile is
+      // still created — surface the reason so management can re-send.
+      String? inviteError;
+      try {
+        await EmployeeService.inviteEmployee(profile.email);
+      } catch (e) {
+        inviteError = e.toString().replaceFirst('Exception: ', '');
+      }
       if (!mounted) return;
       Navigator.pop(context, profile);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Profile created for ${profile.fullName}'),
+          content: Text(inviteError == null
+              ? 'Invitation sent to ${profile.email} to set their password.'
+              : 'Profile created, but the invite could not be sent: $inviteError'),
+          backgroundColor: inviteError == null ? null : AppColors.error,
           behavior: SnackBarBehavior.floating,
         ),
       );

@@ -7,6 +7,7 @@ import 'services/supabase_config.dart';
 import 'services/theme_controller.dart';
 import 'theme/app_theme.dart';
 import 'screens/auth/login_screen.dart';
+import 'screens/auth/set_password_screen.dart';
 import 'screens/home/home_screen.dart';
 import 'screens/land_lead/land_workspace_screen.dart';
 import 'screens/market_intelligence/market_intelligence_screen.dart';
@@ -43,6 +44,7 @@ class FomraLSApp extends StatelessWidget {
         home: const _StartupScreen(),
         routes: {
           '/login':               (_) => const LoginScreen(),
+          '/set-password':        (_) => const SetPasswordScreen(),
           '/home':                (_) => const HomeScreen(),
           '/employee-portal':     (_) => const TaskManagementScreen(
                                       portalMode: TaskPortalMode.employee),
@@ -116,10 +118,23 @@ class _StartupScreenState extends State<_StartupScreen> {
     if (!mounted) return;
     if (error != null) {
       setState(() => _error = error);
+    } else if (_isAuthCallback(Uri.base)) {
+      // Arrived from an invite / password-recovery email link.
+      Navigator.of(context).pushReplacementNamed('/set-password');
     } else {
       Navigator.of(context)
           .pushReplacementNamed(loggedIn ? '/home' : '/login');
     }
+  }
+
+  /// True when the current URL carries Supabase auth tokens from an email link
+  /// (invite or password recovery), which the set-password screen consumes.
+  static bool _isAuthCallback(Uri uri) {
+    final blob = '${uri.query}&${uri.fragment}';
+    return blob.contains('type=invite') ||
+        blob.contains('type=recovery') ||
+        blob.contains('access_token=') ||
+        blob.contains('error_code=');
   }
 
   @override
