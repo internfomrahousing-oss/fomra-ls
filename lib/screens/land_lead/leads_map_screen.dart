@@ -43,6 +43,9 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
   @override
   Widget build(BuildContext context) {
     final plotted = _plotted;
+    final initialView = plotted.isEmpty
+        ? null
+        : _computeCenterAndZoom(plotted);
 
     return Scaffold(
       appBar: AppBar(
@@ -61,11 +64,10 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
                 FlutterMap(
                   mapController: _mapController,
                   options: MapOptions(
-                    initialCenter: plotted.first.point,
-                    initialZoom: 11,
+                    initialCenter: initialView!.$1,
+                    initialZoom: initialView.$2,
                     onMapReady: () {
                       setState(() => _mapReady = true);
-                      _fitAll(plotted);
                     },
                   ),
                   children: [
@@ -221,10 +223,9 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
     );
   }
 
-  void _fitAll(List<_PlottedLead> plotted) {
+  (LatLng, double) _computeCenterAndZoom(List<_PlottedLead> plotted) {
     if (plotted.length == 1) {
-      _mapController.move(plotted.first.point, 15);
-      return;
+      return (plotted.first.point, 15);
     }
 
     var minLat = plotted.first.point.latitude;
@@ -261,7 +262,7 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
       zoom = 13;
     }
 
-    _mapController.move(center, zoom);
+    return (center, zoom);
   }
 
   void _openLead(BuildContext context, LandLead lead) {
