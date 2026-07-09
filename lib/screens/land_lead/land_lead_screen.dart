@@ -56,6 +56,21 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
       .map((e) => e.fullName)
       .toList();
 
+  /// Names to offer when assigning [leadIds]: drops anyone who is already the
+  /// assignee of every selected lead (assigning to them would be a no-op).
+  List<String> _assignableNamesFor(Set<String> leadIds) {
+    final selected = AppStore.instance.leads
+        .where((l) => leadIds.contains(l.leadId))
+        .toList();
+    if (selected.isEmpty) return _employeeNames;
+    return _employeeNames.where((n) {
+      final name = n.trim().toLowerCase();
+      final ownsEvery = selected
+          .every((l) => l.createdByName.trim().toLowerCase() == name);
+      return !ownsEvery;
+    }).toList();
+  }
+
   Future<void> _loadEmployees() async {
     if (AppStore.instance.employees.isNotEmpty) return;
     try {
@@ -82,10 +97,10 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
   /// Ask which employee to assign the selected leads to, confirm, then assign.
   Future<void> _assignSelected() async {
     if (_selectedLeadIds.isEmpty) return;
-    final names = _employeeNames;
+    final names = _assignableNamesFor(_selectedLeadIds);
     if (names.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('No employees available to assign.'),
+        content: Text('No other employees to assign these lead(s) to.'),
         behavior: SnackBarBehavior.floating,
       ));
       return;
