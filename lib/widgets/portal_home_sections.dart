@@ -482,37 +482,41 @@ class PortalQuickActionsGrid extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          // Fit as many cards per row as the min card width allows, then stretch
-          // them with Expanded so the row fills the full width (no trailing gap).
+          // Fit as many cards per row as the min card width allows, then widen
+          // each computed card so the row fills the full width (no trailing gap).
+          // Uses a Wrap with explicit widths — never Expanded — so an unbounded
+          // width constraint can't crash the layout (which blanked the page).
           final maxW = constraints.maxWidth;
+          if (!maxW.isFinite || maxW <= 0) {
+            return Wrap(
+              spacing: _gridGap,
+              runSpacing: _gridGap,
+              children: [
+                for (final action in actions)
+                  SizedBox(
+                    width: _cardWidth,
+                    height: _cardHeight,
+                    child: _QuickActionCard(data: action),
+                  ),
+              ],
+            );
+          }
           var perRow = ((maxW + _gridGap) / (_cardWidth + _gridGap)).floor();
           if (perRow < 1) perRow = 1;
           if (perRow > actions.length) perRow = actions.length;
+          final cardW = (maxW - _gridGap * (perRow - 1)) / perRow;
 
-          final rows = <Widget>[];
-          for (var i = 0; i < actions.length; i += perRow) {
-            final cells = <Widget>[];
-            for (var j = 0; j < perRow; j++) {
-              if (j > 0) cells.add(const SizedBox(width: _gridGap));
-              final index = i + j;
-              cells.add(Expanded(
-                child: index < actions.length
-                    ? SizedBox(
-                        height: _cardHeight,
-                        child: _QuickActionCard(data: actions[index]),
-                      )
-                    : const SizedBox(height: _cardHeight),
-              ));
-            }
-            if (rows.isNotEmpty) rows.add(const SizedBox(height: _gridGap));
-            rows.add(Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: cells,
-            ));
-          }
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: rows,
+          return Wrap(
+            spacing: _gridGap,
+            runSpacing: _gridGap,
+            children: [
+              for (final action in actions)
+                SizedBox(
+                  width: cardW,
+                  height: _cardHeight,
+                  child: _QuickActionCard(data: action),
+                ),
+            ],
           );
         },
       ),
