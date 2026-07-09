@@ -325,29 +325,27 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
   /// Always-visible management actions shown next to the lead summary:
   /// Select (enter assign mode) and Show all projects (open the leads map).
   Widget _buildIdleManagementActions() {
-    return Align(
-      alignment: Alignment.centerRight,
-      // IntrinsicWidth + stretch makes both pills the width of the wider one,
-      // so they stack up/down aligned to the same right edge.
-      child: IntrinsicWidth(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _actionPill(
-              onTap: _toggleSelectMode,
-              icon: Icons.checklist_rtl,
-              label: 'Select',
-            ),
-            const SizedBox(height: 8),
-            _actionPill(
-              onTap: _openLeadsMap,
-              icon: Icons.map_outlined,
-              label: 'Show all projects',
-              foreground: const Color(0xFF0F766E),
-              background: const Color(0xFF0F766E).withValues(alpha: 0.10),
-            ),
-          ],
-        ),
+    // Match the lead cards' extra horizontal inset so the pills line up with
+    // the cards' left/right edges, on a single row.
+    final inset = FomraLayout.pagePadding(context).left;
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: inset),
+      child: Row(
+        children: [
+          _actionPill(
+            onTap: _toggleSelectMode,
+            icon: Icons.checklist_rtl,
+            label: 'Select',
+          ),
+          const SizedBox(width: 8),
+          _actionPill(
+            onTap: _openLeadsMap,
+            icon: Icons.map_outlined,
+            label: 'Show all projects',
+            foreground: const Color(0xFF0F766E),
+            background: const Color(0xFF0F766E).withValues(alpha: 0.10),
+          ),
+        ],
       ),
     );
   }
