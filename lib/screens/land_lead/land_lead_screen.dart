@@ -325,24 +325,30 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
   /// Always-visible management actions shown next to the lead summary:
   /// Select (enter assign mode) and Show all projects (open the leads map).
   Widget _buildIdleManagementActions() {
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      alignment: WrapAlignment.end,
-      children: [
-        _actionPill(
-          onTap: _toggleSelectMode,
-          icon: Icons.checklist_rtl,
-          label: 'Select',
+    return Align(
+      alignment: Alignment.centerRight,
+      // IntrinsicWidth + stretch makes both pills the width of the wider one,
+      // so they stack up/down aligned to the same right edge.
+      child: IntrinsicWidth(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _actionPill(
+              onTap: _toggleSelectMode,
+              icon: Icons.checklist_rtl,
+              label: 'Select',
+            ),
+            const SizedBox(height: 8),
+            _actionPill(
+              onTap: _openLeadsMap,
+              icon: Icons.map_outlined,
+              label: 'Show all projects',
+              foreground: const Color(0xFF0F766E),
+              background: const Color(0xFF0F766E).withValues(alpha: 0.10),
+            ),
+          ],
         ),
-        _actionPill(
-          onTap: _openLeadsMap,
-          icon: Icons.map_outlined,
-          label: 'Show all projects',
-          foreground: const Color(0xFF0F766E),
-          background: const Color(0xFF0F766E).withValues(alpha: 0.10),
-        ),
-      ],
+      ),
     );
   }
 
