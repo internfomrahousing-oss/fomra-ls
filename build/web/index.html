@@ -121,14 +121,18 @@
       navigator.serviceWorker.getRegistrations()
         .then(function (regs) {
           regs.forEach(function (r) {
-            var url = (r.active && r.active.scriptURL) || '';
-            if (url.indexOf('firebase-messaging-sw') === -1) r.unregister();
+            var sw = r.active || r.waiting || r.installing;
+            var url = (sw && sw.scriptURL) || '';
+            // ONLY remove Flutter's own SW. Never touch the FCM push worker —
+            // an installing worker has an empty scriptURL, so a broad check
+            // would wrongly kill firebase-messaging-sw.js mid-install.
+            if (url.indexOf('flutter_service_worker') !== -1) r.unregister();
           });
         })
         .catch(function () {});
-      navigator.serviceWorker.register = function (script) {
+      navigator.serviceWorker.register = function (script, opts) {
         if (typeof script === 'string' && script.indexOf('firebase-messaging-sw') !== -1) {
-          return __origRegister(script);
+          return __origRegister(script, opts); // forward scope/options
         }
         return Promise.reject(new Error('service worker disabled'));
       };
