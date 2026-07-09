@@ -480,17 +480,41 @@ class PortalQuickActionsGrid extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Wrap(
-        spacing: _gridGap,
-        runSpacing: _gridGap,
-        children: [
-          for (final action in actions)
-            SizedBox(
-              width: _cardWidth,
-              height: _cardHeight,
-              child: _QuickActionCard(data: action),
-            ),
-        ],
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // Fit as many cards per row as the min card width allows, then stretch
+          // them with Expanded so the row fills the full width (no trailing gap).
+          final maxW = constraints.maxWidth;
+          var perRow = ((maxW + _gridGap) / (_cardWidth + _gridGap)).floor();
+          if (perRow < 1) perRow = 1;
+          if (perRow > actions.length) perRow = actions.length;
+
+          final rows = <Widget>[];
+          for (var i = 0; i < actions.length; i += perRow) {
+            final cells = <Widget>[];
+            for (var j = 0; j < perRow; j++) {
+              if (j > 0) cells.add(const SizedBox(width: _gridGap));
+              final index = i + j;
+              cells.add(Expanded(
+                child: index < actions.length
+                    ? SizedBox(
+                        height: _cardHeight,
+                        child: _QuickActionCard(data: actions[index]),
+                      )
+                    : const SizedBox(height: _cardHeight),
+              ));
+            }
+            if (rows.isNotEmpty) rows.add(const SizedBox(height: _gridGap));
+            rows.add(Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: cells,
+            ));
+          }
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: rows,
+          );
+        },
       ),
     );
   }
