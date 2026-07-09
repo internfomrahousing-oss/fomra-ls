@@ -839,65 +839,84 @@ class _ToastCardState extends State<_ToastCard>
   Widget build(BuildContext context) {
     final curve = CurvedAnimation(parent: _controller, curve: Curves.easeOut);
     final d = widget.data;
-    return SizeTransition(
-      sizeFactor: curve,
-      child: FadeTransition(
-        opacity: curve,
-        child: SlideTransition(
-          position: Tween<Offset>(
-            begin: const Offset(0.35, 0),
-            end: Offset.zero,
-          ).animate(curve),
-          child: Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: Dismissible(
-              key: ValueKey('toast-${widget.key}'),
-              direction: DismissDirection.startToEnd, // swipe right to close
-              onDismissed: (_) => widget.onDismiss(),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                decoration: BoxDecoration(
-                  color: d.color,
-                  borderRadius: BorderRadius.circular(AppColors.radiusMd),
-                  boxShadow: const [
-                    BoxShadow(
-                      color: Color(0x33000000),
-                      blurRadius: 12,
-                      offset: Offset(0, 4),
+    // Slide the whole card in from off the right edge.
+    return FadeTransition(
+      opacity: curve,
+      child: SlideTransition(
+        position: Tween<Offset>(
+          begin: const Offset(1.15, 0),
+          end: Offset.zero,
+        ).animate(curve),
+        child: Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: Dismissible(
+            key: ValueKey('toast-${widget.key}'),
+            direction: DismissDirection.startToEnd, // swipe right to close
+            onDismissed: (_) => widget.onDismiss(),
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(12, 12, 8, 12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(AppColors.radiusMd),
+                border: Border.all(color: AppColors.border),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x1F000000),
+                    blurRadius: 16,
+                    offset: Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Colored icon chip keeps the type accent on the white card.
+                  Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      color: d.color.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(9),
                     ),
-                  ],
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(d.icon, color: Colors.white, size: 22),
-                    const SizedBox(width: 12),
-                    Flexible(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            d.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w700,
-                            ),
+                    child: Icon(d.icon, color: d.color, size: 20),
+                  ),
+                  const SizedBox(width: 12),
+                  Flexible(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          d.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: AppColors.textPrimary,
+                            fontWeight: FontWeight.w700,
                           ),
-                          if (d.message.isNotEmpty)
-                            Text(
-                              d.message,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(color: Colors.white70),
-                            ),
-                        ],
-                      ),
+                        ),
+                        if (d.message.isNotEmpty)
+                          Text(
+                            d.message,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(color: AppColors.textSecondary),
+                          ),
+                      ],
                     ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(width: 6),
+                  // Close (X) button — tap to dismiss.
+                  InkWell(
+                    onTap: widget.onDismiss,
+                    borderRadius: BorderRadius.circular(999),
+                    child: const Padding(
+                      padding: EdgeInsets.all(4),
+                      child: Icon(Icons.close,
+                          color: AppColors.textSecondary, size: 18),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
