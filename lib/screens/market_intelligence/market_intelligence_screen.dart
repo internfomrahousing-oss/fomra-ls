@@ -2156,7 +2156,11 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
           ],
           if (_showSearchResults && _searchResults.isNotEmpty) ...[
             const SizedBox(height: 6),
-            Container(
+            NotificationListener<ScrollNotification>(
+              // Keep wheel/drag scrolling inside the suggestions list — don't
+              // let it bubble to the map or page behind it.
+              onNotification: (_) => true,
+              child: Container(
               constraints: const BoxConstraints(maxHeight: 220),
               decoration: BoxDecoration(
                 color: context.fomraSurface,
@@ -2171,6 +2175,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
               ),
               child: ListView.separated(
                 shrinkWrap: true,
+                physics: const ClampingScrollPhysics(),
                 itemCount: _searchResults.length,
                 separatorBuilder: (_, __) =>
                     const Divider(height: 1, indent: 40),
@@ -2199,6 +2204,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                   );
                 },
               ),
+            ),
             ),
           ],
         ],
