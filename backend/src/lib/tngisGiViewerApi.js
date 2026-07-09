@@ -75,8 +75,13 @@ function isInvalidFmbPdfBase64(pdfBase64) {
     }
   } catch (_) { /* fall through to size check */ }
 
-  // 3) Only reject tiny payloads — not a full sketch PDF.
-  if (buf.length < 500) return true;
+  // 3) Size heuristic. The TNGIS "does not exist / blank" error template is a
+  // ~13KB page whose error text is drawn as vector glyph outlines, so the text
+  // scans above can't see it. A genuine cadastral FMB sketch (survey outline,
+  // subdivision lines, corner coordinates, Tahsildar seal + title block) is
+  // always far larger — the smallest real sketches we see are 100KB+. Anything
+  // under ~30KB is the error/blank template, never a real government sketch.
+  if (buf.length < 30 * 1024) return true;
 
   return false;
 }
