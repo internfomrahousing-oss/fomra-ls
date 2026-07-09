@@ -423,8 +423,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
       return (label: '0%', up: true, neutral: true);
     }
     if (lastWeek == 0) {
+      // No prior-week baseline: a "% change from zero" is undefined, so don't
+      // fabricate +100% on every card. Show it as new activity instead — real
+      // percentages appear once there's a non-zero week to compare against.
       final up = lowerIsBetter ? false : true;
-      return (label: '+100%', up: up, neutral: false);
+      return (label: 'New', up: up, neutral: false);
     }
 
     final pct = (((thisWeek - lastWeek) / lastWeek) * 100).round();

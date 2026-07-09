@@ -122962,7 +122962,7 @@ return r},
 a38(a,b,c){return new A.ah(a,new A.b_2(this,A.cQ(A.bh(b),A.bm(b),A.cj(b),0,0,0,0),A.cQ(A.bh(c),A.bm(c),A.cj(c),0,0,0,0)),A.a2(a).i("ah<1>")).gp(0)},
 abZ(a,b){var s,r,q,p,o=new A.bp(Date.now(),0,!1),n=A.cQ(A.bh(o),A.bm(o),A.cj(o),0,0,0,0),m=n.js(-5184e8),l=n.js(-6048e8),k=n.js(-11232e8),j=this.a38(a,m,n),i=this.a38(a,k,l)
 if(j===0&&i===0)return new A.BQ("0%",!0,!0)
-if(i===0)return new A.BQ("+100%",!1,!b)
+if(i===0)return new A.BQ("New",!1,!b)
 s=B.n.an((j-i)/i*100)
 if(s===0)return new A.BQ("0%",!0,!0)
 r=s>0
