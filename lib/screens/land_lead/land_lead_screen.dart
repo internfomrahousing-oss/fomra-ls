@@ -340,9 +340,10 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
   /// Always-visible management actions shown next to the lead summary:
   /// Select (enter assign mode) and Show all projects (open the leads map).
   Widget _buildIdleManagementActions() {
-    // Both pills on one row, right-aligned above the Filter button.
+    // Both pills on one row, sized to content so they sit in the empty space
+    // to the right of the KPI summary tiles.
     return Row(
-      mainAxisAlignment: MainAxisAlignment.end,
+      mainAxisSize: MainAxisSize.min,
       children: [
         _actionPill(
           onTap: _toggleSelectMode,
@@ -510,7 +511,16 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
             index: 0,
             child: Padding(
               padding: const EdgeInsets.only(top: 8, bottom: 4),
-              child: _LeadSummary(leads: _leads),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(child: _LeadSummary(leads: _leads)),
+                  if (_isManagement && !_selectMode) ...[
+                    const SizedBox(width: 12),
+                    _buildIdleManagementActions(),
+                  ],
+                ],
+              ),
             ),
           ),
         ),
@@ -521,10 +531,6 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                if (_isManagement && !_selectMode) ...[
-                  _buildIdleManagementActions(),
-                  const SizedBox(height: 10),
-                ],
                 LandWorkspaceSearchBar(
                   onChanged: (q) => setState(() => _search = q),
                   activeFilterCount: _activeFilterCount,
