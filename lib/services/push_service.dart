@@ -33,9 +33,11 @@ class PushService {
       // Re-register whenever FCM rotates the token.
       messaging.onTokenRefresh.listen(_upsertToken);
       _inited = true;
-    } catch (_) {
+      debugPrint('🔔PUSH: Firebase init OK');
+    } catch (e) {
       // No Firebase on this platform / not configured → push stays off.
       _inited = false;
+      debugPrint('🔔PUSH: init FAILED: $e');
     }
   }
 
@@ -61,8 +63,11 @@ class PushService {
       final token = kIsWeb
           ? await messaging.getToken(vapidKey: _vapidKey)
           : await messaging.getToken();
+      debugPrint('🔔PUSH: got token = ${token == null ? "null" : "${token.substring(0, 12)}…"}');
       if (token != null && token.isNotEmpty) await _upsertToken(token);
-    } catch (_) {/* ignore — push just won't reach this device */}
+    } catch (e) {
+      debugPrint('🔔PUSH: getToken FAILED: $e');
+    }
   }
 
   static Future<void> _upsertToken(String token) async {
@@ -85,6 +90,9 @@ class PushService {
         },
         onConflict: 'token',
       );
-    } catch (_) {/* table may not exist yet, or offline — ignore */}
+      debugPrint('🔔PUSH: token saved to device_tokens ($audience)');
+    } catch (e) {
+      debugPrint('🔔PUSH: save to device_tokens FAILED: $e');
+    }
   }
 }
