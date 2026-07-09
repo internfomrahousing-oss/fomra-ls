@@ -298,13 +298,10 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
   Widget build(BuildContext context) {
     final body = _buildScrollableBody();
 
-    // Management gets an expanding menu (Add Lead / Select / Show all projects);
-    // employees just get a single-tap Add Lead. Hidden while selecting.
+    // The "+" button goes straight to Add Lead. Management's Select / Show all
+    // projects live as always-visible pills next to the lead summary.
     final fab = LandWorkspaceSpeedDial(
       onAddLead: _openAddLead,
-      onSelect: _isManagement && !_selectMode ? _toggleSelectMode : null,
-      onShowAllProjects:
-          _isManagement && !_selectMode ? _openLeadsMap : null,
     );
 
     if (widget.isTab) {
@@ -322,6 +319,63 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
       bottomNavigationBar: const FomraBottomNav(currentRoute: '/land-lead'),
       body: body,
       floatingActionButton: fab,
+    );
+  }
+
+  /// Always-visible management actions shown next to the lead summary:
+  /// Select (enter assign mode) and Show all projects (open the leads map).
+  Widget _buildIdleManagementActions() {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      alignment: WrapAlignment.end,
+      children: [
+        _actionPill(
+          onTap: _toggleSelectMode,
+          icon: Icons.checklist_rtl,
+          label: 'Select',
+        ),
+        _actionPill(
+          onTap: _openLeadsMap,
+          icon: Icons.map_outlined,
+          label: 'Show all projects',
+          foreground: const Color(0xFF0F766E),
+          background: const Color(0xFF0F766E).withValues(alpha: 0.10),
+        ),
+      ],
+    );
+  }
+
+  Widget _actionPill({
+    required VoidCallback onTap,
+    required IconData icon,
+    required String label,
+    Color? foreground,
+    Color? background,
+  }) {
+    final fg = foreground ?? AppColors.primary;
+    final bg = background ?? AppColors.primary.withValues(alpha: 0.10);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(999),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: fg.withValues(alpha: 0.25)),
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(icon, size: 18, color: fg),
+            const SizedBox(width: 7),
+            Text(label,
+                style: TextStyle(
+                    fontSize: 13.5, fontWeight: FontWeight.w700, color: fg)),
+          ]),
+        ),
+      ),
     );
   }
 
@@ -452,6 +506,10 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                if (_isManagement && !_selectMode) ...[
+                  _buildIdleManagementActions(),
+                  const SizedBox(height: 10),
+                ],
                 LandWorkspaceSearchBar(
                   onChanged: (q) => setState(() => _search = q),
                   activeFilterCount: _activeFilterCount,

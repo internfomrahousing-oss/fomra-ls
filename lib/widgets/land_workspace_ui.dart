@@ -1000,8 +1000,6 @@ class _LandWorkspaceFilterPanelState extends State<_LandWorkspaceFilterPanel> {
 /// Speed-dial FAB for workspace actions.
 class LandWorkspaceSpeedDial extends StatefulWidget {
   final VoidCallback onAddLead;
-  final VoidCallback? onSelect;
-  final VoidCallback? onShowAllProjects;
   final VoidCallback? onImportLead;
   final VoidCallback? onScanDocument;
   final VoidCallback? onGpsCapture;
@@ -1009,8 +1007,6 @@ class LandWorkspaceSpeedDial extends StatefulWidget {
   const LandWorkspaceSpeedDial({
     super.key,
     required this.onAddLead,
-    this.onSelect,
-    this.onShowAllProjects,
     this.onImportLead,
     this.onScanDocument,
     this.onGpsCapture,
@@ -1047,11 +1043,7 @@ class _LandWorkspaceSpeedDialState extends State<LandWorkspaceSpeedDial>
 
   @override
   Widget build(BuildContext context) {
-    final secondary = <(IconData, String, VoidCallback)>[
-      if (widget.onShowAllProjects != null)
-        (Icons.map_outlined, 'Show all projects', widget.onShowAllProjects!),
-      if (widget.onSelect != null)
-        (Icons.checklist_rounded, 'Select', widget.onSelect!),
+    final actions = <(IconData, String, VoidCallback)>[
       if (widget.onImportLead != null)
         (Icons.upload_file_outlined, 'Import Lead', widget.onImportLead!),
       if (widget.onScanDocument != null)
@@ -1061,11 +1053,7 @@ class _LandWorkspaceSpeedDialState extends State<LandWorkspaceSpeedDial>
     ];
 
     // No secondary actions → the "+" goes straight to Add Lead (no menu).
-    // With a menu, Add Lead becomes the item nearest the "+" toggle.
-    final hasMenu = secondary.isNotEmpty;
-    final actions = hasMenu
-        ? [...secondary, (Icons.add_location_alt_outlined, 'Add Lead', widget.onAddLead)]
-        : const <(IconData, String, VoidCallback)>[];
+    final hasMenu = actions.isNotEmpty;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
