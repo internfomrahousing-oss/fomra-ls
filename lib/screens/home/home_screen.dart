@@ -9,6 +9,7 @@ import '../../services/app_store.dart';
 import '../../services/employee_service.dart';
 import '../../services/land_lead_service.dart';
 import '../../services/notifications_service.dart';
+import '../../services/push_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_layout.dart';
 import '../../theme/fomra_theme_context.dart';
@@ -64,6 +65,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     AppStore.instance.addListener(_onStoreUpdate);
+    // Register this device for push under the signed-in audience (guarded).
+    PushService.syncToken();
     _loadNotifications();
     _loadPerformanceData();
     _notifChannel = NotificationsService.subscribe(

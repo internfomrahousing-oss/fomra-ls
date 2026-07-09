@@ -113,7 +113,6 @@ async function sendOne(projectId, accessToken, token, title, body, link) {
       },
       android: {
         priority: 'high',
-        notification: { channel_id: 'fomrals_default' },
       },
     },
   };

@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'services/auth_link.dart';
 import 'services/auth_service.dart';
 import 'services/session_scoped_local_storage.dart';
+import 'services/push_service.dart';
 import 'services/supabase_config.dart';
 import 'services/theme_controller.dart';
 import 'theme/app_theme.dart';
@@ -110,6 +111,9 @@ class _StartupScreenState extends State<_StartupScreen> {
     } catch (e) {
       error = e.toString();
     }
+    // Bring up Firebase push in the background — fully guarded, never blocks or
+    // crashes startup if Firebase isn't configured on this platform.
+    if (error == null) unawaited(PushService.init());
     bool loggedIn = false;
     if (error == null) {
       try {
