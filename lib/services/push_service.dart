@@ -39,6 +39,18 @@ class PushService {
     }
   }
 
+  /// Request notification permission from a USER GESTURE (browsers suppress the
+  /// auto prompt on page load), then register the token. Call from a tap — e.g.
+  /// the notification bell.
+  static Future<void> promptAndSync() async {
+    try {
+      if (!_inited) await init();
+      if (!_inited) return;
+      await FirebaseMessaging.instance.requestPermission();
+      await syncToken();
+    } catch (_) {/* push just stays off */}
+  }
+
   /// Register this device's token for the currently signed-in audience. Call
   /// after login (e.g. when the home screen mounts).
   static Future<void> syncToken() async {

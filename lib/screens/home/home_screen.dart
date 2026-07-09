@@ -220,6 +220,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       };
 
   void _toggleNotifications() {
+    // Tapping the bell is a user gesture — use it to request push permission
+    // (browsers suppress the auto prompt on page load) and register the token.
+    PushService.promptAndSync();
     if (_notifOpen) {
       _hideNotifications();
     } else {
