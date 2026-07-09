@@ -1831,8 +1831,11 @@ async function tryFmbSourcesForCodes(codes, ctx = {}) {
     }
   }
 
-  const collabHit = await tryCollab();
-  if (collabHit) return collabHit;
+  // CollabLand-TN fallback intentionally disabled: only the government-seal
+  // TNGIS sketch_fmb (Tahsildar title block) is served. CollabLand sketches lack
+  // the seal and often render with overlapping labels, so we return
+  // "not available" rather than fall back to them. (tryCollab kept for ref.)
+  void tryCollab;
 
   return { ok: false, error: lastErr };
 }
