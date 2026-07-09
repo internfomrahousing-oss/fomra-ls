@@ -784,8 +784,9 @@ class _ToastStackState extends State<_ToastStack> {
   @override
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context);
+    // Anchor bottom-right, clearing the floating bottom nav bar (~72px + inset).
     return Positioned(
-      top: media.padding.top + 16,
+      bottom: media.padding.bottom + 88,
       right: 16,
       child: Material(
         color: Colors.transparent,
