@@ -298,9 +298,13 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
   Widget build(BuildContext context) {
     final body = _buildScrollableBody();
 
-    // The "+" button goes straight to Add Lead — no expanding menu.
+    // Management gets an expanding menu (Add Lead / Select / Show all projects);
+    // employees just get a single-tap Add Lead. Hidden while selecting.
     final fab = LandWorkspaceSpeedDial(
       onAddLead: _openAddLead,
+      onSelect: _isManagement && !_selectMode ? _toggleSelectMode : null,
+      onShowAllProjects:
+          _isManagement && !_selectMode ? _openLeadsMap : null,
     );
 
     if (widget.isTab) {
@@ -311,7 +315,7 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
       );
     }
     return Scaffold(
-      appBar: FomraAppBar(
+      appBar: const FomraAppBar(
         moduleName: 'Land Lead',
       ),
       drawer: const AppDrawer(currentRoute: '/land-lead'),
@@ -685,6 +689,13 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
         ));
       }
     }
+  }
+
+  void _openLeadsMap() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => LeadsMapScreen(leads: _leads)),
+    );
   }
 
   Future<void> _openFilterPanel() async {
