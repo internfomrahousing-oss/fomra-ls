@@ -29,6 +29,13 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   List<AppNotification> _notifications = [];
   RealtimeChannel? _notifChannel;
+  // Ids we've already surfaced, so a realtime refresh only toasts genuinely new
+  // notifications. Primed on the first load so history doesn't toast at once.
+  final Set<String> _seenNotifIds = {};
+  bool _notifPrimed = false;
+  // Top-right toast overlay (SnackBars can't anchor to the top).
+  final GlobalKey<_ToastStackState> _toastStackKey = GlobalKey();
+  OverlayEntry? _toastHost;
   DateTime _clock = DateTime.now();
 
   // Anchored notification dropdown (opens under the bell on click).
@@ -99,6 +106,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _notifChannel?.unsubscribe();
     _notifOverlay?.remove();
     _notifOverlay = null;
+    _toastHost?.remove();
+    _toastHost = null;
     super.dispose();
   }
 
@@ -121,6 +130,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           .where((n) => !_isManagementLeadNotification(n) && _isForMe(n))
           .toList();
       if (mounted) {
+        _emitNewNotificationToasts(filtered);
         setState(() => _notifications = filtered);
         _notifOverlay?.markNeedsBuild(); // refresh the open dropdown live
       }
@@ -152,6 +162,59 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         msg.substring(idx + marker.length).split(',').map((s) => s.trim());
     return assignees.contains(me);
   }
+
+  /// On the first refresh we only record the existing ids (so the whole history
+  /// doesn't toast at once). After that, any id we haven't seen before is a live
+  /// insert and pops a toast — newest last so it's the one left on screen.
+  void _emitNewNotificationToasts(List<AppNotification> latest) {
+    final fresh =
+        latest.where((n) => !_seenNotifIds.contains(n.id)).toList();
+    for (final n in latest) {
+      _seenNotifIds.add(n.id);
+    }
+    if (!_notifPrimed) {
+      _notifPrimed = true;
+      return;
+    }
+    for (final n in fresh.take(3).toList().reversed) {
+      _showNotificationToast(n);
+    }
+  }
+
+  void _showNotificationToast(AppNotification n) {
+    _ensureToastHost();
+    // The stack may not be mounted on the frame the host is first inserted.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _toastStackKey.currentState?.push(_ToastData(
+        title: n.title,
+        message: n.message,
+        color: _notifTypeColor(n.type),
+        icon: _notifTypeIcon(n.type),
+      ));
+    });
+  }
+
+  void _ensureToastHost() {
+    if (_toastHost != null) return;
+    _toastHost = OverlayEntry(builder: (_) => _ToastStack(key: _toastStackKey));
+    Overlay.of(context, rootOverlay: true).insert(_toastHost!);
+  }
+
+  Color _notifTypeColor(NotificationType t) => switch (t) {
+        NotificationType.lead         => AppColors.info,
+        NotificationType.task         => AppColors.warning,
+        NotificationType.document     => AppColors.success,
+        NotificationType.alert        => AppColors.error,
+        NotificationType.verification => AppColors.secondary,
+      };
+
+  IconData _notifTypeIcon(NotificationType t) => switch (t) {
+        NotificationType.lead         => Icons.location_on,
+        NotificationType.task         => Icons.task_alt,
+        NotificationType.document     => Icons.description,
+        NotificationType.alert        => Icons.warning_amber,
+        NotificationType.verification => Icons.verified,
+      };
 
   void _toggleNotifications() {
     if (_notifOpen) {
@@ -677,4 +740,169 @@ class _NotificationsDropdown extends StatelessWidget {
         NotificationType.alert        => Icons.warning_amber,
         NotificationType.verification => Icons.verified,
       };
+}
+
+// ── Top-right toast overlay ───────────────────────────────────────────────────
+
+class _ToastData {
+  final String title;
+  final String message;
+  final Color color;
+  final IconData icon;
+  _ToastData({
+    required this.title,
+    required this.message,
+    required this.color,
+    required this.icon,
+  });
+}
+
+/// Hosts a top-right column of stacked toasts. New toasts slide in from the
+/// right, auto-dismiss after 4s, and can be swiped right to close.
+class _ToastStack extends StatefulWidget {
+  const _ToastStack({super.key});
+
+  @override
+  State<_ToastStack> createState() => _ToastStackState();
+}
+
+class _ToastStackState extends State<_ToastStack> {
+  final List<({int id, _ToastData data})> _toasts = [];
+  int _seq = 0;
+
+  void push(_ToastData data) {
+    final id = _seq++;
+    setState(() => _toasts.add((id: id, data: data)));
+    Future.delayed(const Duration(seconds: 4), () => _remove(id));
+  }
+
+  void _remove(int id) {
+    if (!mounted) return;
+    setState(() => _toasts.removeWhere((t) => t.id == id));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+    return Positioned(
+      top: media.padding.top + 16,
+      right: 16,
+      child: Material(
+        color: Colors.transparent,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 360),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              for (final t in _toasts)
+                _ToastCard(
+                  key: ValueKey(t.id),
+                  data: t.data,
+                  onDismiss: () => _remove(t.id),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ToastCard extends StatefulWidget {
+  final _ToastData data;
+  final VoidCallback onDismiss;
+  const _ToastCard({
+    super.key,
+    required this.data,
+    required this.onDismiss,
+  });
+
+  @override
+  State<_ToastCard> createState() => _ToastCardState();
+}
+
+class _ToastCardState extends State<_ToastCard>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 240),
+  )..forward();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final curve = CurvedAnimation(parent: _controller, curve: Curves.easeOut);
+    final d = widget.data;
+    return SizeTransition(
+      sizeFactor: curve,
+      child: FadeTransition(
+        opacity: curve,
+        child: SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(0.35, 0),
+            end: Offset.zero,
+          ).animate(curve),
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Dismissible(
+              key: ValueKey('toast-${widget.key}'),
+              direction: DismissDirection.startToEnd, // swipe right to close
+              onDismissed: (_) => widget.onDismiss(),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(
+                  color: d.color,
+                  borderRadius: BorderRadius.circular(AppColors.radiusMd),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x33000000),
+                      blurRadius: 12,
+                      offset: Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(d.icon, color: Colors.white, size: 22),
+                    const SizedBox(width: 12),
+                    Flexible(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            d.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          if (d.message.isNotEmpty)
+                            Text(
+                              d.message,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(color: Colors.white70),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
