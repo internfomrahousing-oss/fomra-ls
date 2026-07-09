@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../services/api_client.dart';
 import '../../services/auth_service.dart';
+import '../../services/push_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_input.dart';
 import '../../theme/fomra_layout.dart';
@@ -41,6 +42,10 @@ class _LoginScreenState extends State<LoginScreen> {
         _passwordCtrl.text,
       );
       if (!mounted) return;
+      // Ask for push permission now, still inside the login tap's user gesture,
+      // so the browser shows a real prompt (not the suppressed quiet UI). Once
+      // granted per browser profile, it never asks again.
+      PushService.promptAndSync();
       Navigator.pushReplacementNamed(context, '/home');
     } catch (e) {
       if (!mounted) return;

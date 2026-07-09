@@ -29,7 +29,10 @@ class PushService {
         options: DefaultFirebaseOptions.currentPlatform,
       );
       final messaging = FirebaseMessaging.instance;
-      await messaging.requestPermission();
+      // NOTE: do NOT request permission here. This runs at startup with no user
+      // gesture, and browsers then switch the site to "quiet" mode and suppress
+      // the popup for good. Permission is requested only from a real gesture
+      // (login tap / bell tap) via promptAndSync().
       // Re-register whenever FCM rotates the token.
       messaging.onTokenRefresh.listen(_upsertToken);
       _inited = true;
