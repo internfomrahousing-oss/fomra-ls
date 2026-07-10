@@ -13,6 +13,7 @@ import 'screens/auth/set_password_screen.dart';
 import 'screens/home/home_screen.dart';
 import 'screens/land_lead/land_workspace_screen.dart';
 import 'screens/dashboard/dashboard_screen.dart';
+import 'screens/reports/reports_screen.dart';
 import 'screens/task_management/task_management_screen.dart';
 import 'screens/settings/change_password_screen.dart';
 import 'screens/settings/settings_screen.dart';
@@ -60,6 +61,9 @@ class FomraLSApp extends StatelessWidget {
           '/legal-verification':  (_) => const LandWorkspaceScreen(initialTab: 0),
           '/dashboard':           (_) => AuthService.instance.isManagement
                                       ? const DashboardScreen()
+                                      : const HomeScreen(),
+          '/reports':             (_) => AuthService.instance.isManagement
+                                      ? const ReportsScreen()
                                       : const HomeScreen(),
           '/settings':            (_) => const SettingsScreen(),
           '/change-password':     (_) => const ChangePasswordScreen(),

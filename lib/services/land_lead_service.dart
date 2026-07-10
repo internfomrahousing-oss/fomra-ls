@@ -249,10 +249,7 @@ class LandLeadService {
       addedOn: DateTime.parse(r['added_on'] as String),
       createdByName: r['created_by_name'] as String? ?? '',
       createdByRole: r['created_by_role'] as String? ?? '',
-      status: LeadStatus.values.firstWhere(
-        (e) => e.name == r['status'],
-        orElse: () => LeadStatus.new_,
-      ),
+      status: parseLeadStatus(r['status'] as String?),
     );
   }
 }

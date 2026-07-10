@@ -50,6 +50,12 @@ class FomraSideNav extends StatefulWidget {
         Icons.bar_chart_rounded,
         'Dashboard',
       ));
+      items.add(const FomraSideNavItem(
+        '/reports',
+        Icons.summarize_outlined,
+        Icons.summarize_rounded,
+        'Reports',
+      ));
     }
     return items;
   }

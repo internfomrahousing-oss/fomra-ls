@@ -205,13 +205,7 @@ class LandWorkspaceFilters {
     InputSource.internalTeam,
   ];
 
-  static const statusOptions = [
-    LeadStatus.new_,
-    LeadStatus.contacted,
-    LeadStatus.negotiation,
-    LeadStatus.closed,
-    LeadStatus.lost,
-  ];
+  static const statusOptions = leadStatusPipelineOrder;
 
   LandWorkspaceFilters copy() => LandWorkspaceFilters(
         status: status,

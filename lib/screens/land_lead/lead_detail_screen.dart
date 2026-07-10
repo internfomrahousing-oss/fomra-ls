@@ -5,12 +5,14 @@ import '../../models/add_lead_result.dart';
 import '../../models/land_lead.dart';
 import '../../services/app_store.dart';
 import '../../services/land_lead_service.dart';
+import '../../models/lead_list_filter.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../widgets/fomra_app_shell.dart';
 import '../../widgets/fomra_breadcrumb.dart';
 import '../../widgets/ui/app_components.dart';
 import 'add_lead_screen.dart';
+import 'filtered_leads_screen.dart';
 
 int _leadAgeDaysFromReceived(DateTime receivedOn) {
   final received = receivedOn.toLocal();
@@ -76,21 +78,24 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
   int get _leadAgeDays => _leadAgeDaysFromReceived(lead.addedOn);
 
   int get _statusScore => switch (lead.status) {
-        LeadStatus.new_ => 16,
-        LeadStatus.contacted => 32,
-        LeadStatus.siteVisit => 48,
-        LeadStatus.negotiation => 64,
-        LeadStatus.closed => 100,
-        LeadStatus.lost => 12,
+        LeadStatus.prospectMeetingPending => 16,
+        LeadStatus.prospectMeetingCompleted => 32,
+        LeadStatus.negotiation => 48,
+        LeadStatus.legal => 64,
+        LeadStatus.signed => 100,
+        LeadStatus.dropped => 12,
       };
 
-  int get _siteVisitCount =>
-      [LeadStatus.siteVisit, LeadStatus.negotiation, LeadStatus.closed]
-              .contains(lead.status)
-          ? 1
-          : 0;
+  int get _siteVisitCount => lead.status ==
+          LeadStatus.prospectMeetingCompleted ||
+      lead.status == LeadStatus.negotiation ||
+      lead.status == LeadStatus.legal ||
+      lead.status == LeadStatus.signed
+      ? 1
+      : 0;
 
-  int get _contactAttempts => lead.status == LeadStatus.new_ ? 0 : 1;
+  int get _contactAttempts =>
+      lead.status == LeadStatus.prospectMeetingPending ? 0 : 1;
 
   Future<void> _openEdit() async {
     final result = await Navigator.push<AddLeadResult>(
@@ -476,7 +481,7 @@ class _ProfilePanel extends StatelessWidget {
                           child: DropdownButton<LeadStatus>(
                             value: lead.status,
                             isExpanded: true,
-                            items: LeadStatus.values
+                            items: leadStatusPipelineOrder
                                 .map(
                                   (s) => DropdownMenuItem(
                                     value: s,
@@ -582,7 +587,9 @@ class _WorkspacePanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _ActionToolbar(onLaunchContact: onLaunchContact),
+          _ActionToolbar(
+            onActionTap: (filter) => FilteredLeadsScreen.open(context, filter),
+          ),
           const SizedBox(height: 12),
           _NoteComposer(
             controller: noteCtrl,
@@ -629,20 +636,20 @@ class _WorkspacePanel extends StatelessWidget {
 }
 
 class _ActionToolbar extends StatelessWidget {
-  final Future<void> Function(String scheme) onLaunchContact;
+  final ValueChanged<LeadListFilter> onActionTap;
 
-  const _ActionToolbar({required this.onLaunchContact});
+  const _ActionToolbar({required this.onActionTap});
 
   @override
   Widget build(BuildContext context) {
     final actions = [
-      (Icons.sticky_note_2_outlined, 'Note'),
-      (Icons.call_outlined, 'Call'),
-      (Icons.email_outlined, 'Email'),
-      (Icons.sms_outlined, 'SMS'),
-      (Icons.chat_outlined, 'WhatsApp'),
+      (Icons.sticky_note_2_outlined, 'Notes'),
+      (Icons.call_outlined, 'Calls'),
       (Icons.location_on_outlined, 'Site visit'),
-      (Icons.event_outlined, 'Followup'),
+      (Icons.apartment_outlined, 'Management site visit'),
+      (Icons.groups_outlined, 'Meeting'),
+      (Icons.gavel_outlined, 'Legal'),
+      (Icons.draw_outlined, 'Signed'),
     ];
 
     return SingleChildScrollView(
@@ -654,15 +661,9 @@ class _ActionToolbar extends StatelessWidget {
               padding: const EdgeInsets.only(right: 14),
               child: InkWell(
                 onTap: () {
-                  switch (action.$2) {
-                    case 'Call':
-                      onLaunchContact('tel');
-                    case 'SMS':
-                      onLaunchContact('sms');
-                    case 'WhatsApp':
-                      onLaunchContact('https://wa.me');
-                    default:
-                      break;
+                  final filter = LeadListFilterX.forActionLabel(action.$2);
+                  if (filter != null) {
+                    onActionTap(filter);
                   }
                 },
                 borderRadius: BorderRadius.circular(10),
@@ -680,6 +681,7 @@ class _ActionToolbar extends StatelessWidget {
                           fontWeight: FontWeight.w600,
                           color: context.fomraTextSecondary,
                         ),
+                        textAlign: TextAlign.center,
                       ),
                     ],
                   ),
@@ -778,7 +780,8 @@ class _ActivitySummaryRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final cells = [
       ('Conducted\nSite Visits', '$siteVisitCount'),
-      ('Outgoing\nNot Answered', '${status == LeadStatus.contacted ? 1 : 0}'),
+      ('Outgoing\nNot Answered',
+          '${status == LeadStatus.prospectMeetingPending ? 1 : 0}'),
       ('Outgoing\nAnswered', '$contactAttempts'),
       ('Incoming\nNot Answered', '0'),
       ('Incoming\nAnswered', '0'),

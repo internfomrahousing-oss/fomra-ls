@@ -4,7 +4,31 @@ enum InputSource { broker, landowner, referral, internalTeam, existingDatabase }
 
 enum LandType { agricultural, nonAgricultural, residential, commercial, industrial, other }
 
-enum LeadStatus { new_, contacted, siteVisit, negotiation, closed, lost }
+enum LeadStatus {
+  negotiation,
+  legal,
+  signed,
+  dropped,
+  prospectMeetingPending,
+  prospectMeetingCompleted,
+}
+
+/// Parses status from Supabase, including legacy values saved before the
+/// pipeline redesign.
+LeadStatus parseLeadStatus(String? raw) {
+  final value = raw?.trim() ?? '';
+  for (final status in LeadStatus.values) {
+    if (status.name == value) return status;
+  }
+  return switch (value) {
+    'new_' => LeadStatus.prospectMeetingPending,
+    'contacted' => LeadStatus.prospectMeetingPending,
+    'siteVisit' => LeadStatus.prospectMeetingCompleted,
+    'closed' => LeadStatus.signed,
+    'lost' => LeadStatus.dropped,
+    _ => LeadStatus.prospectMeetingPending,
+  };
+}
 
 class LandLead {
   final String leadId;
@@ -56,7 +80,7 @@ class LandLead {
     required this.addedOn,
     this.createdByName = '',
     this.createdByRole = '',
-    this.status = LeadStatus.new_,
+    this.status = LeadStatus.prospectMeetingPending,
   });
 
   /// Chip / summary label: employee-posted leads use "Posted by".
@@ -136,22 +160,49 @@ extension LandTypeLabel on LandType {
 
 extension LeadStatusLabel on LeadStatus {
   String get label => switch (this) {
-        LeadStatus.new_ => 'New',
-        LeadStatus.contacted => 'Contacted',
-        LeadStatus.siteVisit => 'Site Visit',
         LeadStatus.negotiation => 'Negotiation',
-        LeadStatus.closed => 'Closed',
-        LeadStatus.lost => 'Lost',
+        LeadStatus.legal => 'Legal',
+        LeadStatus.signed => 'Signed',
+        LeadStatus.dropped => 'Dropped',
+        LeadStatus.prospectMeetingPending => 'Land owner meeting pending',
+        LeadStatus.prospectMeetingCompleted => 'Land owner meeting completed',
       };
+
+  /// Short label for compact chips and KPI cards.
+  String get shortLabel => switch (this) {
+        LeadStatus.prospectMeetingPending => 'Meeting pending',
+        LeadStatus.prospectMeetingCompleted => 'Meeting completed',
+        _ => label,
+      };
+
+  bool get isProspect =>
+      this == LeadStatus.prospectMeetingPending ||
+      this == LeadStatus.prospectMeetingCompleted;
+
+  bool get isAcquired => this == LeadStatus.signed;
+
+  bool get isDropped => this == LeadStatus.dropped;
+
+  bool get isActive => !isAcquired && !isDropped;
 }
+
+/// Display order for Stage & Status dropdowns and filter chips.
+const leadStatusPipelineOrder = <LeadStatus>[
+  LeadStatus.negotiation,
+  LeadStatus.legal,
+  LeadStatus.signed,
+  LeadStatus.dropped,
+  LeadStatus.prospectMeetingPending,
+  LeadStatus.prospectMeetingCompleted,
+];
 
 extension LeadStatusColor on LeadStatus {
   Color get color => switch (this) {
-        LeadStatus.new_ => const Color(0xFF2563EB), // blue
-        LeadStatus.contacted => const Color(0xFF7C3AED), // violet
-        LeadStatus.siteVisit => const Color(0xFFD97706), // amber
-        LeadStatus.negotiation => const Color(0xFFEA580C), // orange
-        LeadStatus.closed => const Color(0xFF16A34A), // green
-        LeadStatus.lost => const Color(0xFFDC2626), // red
+        LeadStatus.negotiation => const Color(0xFFEA580C),
+        LeadStatus.legal => const Color(0xFF7C3AED),
+        LeadStatus.signed => const Color(0xFF16A34A),
+        LeadStatus.dropped => const Color(0xFFDC2626),
+        LeadStatus.prospectMeetingPending => const Color(0xFF2563EB),
+        LeadStatus.prospectMeetingCompleted => const Color(0xFF0891B2),
       };
 }

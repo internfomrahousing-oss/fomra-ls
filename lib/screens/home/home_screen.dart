@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../models/land_lead.dart';
+import '../land_lead/filtered_leads_screen.dart';
 import '../land_lead/lead_detail_screen.dart';
 import '../settings/change_password_screen.dart';
 import '../../services/auth_service.dart';
@@ -46,14 +47,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   String get _notifAudience =>
       AuthService.instance.isManagement ? 'management' : 'employee';
 
-  int get _activeLeads => AppStore.instance.leads
-      .where((l) => [
-            LeadStatus.new_,
-            LeadStatus.contacted,
-            LeadStatus.siteVisit,
-            LeadStatus.negotiation,
-          ].contains(l.status))
-      .length;
+  int get _activeLeads =>
+      AppStore.instance.leads.where((l) => l.status.isActive).length;
 
   int get _unreadCount => _notifications.where((n) => !n.isRead).length;
 
@@ -414,6 +409,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   activeLeads: _activeLeads,
                   brokerLeads: brokerLeads,
                   onProfileTapDown: _showProfileMenu,
+                  onSummaryTap: (filter) =>
+                      FilteredLeadsScreen.open(context, filter),
                 ),
               ),
               const SizedBox(height: AppSpacing.lg),

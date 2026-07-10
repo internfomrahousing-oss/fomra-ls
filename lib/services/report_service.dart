@@ -65,12 +65,7 @@ class ReportService {
   static const _zebra = PdfColor.fromInt(0xFFF3F4F6);
   static const _tileBg = PdfColor.fromInt(0xFFF8FAFC);
 
-  static bool _isActive(LandLead l) => const [
-        LeadStatus.new_,
-        LeadStatus.contacted,
-        LeadStatus.siteVisit,
-        LeadStatus.negotiation,
-      ].contains(l.status);
+  static bool _isActive(LandLead l) => l.status.isActive;
 
   /// Generate the report and hand it to the OS/browser share/download sheet.
   static Future<void> generateLeadsReport(
@@ -113,11 +108,11 @@ class ReportService {
     String? employeeName,
   }) {
     final acquired =
-        leads.where((l) => l.status == LeadStatus.closed).toList();
+        leads.where((l) => l.status.isAcquired).toList();
     final broker =
         leads.where((l) => l.inputSource == InputSource.broker).toList();
     final active = leads.where(_isActive).length;
-    final rejected = leads.where((l) => l.status == LeadStatus.lost).length;
+    final rejected = leads.where((l) => l.status.isDropped).length;
     final perf = _employeePerformance(leads, employees);
 
     return ReportPreviewData(
@@ -209,11 +204,11 @@ class ReportService {
     final now = DateTime.now();
 
     final acquired =
-        leads.where((l) => l.status == LeadStatus.closed).toList();
+        leads.where((l) => l.status.isAcquired).toList();
     final broker =
         leads.where((l) => l.inputSource == InputSource.broker).toList();
     final active = leads.where(_isActive).length;
-    final rejected = leads.where((l) => l.status == LeadStatus.lost).length;
+    final rejected = leads.where((l) => l.status.isDropped).length;
     final perf = _employeePerformance(leads, employees);
 
     final doc = pw.Document(
@@ -579,7 +574,7 @@ class ReportService {
                 requested.toLowerCase())
             .toList();
         final empAcquired =
-            employeeLeads.where((l) => l.status == LeadStatus.closed).length;
+            employeeLeads.where((l) => l.status.isAcquired).length;
         final empBroker = employeeLeads
             .where((l) => l.inputSource == InputSource.broker)
             .length;
@@ -697,7 +692,7 @@ class ReportService {
           l.createdByName.trim().isEmpty ? 'Unassigned' : l.createdByName.trim();
       final p = forName(n);
       p.total++;
-      if (l.status == LeadStatus.closed) p.acquired++;
+      if (l.status.isAcquired) p.acquired++;
       if (l.inputSource == InputSource.broker) p.broker++;
     }
     final list = map.values.toList()

@@ -617,7 +617,7 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
       addedOn: existing?.addedOn ?? DateTime.now(),
       createdByName: existing?.createdByName ?? '',
       createdByRole: existing?.createdByRole ?? '',
-      status: existing?.status ?? LeadStatus.new_,
+      status: existing?.status ?? LeadStatus.prospectMeetingPending,
       sitePhotoUrl: _keptPhotoUrls.isNotEmpty ? _keptPhotoUrls.first : '',
       sitePhotoUrls: List<String>.from(_keptPhotoUrls),
     );

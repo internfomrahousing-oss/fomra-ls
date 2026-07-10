@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/land_lead.dart';
+import '../models/lead_list_filter.dart';
 import '../services/app_store.dart';
 import '../theme/app_theme.dart';
 import '../theme/fomra_layout.dart';
@@ -122,6 +123,7 @@ class PortalWelcomeHeader extends StatelessWidget {
   final int activeLeads;
   final int brokerLeads;
   final ValueChanged<TapDownDetails>? onProfileTapDown;
+  final ValueChanged<LeadListFilter>? onSummaryTap;
 
   const PortalWelcomeHeader({
     super.key,
@@ -133,6 +135,7 @@ class PortalWelcomeHeader extends StatelessWidget {
     required this.activeLeads,
     required this.brokerLeads,
     this.onProfileTapDown,
+    this.onSummaryTap,
   });
 
   @override
@@ -205,18 +208,27 @@ class PortalWelcomeHeader extends StatelessWidget {
                   value: totalLeads,
                   icon: Icons.location_on_outlined,
                   accent: AppColors.primary,
+                  onTap: onSummaryTap == null
+                      ? null
+                      : () => onSummaryTap!(LeadListFilter.totalLeads),
                 ),
                 PortalSummaryTile(
                   label: 'Active leads',
                   value: activeLeads,
                   icon: Icons.trending_up_rounded,
                   accent: AppColors.success,
+                  onTap: onSummaryTap == null
+                      ? null
+                      : () => onSummaryTap!(LeadListFilter.activeLeads),
                 ),
                 PortalSummaryTile(
                   label: 'Broker leads',
                   value: brokerLeads,
                   icon: Icons.handshake_outlined,
                   accent: AppColors.warning,
+                  onTap: onSummaryTap == null
+                      ? null
+                      : () => onSummaryTap!(LeadListFilter.brokerLeads),
                 ),
               ];
               if (stacked) {
@@ -342,6 +354,7 @@ class PortalSummaryTile extends StatefulWidget {
   final int value;
   final IconData icon;
   final Color accent;
+  final VoidCallback? onTap;
 
   const PortalSummaryTile({
     super.key,
@@ -349,6 +362,7 @@ class PortalSummaryTile extends StatefulWidget {
     required this.value,
     required this.icon,
     required this.accent,
+    this.onTap,
   });
 
   @override
@@ -360,9 +374,12 @@ class _PortalSummaryTileState extends State<PortalSummaryTile> {
 
   @override
   Widget build(BuildContext context) {
-    return MouseRegion(
+    final tile = MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
+      cursor: widget.onTap == null
+          ? MouseCursor.defer
+          : SystemMouseCursors.click,
       child: AnimatedContainer(
         duration: AppMotion.normal,
         curve: AppMotion.curve,
@@ -428,6 +445,9 @@ class _PortalSummaryTileState extends State<PortalSummaryTile> {
         ),
       ),
     );
+
+    if (widget.onTap == null) return tile;
+    return GestureDetector(onTap: widget.onTap, child: tile);
   }
 }
 
@@ -744,20 +764,20 @@ class _PortalPerformanceRowState extends State<PortalPerformanceRow> {
 
   String _priorityLabel(LandLead lead) {
     return switch (lead.status) {
-      LeadStatus.closed => 'Low',
-      LeadStatus.lost => 'Low',
-      LeadStatus.contacted => 'Medium',
-      LeadStatus.siteVisit => 'Medium',
+      LeadStatus.signed => 'Low',
+      LeadStatus.dropped => 'Low',
+      LeadStatus.prospectMeetingCompleted => 'Medium',
+      LeadStatus.legal => 'Medium',
       _ => 'High',
     };
   }
 
   StatusTone _priorityTone(LandLead lead) {
     return switch (lead.status) {
-      LeadStatus.closed => StatusTone.success,
-      LeadStatus.lost => StatusTone.neutral,
-      LeadStatus.contacted => StatusTone.warning,
-      LeadStatus.siteVisit => StatusTone.warning,
+      LeadStatus.signed => StatusTone.success,
+      LeadStatus.dropped => StatusTone.neutral,
+      LeadStatus.prospectMeetingCompleted => StatusTone.warning,
+      LeadStatus.legal => StatusTone.warning,
       _ => StatusTone.danger,
     };
   }
@@ -782,12 +802,8 @@ class _PortalPerformanceRowState extends State<PortalPerformanceRow> {
             .join();
 
     final leads = widget.leads;
-    final activeLeads = leads
-        .where((l) =>
-            l.status != LeadStatus.closed && l.status != LeadStatus.lost)
-        .length;
-    final closedLeads =
-        leads.where((l) => l.status == LeadStatus.closed).length;
+    final activeLeads = leads.where((l) => l.status.isActive).length;
+    final closedLeads = leads.where((l) => l.status.isAcquired).length;
     final conversionRate = leads.isEmpty ? 0 : ((closedLeads / leads.length) * 100).round();
 
     return MouseRegion(
@@ -996,12 +1012,12 @@ class _PerformanceSummaryRow extends StatelessWidget {
 
 StatusTone _statusTone(LeadStatus status) {
   return switch (status) {
-    LeadStatus.new_ => StatusTone.primary,
-    LeadStatus.contacted => StatusTone.warning,
-    LeadStatus.siteVisit => StatusTone.warning,
+    LeadStatus.prospectMeetingPending => StatusTone.primary,
+    LeadStatus.prospectMeetingCompleted => StatusTone.warning,
     LeadStatus.negotiation => StatusTone.danger,
-    LeadStatus.closed => StatusTone.success,
-    LeadStatus.lost => StatusTone.neutral,
+    LeadStatus.legal => StatusTone.warning,
+    LeadStatus.signed => StatusTone.success,
+    LeadStatus.dropped => StatusTone.neutral,
   };
 }
 

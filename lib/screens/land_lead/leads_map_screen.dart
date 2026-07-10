@@ -168,8 +168,7 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
                       child: Wrap(
                         spacing: 10,
                         runSpacing: 6,
-                        children: LeadStatus.values
-                            .where((s) => s != LeadStatus.siteVisit)
+                        children: leadStatusPipelineOrder
                             .map((s) => Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
