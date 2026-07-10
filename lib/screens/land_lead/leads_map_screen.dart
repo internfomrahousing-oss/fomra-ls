@@ -7,6 +7,9 @@ import '../../models/land_lead.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../utils/lead_location_parser.dart';
+import '../../widgets/fomra_app_shell.dart';
+import '../../widgets/fomra_breadcrumb.dart';
+import '../../widgets/portal_page_layout.dart';
 import 'lead_detail_screen.dart';
 
 class _PlottedLead {
@@ -47,15 +50,13 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
         ? null
         : _computeCenterAndZoom(plotted);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          plotted.isEmpty
-              ? 'Lead map'
-              : '${plotted.length} lead${plotted.length == 1 ? '' : 's'} on map',
-        ),
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
+    return FomraAppShell(
+      currentRoute: '/land-lead',
+      appBar: FomraSubPageAppBar(
+        title: plotted.isEmpty
+            ? 'Lead map'
+            : '${plotted.length} lead${plotted.length == 1 ? '' : 's'} on map',
+        breadcrumbs: FomraBreadcrumbs.fromWorkspace('View all leads'),
       ),
       body: plotted.isEmpty
           ? _buildEmpty(context)

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import '../../models/add_lead_result.dart';
 import '../../models/land_lead.dart';
 import '../../models/employee_profile.dart';
@@ -507,28 +506,16 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
         SliverToBoxAdapter(
           child: PortalFadeSection(
             index: 0,
-            child: Padding(
-              padding: const EdgeInsets.only(top: 8, bottom: 4),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Expanded(child: _LeadSummary(leads: _leads)),
-                  if (_isManagement && !_selectMode) ...[
-                    const SizedBox(width: 12),
-                    _buildIdleManagementActions(),
-                  ],
-                ],
-              ),
-            ),
-          ),
-        ),
-      if (_leads.isNotEmpty)
-        SliverToBoxAdapter(
-          child: PortalFadeSection(
-            index: 1,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                if (_isManagement && !_selectMode) ...[
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: _buildIdleManagementActions(),
+                  ),
+                  const SizedBox(height: 10),
+                ],
                 LandWorkspaceSearchBar(
                   onChanged: (q) => setState(() => _search = q),
                   activeFilterCount: _activeFilterCount,
@@ -561,72 +548,48 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
     } else {
       slivers.add(
         SliverPadding(
-          padding: pagePad.copyWith(top: 8, bottom: 96),
-          sliver: SliverList(
-            delegate: SliverChildBuilderDelegate(
-              (_, i) {
-                final lead = _filtered[i];
-                return Dismissible(
-                  key: ValueKey(lead.leadId),
-                  direction: _selectMode
-                      ? DismissDirection.none
-                      : DismissDirection.endToStart,
-                  confirmDismiss: (_) => _confirmAndDelete(lead),
-                  background: Container(
-                    margin: const EdgeInsets.only(bottom: 16),
-                    decoration: BoxDecoration(
-                      color: AppColors.error,
-                      borderRadius: BorderRadius.circular(AppColors.radiusMd),
+          padding: pagePad.copyWith(top: 12, bottom: 96),
+          sliver: SliverToBoxAdapter(
+            child: AppCard(
+              padding: EdgeInsets.zero,
+              radius: AppColors.radiusMd,
+              interactive: false,
+              child: Column(
+                children: [
+                  for (var i = 0; i < _filtered.length; i++)
+                    Dismissible(
+                      key: ValueKey(_filtered[i].leadId),
+                      direction: _selectMode
+                          ? DismissDirection.none
+                          : DismissDirection.endToStart,
+                      confirmDismiss: (_) => _confirmAndDelete(_filtered[i]),
+                      background: Container(
+                        color: AppColors.error,
+                        alignment: Alignment.centerRight,
+                        padding: const EdgeInsets.only(right: 20),
+                        child: const Icon(Icons.delete_outline,
+                            color: Colors.white, size: 22),
+                      ),
+                      child: _LeadListRow(
+                        lead: _filtered[i],
+                        showDivider: i < _filtered.length - 1,
+                        selectionMode: _selectMode,
+                        selected:
+                            _selectedLeadIds.contains(_filtered[i].leadId),
+                        onTap: _selectMode
+                            ? () => _toggleLeadSelected(_filtered[i])
+                            : () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => LeadDetailScreen(
+                                      lead: _filtered[i],
+                                    ),
+                                  ),
+                                ),
+                      ),
                     ),
-                    alignment: Alignment.centerRight,
-                    padding: const EdgeInsets.only(right: 20),
-                    child: const Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.delete_outline,
-                            color: Colors.white, size: 26),
-                        SizedBox(height: 4),
-                        Text('Delete',
-                            style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600)),
-                      ],
-                    ),
-                  ),
-                  child: _LeadCard(
-                    lead: lead,
-                    selectionMode: _selectMode,
-                    selected: _selectedLeadIds.contains(lead.leadId),
-                    onTap: _selectMode
-                        ? () => _toggleLeadSelected(lead)
-                        : () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => LeadDetailScreen(lead: lead),
-                              ),
-                            ),
-                    onStatusChange: (s) => _updateStatus(lead, s),
-                    onEdit: () => _openEditLead(lead),
-                    onMap: () => _openLeadMap(lead),
-                    onCall: lead.contactDetails.isNotEmpty
-                        ? () {
-                            Clipboard.setData(
-                                ClipboardData(text: lead.contactDetails));
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                    'Contact copied: ${lead.contactDetails}'),
-                                behavior: SnackBarBehavior.floating,
-                              ),
-                            );
-                          }
-                        : null,
-                    onDocuments: () => _openEditLead(lead),
-                  ),
-                );
-              },
-              childCount: _filtered.length,
+                ],
+              ),
             ),
           ),
         ),
@@ -692,47 +655,6 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
       }
       return false;
     }
-  }
-
-  void _updateStatus(LandLead lead, LeadStatus s) {
-    AppStore.instance.updateLeadStatus(lead.leadId, s);
-    LandLeadService.updateStatus(lead.leadId, s).catchError((_) {
-      // Revert optimistic update on failure
-      AppStore.instance.updateLeadStatus(lead.leadId, lead.status);
-    });
-  }
-
-  Future<void> _openEditLead(LandLead lead) async {
-    final result = await Navigator.push<AddLeadResult>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => AddLeadScreen(existingLead: lead),
-      ),
-    );
-    if (result == null) return;
-    try {
-      final saved = await LandLeadService.update(
-        result.lead,
-        sitePhotoBytes: result.sitePhotoBytes,
-      );
-      AppStore.instance.replaceLead(saved);
-    } catch (e) {
-      AppStore.instance.replaceLead(result.lead);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Saved locally; sync failed: $e')),
-        );
-      }
-    }
-  }
-
-  void _openLeadMap(LandLead lead) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => LeadsMapScreen(leads: [lead]),
-      ),
-    );
   }
 
   Future<void> _openAddLead() async {
@@ -813,29 +735,31 @@ class _LeadsLoadingSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+    return Column(
       children: [
-        // Summary strip placeholders.
-        SizedBox(
-          height: 122,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            itemCount: 4,
-            separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.sm),
-            itemBuilder: (_, __) => const LoadingSkeleton(
-                width: 152, height: 122, radius: AppColors.radiusMd),
-          ),
-        ),
+        const LoadingSkeleton(height: 48, radius: AppColors.radiusSm),
         const SizedBox(height: AppSpacing.md),
-        const LoadingSkeleton(height: 52, radius: AppColors.radiusSm),
-        const SizedBox(height: AppSpacing.md),
-        // Card placeholders.
-        ...List.generate(
-          4,
-          (_) => const Padding(
-            padding: EdgeInsets.only(bottom: AppSpacing.md),
-            child: LoadingSkeleton(height: 148, radius: AppColors.radiusMd),
+        AppCard(
+          padding: EdgeInsets.zero,
+          radius: AppColors.radiusMd,
+          interactive: false,
+          child: Column(
+            children: List.generate(
+              8,
+              (i) => Column(
+                children: [
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    child: LoadingSkeleton(height: 14, radius: 6),
+                  ),
+                  if (i < 7)
+                    Divider(
+                      height: 1,
+                      color: context.fomraBorder.withValues(alpha: 0.8),
+                    ),
+                ],
+              ),
+            ),
           ),
         ),
       ],
@@ -843,104 +767,58 @@ class _LeadsLoadingSkeleton extends StatelessWidget {
   }
 }
 
-// ── Summary Bar ───────────────────────────────────────────────────────────────
-
-class _LeadSummary extends StatelessWidget {
-  final List<LandLead> leads;
-  const _LeadSummary({required this.leads});
-
-  @override
-  Widget build(BuildContext context) {
-    final kpis = [
-      (LeadStatus.new_, Icons.fiber_new_rounded),
-      (LeadStatus.contacted, Icons.call_outlined),
-      (LeadStatus.negotiation, Icons.handshake_outlined),
-      (LeadStatus.closed, Icons.verified_outlined),
-      (LeadStatus.lost, Icons.cancel_outlined),
-    ];
-
-    return SizedBox(
-      height: 118,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: kpis.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 12),
-        itemBuilder: (_, i) {
-          final status = kpis[i].$1;
-          final icon = kpis[i].$2;
-          final count = leads.where((l) => l.status == status).length;
-          return LandWorkspaceStatusCard(
-            statusName: status.label,
-            subtitle: 'Leads',
-            value: count,
-            icon: icon,
-            accent: status.color,
-          );
-        },
-      ),
-    );
+String _leadListLine(LandLead lead) {
+  final parts = <String>['#${lead.leadId}'];
+  if (lead.ownerName.trim().isNotEmpty) parts.add(lead.ownerName.trim());
+  final location = [lead.location, lead.village, lead.district]
+      .where((s) => s.trim().isNotEmpty)
+      .join(', ');
+  if (location.isNotEmpty) parts.add(location);
+  if (lead.surveyNumber.isNotEmpty) {
+    parts.add('Survey ${lead.surveyNumber}');
   }
+  parts.add(lead.status.label);
+  return parts.join(' · ');
 }
 
-// ── Lead Card ─────────────────────────────────────────────────────────────────
+// ── Lead list row ─────────────────────────────────────────────────────────────
 
-class _LeadCard extends StatelessWidget {
+class _LeadListRow extends StatelessWidget {
   final LandLead lead;
-  final ValueChanged<LeadStatus> onStatusChange;
   final VoidCallback? onTap;
   final bool selectionMode;
   final bool selected;
-  final VoidCallback? onEdit;
-  final VoidCallback? onMap;
-  final VoidCallback? onCall;
-  final VoidCallback? onAssignTask;
-  final VoidCallback? onDocuments;
+  final bool showDivider;
 
-  const _LeadCard({
+  const _LeadListRow({
     required this.lead,
-    required this.onStatusChange,
     this.onTap,
     this.selectionMode = false,
     this.selected = false,
-    this.onEdit,
-    this.onMap,
-    this.onCall,
-    this.onAssignTask,
-    this.onDocuments,
+    this.showDivider = true,
   });
 
   @override
   Widget build(BuildContext context) {
-    final statusColor = lead.status.color;
-    final title = lead.ownerName.trim().isNotEmpty
-        ? lead.ownerName.trim()
-        : 'Lead #${lead.leadId}';
+    final line = _leadListLine(lead);
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
-      child: DecoratedBox(
-        decoration: selected
-            ? BoxDecoration(
-                borderRadius: BorderRadius.circular(AppColors.radiusLg),
-                border: Border.all(color: AppColors.primary, width: 1.5),
-              )
-            : const BoxDecoration(),
-        child: AppCard(
-          onTap: onTap,
-          padding: const EdgeInsets.all(16),
-          radius: AppColors.radiusLg,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
+    return Material(
+      color: selected
+          ? AppColors.primary.withValues(alpha: 0.06)
+          : Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              child: Row(
                 children: [
                   if (selectionMode) ...[
                     AnimatedContainer(
                       duration: const Duration(milliseconds: 160),
-                      curve: Curves.easeOut,
-                      width: 24,
-                      height: 24,
+                      width: 22,
+                      height: 22,
                       decoration: BoxDecoration(
                         color:
                             selected ? AppColors.primary : Colors.transparent,
@@ -954,189 +832,44 @@ class _LeadCard extends StatelessWidget {
                       ),
                       child: selected
                           ? const Icon(Icons.check,
-                              size: 15, color: Colors.white)
+                              size: 14, color: Colors.white)
                           : null,
                     ),
                     const SizedBox(width: 12),
                   ],
-                  Container(
-                    width: 46,
-                    height: 46,
-                    decoration: BoxDecoration(
-                      color: statusColor.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Icon(Icons.location_on_rounded,
-                        color: statusColor, size: 24),
-                  ),
-                  const SizedBox(width: 12),
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: -0.2,
-                            color: context.fomraTextPrimary,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          'Lead #${lead.leadId} · ${lead.landType.label}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                            color: context.fomraTextSecondary,
-                          ),
-                        ),
-                      ],
+                    child: Text(
+                      line,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 14,
+                        height: 1.35,
+                        fontWeight: FontWeight.w500,
+                        color: context.fomraTextPrimary,
+                      ),
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  _StatusBadge(status: lead.status),
-                ],
-              ),
-              const SizedBox(height: 14),
-              Wrap(
-                spacing: 12,
-                runSpacing: 8,
-                children: [
-                  _infoChip(context, Icons.tag, 'ID', lead.leadId),
-                  _infoChip(context, Icons.landscape_outlined, 'Type', lead.landType.label),
-                  if (lead.surveyNumber.isNotEmpty)
-                    _infoChip(context, Icons.numbers, 'Survey', lead.surveyNumber),
-                  if (lead.landExtent.isNotEmpty)
-                    _infoChip(context, Icons.straighten, 'Area', lead.landExtent),
-                  if (lead.village.isNotEmpty)
-                    _infoChip(context, Icons.home_work_outlined, 'Village', lead.village),
-                  if (lead.inputSource == InputSource.broker)
-                    _infoChip(context, Icons.handshake_outlined, 'Broker', 'Yes'),
-                  if (lead.createdByName.isNotEmpty)
-                    _infoChip(
-                      context,
-                      Icons.person_outline,
-                      lead.ownershipLabel,
-                      lead.createdByName,
+                  if (!selectionMode) ...[
+                    const SizedBox(width: 8),
+                    Icon(
+                      Icons.chevron_right_rounded,
+                      size: 20,
+                      color: context.fomraTextTertiary,
                     ),
-                  _infoChip(
-                    context,
-                    Icons.calendar_today_outlined,
-                    'Created',
-                    '${lead.addedOn.day}/${lead.addedOn.month}/${lead.addedOn.year}',
-                  ),
+                  ],
                 ],
               ),
-              if (!selectionMode) ...[
-                const SizedBox(height: 12),
-                LandWorkspaceLeadActions(
-                  lead: lead,
-                  onCall: onCall,
-                  onMap: onMap,
-                  onEdit: onEdit,
-                  onAssignTask: onAssignTask,
-                  onDocuments: onDocuments,
-                ),
-              ],
-              if (!selectionMode) ...[
-                const SizedBox(height: 12),
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: LeadStatus.values
-                        .where((s) =>
-                            s != lead.status && s != LeadStatus.siteVisit)
-                        .map((s) => Padding(
-                              padding: const EdgeInsets.only(right: 8),
-                              child: OutlinedButton(
-                                onPressed: () => onStatusChange(s),
-                                style: OutlinedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 14, vertical: 8),
-                                  minimumSize: Size.zero,
-                                  tapTargetSize:
-                                      MaterialTapTargetSize.shrinkWrap,
-                                  side: BorderSide(
-                                      color: s.color.withValues(alpha: 0.5)),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(999),
-                                  ),
-                                ),
-                                child: Text('→ ${s.label}',
-                                    style: TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w600,
-                                        color: s.color)),
-                              ),
-                            ))
-                        .toList(),
-                  ),
-                ),
-              ],
-            ],
-          ),
+            ),
+            if (showDivider)
+              Divider(
+                height: 1,
+                thickness: 1,
+                color: context.fomraBorder.withValues(alpha: 0.85),
+              ),
+          ],
         ),
       ),
-    );
-  }
-
-  Widget _infoChip(BuildContext context, IconData icon, String label, String value) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: context.fomraSurfaceVar,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 15, color: context.fomraTextSecondary),
-          const SizedBox(width: 5),
-          Text(
-            '$label: ',
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: context.fomraTextSecondary,
-            ),
-          ),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: context.fomraTextPrimary,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-class _StatusBadge extends StatelessWidget {
-  final LeadStatus status;
-  const _StatusBadge({required this.status});
-
-  @override
-  Widget build(BuildContext context) {
-    final c = status.color;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-      decoration: BoxDecoration(
-          color: c.withValues(alpha: 0.15),
-          borderRadius: BorderRadius.circular(20)),
-      child: Text(status.label,
-          style: TextStyle(
-              fontSize: 12, color: c, fontWeight: FontWeight.w700)),
     );
   }
 }

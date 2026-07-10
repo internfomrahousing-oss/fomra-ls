@@ -191,7 +191,8 @@ class _AppearanceSettingsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return FomraAppShell(
+      currentRoute: '/settings',
       backgroundColor: context.fomraPageBg,
       appBar: FomraSubPageAppBar(
         title: 'Appearance',
@@ -259,7 +260,8 @@ class _UserManagementPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return FomraAppShell(
+      currentRoute: '/settings',
       backgroundColor: context.fomraPageBg,
       appBar: FomraSubPageAppBar(
         title: 'User Management',

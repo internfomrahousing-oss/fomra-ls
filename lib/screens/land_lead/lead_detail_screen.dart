@@ -7,6 +7,7 @@ import '../../services/app_store.dart';
 import '../../services/land_lead_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_theme_context.dart';
+import '../../widgets/fomra_app_shell.dart';
 import '../../widgets/fomra_breadcrumb.dart';
 import '../../widgets/ui/app_components.dart';
 import 'add_lead_screen.dart';
@@ -195,7 +196,8 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return FomraAppShell(
+      currentRoute: '/land-lead',
       backgroundColor: const Color(0xFFF3F4F8),
       body: SafeArea(
         child: LayoutBuilder(

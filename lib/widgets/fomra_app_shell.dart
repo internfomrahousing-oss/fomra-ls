@@ -11,6 +11,7 @@ class FomraAppShell extends StatelessWidget {
   final Color? backgroundColor;
   final Widget? floatingActionButton;
   final FloatingActionButtonLocation? floatingActionButtonLocation;
+  final Widget? bottomNavigationBar;
 
   const FomraAppShell({
     super.key,
@@ -20,6 +21,7 @@ class FomraAppShell extends StatelessWidget {
     this.backgroundColor,
     this.floatingActionButton,
     this.floatingActionButtonLocation,
+    this.bottomNavigationBar,
   });
 
   @override
@@ -39,6 +41,7 @@ class FomraAppShell extends StatelessWidget {
               body: body,
               floatingActionButton: floatingActionButton,
               floatingActionButtonLocation: floatingActionButtonLocation,
+              bottomNavigationBar: bottomNavigationBar,
             ),
           ),
         ],

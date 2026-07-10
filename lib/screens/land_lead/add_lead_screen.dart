@@ -12,6 +12,7 @@ import '../../theme/app_theme.dart';
 import '../../config/maptiler_tiles.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../widgets/add_lead_ui.dart';
+import '../../widgets/fomra_app_shell.dart';
 import '../../widgets/fomra_breadcrumb.dart';
 import '../../widgets/portal_page_layout.dart';
 import '../../services/api_client.dart';
@@ -642,7 +643,8 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
         ),
     ];
 
-    return Scaffold(
+    return FomraAppShell(
+      currentRoute: '/land-lead',
       backgroundColor: AddLeadUi.pageBg,
       appBar: AddLeadAppBar(
         title: _isEdit ? 'Edit Land Lead' : 'Add Land Lead',
