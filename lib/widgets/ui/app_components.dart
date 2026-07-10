@@ -224,6 +224,168 @@ class MetricCard extends StatelessWidget {
 /// Backwards-friendly alias — the brief lists both MetricCard and StatisticCard.
 typedef StatisticCard = MetricCard;
 
+/// Computes period-over-period % change with safe edge-case handling.
+double computeKpiPercentChange(int currentValue, int previousValue) {
+  if (previousValue == 0) {
+    if (currentValue > 0) return 100;
+    return 0;
+  }
+  final raw = ((currentValue - previousValue) / previousValue) * 100;
+  if (!raw.isFinite) return 0;
+  final rounded = raw.round();
+  if (rounded == 0) return 0;
+  return rounded.toDouble();
+}
+
+/// Dynamic KPI performance pill — green up, red down, gray flat.
+class KpiPerformanceBadge extends StatefulWidget {
+  const KpiPerformanceBadge({
+    super.key,
+    required this.currentValue,
+    required this.previousValue,
+    this.invertSemanticColors = false,
+    this.periodLabel = 'vs last week',
+  });
+
+  final int currentValue;
+  final int previousValue;
+  final bool invertSemanticColors;
+  final String periodLabel;
+
+  @override
+  State<KpiPerformanceBadge> createState() => _KpiPerformanceBadgeState();
+}
+
+class _KpiPerformanceBadgeState extends State<KpiPerformanceBadge>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pulse = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 280),
+  );
+
+  @override
+  void didUpdateWidget(covariant KpiPerformanceBadge oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.currentValue != widget.currentValue ||
+        oldWidget.previousValue != widget.previousValue) {
+      _pulse.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final pct = computeKpiPercentChange(
+      widget.currentValue,
+      widget.previousValue,
+    );
+    final isUp = pct > 0;
+    final isDown = pct < 0;
+    final isNeutral = pct == 0;
+
+    final semanticPositive =
+        widget.invertSemanticColors ? isDown : isUp;
+    final semanticNegative =
+        widget.invertSemanticColors ? isUp : isDown;
+
+    final Color fg;
+    final Color bg;
+    final IconData icon;
+    final String label;
+
+    if (isNeutral) {
+      fg = AppColors.textSecondary;
+      bg = AppColors.textSecondary.withValues(alpha: 0.10);
+      icon = Icons.remove_rounded;
+      label = '0%';
+    } else if (semanticPositive) {
+      fg = AppColors.success;
+      bg = AppColors.success.withValues(alpha: 0.12);
+      icon = Icons.north_east_rounded;
+      label = '+${pct.round()}%';
+    } else if (semanticNegative) {
+      fg = AppColors.error;
+      bg = AppColors.error.withValues(alpha: 0.12);
+      icon = Icons.south_east_rounded;
+      label = '${pct.round()}%';
+    } else {
+      fg = AppColors.textSecondary;
+      bg = AppColors.textSecondary.withValues(alpha: 0.10);
+      icon = Icons.remove_rounded;
+      label = '0%';
+    }
+
+    final exactPct = computeKpiPercentChange(
+      widget.currentValue,
+      widget.previousValue,
+    );
+    final exactLabel = exactPct == 0
+        ? '0%'
+        : '${exactPct > 0 ? '+' : ''}${exactPct.round()}%';
+
+    final tooltip = 'Current: ${widget.currentValue}\n'
+        'Previous: ${widget.previousValue}\n'
+        'Change: $exactLabel\n'
+        '${widget.periodLabel}';
+
+    return Tooltip(
+      message: tooltip,
+      preferBelow: false,
+      child: ScaleTransition(
+        scale: Tween<double>(begin: 0.92, end: 1).animate(
+          CurvedAnimation(parent: _pulse, curve: Curves.easeOutCubic),
+        ),
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 260),
+          switchInCurve: Curves.easeOutCubic,
+          switchOutCurve: Curves.easeInCubic,
+          transitionBuilder: (child, animation) => FadeTransition(
+            opacity: animation,
+            child: child,
+          ),
+          child: Container(
+            key: ValueKey('$label-${widget.currentValue}-${widget.previousValue}'),
+            height: 28,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              color: bg,
+              borderRadius: BorderRadius.circular(999),
+              boxShadow: [
+                BoxShadow(
+                  color: fg.withValues(alpha: 0.12),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 14, color: fg),
+                const SizedBox(width: 4),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: fg,
+                    height: 1,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _TrendPill extends StatelessWidget {
   const _TrendPill({required this.label, required this.up});
   final String label;

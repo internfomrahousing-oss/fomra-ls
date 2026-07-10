@@ -14,9 +14,8 @@ import '../../theme/app_theme.dart';
 import '../../theme/fomra_layout.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../models/app_notification.dart';
-import '../../widgets/app_drawer.dart';
 import '../../widgets/fomra_app_bar.dart';
-import '../../widgets/fomra_bottom_nav.dart';
+import '../../widgets/fomra_app_shell.dart';
 import '../../widgets/portal_home_sections.dart';
 import '../../widgets/ui/app_components.dart';
 
@@ -372,7 +371,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         ),
     ];
 
-    return Scaffold(
+    return FomraAppShell(
+      currentRoute: '/home',
       appBar: FomraAppBar(
         actions: [
           CompositedTransformTarget(
@@ -413,8 +413,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           ),
         ],
       ),
-      drawer: const AppDrawer(currentRoute: '/home'),
-      bottomNavigationBar: const FomraBottomNav(currentRoute: '/home'),
       backgroundColor: context.fomraPageBg,
       body: SingleChildScrollView(
         padding: FomraLayout.pagePadding(context),

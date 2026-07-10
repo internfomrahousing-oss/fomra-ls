@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../theme/fomra_layout.dart';
 import '../../theme/fomra_theme_context.dart';
-import '../../widgets/app_drawer.dart';
 import '../../widgets/fomra_app_bar.dart';
-import '../../widgets/fomra_bottom_nav.dart';
+import '../../widgets/fomra_app_shell.dart';
 import '../task_management/task_management_screen.dart';
 import '../../widgets/portal_page_layout.dart';
 import 'land_lead_screen.dart';
@@ -45,7 +44,8 @@ class _LandWorkspaceScreenState extends State<LandWorkspaceScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return FomraAppShell(
+      currentRoute: '/land-lead',
       backgroundColor: context.fomraPageBg,
       appBar: FomraAppBar(
         moduleName: 'Land Workspace',
@@ -70,8 +70,6 @@ class _LandWorkspaceScreenState extends State<LandWorkspaceScreen>
           ),
         ),
       ),
-      drawer: const AppDrawer(currentRoute: '/land-lead'),
-      bottomNavigationBar: const FomraBottomNav(currentRoute: '/land-lead'),
       body: TabBarView(
         controller: _tab,
         physics: const NeverScrollableScrollPhysics(),

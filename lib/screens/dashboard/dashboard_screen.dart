@@ -7,9 +7,8 @@ import '../../services/report_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_layout.dart';
 import '../../theme/fomra_theme_context.dart';
-import '../../widgets/app_drawer.dart';
 import '../../widgets/fomra_app_bar.dart';
-import '../../widgets/fomra_bottom_nav.dart';
+import '../../widgets/fomra_app_shell.dart';
 import '../../widgets/ui/app_components.dart';
 import '../land_lead/lead_detail_screen.dart';
 
@@ -406,37 +405,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }).length;
   }
 
-  /// Week-over-week % change from real lead dates (not placeholders).
-  ({String label, bool up, bool neutral}) _weekOverWeekTrend(
-    List<LandLead> leads, {
-    bool lowerIsBetter = false,
-  }) {
+  /// Week-over-week counts from real lead dates (current = this week, previous = last week).
+  (int current, int previous) _weekOverWeekCounts(List<LandLead> leads) {
     final today = _dayOnly(DateTime.now());
     final thisWeekStart = today.subtract(const Duration(days: 6));
     final lastWeekEnd = today.subtract(const Duration(days: 7));
     final lastWeekStart = today.subtract(const Duration(days: 13));
 
-    final thisWeek = _countLeadsBetween(leads, thisWeekStart, today);
-    final lastWeek = _countLeadsBetween(leads, lastWeekStart, lastWeekEnd);
-
-    if (thisWeek == 0 && lastWeek == 0) {
-      return (label: '0%', up: true, neutral: true);
-    }
-    if (lastWeek == 0) {
-      // No prior-week baseline: a "% change from zero" is undefined, so don't
-      // fabricate +100% on every card. Show it as new activity instead — real
-      // percentages appear once there's a non-zero week to compare against.
-      final up = lowerIsBetter ? false : true;
-      return (label: 'New', up: up, neutral: false);
-    }
-
-    final pct = (((thisWeek - lastWeek) / lastWeek) * 100).round();
-    if (pct == 0) return (label: '0%', up: true, neutral: true);
-
-    final improved = pct > 0;
-    final up = lowerIsBetter ? !improved : improved;
-    final sign = pct > 0 ? '+' : '';
-    return (label: '$sign$pct%', up: up, neutral: false);
+    final current = _countLeadsBetween(leads, thisWeekStart, today);
+    final previous = _countLeadsBetween(leads, lastWeekStart, lastWeekEnd);
+    return (current, previous);
   }
 
   void _openKpiLeads(_KpiData kpi) {
@@ -495,11 +473,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final chartRejected =
         _leadsWithinRange(rejectedList, _selectedChartRange).length;
 
-    final totalTrend = _weekOverWeekTrend(totalLeadsList);
-    final activeTrend = _weekOverWeekTrend(activeLeadsList);
-    final acquiredTrend = _weekOverWeekTrend(acquiredList);
-    final rejectedTrend =
-        _weekOverWeekTrend(rejectedList, lowerIsBetter: true);
+    final totalTrend = _weekOverWeekCounts(totalLeadsList);
+    final activeTrend = _weekOverWeekCounts(activeLeadsList);
+    final acquiredTrend = _weekOverWeekCounts(acquiredList);
+    final rejectedTrend = _weekOverWeekCounts(rejectedList);
 
     final weeklyTrend = _trendByDays(7, totalLeadsList);
 
@@ -509,9 +486,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
         value: '$totalLeads',
         accent: isDark ? const Color(0xFF60A5FA) : const Color(0xFF2563EB),
         icon: Icons.location_on_outlined,
-        trend: totalTrend.label,
-        trendUp: totalTrend.up,
-        trendNeutral: totalTrend.neutral,
+        trendCurrent: totalTrend.$1,
+        trendPrevious: totalTrend.$2,
+        invertTrendColors: false,
         secondary: 'Compared with last week',
         todayLabel: 'Today',
         todayValue: '$addedToday',
@@ -525,9 +502,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
         value: '$activeLeads',
         accent: isDark ? const Color(0xFFA78BFA) : const Color(0xFF8B5CF6),
         icon: Icons.bolt_outlined,
-        trend: activeTrend.label,
-        trendUp: activeTrend.up,
-        trendNeutral: activeTrend.neutral,
+        trendCurrent: activeTrend.$1,
+        trendPrevious: activeTrend.$2,
+        invertTrendColors: false,
         secondary: 'Pipeline in motion',
         todayLabel: 'Pending',
         todayValue: '$pendingActions',
@@ -541,9 +518,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
         value: '$acquired',
         accent: AppColors.success,
         icon: Icons.check_circle_outline,
-        trend: acquiredTrend.label,
-        trendUp: acquiredTrend.up,
-        trendNeutral: acquiredTrend.neutral,
+        trendCurrent: acquiredTrend.$1,
+        trendPrevious: acquiredTrend.$2,
+        invertTrendColors: false,
         secondary: 'Closed conversions',
         todayLabel: 'Today',
         todayValue: '$acquiredToday',
@@ -557,9 +534,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
         value: '$rejected',
         accent: AppColors.error,
         icon: Icons.cancel_outlined,
-        trend: rejectedTrend.label,
-        trendUp: rejectedTrend.up,
-        trendNeutral: rejectedTrend.neutral,
+        trendCurrent: rejectedTrend.$1,
+        trendPrevious: rejectedTrend.$2,
+        invertTrendColors: true,
         secondary: 'Needs follow-up review',
         todayLabel: 'Recovery',
         todayValue: '${(totalLeads - rejected).clamp(0, totalLeads)}',
@@ -570,10 +547,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
     ];
 
-    return Scaffold(
+    return FomraAppShell(
+      currentRoute: '/dashboard',
       appBar: const FomraAppBar(moduleName: 'Dashboard'),
-      drawer: const AppDrawer(currentRoute: '/dashboard'),
-      bottomNavigationBar: const FomraBottomNav(currentRoute: '/dashboard'),
       backgroundColor: context.fomraPageBg,
       body: SingleChildScrollView(
         padding: FomraLayout.pagePadding(context),
@@ -610,7 +586,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     _InsightChip(
                       icon: Icons.workspace_premium_outlined,
                       label: 'Best Metric',
-                      value: acquiredTrend.up ? 'Acquired' : 'Total',
+                      value: acquiredTrend.$1 >= acquiredTrend.$2
+                          ? 'Acquired'
+                          : 'Total',
                       tone: AppColors.warning,
                     ),
                   ],
@@ -707,9 +685,9 @@ class _KpiData {
   final String value;
   final Color accent;
   final IconData icon;
-  final String trend;
-  final bool trendUp;
-  final bool trendNeutral;
+  final int trendCurrent;
+  final int trendPrevious;
+  final bool invertTrendColors;
   final String secondary;
   final String todayLabel;
   final String todayValue;
@@ -723,9 +701,9 @@ class _KpiData {
     required this.value,
     required this.accent,
     required this.icon,
-    required this.trend,
-    required this.trendUp,
-    this.trendNeutral = false,
+    required this.trendCurrent,
+    required this.trendPrevious,
+    this.invertTrendColors = false,
     required this.secondary,
     required this.todayLabel,
     required this.todayValue,
@@ -795,18 +773,10 @@ class _KpiCard extends StatelessWidget {
                     child: Icon(data.icon, color: data.accent),
                   ),
                   const Spacer(),
-                  StatusChip(
-                    label: data.trend,
-                    tone: data.trendNeutral
-                        ? StatusTone.neutral
-                        : data.trendUp
-                            ? StatusTone.success
-                            : StatusTone.danger,
-                    icon: data.trendNeutral
-                        ? Icons.remove_rounded
-                        : data.trendUp
-                            ? Icons.arrow_upward_rounded
-                            : Icons.arrow_downward_rounded,
+                  KpiPerformanceBadge(
+                    currentValue: data.trendCurrent,
+                    previousValue: data.trendPrevious,
+                    invertSemanticColors: data.invertTrendColors,
                   ),
                 ],
               ),

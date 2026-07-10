@@ -13,6 +13,7 @@ class FomraAppBar extends StatelessWidget implements PreferredSizeWidget {
   @override
   Widget build(BuildContext context) {
     return AppBar(
+      automaticallyImplyLeading: false,
       flexibleSpace: Container(
         decoration: BoxDecoration(gradient: context.fomraHeroGradient),
       ),

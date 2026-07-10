@@ -3,9 +3,8 @@ import 'change_password_screen.dart';
 import '../../services/auth_service.dart';
 import '../../services/theme_controller.dart';
 import '../../theme/app_theme.dart';
-import '../../widgets/app_drawer.dart';
 import '../../widgets/fomra_app_bar.dart';
-import '../../widgets/fomra_bottom_nav.dart';
+import '../../widgets/fomra_app_shell.dart';
 import '../../widgets/ui/app_components.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -13,10 +12,9 @@ class SettingsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return FomraAppShell(
+      currentRoute: '/settings',
       appBar: const FomraAppBar(moduleName: 'Settings'),
-      drawer: const AppDrawer(currentRoute: '/settings'),
-      bottomNavigationBar: const FomraBottomNav(currentRoute: '/settings'),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
         children: [

@@ -11,9 +11,8 @@ import '../../services/notifications_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_layout.dart';
 import '../../theme/fomra_theme_context.dart';
-import '../../widgets/app_drawer.dart';
 import '../../widgets/fomra_app_bar.dart';
-import '../../widgets/fomra_bottom_nav.dart';
+import '../../widgets/fomra_app_shell.dart';
 import '../../widgets/land_workspace_ui.dart';
 import '../../widgets/portal_home_sections.dart';
 import '../../widgets/portal_page_layout.dart';
@@ -326,12 +325,11 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
         floatingActionButton: fab,
       );
     }
-    return Scaffold(
+    return FomraAppShell(
+      currentRoute: '/land-lead',
       appBar: const FomraAppBar(
         moduleName: 'Land Lead',
       ),
-      drawer: const AppDrawer(currentRoute: '/land-lead'),
-      bottomNavigationBar: const FomraBottomNav(currentRoute: '/land-lead'),
       body: body,
       floatingActionButton: fab,
     );

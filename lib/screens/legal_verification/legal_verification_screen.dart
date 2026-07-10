@@ -6,9 +6,8 @@ import '../../services/legal_verification_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../widgets/ui/app_components.dart';
-import '../../widgets/app_drawer.dart';
 import '../../widgets/fomra_app_bar.dart';
-import '../../widgets/fomra_bottom_nav.dart';
+import '../../widgets/fomra_app_shell.dart';
 
 // ── Main Screen ───────────────────────────────────────────────────────────────
 
@@ -162,11 +161,9 @@ class _LegalVerificationScreenState extends State<LegalVerificationScreen> {
   Widget build(BuildContext context) {
     final body = _selectedLead == null ? _buildLeadList() : _buildForm();
     if (widget.isTab) return Scaffold(body: body);
-    return Scaffold(
+    return FomraAppShell(
+      currentRoute: '/legal-verification',
       appBar: const FomraAppBar(moduleName: 'Legal Verification'),
-      drawer: const AppDrawer(currentRoute: '/legal-verification'),
-      bottomNavigationBar:
-          const FomraBottomNav(currentRoute: '/legal-verification'),
       body: body,
     );
   }

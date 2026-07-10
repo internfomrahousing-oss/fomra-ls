@@ -8,9 +8,8 @@ import '../../theme/app_theme.dart';
 import '../../theme/fomra_input.dart';
 import '../../theme/fomra_layout.dart';
 import '../../theme/fomra_theme_context.dart';
-import '../../widgets/app_drawer.dart';
 import '../../widgets/fomra_app_bar.dart';
-import '../../widgets/fomra_bottom_nav.dart';
+import '../../widgets/fomra_app_shell.dart';
 import '../../widgets/portal_home_sections.dart';
 import '../../widgets/portal_page_layout.dart';
 import '../../widgets/ui/app_components.dart';
@@ -668,7 +667,8 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
       );
     }
 
-    return Scaffold(
+    return FomraAppShell(
+      currentRoute: '/task-management',
       backgroundColor: context.fomraPageBg,
       appBar: FomraAppBar(
         moduleName: 'Task Management',
@@ -700,9 +700,6 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
         ],
         bottom: taskTabBar,
       ),
-      drawer: const AppDrawer(currentRoute: '/task-management'),
-      bottomNavigationBar:
-          const FomraBottomNav(currentRoute: '/task-management'),
       body: taskListView,
       floatingActionButton: fab,
     );

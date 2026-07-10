@@ -16,9 +16,8 @@ import '../../theme/app_theme.dart';
 import '../../theme/fomra_input.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../utils/lead_location_parser.dart';
-import '../../widgets/app_drawer.dart';
 import '../../widgets/fomra_app_bar.dart';
-import '../../widgets/fomra_bottom_nav.dart';
+import '../../widgets/fomra_app_shell.dart';
 import '../../widgets/fmb_sketch_viewer.dart';
 import '../../widgets/market_intelligence_ui.dart';
 import '../../widgets/patta_document_preview.dart';
@@ -1998,12 +1997,10 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
           ],
         ),
     );
-    return Scaffold(
+    return FomraAppShell(
+      currentRoute: '/market-intelligence',
       backgroundColor: context.fomraSurfaceVar,
       appBar: const FomraAppBar(moduleName: 'Market Intelligence'),
-      drawer: const AppDrawer(currentRoute: '/market-intelligence'),
-      bottomNavigationBar:
-          const FomraBottomNav(currentRoute: '/market-intelligence'),
       body: _wrapWithFullScreenMap(body),
     );
   }
