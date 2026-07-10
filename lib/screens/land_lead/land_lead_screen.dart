@@ -312,7 +312,7 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
   Widget build(BuildContext context) {
     final body = _buildScrollableBody();
 
-    // The "+" button goes straight to Add Lead. Management's Select / Show all
+    // The "+" button goes straight to Add Lead. Management's Select / View all
     // projects live as always-visible pills next to the lead summary.
     final fab = LandWorkspaceSpeedDial(
       onAddLead: _openAddLead,
@@ -336,7 +336,7 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
   }
 
   /// Always-visible management actions shown next to the lead summary:
-  /// Select (enter assign mode) and Show all projects (open the leads map).
+  /// Select (enter assign mode) and View all leads (open the leads map).
   Widget _buildIdleManagementActions() {
     // Both pills on one row, sized to content so they sit in the empty space
     // to the right of the KPI summary tiles.
@@ -352,7 +352,7 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
         _actionPill(
           onTap: _openLeadsMap,
           icon: Icons.map_outlined,
-          label: 'Show all projects',
+          label: 'View all leads',
           foreground: const Color(0xFF0F766E),
           background: const Color(0xFF0F766E).withValues(alpha: 0.10),
         ),

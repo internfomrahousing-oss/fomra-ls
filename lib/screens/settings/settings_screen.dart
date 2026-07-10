@@ -6,6 +6,7 @@ import '../../theme/app_theme.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../widgets/fomra_app_bar.dart';
 import '../../widgets/fomra_app_shell.dart';
+import '../../widgets/fomra_breadcrumb.dart';
 import '../../widgets/portal_page_layout.dart';
 import '../../widgets/ui/app_components.dart';
 import '../employee_management/employee_management_screen.dart';
@@ -58,7 +59,7 @@ class SettingsScreen extends StatelessWidget {
               ),
               _SettingsTile(
                 icon: Icons.lock_outline,
-                label: 'Change Password',
+                label: 'Reset Password',
                 accent: AppColors.purple,
                 onTap: () => Navigator.push(
                   context,
@@ -192,7 +193,10 @@ class _AppearanceSettingsPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: context.fomraPageBg,
-      appBar: const FomraSubPageAppBar(title: 'Appearance'),
+      appBar: FomraSubPageAppBar(
+        title: 'Appearance',
+        breadcrumbs: FomraBreadcrumbs.fromSettings('Appearance'),
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -257,7 +261,10 @@ class _UserManagementPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: context.fomraPageBg,
-      appBar: const FomraSubPageAppBar(title: 'User Management'),
+      appBar: FomraSubPageAppBar(
+        title: 'User Management',
+        breadcrumbs: FomraBreadcrumbs.fromSettings('User Management'),
+      ),
       body: const EmployeeManagementScreen(isTab: true),
     );
   }

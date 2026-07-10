@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:intl/intl.dart';
@@ -6,6 +7,9 @@ import 'package:pdf/widgets.dart' as pw;
 
 import '../models/employee_profile.dart';
 import '../models/land_lead.dart';
+import 'csv_saver_stub.dart'
+    if (dart.library.html) 'csv_saver_web.dart'
+    if (dart.library.io) 'csv_saver_io.dart';
 import 'pdf_saver_stub.dart'
     if (dart.library.html) 'pdf_saver_web.dart'
     if (dart.library.io) 'pdf_saver_io.dart';
@@ -16,6 +20,36 @@ enum LeadReportType {
   acquiredLeads,
   brokerLeads,
   employeeLeads,
+}
+
+enum ReportFormat { pdf, excel }
+
+class ReportPreviewSection {
+  final String title;
+  final List<String> headers;
+  final List<List<String>> rows;
+  final String emptyMessage;
+
+  const ReportPreviewSection({
+    required this.title,
+    required this.headers,
+    required this.rows,
+    this.emptyMessage = 'No data.',
+  });
+
+  int get count => rows.length;
+}
+
+class ReportPreviewData {
+  final DateTime generatedAt;
+  final List<({String label, String value})> summary;
+  final List<ReportPreviewSection> sections;
+
+  const ReportPreviewData({
+    required this.generatedAt,
+    required this.summary,
+    required this.sections,
+  });
 }
 
 /// Builds and downloads a PDF report covering all leads, acquired leads,
@@ -38,29 +72,118 @@ class ReportService {
         LeadStatus.negotiation,
       ].contains(l.status);
 
-  /// Generate the PDF and hand it to the OS/browser share/download sheet.
+  /// Generate the report and hand it to the OS/browser share/download sheet.
   static Future<void> generateLeadsReport(
     List<LandLead> leads, {
     List<EmployeeProfile> employees = const [],
     LeadReportType reportType = LeadReportType.all,
     String? employeeName,
+    ReportFormat format = ReportFormat.pdf,
   }) async {
-    final bytes = await _buildReport(
+    final fileName = reportFileName(
+      reportType: reportType,
+      employeeName: employeeName,
+      format: format,
+    );
+    if (format == ReportFormat.excel) {
+      final bytes = buildExcelReport(
+        leads,
+        employees: employees,
+        reportType: reportType,
+        employeeName: employeeName,
+      );
+      await saveCsv(bytes, fileName);
+      return;
+    }
+
+    final bytes = await _buildPdfReport(
       leads,
       employees: employees,
       reportType: reportType,
       employeeName: employeeName,
     );
-    await savePdf(
-      bytes,
-      reportFileName(reportType: reportType, employeeName: employeeName),
+    await savePdf(bytes, fileName);
+  }
+
+  /// Structured preview of the report before export.
+  static ReportPreviewData buildPreview(
+    List<LandLead> leads, {
+    List<EmployeeProfile> employees = const [],
+    LeadReportType reportType = LeadReportType.all,
+    String? employeeName,
+  }) {
+    final acquired =
+        leads.where((l) => l.status == LeadStatus.closed).toList();
+    final broker =
+        leads.where((l) => l.inputSource == InputSource.broker).toList();
+    final active = leads.where(_isActive).length;
+    final rejected = leads.where((l) => l.status == LeadStatus.lost).length;
+    final perf = _employeePerformance(leads, employees);
+
+    return ReportPreviewData(
+      generatedAt: DateTime.now(),
+      summary: [
+        (label: 'Total leads', value: '${leads.length}'),
+        (label: 'Acquired', value: '${acquired.length}'),
+        (label: 'Broker leads', value: '${broker.length}'),
+        (label: 'Active', value: '$active'),
+        (label: 'Rejected', value: '$rejected'),
+      ],
+      sections: _previewSections(
+        leads: leads,
+        acquired: acquired,
+        broker: broker,
+        perf: perf,
+        reportType: reportType,
+        employeeName: employeeName,
+      ),
     );
+  }
+
+  static Uint8List buildExcelReport(
+    List<LandLead> leads, {
+    List<EmployeeProfile> employees = const [],
+    LeadReportType reportType = LeadReportType.all,
+    String? employeeName,
+  }) {
+    final preview = buildPreview(
+      leads,
+      employees: employees,
+      reportType: reportType,
+      employeeName: employeeName,
+    );
+    final buffer = StringBuffer();
+    buffer.writeln('Fomra Housing & Infrastructure Pvt. Ltd.');
+    buffer.writeln('Land Acquisition Report');
+    buffer.writeln('Generated,${_csv(_stamp.format(preview.generatedAt))}');
+    buffer.writeln();
+    buffer.writeln(
+      preview.summary.map((s) => '${_csv(s.label)},${_csv(s.value)}').join(','),
+    );
+    buffer.writeln();
+
+    for (final section in preview.sections) {
+      buffer.writeln('${_csv(section.title)} (${section.count})');
+      buffer.writeln(section.headers.map(_csv).join(','));
+      if (section.rows.isEmpty) {
+        buffer.writeln(_csv(section.emptyMessage));
+      } else {
+        for (final row in section.rows) {
+          buffer.writeln(row.map(_csv).join(','));
+        }
+      }
+      buffer.writeln();
+    }
+
+    final body = utf8.encode(buffer.toString());
+    return Uint8List.fromList([0xEF, 0xBB, 0xBF, ...body]);
   }
 
   /// The download file name for a given report selection.
   static String reportFileName({
     LeadReportType reportType = LeadReportType.all,
     String? employeeName,
+    ReportFormat format = ReportFormat.pdf,
   }) {
     final suffix = switch (reportType) {
       LeadReportType.all => 'All',
@@ -72,11 +195,12 @@ class ReportService {
             ? 'Employee_Leads_All'
             : 'Employee_${_fileSafe(employeeName)}',
     };
+    final ext = format == ReportFormat.excel ? 'csv' : 'pdf';
     return 'FomraLS_Report_${suffix}_'
-        '${DateFormat('yyyyMMdd').format(DateTime.now())}.pdf';
+        '${DateFormat('yyyyMMdd').format(DateTime.now())}.$ext';
   }
 
-  static Future<Uint8List> _buildReport(
+  static Future<Uint8List> _buildPdfReport(
     List<LandLead> leads, {
     List<EmployeeProfile> employees = const [],
     LeadReportType reportType = LeadReportType.all,
@@ -217,6 +341,117 @@ class ReportService {
         ),
       );
 
+  static List<String> _leadHeaders() => const [
+        'Lead ID',
+        'Owner',
+        'Location',
+        'Type',
+        'Source',
+        'Status',
+        'Added By',
+        'Date',
+      ];
+
+  static List<String> _leadRow(LandLead l) => [
+        l.leadId,
+        l.ownerName.trim().isEmpty ? '-' : l.ownerName,
+        l.location.trim().isEmpty ? '-' : l.location,
+        l.landType.label,
+        l.inputSource.label,
+        l.status.label,
+        l.createdByName.trim().isEmpty ? '-' : l.createdByName,
+        _date.format(l.addedOn),
+      ];
+
+  static List<List<String>> _leadRows(List<LandLead> leads) =>
+      leads.map(_leadRow).toList();
+
+  static List<ReportPreviewSection> _previewSections({
+    required List<LandLead> leads,
+    required List<LandLead> acquired,
+    required List<LandLead> broker,
+    required List<_Perf> perf,
+    required LeadReportType reportType,
+    String? employeeName,
+  }) {
+    ReportPreviewSection leadsSection(String title, List<LandLead> data,
+            {String emptyMsg = 'No leads.'}) =>
+        ReportPreviewSection(
+          title: title,
+          headers: _leadHeaders(),
+          rows: _leadRows(data),
+          emptyMessage: emptyMsg,
+        );
+
+    ReportPreviewSection perfSection() => ReportPreviewSection(
+          title: 'Employee Lead Performance',
+          headers: const [
+            'Employee',
+            'Total Leads',
+            'Acquired',
+            'Broker',
+            'Conversion',
+          ],
+          rows: perf
+              .map(
+                (p) => [
+                  p.name,
+                  '${p.total}',
+                  '${p.acquired}',
+                  '${p.broker}',
+                  '${p.total == 0 ? 0 : ((p.acquired / p.total) * 100).round()}%',
+                ],
+              )
+              .toList(),
+          emptyMessage: 'No employee activity yet.',
+        );
+
+    switch (reportType) {
+      case LeadReportType.all:
+        return [
+          leadsSection('All Leads', leads, emptyMsg: 'No leads yet.'),
+          leadsSection('Acquired Leads', acquired,
+              emptyMsg: 'No acquired leads yet.'),
+          leadsSection('Broker Leads', broker, emptyMsg: 'No broker leads yet.'),
+          perfSection(),
+        ];
+      case LeadReportType.totalLeads:
+        return [
+          leadsSection('Total Leads', leads, emptyMsg: 'No leads yet.'),
+        ];
+      case LeadReportType.acquiredLeads:
+        return [
+          leadsSection('Acquired Leads', acquired,
+              emptyMsg: 'No acquired leads yet.'),
+        ];
+      case LeadReportType.brokerLeads:
+        return [
+          leadsSection('Broker Leads', broker, emptyMsg: 'No broker leads yet.'),
+        ];
+      case LeadReportType.employeeLeads:
+        final requested = employeeName?.trim() ?? '';
+        if (requested.isEmpty || requested.toLowerCase() == 'all') {
+          return [perfSection()];
+        }
+        final employeeLeads = leads
+            .where((l) =>
+                l.createdByName.trim().toLowerCase() == requested.toLowerCase())
+            .toList();
+        return [
+          leadsSection('Employee Leads · $requested', employeeLeads,
+              emptyMsg: 'No leads found for $requested.'),
+        ];
+    }
+  }
+
+  static String _csv(String value) {
+    final v = value.replaceAll('\r', ' ').replaceAll('\n', ' ');
+    if (v.contains(',') || v.contains('"')) {
+      return '"${v.replaceAll('"', '""')}"';
+    }
+    return v;
+  }
+
   static pw.Widget _leadsTable(List<LandLead> leads,
       {String emptyMsg = 'No leads.'}) {
     if (leads.isEmpty) {
@@ -227,28 +462,8 @@ class ReportService {
               fontStyle: pw.FontStyle.italic));
     }
     return pw.TableHelper.fromTextArray(
-      headers: const [
-        'Lead ID',
-        'Owner',
-        'Location',
-        'Type',
-        'Source',
-        'Status',
-        'Added By',
-        'Date',
-      ],
-      data: leads
-          .map((l) => [
-                l.leadId,
-                l.ownerName.trim().isEmpty ? '-' : l.ownerName,
-                l.location.trim().isEmpty ? '-' : l.location,
-                l.landType.label,
-                l.inputSource.label,
-                l.status.label,
-                l.createdByName.trim().isEmpty ? '-' : l.createdByName,
-                _date.format(l.addedOn),
-              ])
-          .toList(),
+      headers: _leadHeaders(),
+      data: _leadRows(leads),
       border: pw.TableBorder.all(color: _border, width: 0.5),
       headerStyle: const pw.TextStyle(
           fontSize: 9, fontWeight: pw.FontWeight.bold, color: PdfColors.white),

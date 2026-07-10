@@ -7,6 +7,7 @@ import '../../services/app_store.dart';
 import '../../services/land_lead_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_theme_context.dart';
+import '../../widgets/fomra_breadcrumb.dart';
 import '../../widgets/ui/app_components.dart';
 import 'add_lead_screen.dart';
 
@@ -207,6 +208,9 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
                   leadId: lead.leadId,
                   onBack: () => Navigator.pop(context),
                   onEdit: _openEdit,
+                ),
+                FomraBreadcrumbStrip(
+                  items: FomraBreadcrumbs.fromWorkspace('Lead ${lead.leadId}'),
                 ),
                 Expanded(
                   child: Padding(

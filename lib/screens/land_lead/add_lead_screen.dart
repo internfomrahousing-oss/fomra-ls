@@ -1,4 +1,5 @@
-﻿import 'dart:convert';
+﻿import 'dart:async';
+import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -11,6 +12,7 @@ import '../../theme/app_theme.dart';
 import '../../config/maptiler_tiles.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../widgets/add_lead_ui.dart';
+import '../../widgets/fomra_breadcrumb.dart';
 import '../../widgets/portal_page_layout.dart';
 import '../../services/api_client.dart';
 import '../../utils/image_compressor.dart';
@@ -67,6 +69,8 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
   LatLng? _pinnedPoint;
   final _mapController = MapController();
   bool _mapReady = false;
+  Timer? _gpsDebounce;
+  bool _suppressGpsListener = false;
 
   static const _kDefaultMapCenter = LatLng(13.0827, 80.2707);
   static final _kMapTileUrl = MapTilerTiles.standard;
@@ -96,6 +100,7 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
+    _gpsCtrl.addListener(_onGpsTextChanged);
     final existing = widget.existingLead;
     if (existing == null) return;
 
@@ -126,6 +131,8 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
 
   @override
   void dispose() {
+    _gpsDebounce?.cancel();
+    _gpsCtrl.removeListener(_onGpsTextChanged);
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
     for (final c in [
@@ -141,13 +148,44 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
 
   // ── Location fill from coordinates ─────────────────────────────────────────
 
+  void _onGpsTextChanged() {
+    if (_suppressGpsListener) return;
+    _gpsDebounce?.cancel();
+    _gpsDebounce = Timer(const Duration(milliseconds: 650), _applyGpsFromText);
+  }
+
+  Future<void> _applyGpsFromText() async {
+    if (!mounted) return;
+    final parsed = parseLeadGps(_gpsCtrl.text);
+    if (parsed == null) return;
+
+    if (_pinnedPoint != null &&
+        (_pinnedPoint!.latitude - parsed.latitude).abs() < 1e-5 &&
+        (_pinnedPoint!.longitude - parsed.longitude).abs() < 1e-5) {
+      return;
+    }
+
+    if (_locationMode == _LocationMode.live) {
+      setState(() => _locationMode = _LocationMode.manual);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _onMapPin(parsed);
+      });
+      return;
+    }
+
+    await _onMapPin(parsed);
+  }
+
   Future<void> _fillFromCoordinates(
     double lat,
     double lng, {
     bool clearLoading = true,
   }) async {
+    _suppressGpsListener = true;
     _gpsCtrl.text =
         '${lat.toStringAsFixed(6)}° N, ${lng.toStringAsFixed(6)}° E';
+    _suppressGpsListener = false;
 
     if (!mounted) return;
     setState(() => _locationStatus = 'Fetching address…');
@@ -617,6 +655,11 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          FomraBreadcrumbStrip(
+            items: FomraBreadcrumbs.fromWorkspace(
+              _isEdit ? 'Edit Land Lead' : 'Add Land Lead',
+            ),
+          ),
           AddLeadProgressNav(
             steps: progressSteps,
             onStepTap: _scrollToSection,
@@ -754,6 +797,10 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
                                     ? 'Auto-filled after capture'
                                     : 'Pin on map or type manually',
                                 icon: Icons.gps_fixed_rounded,
+                                onFieldSubmitted: (_) {
+                                  _gpsDebounce?.cancel();
+                                  _applyGpsFromText();
+                                },
                               ),
                               const SizedBox(height: AddLeadUi.fieldGap),
                               _Field(
@@ -1093,6 +1140,7 @@ class _Field extends StatelessWidget {
   final int maxLines;
   final TextInputType keyboardType;
   final bool light;
+  final ValueChanged<String>? onFieldSubmitted;
 
   const _Field({
     required this.ctrl,
@@ -1103,6 +1151,7 @@ class _Field extends StatelessWidget {
     this.maxLines = 1,
     this.keyboardType = TextInputType.text,
     this.light = false,
+    this.onFieldSubmitted,
   });
 
   @override
@@ -1120,6 +1169,7 @@ class _Field extends StatelessWidget {
       controller: ctrl,
       maxLines: maxLines,
       keyboardType: keyboardType,
+      onFieldSubmitted: onFieldSubmitted,
       style: TextStyle(
         fontSize: 14,
         color: context.fomraTextPrimary,

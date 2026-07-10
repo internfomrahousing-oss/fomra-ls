@@ -1,5 +1,6 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 import '../../models/land_lead.dart';
 import '../../services/app_store.dart';
@@ -22,13 +23,12 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  static const _kRecentCollapsedCount = 6;
   static const _kAllEmployees = 'All';
-  bool _showAllRecent = false;
   bool _generatingReport = false;
   int _selectedChartRange = 1;
   int _chartAnimToken = 0;
   LeadReportType _selectedReportType = LeadReportType.all;
+  ReportFormat _selectedReportFormat = ReportFormat.pdf;
   String _selectedEmployeeReport = _kAllEmployees;
 
   List<String> get _employeeNames {
@@ -96,6 +96,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 _selectedEmployeeReport != _kAllEmployees
             ? _selectedEmployeeReport
             : null,
+        format: _selectedReportFormat,
       );
     } catch (e) {
       if (!mounted) return;
@@ -110,7 +111,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  /// Premium "Export PDF Report" wizard card shown above Recent activity.
+  void _previewReport() {
+    final preview = ReportService.buildPreview(
+      AppStore.instance.leads,
+      employees: AppStore.instance.employees,
+      reportType: _selectedReportType,
+      employeeName: _selectedReportType == LeadReportType.employeeLeads &&
+              _selectedEmployeeReport != _kAllEmployees
+          ? _selectedEmployeeReport
+          : null,
+    );
+    showDialog(
+      context: context,
+      builder: (_) => _ReportPreviewDialog(
+        preview: preview,
+        format: _selectedReportFormat,
+      ),
+    );
+  }
+
+  /// Report wizard card on the dashboard.
   Widget _buildReportCard(BuildContext context, {required bool leadsEmpty}) {
     return AppCard(
       padding: const EdgeInsets.all(24),
@@ -126,6 +146,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ] else ...[
             const SizedBox(height: 24),
             _buildReportTypeSection(context),
+            const SizedBox(height: 20),
+            _buildReportFormatSection(context),
             _buildEmployeeFilter(context),
             const SizedBox(height: 24),
             _buildReportFooter(context),
@@ -148,7 +170,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
           alignment: Alignment.center,
           child: const Icon(
-            Icons.picture_as_pdf_outlined,
+            Icons.summarize_outlined,
             color: AppColors.primary,
             size: 26,
           ),
@@ -159,7 +181,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Export PDF Report',
+                'Report',
                 style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.w800,
@@ -169,7 +191,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
               const SizedBox(height: 4),
               Text(
-                'Generate a professional PDF report from your land database.',
+                'Preview, then export as PDF or Excel from your land database.',
                 style: TextStyle(
                   fontSize: 13,
                   height: 1.4,
@@ -217,6 +239,46 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ],
             );
           },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildReportFormatSection(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _ReportSectionLabel(
+          icon: Icons.file_download_outlined,
+          label: 'Export Format',
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: _ReportFormatCard(
+                label: 'PDF',
+                description: 'Print-ready document',
+                icon: Icons.picture_as_pdf_outlined,
+                accent: AppColors.primary,
+                selected: _selectedReportFormat == ReportFormat.pdf,
+                onTap: () =>
+                    setState(() => _selectedReportFormat = ReportFormat.pdf),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _ReportFormatCard(
+                label: 'Excel',
+                description: 'Spreadsheet (.csv)',
+                icon: Icons.table_chart_outlined,
+                accent: AppColors.success,
+                selected: _selectedReportFormat == ReportFormat.excel,
+                onTap: () =>
+                    setState(() => _selectedReportFormat = ReportFormat.excel),
+              ),
+            ),
+          ],
         ),
       ],
     );
@@ -292,17 +354,39 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _buildReportFooter(BuildContext context) {
+    final isPdf = _selectedReportFormat == ReportFormat.pdf;
+    final generatingLabel =
+        isPdf ? 'Preparing PDF…' : 'Preparing Excel…';
+    final generateLabel = isPdf ? 'Generate PDF' : 'Generate Excel';
+    final generateIcon =
+        isPdf ? Icons.picture_as_pdf_outlined : Icons.table_chart_outlined;
+
     return Container(
       padding: const EdgeInsets.only(top: 20),
       decoration: BoxDecoration(
         border: Border(top: BorderSide(color: context.fomraBorder)),
       ),
-      child: PrimaryButton(
-        label: _generatingReport ? 'Preparing PDF…' : 'Generate PDF',
-        icon: Icons.picture_as_pdf_outlined,
-        loading: _generatingReport,
-        expand: true,
-        onPressed: _generatingReport ? null : _generateReport,
+      child: Row(
+        children: [
+          Expanded(
+            child: SecondaryButton(
+              label: 'Preview',
+              icon: Icons.visibility_outlined,
+              onPressed: _generatingReport ? null : _previewReport,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            flex: 2,
+            child: PrimaryButton(
+              label: _generatingReport ? generatingLabel : generateLabel,
+              icon: generateIcon,
+              loading: _generatingReport,
+              expand: true,
+              onPressed: _generatingReport ? null : _generateReport,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -348,18 +432,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   bool _isSameMonth(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month;
-
-  List<LandLead> get _sortedLeads {
-    final leads = List<LandLead>.from(AppStore.instance.leads);
-    leads.sort((a, b) => b.addedOn.compareTo(a.addedOn));
-    return leads;
-  }
-
-  List<LandLead> get _recentLeads {
-    final leads = _sortedLeads;
-    if (_showAllRecent) return leads;
-    return leads.take(_kRecentCollapsedCount).toList();
-  }
 
   List<double> _trendByDays(int days, List<LandLead> leads) {
     final now = DateTime.now();
@@ -431,8 +503,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
     );
   }
-
-  void _goTo(String route) => Navigator.pushNamed(context, route);
 
   void _refreshChart() => setState(() => _chartAnimToken++);
 
@@ -623,54 +693,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
                 const SizedBox(height: 20),
                 _buildReportCard(context, leadsEmpty: leads.isEmpty),
-                const SizedBox(height: 20),
-                _SectionCard(
-                  title: 'Recent activity',
-                  subtitle: 'Latest updates across your land acquisition pipeline.',
-                  icon: Icons.history_rounded,
-                  child: _recentLeads.isEmpty
-                      ? EmptyState(
-                          icon: Icons.inbox_outlined,
-                          title: 'No leads yet',
-                          message:
-                              'Create your first lead to start tracking activity on the dashboard.',
-                          action: PrimaryButton(
-                            label: 'Add Lead',
-                            icon: Icons.add_location_alt_outlined,
-                            onPressed: () => _goTo('/land-lead'),
-                          ),
-                        )
-                      : Column(
-                          children: [
-                            for (final lead in _recentLeads) ...[
-                              _ActivityRow(lead: lead),
-                              if (lead != _recentLeads.last)
-                                const SizedBox(height: 12),
-                            ],
-                            if (_sortedLeads.length > _kRecentCollapsedCount) ...[
-                              const SizedBox(height: 8),
-                              Align(
-                                alignment: Alignment.centerLeft,
-                                child: TextButton.icon(
-                                  onPressed: () => setState(
-                                    () => _showAllRecent = !_showAllRecent,
-                                  ),
-                                  icon: Icon(
-                                    _showAllRecent
-                                        ? Icons.expand_less
-                                        : Icons.expand_more,
-                                  ),
-                                  label: Text(
-                                    _showAllRecent
-                                        ? 'Show less'
-                                        : 'Show all (${_sortedLeads.length})',
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                ),
               ],
             ),
           ),
@@ -1730,109 +1752,291 @@ class _KpiOverviewChartState extends State<_KpiOverviewChart>
   }
 }
 
-class _ActivityRow extends StatelessWidget {
-  final LandLead lead;
+class _ReportFormatCard extends StatelessWidget {
+  final String label;
+  final String description;
+  final IconData icon;
+  final Color accent;
+  final bool selected;
+  final VoidCallback onTap;
 
-  const _ActivityRow({required this.lead});
+  const _ReportFormatCard({
+    required this.label,
+    required this.description,
+    required this.icon,
+    required this.accent,
+    required this.selected,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final statusColor = lead.status.color;
-    final location = [lead.location, lead.village, lead.district]
-        .where((s) => s.isNotEmpty)
-        .join(', ');
-
     return Material(
-      color: context.fomraSurfaceVar,
-      borderRadius: BorderRadius.circular(16),
+      color: Colors.transparent,
       child: InkWell(
+        onTap: onTap,
         borderRadius: BorderRadius.circular(16),
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => LeadDetailScreen(lead: lead)),
-          );
-        },
-        child: Padding(
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
           padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: selected
+                ? accent.withValues(alpha: 0.08)
+                : context.fomraSurface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: selected ? accent : context.fomraBorder,
+              width: selected ? 1.6 : 1,
+            ),
+          ),
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                width: 42,
-                height: 42,
+                width: 38,
+                height: 38,
                 decoration: BoxDecoration(
-                  color: statusColor.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(14),
+                  color: accent.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(11),
                 ),
                 alignment: Alignment.center,
-                child: Icon(
-                  Icons.location_on_outlined,
-                  color: statusColor,
-                  size: 20,
-                ),
+                child: Icon(icon, color: accent, size: 20),
               ),
-              const SizedBox(width: 14),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            '${lead.leadId} · ${lead.ownerName}',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                              color: context.fomraTextPrimary,
-                            ),
-                          ),
-                        ),
-                        StatusChip(
-                          label: lead.status.label,
-                          tone: switch (lead.status) {
-                            LeadStatus.closed => StatusTone.success,
-                            LeadStatus.lost => StatusTone.danger,
-                            LeadStatus.negotiation => StatusTone.purple,
-                            _ => StatusTone.primary,
-                          },
-                        ),
-                      ],
-                    ),
-                    if (location.isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        location,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: context.fomraTextSecondary,
-                        ),
+                    Text(
+                      label,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: context.fomraTextPrimary,
                       ),
-                    ],
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 10,
-                      runSpacing: 6,
-                      children: [
-                        if (lead.surveyNumber.isNotEmpty)
-                          _DetailChip(Icons.tag, 'Survey ${lead.surveyNumber}'),
-                        if (lead.landExtent.isNotEmpty)
-                          _DetailChip(Icons.straighten, lead.landExtent),
-                        _DetailChip(Icons.terrain_outlined, lead.landType.label),
-                      ],
+                    ),
+                    Text(
+                      description,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: context.fomraTextSecondary,
+                      ),
                     ),
                   ],
                 ),
               ),
+              if (selected)
+                Icon(Icons.check_circle_rounded, color: accent, size: 20),
             ],
           ),
         ),
       ),
+    );
+  }
+}
+
+class _ReportPreviewDialog extends StatelessWidget {
+  final ReportPreviewData preview;
+  final ReportFormat format;
+
+  const _ReportPreviewDialog({
+    required this.preview,
+    required this.format,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final stamp = DateFormat('dd MMM yyyy, h:mm a').format(preview.generatedAt);
+    final formatLabel =
+        format == ReportFormat.pdf ? 'PDF export' : 'Excel export';
+
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      backgroundColor: context.fomraSurface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: 960,
+          maxHeight: MediaQuery.sizeOf(context).height * 0.86,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 18, 12, 12),
+              child: Row(
+                children: [
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    alignment: Alignment.center,
+                    child: const Icon(
+                      Icons.visibility_outlined,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Report Preview',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                            color: context.fomraTextPrimary,
+                          ),
+                        ),
+                        Text(
+                          '$formatLabel · $stamp',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: context.fomraTextSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  for (final item in preview.summary)
+                    _PreviewSummaryChip(
+                      label: item.label,
+                      value: item.value,
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+            const Divider(height: 1),
+            Expanded(
+              child: ListView.separated(
+                padding: const EdgeInsets.all(20),
+                itemCount: preview.sections.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 20),
+                itemBuilder: (_, i) {
+                  final section = preview.sections[i];
+                  return _PreviewSectionBlock(section: section);
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PreviewSummaryChip extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _PreviewSummaryChip({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: context.fomraSurfaceVar,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: context.fomraBorder),
+      ),
+      child: Text(
+        '$label: $value',
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+          color: context.fomraTextPrimary,
+        ),
+      ),
+    );
+  }
+}
+
+class _PreviewSectionBlock extends StatelessWidget {
+  final ReportPreviewSection section;
+
+  const _PreviewSectionBlock({required this.section});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '${section.title} (${section.count})',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w800,
+            color: context.fomraTextPrimary,
+          ),
+        ),
+        const SizedBox(height: 10),
+        if (section.rows.isEmpty)
+          Text(
+            section.emptyMessage,
+            style: TextStyle(
+              fontSize: 12,
+              fontStyle: FontStyle.italic,
+              color: context.fomraTextSecondary,
+            ),
+          )
+        else
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: DataTable(
+              headingRowHeight: 36,
+              dataRowMinHeight: 34,
+              dataRowMaxHeight: 48,
+              columnSpacing: 18,
+              headingTextStyle: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: context.fomraTextSecondary,
+              ),
+              dataTextStyle: TextStyle(
+                fontSize: 12,
+                color: context.fomraTextPrimary,
+              ),
+              columns: [
+                for (final h in section.headers)
+                  DataColumn(label: Text(h)),
+              ],
+              rows: [
+                for (final row in section.rows)
+                  DataRow(
+                    cells: [
+                      for (final cell in row)
+                        DataCell(
+                          Text(
+                            cell,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                    ],
+                  ),
+              ],
+            ),
+          ),
+      ],
     );
   }
 }

@@ -1,14 +1,50 @@
 import 'package:flutter/material.dart';
-import '../screens/home/home_screen.dart';
 import '../theme/fomra_theme_context.dart';
+import 'fomra_breadcrumb.dart';
 import 'fomra_theme_toggle.dart';
 
 class FomraAppBar extends StatelessWidget implements PreferredSizeWidget {
   final String? moduleName;
   final List<Widget>? actions;
   final PreferredSizeWidget? bottom;
+  final List<FomraBreadcrumbItem>? breadcrumbs;
 
-  const FomraAppBar({super.key, this.moduleName, this.actions, this.bottom});
+  const FomraAppBar({
+    super.key,
+    this.moduleName,
+    this.actions,
+    this.bottom,
+    this.breadcrumbs,
+  });
+
+  List<FomraBreadcrumbItem> _effectiveBreadcrumbs() {
+    if (breadcrumbs != null && breadcrumbs!.isNotEmpty) return breadcrumbs!;
+    if (moduleName != null && moduleName!.trim().isNotEmpty) {
+      return FomraBreadcrumbs.module(moduleName!);
+    }
+    return const [];
+  }
+
+  PreferredSizeWidget? _buildBottom() {
+    final trail = _effectiveBreadcrumbs();
+    final breadcrumbBar =
+        trail.length >= 2 ? FomraBreadcrumbBar(items: trail) : null;
+
+    if (breadcrumbBar == null) return bottom;
+    if (bottom == null) return breadcrumbBar;
+
+    final h = breadcrumbBar.preferredSize.height + bottom!.preferredSize.height;
+    return PreferredSize(
+      preferredSize: Size.fromHeight(h),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          breadcrumbBar,
+          bottom!,
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -77,25 +113,16 @@ class FomraAppBar extends StatelessWidget implements PreferredSizeWidget {
         ...?actions,
         const FomraThemeToggle(),
       ],
-      bottom: bottom,
+      bottom: _buildBottom(),
     );
   }
 
-  static void _goHome(BuildContext context) {
-    Navigator.of(context).pushAndRemoveUntil(
-      PageRouteBuilder(
-        pageBuilder: (_, __, ___) => const HomeScreen(),
-        transitionsBuilder: (_, animation, __, child) => FadeTransition(
-          opacity: CurvedAnimation(parent: animation, curve: Curves.easeOut),
-          child: child,
-        ),
-        transitionDuration: const Duration(milliseconds: 250),
-      ),
-      (_) => false,
-    );
-  }
+  static void goHome(BuildContext context) => fomraNavigateHome(context);
+
+  static void _goHome(BuildContext context) => goHome(context);
 
   @override
-  Size get preferredSize =>
-      Size.fromHeight(kToolbarHeight + (bottom?.preferredSize.height ?? 0));
+  Size get preferredSize => Size.fromHeight(
+        kToolbarHeight + (_buildBottom()?.preferredSize.height ?? 0),
+      );
 }

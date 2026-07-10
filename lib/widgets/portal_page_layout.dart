@@ -4,6 +4,7 @@ import '../theme/app_theme.dart';
 import '../theme/fomra_layout.dart';
 import '../theme/fomra_theme_context.dart';
 import 'portal_home_sections.dart';
+import 'fomra_breadcrumb.dart';
 import 'ui/app_components.dart';
 
 /// Same ~94% centered width as the home page.
@@ -40,6 +41,7 @@ class FomraSubPageAppBar extends StatelessWidget implements PreferredSizeWidget 
   final TextStyle? titleStyle;
   final TextStyle? subtitleStyle;
   final List<Widget>? actions;
+  final List<FomraBreadcrumbItem>? breadcrumbs;
 
   const FomraSubPageAppBar({
     super.key,
@@ -48,7 +50,13 @@ class FomraSubPageAppBar extends StatelessWidget implements PreferredSizeWidget 
     this.titleStyle,
     this.subtitleStyle,
     this.actions,
+    this.breadcrumbs,
   });
+
+  PreferredSizeWidget? _breadcrumbBottom() {
+    if (breadcrumbs == null || breadcrumbs!.length < 2) return null;
+    return FomraBreadcrumbBar(items: breadcrumbs!);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -60,7 +68,12 @@ class FomraSubPageAppBar extends StatelessWidget implements PreferredSizeWidget 
       surfaceTintColor: Colors.transparent,
       elevation: 0,
       scrolledUnderElevation: 0,
+      automaticallyImplyLeading: false,
       iconTheme: const IconThemeData(color: Colors.white),
+      leading: IconButton(
+        icon: const Icon(Icons.arrow_back_rounded),
+        onPressed: () => Navigator.maybePop(context),
+      ),
       title: subtitle == null
           ? Text(
               title,
@@ -93,11 +106,14 @@ class FomraSubPageAppBar extends StatelessWidget implements PreferredSizeWidget 
               ],
             ),
       actions: actions,
+      bottom: _breadcrumbBottom(),
     );
   }
 
   @override
-  Size get preferredSize => const Size.fromHeight(kToolbarHeight);
+  Size get preferredSize => Size.fromHeight(
+        kToolbarHeight + (_breadcrumbBottom()?.preferredSize.height ?? 0),
+      );
 }
 
 /// Numbered step header used on add/edit forms.
