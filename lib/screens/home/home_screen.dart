@@ -344,30 +344,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         accent: AppColors.primary,
         onTap: () => _goTo('/land-lead'),
       ),
-      PortalQuickAction(
-        label: 'Create Task',
-        icon: Icons.playlist_add_check_circle_outlined,
-        accent: AppColors.purple,
-        onTap: () => _goTo('/task-management'),
-      ),
-      PortalQuickAction(
-        label: 'View Dashboard',
-        icon: Icons.assessment_outlined,
-        accent: AppColors.warning,
-        onTap: () => _goTo('/dashboard'),
-      ),
-      PortalQuickAction(
-        label: 'Search Property',
-        icon: Icons.travel_explore_outlined,
-        accent: AppColors.success,
-        onTap: () => _goTo('/market-intelligence'),
-      ),
       if (_isManagement)
         PortalQuickAction(
-          label: 'Add Employee',
-          icon: Icons.person_add_alt_1_outlined,
-          accent: AppColors.secondary,
-          onTap: () => _goTo('/employee-management'),
+          label: 'View Dashboard',
+          icon: Icons.assessment_outlined,
+          accent: AppColors.warning,
+          onTap: () => _goTo('/dashboard'),
         ),
     ];
 

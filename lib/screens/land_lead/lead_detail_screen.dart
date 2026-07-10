@@ -8,8 +8,21 @@ import '../../services/land_lead_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../widgets/ui/app_components.dart';
-import '../market_intelligence/market_intelligence_screen.dart';
 import 'add_lead_screen.dart';
+
+int _leadAgeDaysFromReceived(DateTime receivedOn) {
+  final received = receivedOn.toLocal();
+  final now = DateTime.now();
+  final receivedDay = DateTime(received.year, received.month, received.day);
+  final today = DateTime(now.year, now.month, now.day);
+  return today.difference(receivedDay).inDays;
+}
+
+String _formatReceivedOn(DateTime receivedOn) {
+  final local = receivedOn.toLocal();
+  return '${local.day}/${local.month}/${local.year} '
+      '${local.hour}:${local.minute.toString().padLeft(2, '0')}';
+}
 
 class LeadDetailScreen extends StatefulWidget {
   final LandLead lead;
@@ -32,7 +45,6 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
     'Notes',
     'Details',
     'Site Photos',
-    'Market',
   ];
 
   @override
@@ -59,8 +71,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
     return list.map((p) => p[0]).join().toUpperCase();
   }
 
-  int get _leadAgeDays =>
-      DateTime.now().difference(lead.addedOn.toLocal()).inDays;
+  int get _leadAgeDays => _leadAgeDaysFromReceived(lead.addedOn);
 
   int get _statusScore => switch (lead.status) {
         LeadStatus.new_ => 16,
@@ -204,8 +215,8 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
                         ? Row(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              SizedBox(
-                                width: 360,
+                              Expanded(
+                                flex: 1,
                                 child: _ProfilePanel(
                                   lead: lead,
                                   displayName: _displayName,
@@ -218,6 +229,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
                               ),
                               const SizedBox(width: 12),
                               Expanded(
+                                flex: 1,
                                 child: _WorkspacePanel(
                                   lead: lead,
                                   tabController: _tabController,
@@ -601,13 +613,6 @@ class _WorkspacePanel extends StatelessWidget {
                 _NotesTab(lead: lead),
                 _DetailsTab(lead: lead),
                 _SitePhotosTab(lead: lead),
-                MarketIntelligenceScreen(
-                  key: ValueKey(
-                    '${lead.leadId}|${lead.gpsCoordinates}|${lead.landExtent}',
-                  ),
-                  lead: lead,
-                  embeddedInLead: true,
-                ),
               ],
             ),
           ),
@@ -826,8 +831,7 @@ class _ActivityTimeline extends StatelessWidget {
     final events = <({String title, String subtitle, IconData icon})>[
       (
         title: 'Lead created',
-        subtitle:
-            '${lead.addedOn.day}/${lead.addedOn.month}/${lead.addedOn.year}',
+        subtitle: _formatReceivedOn(lead.addedOn),
         icon: Icons.add_circle_outline,
       ),
       (
@@ -1020,7 +1024,7 @@ class _MetaGrid extends StatelessWidget {
     final items = <(String, String)>[
       (
         'Received On',
-        '${lead.addedOn.day}/${lead.addedOn.month}/${lead.addedOn.year} ${lead.addedOn.hour}:${lead.addedOn.minute.toString().padLeft(2, '0')}',
+        _formatReceivedOn(lead.addedOn),
       ),
       ('Lead Age', '$leadAgeDays days'),
       ('Tags', '${lead.landType.label}, ${lead.inputSource.label}'),

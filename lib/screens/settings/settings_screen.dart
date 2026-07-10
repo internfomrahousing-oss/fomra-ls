@@ -1,197 +1,264 @@
 import 'package:flutter/material.dart';
-import 'change_password_screen.dart';
+
 import '../../services/auth_service.dart';
 import '../../services/theme_controller.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/fomra_theme_context.dart';
 import '../../widgets/fomra_app_bar.dart';
 import '../../widgets/fomra_app_shell.dart';
+import '../../widgets/portal_page_layout.dart';
 import '../../widgets/ui/app_components.dart';
+import '../employee_management/employee_management_screen.dart';
+import 'change_password_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final isManagement = AuthService.instance.isManagement;
+
     return FomraAppShell(
       currentRoute: '/settings',
       appBar: const FomraAppBar(moduleName: 'Settings'),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
         children: [
-          const _SessionStatusSection(),
-          const SizedBox(height: 18),
-          const _ThemeSection(),
-          const SizedBox(height: 18),
-          _ChangePasswordButtonSection(
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const ChangePasswordScreen()),
+          Text(
+            'Settings',
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+              color: context.fomraTextPrimary,
             ),
           ),
-          const SizedBox(height: 18),
-          const _SignOutSection(),
+          const SizedBox(height: 6),
+          Text(
+            'Manage appearance, account, and workspace options.',
+            style: TextStyle(
+              fontSize: 13,
+              color: context.fomraTextSecondary,
+            ),
+          ),
+          const SizedBox(height: 20),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              _SettingsTile(
+                icon: Icons.palette_outlined,
+                label: 'Appearance',
+                accent: AppColors.primary,
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const _AppearanceSettingsPage(),
+                  ),
+                ),
+              ),
+              _SettingsTile(
+                icon: Icons.lock_outline,
+                label: 'Change Password',
+                accent: AppColors.purple,
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const ChangePasswordScreen(),
+                  ),
+                ),
+              ),
+              if (isManagement)
+                _SettingsTile(
+                  icon: Icons.groups_outlined,
+                  label: 'User Management',
+                  accent: AppColors.secondary,
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const _UserManagementPage(),
+                    ),
+                  ),
+                ),
+              _SettingsTile(
+                icon: Icons.logout_rounded,
+                label: 'Sign Out',
+                accent: AppColors.error,
+                danger: true,
+                onTap: () async {
+                  final confirmed = await confirmSignOut(context);
+                  if (!confirmed || !context.mounted) return;
+                  AuthService.instance.logout();
+                  Navigator.pushNamedAndRemoveUntil(
+                    context,
+                    '/login',
+                    (_) => false,
+                  );
+                },
+              ),
+            ],
+          ),
         ],
       ),
     );
   }
 }
 
-// ── Section shell ──────────────────────────────────────────────────────────────
-
-class _SettingsCard extends StatelessWidget {
+class _SettingsTile extends StatefulWidget {
   final IconData icon;
-  final String title;
-  final String subtitle;
-  final Widget child;
+  final String label;
+  final Color accent;
+  final VoidCallback onTap;
+  final bool danger;
 
-  const _SettingsCard({
+  const _SettingsTile({
     required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.child,
+    required this.label,
+    required this.accent,
+    required this.onTap,
+    this.danger = false,
   });
 
   @override
+  State<_SettingsTile> createState() => _SettingsTileState();
+}
+
+class _SettingsTileState extends State<_SettingsTile> {
+  bool _hovered = false;
+
+  @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(children: [
+    final borderColor = widget.danger
+        ? AppColors.error.withValues(alpha: 0.35)
+        : widget.accent.withValues(alpha: _hovered ? 0.45 : 0.25);
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          width: 148,
+          height: 118,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: context.fomraSurface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: borderColor, width: _hovered ? 1.5 : 1),
+            boxShadow: _hovered ? context.fomraCardShadow : null,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
               Container(
-                padding: const EdgeInsets.all(9),
+                width: 38,
+                height: 38,
                 decoration: BoxDecoration(
-                  color: cs.primary.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(14),
+                  color: widget.accent.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(icon, color: cs.primary, size: 20),
+                child: Icon(widget.icon, color: widget.accent, size: 20),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(title,
-                        style: const TextStyle(
-                            fontSize: 15, fontWeight: FontWeight.w700)),
-                    const SizedBox(height: 2),
-                    Text(subtitle,
-                        style: TextStyle(
-                            fontSize: 12,
-                            color: cs.onSurface.withValues(alpha: 0.6))),
-                  ],
+              const Spacer(),
+              Text(
+                widget.label,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: widget.danger
+                      ? AppColors.error
+                      : context.fomraTextPrimary,
                 ),
               ),
-            ]),
-            const SizedBox(height: 18),
-            child,
-          ],
+              const SizedBox(height: 2),
+              Icon(
+                Icons.arrow_forward_rounded,
+                size: 14,
+                color: context.fomraTextSecondary,
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-// ── Session status ───────────────────────────────────────────────────────────
-
-class _SessionStatusSection extends StatelessWidget {
-  const _SessionStatusSection();
+class _AppearanceSettingsPage extends StatelessWidget {
+  const _AppearanceSettingsPage();
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final secure = AuthService.instance.hasRealSession;
-    final color = secure ? AppColors.success : AppColors.warning;
-
-    return _SettingsCard(
-      icon: secure ? Icons.verified_user_outlined : Icons.gpp_maybe_outlined,
-      title: 'Session security',
-      subtitle: 'Is this login a real authenticated session?',
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: color.withValues(alpha: 0.4)),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(secure ? Icons.lock_outline : Icons.lock_open_outlined,
-                color: color, size: 20),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    secure ? 'Secure (authenticated)' : 'Local (not authenticated)',
-                    style: TextStyle(
-                        fontWeight: FontWeight.w700, color: color, fontSize: 14),
+    return Scaffold(
+      backgroundColor: context.fomraPageBg,
+      appBar: const FomraSubPageAppBar(title: 'Appearance'),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          AppCard(
+            interactive: false,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Choose how FomraLS looks',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: context.fomraTextPrimary,
                   ),
-                  const SizedBox(height: 3),
-                  Text(
-                    secure
-                        ? 'This login can use the locked-down (secure) database.'
-                        : 'This login would be blocked by the secure database. '
-                            'Sign out and back in on the latest build; if it stays '
-                            'Local, reset this account’s password in Supabase.',
-                    style: TextStyle(
-                        fontSize: 12,
-                        height: 1.35,
-                        color: cs.onSurface.withValues(alpha: 0.65)),
-                  ),
-                ],
-              ),
+                ),
+                const SizedBox(height: 16),
+                ValueListenableBuilder<ThemeMode>(
+                  valueListenable: ThemeController.instance.mode,
+                  builder: (context, mode, _) {
+                    final isDark = mode == ThemeMode.dark;
+                    return Row(
+                      children: [
+                        Expanded(
+                          child: _ThemeOption(
+                            icon: Icons.wb_sunny_outlined,
+                            label: 'Light',
+                            previewDark: false,
+                            selected: !isDark,
+                            onTap: () =>
+                                ThemeController.instance.setDark(false),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _ThemeOption(
+                            icon: Icons.nightlight_round,
+                            label: 'Dark',
+                            previewDark: true,
+                            selected: isDark,
+                            onTap: () =>
+                                ThemeController.instance.setDark(true),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 }
 
-// ── Theme ────────────────────────────────────────────────────────────────────
-
-class _ThemeSection extends StatelessWidget {
-  const _ThemeSection();
+class _UserManagementPage extends StatelessWidget {
+  const _UserManagementPage();
 
   @override
   Widget build(BuildContext context) {
-    return _SettingsCard(
-      icon: Icons.palette_outlined,
-      title: 'Appearance',
-      subtitle: 'Choose how FomraLS looks',
-      child: ValueListenableBuilder<ThemeMode>(
-        valueListenable: ThemeController.instance.mode,
-        builder: (context, mode, _) {
-          final isDark = mode == ThemeMode.dark;
-          return Row(children: [
-            Expanded(
-              child: _ThemeOption(
-                icon: Icons.wb_sunny_outlined,
-                label: 'Light',
-                previewDark: false,
-                selected: !isDark,
-                onTap: () => ThemeController.instance.setDark(false),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _ThemeOption(
-                icon: Icons.nightlight_round,
-                label: 'Dark',
-                previewDark: true,
-                selected: isDark,
-                onTap: () => ThemeController.instance.setDark(true),
-              ),
-            ),
-          ]);
-        },
-      ),
+    return Scaffold(
+      backgroundColor: context.fomraPageBg,
+      appBar: const FomraSubPageAppBar(title: 'User Management'),
+      body: const EmployeeManagementScreen(isTab: true),
     );
   }
 }
@@ -226,53 +293,56 @@ class _ThemeOption extends StatelessWidget {
               : cs.surfaceContainerHighest.withValues(alpha: 0.4),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: selected
-                ? cs.primary
-                : cs.outline.withValues(alpha: 0.4),
+            color: selected ? cs.primary : cs.outline.withValues(alpha: 0.4),
             width: selected ? 1.5 : 1,
           ),
         ),
-        child: Column(children: [
-          Align(
-            alignment: Alignment.center,
-            child: SizedBox(
-              width: 56,
-              child: _ThemeMiniPreview(isDark: previewDark),
+        child: Column(
+          children: [
+            Align(
+              alignment: Alignment.center,
+              child: SizedBox(
+                width: 56,
+                child: _ThemeMiniPreview(isDark: previewDark),
+              ),
             ),
-          ),
-          const SizedBox(height: 5),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon,
+            const SizedBox(height: 5),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  icon,
                   size: 14,
                   color: selected
                       ? cs.primary
-                      : cs.onSurface.withValues(alpha: 0.6)),
-              const SizedBox(width: 4),
-              Text(label,
+                      : cs.onSurface.withValues(alpha: 0.6),
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  label,
                   style: TextStyle(
-                      fontSize: 12,
-                      fontWeight:
-                          selected ? FontWeight.w700 : FontWeight.w500,
-                      color: selected
-                          ? cs.primary
-                          : cs.onSurface.withValues(alpha: 0.8))),
-            ],
-          ),
-          const SizedBox(height: 4),
-          AnimatedOpacity(
-            opacity: selected ? 1 : 0,
-            duration: const Duration(milliseconds: 180),
-            child: Icon(Icons.check_circle, size: 14, color: cs.primary),
-          ),
-        ]),
+                    fontSize: 12,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                    color: selected
+                        ? cs.primary
+                        : cs.onSurface.withValues(alpha: 0.8),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            AnimatedOpacity(
+              opacity: selected ? 1 : 0,
+              duration: const Duration(milliseconds: 180),
+              child: Icon(Icons.check_circle, size: 14, color: cs.primary),
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
-/// Tiny mock UI showing how each theme looks before selecting it.
 class _ThemeMiniPreview extends StatelessWidget {
   final bool isDark;
   const _ThemeMiniPreview({required this.isDark});
@@ -282,9 +352,6 @@ class _ThemeMiniPreview extends StatelessWidget {
     final pageBg = isDark ? AppColors.darkBackground : AppColors.background;
     final surface = isDark ? AppColors.darkSurface : AppColors.surface;
     final border = isDark ? AppColors.darkBorder : AppColors.border;
-    final text = isDark ? AppColors.darkTextPrimary : AppColors.textPrimary;
-    final subtext =
-        isDark ? AppColors.darkTextSecondary : AppColors.textSecondary;
     final accent = isDark ? AppColors.primaryLight : AppColors.primary;
 
     return AspectRatio(
@@ -302,220 +369,55 @@ class _ThemeMiniPreview extends StatelessWidget {
           child: SizedBox(
             width: 88,
             height: 88 / 1.9,
-            child: _ThemeMiniPreviewContent(
-              isDark: isDark,
-              pageBg: pageBg,
-              surface: surface,
-              border: border,
-              text: text,
-              subtext: subtext,
-              accent: accent,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ThemeMiniPreviewContent extends StatelessWidget {
-  final bool isDark;
-  final Color pageBg;
-  final Color surface;
-  final Color border;
-  final Color text;
-  final Color subtext;
-  final Color accent;
-
-  const _ThemeMiniPreviewContent({
-    required this.isDark,
-    required this.pageBg,
-    required this.surface,
-    required this.border,
-    required this.text,
-    required this.subtext,
-    required this.accent,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return ColoredBox(
-      color: pageBg,
-      child: Column(
-        children: [
-          Container(
-            height: 14,
-            width: double.infinity,
-            decoration: BoxDecoration(
-              gradient: isDark
-                  ? const LinearGradient(
-                      colors: [
-                        Color(0xFF152A52),
-                        Color(0xFF1E293B),
-                        Color(0xFF231B4A),
-                      ],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    )
-                  : AppColors.heroGradient,
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-            child: Row(
-              children: [
-                Container(
-                  width: 6,
-                  height: 6,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.22),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                const SizedBox(width: 4),
-                Expanded(
-                  child: Container(
-                    height: 3,
+            child: ColoredBox(
+              color: pageBg,
+              child: Column(
+                children: [
+                  Container(
+                    height: 14,
+                    width: double.infinity,
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.75),
-                      borderRadius: BorderRadius.circular(2),
+                      gradient: isDark
+                          ? const LinearGradient(
+                              colors: [
+                                Color(0xFF152A52),
+                                Color(0xFF1E293B),
+                                Color(0xFF231B4A),
+                              ],
+                            )
+                          : AppColors.heroGradient,
                     ),
                   ),
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.all(5),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
                   Expanded(
-                    flex: 3,
-                    child: Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: BoxDecoration(
-                        color: surface,
-                        borderRadius: BorderRadius.circular(4),
-                        border: Border.all(color: border),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                    child: Padding(
+                      padding: const EdgeInsets.all(5),
+                      child: Row(
                         children: [
-                          Container(
-                            width: 18,
-                            height: 3,
-                            decoration: BoxDecoration(
-                              color: text,
-                              borderRadius: BorderRadius.circular(2),
+                          Expanded(
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: surface,
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(color: border),
+                              ),
                             ),
                           ),
-                          const Spacer(),
-                          Container(
-                            width: double.infinity,
-                            height: 3,
-                            decoration: BoxDecoration(
-                              color: subtext.withValues(alpha: 0.55),
-                              borderRadius: BorderRadius.circular(2),
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Container(
-                            width: 12,
-                            height: 3,
-                            decoration: BoxDecoration(
-                              color: subtext.withValues(alpha: 0.4),
-                              borderRadius: BorderRadius.circular(2),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: accent.withValues(alpha: 0.18),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
                             ),
                           ),
                         ],
                       ),
                     ),
                   ),
-                  const SizedBox(width: 4),
-                  Expanded(
-                    flex: 2,
-                    child: Column(
-                      children: [
-                        Expanded(
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: accent.withValues(alpha: 0.18),
-                              borderRadius: BorderRadius.circular(4),
-                              border: Border.all(
-                                  color: accent.withValues(alpha: 0.35)),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Expanded(
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: surface,
-                              borderRadius: BorderRadius.circular(4),
-                              border: Border.all(color: border),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
                 ],
               ),
             ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ChangePasswordButtonSection extends StatelessWidget {
-  final VoidCallback onTap;
-
-  const _ChangePasswordButtonSection({required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return _SettingsCard(
-      icon: Icons.lock_outline,
-      title: 'Change Password',
-      subtitle: 'Open password update form',
-      child: SizedBox(
-        width: double.infinity,
-        child: OutlinedButton.icon(
-          onPressed: onTap,
-          icon: const Icon(Icons.lock_open_outlined, size: 18),
-          label: const Text('Change Password'),
-        ),
-      ),
-    );
-  }
-}
-
-class _SignOutSection extends StatelessWidget {
-  const _SignOutSection();
-
-  @override
-  Widget build(BuildContext context) {
-    final error = Theme.of(context).colorScheme.error;
-    return _SettingsCard(
-      icon: Icons.logout_rounded,
-      title: 'Sign Out',
-      subtitle: 'End your current session',
-      child: SizedBox(
-        width: double.infinity,
-        child: OutlinedButton.icon(
-          onPressed: () async {
-            final confirmed = await confirmSignOut(context);
-            if (!confirmed || !context.mounted) return;
-            AuthService.instance.logout();
-            Navigator.pushNamedAndRemoveUntil(context, '/login', (_) => false);
-          },
-          icon: Icon(Icons.logout_rounded, size: 18, color: error),
-          label: Text('Sign Out', style: TextStyle(color: error)),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: error,
-            side: BorderSide(color: error.withValues(alpha: 0.45)),
           ),
         ),
       ),

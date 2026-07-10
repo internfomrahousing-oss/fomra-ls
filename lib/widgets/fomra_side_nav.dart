@@ -45,20 +45,6 @@ class FomraSideNav extends StatefulWidget {
     ];
     if (AuthService.instance.isManagement) {
       items.add(const FomraSideNavItem(
-        '/employee-management',
-        Icons.groups_outlined,
-        Icons.groups,
-        'Employees',
-      ));
-    }
-    items.add(const FomraSideNavItem(
-      '/market-intelligence',
-      Icons.insights_outlined,
-      Icons.insights,
-      'Market',
-    ));
-    if (AuthService.instance.isManagement) {
-      items.add(const FomraSideNavItem(
         '/dashboard',
         Icons.bar_chart_outlined,
         Icons.bar_chart_rounded,

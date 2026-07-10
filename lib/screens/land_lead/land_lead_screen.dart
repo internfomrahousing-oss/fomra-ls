@@ -615,16 +615,13 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
                                 ClipboardData(text: lead.contactDetails));
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
-                                content: Text('Contact copied: ${lead.contactDetails}'),
+                                content: Text(
+                                    'Contact copied: ${lead.contactDetails}'),
                                 behavior: SnackBarBehavior.floating,
                               ),
                             );
                           }
                         : null,
-                    onAssignTask: () => Navigator.pushNamed(
-                      context,
-                      '/task-management',
-                    ),
                     onDocuments: () => _openEditLead(lead),
                   ),
                 );
