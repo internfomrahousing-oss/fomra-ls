@@ -6,7 +6,7 @@ import '../../models/land_lead_legal_document.dart';
 import '../../services/land_lead_legal_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_theme_context.dart';
-import 'calls_log_dialog.dart';
+import '../../widgets/separate_date_time_fields.dart';
 
 class LegalDocumentsDialog extends StatefulWidget {
   final String leadId;

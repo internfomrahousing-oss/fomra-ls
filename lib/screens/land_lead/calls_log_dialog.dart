@@ -5,12 +5,7 @@ import '../../models/lead_call_log.dart';
 import '../../services/lead_call_log_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_theme_context.dart';
-
-String formatCallDateTime(DateTime dt) {
-  final local = dt.toLocal();
-  return '${local.day}/${local.month}/${local.year} '
-      '${local.hour}:${local.minute.toString().padLeft(2, '0')}';
-}
+import '../../widgets/separate_date_time_fields.dart';
 
 class CallsLogDialog extends StatefulWidget {
   final String leadId;
@@ -28,6 +23,7 @@ class CallsLogDialog extends StatefulWidget {
 
 class _CallsLogDialogState extends State<CallsLogDialog> {
   late DateTime _calledAt = DateTime.now();
+  CallDirection _direction = CallDirection.outgoing;
   final _durationCtrl = TextEditingController();
   final _detailsCtrl = TextEditingController();
   bool _saving = false;
@@ -58,31 +54,16 @@ class _CallsLogDialogState extends State<CallsLogDialog> {
     }
   }
 
-  Future<void> _editDateTime() async {
-    final now = DateTime.now();
-    final date = await showDatePicker(
-      context: context,
-      initialDate: _calledAt,
-      firstDate: DateTime(2020),
-      lastDate: DateTime(now.year + 1),
-    );
-    if (date == null || !mounted) return;
+  Future<void> _editDate() async {
+    final updated = await pickLogDate(context, _calledAt);
+    if (updated == null || !mounted) return;
+    setState(() => _calledAt = updated);
+  }
 
-    final time = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.fromDateTime(_calledAt),
-    );
-    if (time == null || !mounted) return;
-
-    setState(() {
-      _calledAt = DateTime(
-        date.year,
-        date.month,
-        date.day,
-        time.hour,
-        time.minute,
-      );
-    });
+  Future<void> _editTime() async {
+    final updated = await pickLogTime(context, _calledAt);
+    if (updated == null || !mounted) return;
+    setState(() => _calledAt = updated);
   }
 
   Future<void> _save() async {
@@ -109,6 +90,7 @@ class _CallsLogDialogState extends State<CallsLogDialog> {
         calledAt: _calledAt,
         duration: duration,
         details: details,
+        direction: _direction,
       );
       if (!mounted) return;
       setState(() {
@@ -116,6 +98,7 @@ class _CallsLogDialogState extends State<CallsLogDialog> {
         _durationCtrl.clear();
         _detailsCtrl.clear();
         _calledAt = DateTime.now();
+        _direction = CallDirection.outgoing;
       });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Call logged')),
@@ -208,15 +191,53 @@ class _CallsLogDialogState extends State<CallsLogDialog> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      _DateTimeField(
-                        value: formatCallDateTime(_calledAt),
-                        onEdit: _editDateTime,
+                      SeparateDateTimeFields(
+                        value: _calledAt,
+                        onEditDate: _editDate,
+                        onEditTime: _editTime,
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'Call type',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: context.fomraTextSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          for (final option in CallDirection.values) ...[
+                            Expanded(
+                              child: Padding(
+                                padding: EdgeInsets.only(
+                                  right: option == CallDirection.outgoing
+                                      ? 6
+                                      : 0,
+                                ),
+                                child: _DirectionChip(
+                                  label: option.label,
+                                  icon: option == CallDirection.outgoing
+                                      ? Icons.call_made_outlined
+                                      : Icons.call_received_outlined,
+                                  selected: _direction == option,
+                                  onTap: () =>
+                                      setState(() => _direction = option),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                       const SizedBox(height: 12),
                       TextField(
                         controller: _durationCtrl,
                         keyboardType: TextInputType.number,
-                        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                          LengthLimitingTextInputFormatter(3),
+                        ],
                         decoration: InputDecoration(
                           labelText: 'Call duration (minutes)',
                           hintText: 'e.g. 5',
@@ -324,58 +345,59 @@ class _CallsLogDialogState extends State<CallsLogDialog> {
   }
 }
 
-class _DateTimeField extends StatelessWidget {
-  final String value;
-  final VoidCallback onEdit;
+class _DirectionChip extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
 
-  const _DateTimeField({required this.value, required this.onEdit});
+  const _DirectionChip({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
-      decoration: BoxDecoration(
-        color: context.fomraSurfaceVar.withValues(alpha: 0.55),
+    return Material(
+      color: selected
+          ? AppColors.purple.withValues(alpha: 0.12)
+          : context.fomraSurfaceVar.withValues(alpha: 0.55),
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: onTap,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: context.fomraBorder),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Date & time',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.4,
-                    color: context.fomraTextSecondary,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  value,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: context.fomraTextPrimary,
-                  ),
-                ),
-              ],
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: selected ? AppColors.purple : context.fomraBorder,
             ),
           ),
-          TextButton.icon(
-            onPressed: onEdit,
-            icon: const Icon(Icons.edit_outlined, size: 16),
-            label: const Text('Edit'),
-            style: TextButton.styleFrom(
-              foregroundColor: AppColors.purple,
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                size: 16,
+                color: selected ? AppColors.purple : context.fomraTextSecondary,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: selected
+                      ? AppColors.purple
+                      : context.fomraTextPrimary,
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -410,6 +432,17 @@ class _PreviousCallTile extends StatelessWidget {
                   ),
                 ),
               ),
+              Text(
+                log.direction.label,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: log.direction == CallDirection.outgoing
+                      ? AppColors.info
+                      : AppColors.success,
+                ),
+              ),
+              const SizedBox(width: 8),
               Text(
                 '${log.duration} min',
                 style: const TextStyle(

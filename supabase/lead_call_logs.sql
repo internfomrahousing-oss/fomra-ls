@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS lead_call_logs (
   lead_id          TEXT        NOT NULL,
   called_at        TIMESTAMPTZ NOT NULL,
   duration         TEXT        NOT NULL DEFAULT '',
+  direction        TEXT        NOT NULL DEFAULT 'outgoing',
   details          TEXT        NOT NULL DEFAULT '',
   logged_by_name   TEXT        NOT NULL DEFAULT '',
   logged_by        UUID,
@@ -14,6 +15,9 @@ CREATE TABLE IF NOT EXISTS lead_call_logs (
 
 CREATE INDEX IF NOT EXISTS idx_lead_call_logs_lead_id ON lead_call_logs(lead_id);
 CREATE INDEX IF NOT EXISTS idx_lead_call_logs_called_at ON lead_call_logs(called_at DESC);
+
+ALTER TABLE lead_call_logs
+  ADD COLUMN IF NOT EXISTS direction TEXT NOT NULL DEFAULT 'outgoing';
 
 ALTER TABLE lead_call_logs ENABLE ROW LEVEL SECURITY;
 

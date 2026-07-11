@@ -176,9 +176,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
 
   // POI
   int _selectedRadius = 2;
-  // Competitor projects always search a fixed 2km — independent of the map /
-  // infrastructure radius picker.
-  static const int _compRadiusKm = 2;
+  int _compRadiusKm = 2;
   Map<String, int> _poiCounts = {};
   Map<String, List<Map<String, dynamic>>> _poiPlaces = {};
   bool _collectingPois = false;
@@ -1411,6 +1409,52 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
           ],
         ),
         const SizedBox(height: 14),
+        Row(
+          children: [
+            Text(
+              'Radius',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: context.fomraTextSecondary,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              decoration: BoxDecoration(
+                color: context.fomraSurfaceVar,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: context.fomraBorder),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<int>(
+                  value: _compRadiusKm,
+                  isDense: true,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: context.fomraTextPrimary,
+                  ),
+                  items: [
+                    for (var km = 1; km <= 10; km++)
+                      DropdownMenuItem(
+                        value: km,
+                        child: Text('$km km'),
+                      ),
+                  ],
+                  onChanged: _fetchingMb
+                      ? null
+                      : (km) {
+                          if (km == null) return;
+                          setState(() => _compRadiusKm = km);
+                        },
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
         Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [

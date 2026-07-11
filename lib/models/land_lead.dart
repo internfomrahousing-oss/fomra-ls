@@ -44,6 +44,8 @@ class LandLead {
   final String landExtent;
   final String ownerName;
   final String contactDetails;
+  final String brokerName;
+  final String brokerContact;
   final LandType landType;
   final String roadWidth;
   final String accessDetails;
@@ -71,6 +73,8 @@ class LandLead {
     required this.landExtent,
     required this.ownerName,
     required this.contactDetails,
+    this.brokerName = '',
+    this.brokerContact = '',
     required this.landType,
     required this.roadWidth,
     required this.accessDetails,
@@ -100,6 +104,8 @@ class LandLead {
     String? landExtent,
     String? ownerName,
     String? contactDetails,
+    String? brokerName,
+    String? brokerContact,
     LandType? landType,
     String? roadWidth,
     String? accessDetails,
@@ -124,6 +130,8 @@ class LandLead {
         landExtent: landExtent ?? this.landExtent,
         ownerName: ownerName ?? this.ownerName,
         contactDetails: contactDetails ?? this.contactDetails,
+        brokerName: brokerName ?? this.brokerName,
+        brokerContact: brokerContact ?? this.brokerContact,
         landType: landType ?? this.landType,
         roadWidth: roadWidth ?? this.roadWidth,
         accessDetails: accessDetails ?? this.accessDetails,

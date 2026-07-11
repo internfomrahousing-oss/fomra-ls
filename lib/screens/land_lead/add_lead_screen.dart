@@ -10,6 +10,7 @@ import '../../theme/app_theme.dart';
 import '../../config/maptiler_tiles.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../widgets/add_lead_ui.dart';
+import '../../widgets/terms_deal_selector.dart';
 import '../../widgets/fomra_app_shell.dart';
 import '../../widgets/fomra_breadcrumb.dart';
 import '../../widgets/portal_page_layout.dart';
@@ -23,14 +24,6 @@ import '../../utils/tngis_parcel_lookup.dart';
 enum _LocationMode { manual, live }
 
 const _kMaxSitePhotos = 4;
-
-const _kTermsOptions = [
-  ('Outrate',          Icons.currency_rupee_rounded),
-  ('Joint Venture',    Icons.handshake_rounded),
-  ('Marketing',        Icons.campaign_rounded),
-  ('Deferred Payment', Icons.schedule_rounded),
-  ('Others',           Icons.more_horiz_rounded),
-];
 
 class AddLeadScreen extends StatefulWidget {
   final LandLead? existingLead;
@@ -46,6 +39,8 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
 
   // Section 1 — MCQ
   InputSource? _inputSource;
+  final _brokerNameCtrl = TextEditingController();
+  final _brokerContactCtrl = TextEditingController();
 
   // Section 2 — location fill-up
   final _locationCtrl   = TextEditingController();
@@ -60,7 +55,6 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
   final _contactCtrl    = TextEditingController();
   final _pincodeCtrl    = TextEditingController();
   final _roadWidthCtrl  = TextEditingController();
-  final _notesCtrl      = TextEditingController();
   LandType _landType = LandType.agricultural;
 
   _LocationMode _locationMode = _LocationMode.manual;
@@ -80,8 +74,9 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
   static const _kDefaultMapCenter = LatLng(13.0827, 80.2707);
   static final _kMapTileUrl = MapTilerTiles.standard;
 
-  // Terms
+  // Terms (serialized deal selection → LandLead.accessDetails)
   String? _termsType;
+  final _notesCtrl = TextEditingController();
 
   // Photos (max 4)
   final List<AddLeadPhotoDraft> _photos = [];
@@ -91,6 +86,18 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
   final _scrollController = ScrollController();
   final _sectionKeys = List.generate(4, (_) => GlobalKey());
   int _activeSection = 0;
+
+  void _onInputSourceChanged(InputSource? source) {
+    setState(() {
+      if (_inputSource == InputSource.broker && source != InputSource.broker) {
+        _brokerNameCtrl.clear();
+        _brokerContactCtrl.clear();
+      }
+      _inputSource = source;
+    });
+  }
+
+  bool get _isBrokerSource => _inputSource == InputSource.broker;
 
   bool get _isEdit => widget.existingLead != null;
 
@@ -110,6 +117,8 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
     if (existing == null) return;
 
     _inputSource = existing.inputSource;
+    _brokerNameCtrl.text = existing.brokerName;
+    _brokerContactCtrl.text = existing.brokerContact;
     _locationCtrl.text = existing.location;
     _gpsCtrl.text = existing.gpsCoordinates;
     _villageCtrl.text = existing.village;
@@ -122,11 +131,11 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
     _ownerCtrl.text = existing.ownerName;
     _contactCtrl.text = existing.contactDetails;
     _roadWidthCtrl.text = existing.roadWidth;
-    _notesCtrl.text = existing.notes;
     _landType = existing.landType;
     if (existing.accessDetails.isNotEmpty) {
       _termsType = existing.accessDetails;
     }
+    _notesCtrl.text = existing.notes;
     _pinnedPoint = parseLeadGps(existing.gpsCoordinates);
     _keptPhotoUrls = List<String>.from(existing.sitePhotoUrls);
     if (_keptPhotoUrls.isEmpty && existing.sitePhotoUrl.isNotEmpty) {
@@ -143,11 +152,13 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
     for (final c in [
       _locationCtrl, _gpsCtrl, _villageCtrl, _talukCtrl, _districtCtrl,
       _pincodeCtrl, _surveyCtrl, _subDivCtrl, _extentCtrl, _ownerCtrl,
-      _contactCtrl, _roadWidthCtrl, _notesCtrl,
+      _contactCtrl, _brokerNameCtrl, _brokerContactCtrl, _roadWidthCtrl,
+      _notesCtrl,
     ]) {
       c.dispose();
     }
     _mapController.dispose();
+    _notesCtrl.dispose();
     super.dispose();
   }
 
@@ -162,7 +173,11 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
   Future<void> _applyGpsFromText() async {
     if (!mounted) return;
     final parsed = parseLeadGps(_gpsCtrl.text);
-    if (parsed == null) return;
+    if (parsed == null) {
+      setState(() => _locationStatus =
+          'Could not read coordinates — use DMS (13°07\'08.7"N 80°16\'53.0"E) or decimal ° N / ° E.');
+      return;
+    }
 
     final samePin = _pinnedPoint != null &&
         (_pinnedPoint!.latitude - parsed.latitude).abs() < 1e-5 &&
@@ -173,18 +188,14 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
     }
 
     if (_locationMode == _LocationMode.live) {
-      setState(() {
-        _locationMode = _LocationMode.manual;
-        _pinnedPoint = parsed;
-      });
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        _centerMapOn(parsed, zoom: 16.0);
-        _placePinAndFetchDetails(parsed);
-      });
-      return;
+      setState(() => _locationMode = _LocationMode.manual);
     }
 
+    setState(() => _pinnedPoint = parsed);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _centerMapOn(parsed, zoom: 16.0);
+    });
     await _placePinAndFetchDetails(parsed);
   }
 
@@ -217,8 +228,7 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
     int? fetchSeq,
   }) async {
     _suppressGpsListener = true;
-    _gpsCtrl.text =
-        '${lat.toStringAsFixed(6)}° N, ${lng.toStringAsFixed(6)}° E';
+    _gpsCtrl.text = formatLeadGps(lat, lng);
     _suppressGpsListener = false;
 
     if (!_isActivePinFetch(fetchSeq ?? _pinFetchSeq) && fetchSeq != null) {
@@ -587,7 +597,12 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
   bool _sectionCompleted(int index) {
     switch (index) {
       case 0:
-        return _inputSource != null;
+        if (_inputSource == null) return false;
+        if (_isBrokerSource) {
+          return _brokerNameCtrl.text.trim().isNotEmpty &&
+              _brokerContactCtrl.text.trim().isNotEmpty;
+        }
+        return true;
       case 1:
         return _locationCtrl.text.trim().isNotEmpty &&
             _surveyCtrl.text.trim().isNotEmpty &&
@@ -659,6 +674,8 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
       landExtent: _extentCtrl.text.trim(),
       ownerName: _ownerCtrl.text.trim(),
       contactDetails: _contactCtrl.text.trim(),
+      brokerName: _isBrokerSource ? _brokerNameCtrl.text.trim() : '',
+      brokerContact: _isBrokerSource ? _brokerContactCtrl.text.trim() : '',
       landType: _landType,
       roadWidth: _roadWidthCtrl.text.trim(),
       accessDetails: _termsType ?? '',
@@ -744,9 +761,29 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
                             children: [
                               _InputSourceDropdown(
                                 value: _inputSource,
-                                onChanged: (s) =>
-                                    setState(() => _inputSource = s),
+                                onChanged: _onInputSourceChanged,
                               ),
+                              if (_isBrokerSource) ...[
+                                const SizedBox(height: AddLeadUi.fieldGap),
+                                addLeadFormRow(
+                                  context,
+                                  _Field(
+                                    ctrl: _brokerNameCtrl,
+                                    label: 'Broker Name',
+                                    hint: 'Full name of the broker',
+                                    icon: Icons.person_outline_rounded,
+                                    required: true,
+                                  ),
+                                  _Field(
+                                    ctrl: _brokerContactCtrl,
+                                    label: 'Broker Contact Number',
+                                    hint: 'Phone number',
+                                    icon: Icons.phone_outlined,
+                                    keyboardType: TextInputType.phone,
+                                    required: true,
+                                  ),
+                                ),
+                              ],
                               if (_inputSource == null)
                                 const Padding(
                                   padding: EdgeInsets.only(top: 6, left: 4),
@@ -859,7 +896,7 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
                                 label: 'GPS Coordinates',
                                 hint: _locationMode == _LocationMode.live
                                     ? 'Auto-filled after capture'
-                                    : 'Pin on map or type manually',
+                                    : 'DMS or decimal — e.g. 13°07\'08.7"N 80°16\'53.0"E',
                                 icon: Icons.gps_fixed_rounded,
                                 onFieldSubmitted: (_) {
                                   _gpsDebounce?.cancel();
@@ -976,27 +1013,13 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
                         AddLeadSectionCard(
                           number: '3',
                           title: 'Terms',
-                          subtitle: 'Select the deal terms',
+                          subtitle: 'Choose deal type, subtype, and details',
                           icon: Icons.handshake_outlined,
                           compact: true,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              _TermsDropdown(
-                                value: _termsType,
-                                onChanged: (v) =>
-                                    setState(() => _termsType = v),
-                              ),
-                              const SizedBox(height: AddLeadUi.fieldGap),
-                              _Field(
-                                ctrl: _notesCtrl,
-                                label: 'Notes',
-                                hint: 'Any additional observations',
-                                icon: Icons.notes_outlined,
-                                maxLines: 3,
-                                light: true,
-                              ),
-                            ],
+                          child: TermsDealSelector(
+                            value: _termsType,
+                            onChanged: (v) =>
+                                setState(() => _termsType = v),
                           ),
                         ),
                       ),
@@ -1036,58 +1059,6 @@ IconData _landTypeIcon(LandType type) => switch (type) {
       LandType.industrial => Icons.factory_outlined,
       LandType.other => Icons.category_outlined,
     };
-
-class _TermsDropdown extends StatelessWidget {
-  final String? value;
-  final ValueChanged<String?> onChanged;
-  const _TermsDropdown({required this.value, required this.onChanged});
-
-  @override
-  Widget build(BuildContext context) {
-    final iconColor = Theme.of(context).brightness == Brightness.dark
-        ? AppColors.primaryLight
-        : AppColors.primary;
-
-    return DropdownButtonFormField<String>(
-      isExpanded: true,
-      initialValue: value,
-      onChanged: onChanged,
-      menuMaxHeight: 260,
-      borderRadius: BorderRadius.circular(AddLeadUi.fieldRadius),
-      decoration: addLeadInputDecoration(
-        context,
-        label: 'Terms',
-        hint: 'Select deal terms',
-        icon: Icons.handshake_outlined,
-      ),
-      items: _kTermsOptions
-          .map(
-            (t) => DropdownMenuItem(
-              value: t.$1,
-              child: addLeadDropdownRow(
-                icon: t.$2,
-                label: t.$1,
-                iconColor: iconColor,
-              ),
-            ),
-          )
-          .toList(),
-      selectedItemBuilder: (ctx) => _kTermsOptions
-          .map(
-            (t) => Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                t.$1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 14),
-              ),
-            ),
-          )
-          .toList(),
-    );
-  }
-}
-
 
 class _InputSourceDropdown extends StatelessWidget {
   final InputSource? value;

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../screens/home/home_screen.dart';
@@ -66,6 +68,36 @@ class FomraSideNav extends StatefulWidget {
 
 class _FomraSideNavState extends State<FomraSideNav> {
   bool _expanded = false;
+  Timer? _expandTimer;
+  Timer? _collapseTimer;
+
+  static const _expandDelay = Duration(milliseconds: 420);
+  static const _collapseDelay = Duration(milliseconds: 520);
+
+  @override
+  void dispose() {
+    _expandTimer?.cancel();
+    _collapseTimer?.cancel();
+    super.dispose();
+  }
+
+  void _scheduleExpand() {
+    _collapseTimer?.cancel();
+    if (_expanded) return;
+    _expandTimer?.cancel();
+    _expandTimer = Timer(_expandDelay, () {
+      if (mounted) setState(() => _expanded = true);
+    });
+  }
+
+  void _scheduleCollapse() {
+    _expandTimer?.cancel();
+    if (!_expanded) return;
+    _collapseTimer?.cancel();
+    _collapseTimer = Timer(_collapseDelay, () {
+      if (mounted) setState(() => _expanded = false);
+    });
+  }
 
   bool _isActive(FomraSideNavItem item) {
     if (widget.currentRoute == item.route) return true;
@@ -114,11 +146,11 @@ class _FomraSideNavState extends State<FomraSideNav> {
     final border = context.fomraBorder;
 
     return MouseRegion(
-      onEnter: (_) => setState(() => _expanded = true),
-      onExit: (_) => setState(() => _expanded = false),
+      onEnter: (_) => _scheduleExpand(),
+      onExit: (_) => _scheduleCollapse(),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 260),
-        curve: Curves.easeOutCubic,
+        duration: const Duration(milliseconds: 320),
+        curve: Curves.easeInOutCubic,
         width: _expanded ? FomraSideNav.expandedWidth : FomraSideNav.collapsedWidth,
         decoration: BoxDecoration(
           color: surface,
@@ -207,9 +239,8 @@ class _BrandHeader extends StatelessWidget {
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              gradient: AppColors.primaryGradient,
+              color: AppColors.primary,
               borderRadius: BorderRadius.circular(12),
-              boxShadow: AppColors.coloredShadow(AppColors.primary),
             ),
             alignment: Alignment.center,
             child: const Icon(Icons.domain, color: Colors.white, size: 22),
@@ -264,6 +295,24 @@ class _NavTile extends StatefulWidget {
 
 class _NavTileState extends State<_NavTile> {
   bool _hovered = false;
+  Timer? _hoverTimer;
+
+  @override
+  void dispose() {
+    _hoverTimer?.cancel();
+    super.dispose();
+  }
+
+  void _setHovered(bool value) {
+    _hoverTimer?.cancel();
+    if (value) {
+      _hoverTimer = Timer(const Duration(milliseconds: 180), () {
+        if (mounted) setState(() => _hovered = true);
+      });
+      return;
+    }
+    setState(() => _hovered = false);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -274,25 +323,32 @@ class _NavTileState extends State<_NavTile> {
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
       child: MouseRegion(
-        onEnter: (_) => setState(() => _hovered = true),
-        onExit: (_) => setState(() => _hovered = false),
+        onEnter: (_) => _setHovered(true),
+        onExit: (_) => _setHovered(false),
         cursor: SystemMouseCursors.click,
         child: GestureDetector(
           onTap: widget.onTap,
           child: AnimatedContainer(
-            duration: const Duration(milliseconds: 220),
-            curve: Curves.easeOutCubic,
+            duration: const Duration(milliseconds: 280),
+            curve: Curves.easeInOutCubic,
             height: 46,
             padding: EdgeInsets.symmetric(horizontal: expanded ? 12 : 0),
             decoration: BoxDecoration(
-              gradient: active ? AppColors.primaryGradient : null,
               color: active
-                  ? null
+                  ? AppColors.primary.withValues(alpha: 0.92)
                   : (_hovered
-                      ? context.fomraSurfaceVar.withValues(alpha: 0.9)
+                      ? context.fomraSurfaceVar.withValues(alpha: 0.55)
                       : Colors.transparent),
               borderRadius: BorderRadius.circular(14),
-              boxShadow: active ? AppColors.coloredShadow(AppColors.primary) : null,
+              boxShadow: active
+                  ? [
+                      BoxShadow(
+                        color: AppColors.primary.withValues(alpha: 0.18),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ]
+                  : null,
             ),
             child: expanded
                 ? Row(

@@ -3,14 +3,20 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../models/add_lead_result.dart';
 import '../../models/land_lead.dart';
+import '../../models/land_lead_site_visit.dart';
+import '../../models/lead_call_log.dart';
 import '../../services/app_store.dart';
 import '../../services/land_lead_service.dart';
+import '../../services/land_lead_site_visit_service.dart';
+import '../../services/lead_call_log_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../widgets/fomra_app_shell.dart';
 import '../../widgets/fomra_breadcrumb.dart';
+import '../../widgets/separate_date_time_fields.dart';
 import '../../widgets/ui/app_components.dart';
 import '../market_intelligence/market_intelligence_screen.dart';
+import '../task_management/task_management_screen.dart';
 import 'add_lead_screen.dart';
 import 'calls_log_dialog.dart';
 import 'legal_documents_dialog.dart';
@@ -51,6 +57,8 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
   late final TabController _tabController;
   final _noteCtrl = TextEditingController();
   bool _savingNote = false;
+  List<LeadCallLog> _callLogs = [];
+  List<LandLeadSiteVisit> _siteVisits = [];
 
   static const _tabs = [
     'Activity',
@@ -70,6 +78,26 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
     super.initState();
     _tabController = TabController(length: _tabs.length, vsync: this);
     _tabController.addListener(_onTabChanged);
+    _loadActivityData();
+  }
+
+  Future<void> _loadActivityData() async {
+    try {
+      final results = await Future.wait([
+        LeadCallLogService.getForLead(lead.leadId),
+        LandLeadSiteVisitService.getForLead(
+          lead.leadId,
+          visitType: LandLeadSiteVisitType.employee,
+        ),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        _callLogs = results[0] as List<LeadCallLog>;
+        _siteVisits = results[1] as List<LandLeadSiteVisit>;
+      });
+    } catch (_) {
+      // Tables may not exist yet — keep counts at zero.
+    }
   }
 
   void _onTabChanged() {
@@ -97,16 +125,8 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
 
   int get _leadAgeDays => _leadAgeDaysFromReceived(lead.addedOn);
 
-  int get _siteVisitCount => lead.status ==
-          LeadStatus.prospectMeetingCompleted ||
-      lead.status == LeadStatus.negotiation ||
-      lead.status == LeadStatus.legal ||
-      lead.status == LeadStatus.signed
-      ? 1
-      : 0;
-
-  int get _contactAttempts =>
-      lead.status == LeadStatus.prospectMeetingPending ? 0 : 1;
+  CallActivityMetrics get _callMetrics =>
+      CallActivityMetrics.fromLogs(_callLogs);
 
   Future<void> _openEdit() async {
     final result = await Navigator.push<AddLeadResult>(
@@ -210,6 +230,15 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
     }
   }
 
+  void _openCreateTask() {
+    showCreateTaskSheet(
+      context,
+      leadId: lead.leadId,
+      leadLabel: lead.ownerName.trim().isNotEmpty ? lead.ownerName.trim() : null,
+      leadLocation: lead.location,
+    );
+  }
+
   void _handleDetailAction(String label) {
     _showActionDialog(label);
   }
@@ -223,6 +252,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
           ownerName: lead.ownerName,
         ),
       );
+      await _loadActivityData();
       return;
     }
 
@@ -238,6 +268,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
           },
         ),
       );
+      await _loadActivityData();
       return;
     }
 
@@ -333,6 +364,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
                                   leadAgeDays: _leadAgeDays,
                                   onStatusChanged: _changeStatus,
                                   onLaunchContact: _launchContact,
+                                  onCreateTask: _openCreateTask,
                                 ),
                               ),
                               const SizedBox(width: 12),
@@ -344,8 +376,10 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
                                   tabs: _tabs,
                                   noteCtrl: _noteCtrl,
                                   savingNote: _savingNote,
-                                  siteVisitCount: _siteVisitCount,
-                                  contactAttempts: _contactAttempts,
+                                  siteVisitCount: _siteVisits.length,
+                                  callMetrics: _callMetrics,
+                                  callLogs: _callLogs,
+                                  siteVisits: _siteVisits,
                                   onSaveNote: _saveNote,
                                   onLaunchContact: _launchContact,
                                   onDetailAction: _handleDetailAction,
@@ -362,6 +396,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
                                 leadAgeDays: _leadAgeDays,
                                 onStatusChanged: _changeStatus,
                                 onLaunchContact: _launchContact,
+                                onCreateTask: _openCreateTask,
                               ),
                               const SizedBox(height: 12),
                               SizedBox(
@@ -372,8 +407,10 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
                                   tabs: _tabs,
                                   noteCtrl: _noteCtrl,
                                   savingNote: _savingNote,
-                                  siteVisitCount: _siteVisitCount,
-                                  contactAttempts: _contactAttempts,
+                                  siteVisitCount: _siteVisits.length,
+                                  callMetrics: _callMetrics,
+                                  callLogs: _callLogs,
+                                  siteVisits: _siteVisits,
                                   onSaveNote: _saveNote,
                                   onLaunchContact: _launchContact,
                                   onDetailAction: _handleDetailAction,
@@ -486,6 +523,7 @@ class _ProfilePanel extends StatelessWidget {
   final int leadAgeDays;
   final ValueChanged<LeadStatus?> onStatusChanged;
   final Future<void> Function(String scheme) onLaunchContact;
+  final VoidCallback onCreateTask;
 
   const _ProfilePanel({
     required this.lead,
@@ -493,6 +531,7 @@ class _ProfilePanel extends StatelessWidget {
     required this.leadAgeDays,
     required this.onStatusChanged,
     required this.onLaunchContact,
+    required this.onCreateTask,
   });
 
   @override
@@ -633,6 +672,22 @@ class _ProfilePanel extends StatelessWidget {
                       status: lead.status,
                       onStatusChanged: onStatusChanged,
                     ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        onPressed: onCreateTask,
+                        icon: const Icon(Icons.add_task_outlined, size: 18),
+                        label: const Text('Create Task'),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.purple,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+                    ),
                     const SizedBox(height: 16),
                     Text(
                       'LEAD DETAILS',
@@ -714,7 +769,9 @@ class _WorkspacePanel extends StatelessWidget {
   final TextEditingController noteCtrl;
   final bool savingNote;
   final int siteVisitCount;
-  final int contactAttempts;
+  final CallActivityMetrics callMetrics;
+  final List<LeadCallLog> callLogs;
+  final List<LandLeadSiteVisit> siteVisits;
   final VoidCallback onSaveNote;
   final Future<void> Function(String scheme) onLaunchContact;
   final ValueChanged<String> onDetailAction;
@@ -727,7 +784,9 @@ class _WorkspacePanel extends StatelessWidget {
     required this.noteCtrl,
     required this.savingNote,
     required this.siteVisitCount,
-    required this.contactAttempts,
+    required this.callMetrics,
+    required this.callLogs,
+    required this.siteVisits,
     required this.onSaveNote,
     required this.onLaunchContact,
     required this.onDetailAction,
@@ -778,8 +837,7 @@ class _WorkspacePanel extends StatelessWidget {
             const SizedBox(height: 16),
             _ActivitySummaryRow(
               siteVisitCount: siteVisitCount,
-              contactAttempts: contactAttempts,
-              status: lead.status,
+              callMetrics: callMetrics,
             ),
             const SizedBox(height: 14),
             Container(
@@ -821,7 +879,11 @@ class _WorkspacePanel extends StatelessWidget {
               child: TabBarView(
                 controller: tabController,
                 children: [
-                  _ActivityTimeline(lead: lead),
+                  _ActivityTimeline(
+                    lead: lead,
+                    callLogs: callLogs,
+                    siteVisits: siteVisits,
+                  ),
                   _NotesTab(lead: lead),
                   _DetailsTab(lead: lead),
                   _SitePhotosTab(lead: lead),
@@ -1090,24 +1152,21 @@ class _NoteComposer extends StatelessWidget {
 
 class _ActivitySummaryRow extends StatelessWidget {
   final int siteVisitCount;
-  final int contactAttempts;
-  final LeadStatus status;
+  final CallActivityMetrics callMetrics;
 
   const _ActivitySummaryRow({
     required this.siteVisitCount,
-    required this.contactAttempts,
-    required this.status,
+    required this.callMetrics,
   });
 
   @override
   Widget build(BuildContext context) {
     final cells = [
       ('Conducted\nSite Visits', '$siteVisitCount'),
-      ('Outgoing\nNot Answered',
-          '${status == LeadStatus.prospectMeetingPending ? 1 : 0}'),
-      ('Outgoing\nAnswered', '$contactAttempts'),
-      ('Incoming\nNot Answered', '0'),
-      ('Incoming\nAnswered', '0'),
+      ('Outgoing\nNot Answered', '${callMetrics.outgoingNotAnswered}'),
+      ('Outgoing\nAnswered', '${callMetrics.outgoingAnswered}'),
+      ('Incoming\nNot Answered', '${callMetrics.incomingNotAnswered}'),
+      ('Incoming\nAnswered', '${callMetrics.incomingAnswered}'),
     ];
 
     return Row(
@@ -1157,16 +1216,46 @@ class _ActivitySummaryRow extends StatelessWidget {
 
 class _ActivityTimeline extends StatelessWidget {
   final LandLead lead;
-  const _ActivityTimeline({required this.lead});
+  final List<LeadCallLog> callLogs;
+  final List<LandLeadSiteVisit> siteVisits;
+
+  const _ActivityTimeline({
+    required this.lead,
+    required this.callLogs,
+    required this.siteVisits,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final events = <({String title, String subtitle, IconData icon})>[
-      (
-        title: 'Lead created',
-        subtitle: _formatReceivedOn(lead.addedOn),
-        icon: Icons.add_circle_outline,
-      ),
+    final events = <({String title, String subtitle, IconData icon})>[];
+
+    for (final log in callLogs) {
+      final outcome = log.isAnswered ? 'Answered' : 'Not answered';
+      final subtitleParts = [
+        _formatReceivedOn(log.calledAt),
+        '$outcome · ${log.duration} min',
+        if (log.details.isNotEmpty) log.details,
+      ];
+      events.add((
+        title: '${log.direction.label} call',
+        subtitle: subtitleParts.join('\n'),
+        icon: log.direction == CallDirection.outgoing
+            ? Icons.call_made_outlined
+            : Icons.call_received_outlined,
+      ));
+    }
+
+    for (final visit in siteVisits) {
+      events.add((
+        title: 'Site visit conducted',
+        subtitle: visit.loggedByName.isEmpty
+            ? _formatReceivedOn(visit.visitedAt)
+            : '${_formatReceivedOn(visit.visitedAt)}\n${visit.loggedByName}',
+        icon: Icons.location_on_outlined,
+      ));
+    }
+
+    events.addAll([
       (
         title: 'Current stage',
         subtitle: lead.status.label,
@@ -1184,7 +1273,12 @@ class _ActivityTimeline extends StatelessWidget {
           subtitle: lead.notes.trim().split('\n').last,
           icon: Icons.sticky_note_2_outlined,
         ),
-    ];
+      (
+        title: 'Lead created',
+        subtitle: _formatReceivedOn(lead.addedOn),
+        icon: Icons.add_circle_outline,
+      ),
+    ]);
 
     return ListView(
       children: [
@@ -1317,6 +1411,8 @@ class _DetailsTab extends StatelessWidget {
 }
 
 class _SitePhotosTab extends StatelessWidget {
+  static const _thumbSize = 96.0;
+
   final LandLead lead;
   const _SitePhotosTab({required this.lead});
 
@@ -1331,19 +1427,126 @@ class _SitePhotosTab extends StatelessWidget {
         ),
       );
     }
-    return GridView.builder(
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        crossAxisSpacing: 10,
-        mainAxisSpacing: 10,
-      ),
-      itemCount: urls.length,
-      itemBuilder: (_, i) => ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: Image.network(urls[i], fit: BoxFit.cover),
+    return Align(
+      alignment: Alignment.topLeft,
+      child: SingleChildScrollView(
+        child: Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: [
+            for (var i = 0; i < urls.length; i++)
+              _SitePhotoThumbnail(
+                url: urls[i],
+                size: _thumbSize,
+                onTap: () => _showSitePhotoLightbox(context, urls[i]),
+              ),
+          ],
+        ),
       ),
     );
   }
+}
+
+class _SitePhotoThumbnail extends StatelessWidget {
+  final String url;
+  final double size;
+  final VoidCallback onTap;
+
+  const _SitePhotoThumbnail({
+    required this.url,
+    required this.size,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: context.fomraBorder),
+            boxShadow: AppColors.cardShadow,
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Image.network(
+            url,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => ColoredBox(
+              color: context.fomraSurfaceVar,
+              child: Icon(
+                Icons.broken_image_outlined,
+                color: context.fomraTextSecondary,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+Future<void> _showSitePhotoLightbox(BuildContext context, String url) {
+  return showDialog<void>(
+    context: context,
+    builder: (ctx) => Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      backgroundColor: context.fomraSurface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      clipBehavior: Clip.antiAlias,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.sizeOf(ctx).width - 48,
+          maxHeight: MediaQuery.sizeOf(ctx).height * 0.85,
+        ),
+        child: Stack(
+          children: [
+            InteractiveViewer(
+              minScale: 0.5,
+              maxScale: 4,
+              child: Image.network(
+                url,
+                fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) => Padding(
+                  padding: const EdgeInsets.all(48),
+                  child: Icon(
+                    Icons.broken_image_outlined,
+                    size: 48,
+                    color: context.fomraTextSecondary,
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              top: 8,
+              right: 8,
+              child: Material(
+                color: Colors.black54,
+                borderRadius: BorderRadius.circular(8),
+                child: InkWell(
+                  onTap: () => Navigator.pop(ctx),
+                  borderRadius: BorderRadius.circular(8),
+                  child: const Padding(
+                    padding: EdgeInsets.all(6),
+                    child: Icon(
+                      Icons.close_rounded,
+                      size: 18,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
 }
 
 class _StageStatusField extends StatelessWidget {

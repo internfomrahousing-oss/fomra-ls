@@ -4,7 +4,7 @@ import '../../models/land_lead_site_visit.dart';
 import '../../services/land_lead_site_visit_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_theme_context.dart';
-import 'calls_log_dialog.dart';
+import '../../widgets/separate_date_time_fields.dart';
 
 class SiteVisitDialog extends StatefulWidget {
   final String leadId;
@@ -76,31 +76,16 @@ class _SiteVisitDialogState extends State<SiteVisitDialog> {
     }
   }
 
-  Future<void> _editDateTime() async {
-    final now = DateTime.now();
-    final date = await showDatePicker(
-      context: context,
-      initialDate: _visitedAt,
-      firstDate: DateTime(2020),
-      lastDate: DateTime(now.year + 1),
-    );
-    if (date == null || !mounted) return;
+  Future<void> _editDate() async {
+    final updated = await pickLogDate(context, _visitedAt);
+    if (updated == null || !mounted) return;
+    setState(() => _visitedAt = updated);
+  }
 
-    final time = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.fromDateTime(_visitedAt),
-    );
-    if (time == null || !mounted) return;
-
-    setState(() {
-      _visitedAt = DateTime(
-        date.year,
-        date.month,
-        date.day,
-        time.hour,
-        time.minute,
-      );
-    });
+  Future<void> _editTime() async {
+    final updated = await pickLogTime(context, _visitedAt);
+    if (updated == null || !mounted) return;
+    setState(() => _visitedAt = updated);
   }
 
   Future<void> _markDone() async {
@@ -198,9 +183,10 @@ class _SiteVisitDialogState extends State<SiteVisitDialog> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      _DateTimeField(
-                        value: formatCallDateTime(_visitedAt),
-                        onEdit: _editDateTime,
+                      SeparateDateTimeFields(
+                        value: _visitedAt,
+                        onEditDate: _editDate,
+                        onEditTime: _editTime,
                       ),
                       if (_loading)
                         const Padding(
@@ -266,63 +252,6 @@ class _SiteVisitDialogState extends State<SiteVisitDialog> {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _DateTimeField extends StatelessWidget {
-  final String value;
-  final VoidCallback onEdit;
-
-  const _DateTimeField({required this.value, required this.onEdit});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
-      decoration: BoxDecoration(
-        color: context.fomraSurfaceVar.withValues(alpha: 0.55),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: context.fomraBorder),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Date & time',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.4,
-                    color: context.fomraTextSecondary,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  value,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: context.fomraTextPrimary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          TextButton.icon(
-            onPressed: onEdit,
-            icon: const Icon(Icons.edit_outlined, size: 16),
-            label: const Text('Edit'),
-            style: TextButton.styleFrom(
-              foregroundColor: AppColors.purple,
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            ),
-          ),
-        ],
       ),
     );
   }

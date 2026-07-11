@@ -21,6 +21,43 @@ enum TaskPortalMode { full, employee, management }
 /// Shared in-memory task list (management adds, employees view).
 final List<Task> sharedTasks = [];
 
+void showCreateTaskSheet(
+  BuildContext context, {
+  String? leadId,
+  String? leadLabel,
+  String? leadLocation,
+}) {
+  final title = leadLabel != null && leadLabel.trim().isNotEmpty
+      ? 'Follow up — ${leadLabel.trim()}'
+      : leadId != null
+          ? 'Follow up — Lead #$leadId'
+          : null;
+  final description = [
+    if (leadId != null) 'Lead #$leadId',
+    if (leadLocation != null && leadLocation.trim().isNotEmpty)
+      leadLocation.trim(),
+  ].join('\n');
+
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (_) => _AddTaskSheet(
+      initialTitle: title,
+      initialDescription: description.isEmpty ? null : description,
+      linkModule: leadId != null ? 'land_lead:$leadId' : null,
+      onSave: (task) {
+        sharedTasks.insert(0, task);
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Task "${task.title}" created')),
+          );
+        }
+      },
+    ),
+  );
+}
+
 // ── Enums ─────────────────────────────────────────────────────────────────────
 
 enum TaskPriority { low, medium, high, urgent }
@@ -1110,7 +1147,16 @@ class _SlaBar extends StatelessWidget {
 
 class _AddTaskSheet extends StatefulWidget {
   final void Function(Task) onSave;
-  const _AddTaskSheet({required this.onSave});
+  final String? initialTitle;
+  final String? initialDescription;
+  final String? linkModule;
+
+  const _AddTaskSheet({
+    required this.onSave,
+    this.initialTitle,
+    this.initialDescription,
+    this.linkModule,
+  });
 
   @override
   State<_AddTaskSheet> createState() => _AddTaskSheetState();
@@ -1139,6 +1185,12 @@ class _AddTaskSheetState extends State<_AddTaskSheet>
   @override
   void initState() {
     super.initState();
+    if (widget.initialTitle != null) {
+      _titleCtrl.text = widget.initialTitle!;
+    }
+    if (widget.initialDescription != null) {
+      _descCtrl.text = widget.initialDescription!;
+    }
     _enterCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 220),
@@ -1648,7 +1700,7 @@ class _AddTaskSheetState extends State<_AddTaskSheet>
       dueDate: _dueDate,
       createdAt: DateTime.now(),
       assignedTo: _isManagement ? _assignedTo.toList() : const [],
-      module: '',
+      module: widget.linkModule ?? '',
       escalationRules: const [],
       reminderOffsets: _reminders.toList(),
       notes: _notesCtrl.text.trim(),

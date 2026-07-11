@@ -5,7 +5,7 @@ import '../../models/land_lead_meeting.dart';
 import '../../services/land_lead_meeting_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_theme_context.dart';
-import 'calls_log_dialog.dart';
+import '../../widgets/separate_date_time_fields.dart';
 
 class MeetingLogDialog extends StatefulWidget {
   final String leadId;
@@ -55,31 +55,16 @@ class _MeetingLogDialogState extends State<MeetingLogDialog> {
     }
   }
 
-  Future<void> _editDateTime() async {
-    final now = DateTime.now();
-    final date = await showDatePicker(
-      context: context,
-      initialDate: _metAt,
-      firstDate: DateTime(2020),
-      lastDate: DateTime(now.year + 1),
-    );
-    if (date == null || !mounted) return;
+  Future<void> _editDate() async {
+    final updated = await pickLogDate(context, _metAt);
+    if (updated == null || !mounted) return;
+    setState(() => _metAt = updated);
+  }
 
-    final time = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.fromDateTime(_metAt),
-    );
-    if (time == null || !mounted) return;
-
-    setState(() {
-      _metAt = DateTime(
-        date.year,
-        date.month,
-        date.day,
-        time.hour,
-        time.minute,
-      );
-    });
+  Future<void> _editTime() async {
+    final updated = await pickLogTime(context, _metAt);
+    if (updated == null || !mounted) return;
+    setState(() => _metAt = updated);
   }
 
   InputDecoration _fieldDecoration(BuildContext context, String label,
@@ -217,9 +202,10 @@ class _MeetingLogDialogState extends State<MeetingLogDialog> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      _MeetingDateTimeField(
-                        value: formatCallDateTime(_metAt),
-                        onEdit: _editDateTime,
+                      SeparateDateTimeFields(
+                        value: _metAt,
+                        onEditDate: _editDate,
+                        onEditTime: _editTime,
                       ),
                       const SizedBox(height: 12),
                       TextField(
@@ -227,6 +213,7 @@ class _MeetingLogDialogState extends State<MeetingLogDialog> {
                         keyboardType: TextInputType.number,
                         inputFormatters: [
                           FilteringTextInputFormatter.digitsOnly,
+                          LengthLimitingTextInputFormatter(3),
                         ],
                         decoration: _fieldDecoration(
                           context,
@@ -309,63 +296,6 @@ class _MeetingLogDialogState extends State<MeetingLogDialog> {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _MeetingDateTimeField extends StatelessWidget {
-  final String value;
-  final VoidCallback onEdit;
-
-  const _MeetingDateTimeField({required this.value, required this.onEdit});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
-      decoration: BoxDecoration(
-        color: context.fomraSurfaceVar.withValues(alpha: 0.55),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: context.fomraBorder),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Date & time',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.4,
-                    color: context.fomraTextSecondary,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  value,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: context.fomraTextPrimary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          TextButton.icon(
-            onPressed: onEdit,
-            icon: const Icon(Icons.edit_outlined, size: 16),
-            label: const Text('Edit'),
-            style: TextButton.styleFrom(
-              foregroundColor: AppColors.purple,
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            ),
-          ),
-        ],
       ),
     );
   }
