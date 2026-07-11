@@ -12,12 +12,14 @@ class MeetingLogDialog extends StatefulWidget {
   final String leadId;
   final String ownerName;
   final VoidCallback? onMeetingSaved;
+  final bool readOnly;
 
   const MeetingLogDialog({
     super.key,
     required this.leadId,
     this.ownerName = '',
     this.onMeetingSaved,
+    this.readOnly = false,
   });
 
   @override
@@ -36,6 +38,7 @@ class _MeetingLogDialogState extends State<MeetingLogDialog> {
   @override
   void initState() {
     super.initState();
+    if (widget.readOnly) _tabIndex = 1;
     _loadMeetings();
   }
 
@@ -186,26 +189,36 @@ class _MeetingLogDialogState extends State<MeetingLogDialog> {
                 ],
               ),
               const SizedBox(height: 4),
-              Text(
-                'Log your meeting $withLabel',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: context.fomraTextSecondary,
+              if (!widget.readOnly)
+                Text(
+                  'Log your meeting $withLabel',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: context.fomraTextSecondary,
+                  ),
+                )
+              else
+                Text(
+                  'Meeting history for this lead',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: context.fomraTextSecondary,
+                  ),
                 ),
-              ),
               const SizedBox(height: 14),
-              LogDialogTabBar(
-                selectedIndex: _tabIndex,
-                onChanged: (index) => setState(() => _tabIndex = index),
-                historyCount: _meetings.length,
-              ),
-              const SizedBox(height: 14),
+              if (!widget.readOnly)
+                LogDialogTabBar(
+                  selectedIndex: _tabIndex,
+                  onChanged: (index) => setState(() => _tabIndex = index),
+                  historyCount: _meetings.length,
+                ),
+              if (!widget.readOnly) const SizedBox(height: 14),
               Flexible(
-                child: _tabIndex == 0
-                    ? SingleChildScrollView(child: _buildNewForm(context))
-                    : _buildHistory(context),
+                child: widget.readOnly || _tabIndex == 1
+                    ? _buildHistory(context)
+                    : SingleChildScrollView(child: _buildNewForm(context)),
               ),
-              if (_tabIndex == 0) ...[
+              if (!widget.readOnly && _tabIndex == 0) ...[
                 const SizedBox(height: 14),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.end,

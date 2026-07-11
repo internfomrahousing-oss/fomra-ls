@@ -9,11 +9,13 @@ import '../../widgets/log_dialog_tabs.dart';
 class NotesLogDialog extends StatefulWidget {
   final LandLead lead;
   final ValueChanged<LandLead>? onSaved;
+  final bool readOnly;
 
   const NotesLogDialog({
     super.key,
     required this.lead,
     this.onSaved,
+    this.readOnly = false,
   });
 
   @override
@@ -30,6 +32,7 @@ class _NotesLogDialogState extends State<NotesLogDialog> {
   @override
   void initState() {
     super.initState();
+    if (widget.readOnly) _tabIndex = 1;
     _existingNotes = widget.lead.notes;
     _previousNotes = _parseNotes(_existingNotes);
   }
@@ -161,26 +164,36 @@ class _NotesLogDialogState extends State<NotesLogDialog> {
                 ],
               ),
               const SizedBox(height: 4),
-              Text(
-                'Add a note for this lead',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: context.fomraTextSecondary,
+              if (!widget.readOnly)
+                Text(
+                  'Add a note for this lead',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: context.fomraTextSecondary,
+                  ),
+                )
+              else
+                Text(
+                  'Notes history for this lead',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: context.fomraTextSecondary,
+                  ),
                 ),
-              ),
               const SizedBox(height: 14),
-              LogDialogTabBar(
-                selectedIndex: _tabIndex,
-                onChanged: (index) => setState(() => _tabIndex = index),
-                historyCount: _previousNotes.length,
-              ),
-              const SizedBox(height: 14),
+              if (!widget.readOnly)
+                LogDialogTabBar(
+                  selectedIndex: _tabIndex,
+                  onChanged: (index) => setState(() => _tabIndex = index),
+                  historyCount: _previousNotes.length,
+                ),
+              if (!widget.readOnly) const SizedBox(height: 14),
               Flexible(
-                child: _tabIndex == 0
-                    ? SingleChildScrollView(child: _buildNewForm(context))
-                    : _buildHistory(context),
+                child: widget.readOnly || _tabIndex == 1
+                    ? _buildHistory(context)
+                    : SingleChildScrollView(child: _buildNewForm(context)),
               ),
-              if (_tabIndex == 0) ...[
+              if (!widget.readOnly && _tabIndex == 0) ...[
                 const SizedBox(height: 14),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.end,

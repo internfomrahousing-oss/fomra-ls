@@ -256,22 +256,22 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
     if (mounted) setState(() {});
   }
 
-  bool _isActionAllowed(String label) =>
-      !_readOnly || label == 'Management site visit';
+  bool _isViewOnlyAction(String label) =>
+      _readOnly && label != 'Management site visit';
 
   void _handleDetailAction(String label) {
-    if (!_isActionAllowed(label)) return;
     _showActionDialog(label);
   }
 
   Future<void> _showActionDialog(String label) async {
-    if (!_isActionAllowed(label)) return;
+    final viewOnly = _isViewOnlyAction(label);
     if (label == 'Calls') {
       await showFomraDialog<void>(
         context: context,
         builder: (ctx) => CallsLogDialog(
           leadId: lead.leadId,
           ownerName: lead.ownerName,
+          readOnly: viewOnly,
         ),
       );
       await _loadActivityData();
@@ -283,11 +283,14 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
         context: context,
         builder: (ctx) => SiteVisitDialog(
           leadId: lead.leadId,
-          onVisitDone: () {
-            if (lead.status == LeadStatus.prospectMeetingPending) {
-              _changeStatus(LeadStatus.prospectMeetingCompleted);
-            }
-          },
+          readOnly: viewOnly,
+          onVisitDone: viewOnly
+              ? null
+              : () {
+                  if (lead.status == LeadStatus.prospectMeetingPending) {
+                    _changeStatus(LeadStatus.prospectMeetingCompleted);
+                  }
+                },
         ),
       );
       await _loadActivityData();
@@ -311,11 +314,14 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
         builder: (ctx) => MeetingLogDialog(
           leadId: lead.leadId,
           ownerName: lead.ownerName,
-          onMeetingSaved: () {
-            if (lead.status == LeadStatus.prospectMeetingPending) {
-              _changeStatus(LeadStatus.prospectMeetingCompleted);
-            }
-          },
+          readOnly: viewOnly,
+          onMeetingSaved: viewOnly
+              ? null
+              : () {
+                  if (lead.status == LeadStatus.prospectMeetingPending) {
+                    _changeStatus(LeadStatus.prospectMeetingCompleted);
+                  }
+                },
         ),
       );
       return;
@@ -326,10 +332,13 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
         context: context,
         builder: (ctx) => NotesLogDialog(
           lead: lead,
-          onSaved: (saved) {
-            AppStore.instance.replaceLead(saved);
-            setState(() => lead = saved);
-          },
+          readOnly: viewOnly,
+          onSaved: viewOnly
+              ? null
+              : (saved) {
+                  AppStore.instance.replaceLead(saved);
+                  setState(() => lead = saved);
+                },
         ),
       );
       return;
@@ -338,7 +347,10 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
     if (label == 'Legal') {
       await showFomraDialog<void>(
         context: context,
-        builder: (ctx) => LegalDocumentsDialog(leadId: lead.leadId),
+        builder: (ctx) => LegalDocumentsDialog(
+          leadId: lead.leadId,
+          readOnly: viewOnly,
+        ),
       );
       return;
     }
@@ -975,49 +987,14 @@ class _WorkspacePanel extends StatelessWidget {
               ),
               const SizedBox(height: 10),
               Text(
-                'View-only for management. Summary counts and full activity history below.',
+                'View-only for management. Tap an activity to open its full history.',
                 style: TextStyle(
                   fontSize: 12,
                   color: context.fomraTextSecondary,
                 ),
               ),
               const SizedBox(height: 10),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Material(
-                  color: AppColors.purple.withValues(alpha: 0.07),
-                  borderRadius: BorderRadius.circular(24),
-                  child: InkWell(
-                    onTap: () => onDetailAction('Management site visit'),
-                    borderRadius: BorderRadius.circular(24),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.apartment_outlined,
-                            size: 16,
-                            color: AppColors.purple,
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            'Management site visit',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: context.fomraTextPrimary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
+              _ActionToolbar(onAction: onDetailAction),
               const SizedBox(height: 16),
             ],
             _ActivitySummaryRow(

@@ -11,18 +11,21 @@ class SiteVisitDialog extends StatefulWidget {
   final String leadId;
   final LandLeadSiteVisitType visitType;
   final VoidCallback? onVisitDone;
+  final bool readOnly;
 
   const SiteVisitDialog({
     super.key,
     required this.leadId,
     this.visitType = LandLeadSiteVisitType.employee,
     this.onVisitDone,
+    this.readOnly = false,
   });
 
   const SiteVisitDialog.management({
     super.key,
     required this.leadId,
     this.onVisitDone,
+    this.readOnly = false,
   }) : visitType = LandLeadSiteVisitType.management;
 
   @override
@@ -53,9 +56,11 @@ class _SiteVisitDialogState extends State<SiteVisitDialog> {
       ? 'Management site visit recorded'
       : 'Site visit marked as done';
 
-  String get _previousLabel => _isManagement
-      ? 'Previous management visits'
-      : 'Previous site visits';
+  String get _previousLabel => widget.readOnly
+      ? 'Visit history'
+      : _isManagement
+          ? 'Previous management visits'
+          : 'Previous site visits';
 
   @override
   void initState() {
@@ -187,11 +192,12 @@ class _SiteVisitDialogState extends State<SiteVisitDialog> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      SeparateDateTimeFields(
-                        value: _visitedAt,
-                        onEditDate: _editDate,
-                        onEditTime: _editTime,
-                      ),
+                      if (!widget.readOnly)
+                        SeparateDateTimeFields(
+                          value: _visitedAt,
+                          onEditDate: _editDate,
+                          onEditTime: _editTime,
+                        ),
                       if (_loading)
                         const Padding(
                           padding: EdgeInsets.only(top: 16),
@@ -204,7 +210,7 @@ class _SiteVisitDialogState extends State<SiteVisitDialog> {
                           ),
                         )
                       else if (_visits.isNotEmpty) ...[
-                        const SizedBox(height: 18),
+                        if (!widget.readOnly) const SizedBox(height: 18),
                         Text(
                           _previousLabel,
                           style: TextStyle(
@@ -214,8 +220,17 @@ class _SiteVisitDialogState extends State<SiteVisitDialog> {
                           ),
                         ),
                         const SizedBox(height: 8),
-                        for (final visit in _visits.take(5))
+                        for (final visit in _visits)
                           _PreviousVisitTile(visit: visit),
+                      ] else if (widget.readOnly) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          'No visits logged yet.',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: context.fomraTextSecondary,
+                          ),
+                        ),
                       ],
                     ],
                   ),
@@ -229,28 +244,30 @@ class _SiteVisitDialogState extends State<SiteVisitDialog> {
                     onPressed: () => Navigator.pop(context),
                     child: const Text('Close'),
                   ),
-                  const SizedBox(width: 8),
-                  FilledButton.icon(
-                    onPressed: _saving ? null : _markDone,
-                    icon: _saving
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Icon(Icons.check_circle_outline, size: 18),
-                    label: Text(_saving ? 'Saving…' : _doneLabel),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: AppColors.purple,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 10,
+                  if (!widget.readOnly) ...[
+                    const SizedBox(width: 8),
+                    FilledButton.icon(
+                      onPressed: _saving ? null : _markDone,
+                      icon: _saving
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Icon(Icons.check_circle_outline, size: 18),
+                      label: Text(_saving ? 'Saving…' : _doneLabel),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.purple,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 10,
+                        ),
                       ),
                     ),
-                  ),
+                  ],
                 ],
               ),
             ],

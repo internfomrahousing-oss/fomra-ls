@@ -11,11 +11,13 @@ import '../../widgets/separate_date_time_fields.dart';
 class CallsLogDialog extends StatefulWidget {
   final String leadId;
   final String ownerName;
+  final bool readOnly;
 
   const CallsLogDialog({
     super.key,
     required this.leadId,
     this.ownerName = '',
+    this.readOnly = false,
   });
 
   @override
@@ -36,6 +38,7 @@ class _CallsLogDialogState extends State<CallsLogDialog> {
   @override
   void initState() {
     super.initState();
+    if (widget.readOnly) _tabIndex = 1;
     _loadLogs();
   }
 
@@ -176,26 +179,36 @@ class _CallsLogDialogState extends State<CallsLogDialog> {
                 ],
               ),
               const SizedBox(height: 4),
-              Text(
-                'Log your call $withLabel',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: context.fomraTextSecondary,
+              if (!widget.readOnly)
+                Text(
+                  'Log your call $withLabel',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: context.fomraTextSecondary,
+                  ),
+                )
+              else
+                Text(
+                  'Call history for this lead',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: context.fomraTextSecondary,
+                  ),
                 ),
-              ),
               const SizedBox(height: 14),
-              LogDialogTabBar(
-                selectedIndex: _tabIndex,
-                onChanged: (index) => setState(() => _tabIndex = index),
-                historyCount: _logs.length,
-              ),
-              const SizedBox(height: 14),
+              if (!widget.readOnly)
+                LogDialogTabBar(
+                  selectedIndex: _tabIndex,
+                  onChanged: (index) => setState(() => _tabIndex = index),
+                  historyCount: _logs.length,
+                ),
+              if (!widget.readOnly) const SizedBox(height: 14),
               Flexible(
-                child: _tabIndex == 0
-                    ? SingleChildScrollView(child: _buildNewForm(context))
-                    : _buildHistory(context),
+                child: widget.readOnly || _tabIndex == 1
+                    ? _buildHistory(context)
+                    : SingleChildScrollView(child: _buildNewForm(context)),
               ),
-              if (_tabIndex == 0) ...[
+              if (!widget.readOnly && _tabIndex == 0) ...[
                 const SizedBox(height: 14),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.end,

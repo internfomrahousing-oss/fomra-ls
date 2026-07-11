@@ -377,7 +377,6 @@ class _PortalSummaryTileState extends State<PortalSummaryTile> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = context.isDarkMode;
     final tile = MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
@@ -391,25 +390,10 @@ class _PortalSummaryTileState extends State<PortalSummaryTile> {
             ? Matrix4.translationValues(0, -2, 0)
             : Matrix4.identity(),
         decoration: BoxDecoration(
-          color: isDark ? context.fomraSurface : widget.accent.withValues(alpha: 0.08),
+          color: widget.accent.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(AppColors.radiusSm),
-          border: Border(
-            top: BorderSide(color: widget.accent, width: 2.5),
-            left: BorderSide(
-              color: isDark
-                  ? context.fomraBorder
-                  : widget.accent.withValues(alpha: _hovered ? 0.28 : 0.14),
-            ),
-            right: BorderSide(
-              color: isDark
-                  ? context.fomraBorder
-                  : widget.accent.withValues(alpha: _hovered ? 0.28 : 0.14),
-            ),
-            bottom: BorderSide(
-              color: isDark
-                  ? context.fomraBorder
-                  : widget.accent.withValues(alpha: _hovered ? 0.28 : 0.14),
-            ),
+          border: Border.all(
+            color: widget.accent.withValues(alpha: _hovered ? 0.28 : 0.14),
           ),
           boxShadow: _hovered ? context.fomraCardShadow : null,
         ),
@@ -423,7 +407,7 @@ class _PortalSummaryTileState extends State<PortalSummaryTile> {
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: widget.accent.withValues(alpha: isDark ? 0.14 : 0.12),
+                color: context.fomraSurface.withValues(alpha: 0.9),
                 borderRadius: BorderRadius.circular(12),
               ),
               alignment: Alignment.center,

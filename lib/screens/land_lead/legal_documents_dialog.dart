@@ -13,8 +13,13 @@ import '../../widgets/separate_date_time_fields.dart';
 
 class LegalDocumentsDialog extends StatefulWidget {
   final String leadId;
+  final bool readOnly;
 
-  const LegalDocumentsDialog({super.key, required this.leadId});
+  const LegalDocumentsDialog({
+    super.key,
+    required this.leadId,
+    this.readOnly = false,
+  });
 
   @override
   State<LegalDocumentsDialog> createState() => _LegalDocumentsDialogState();
@@ -289,7 +294,9 @@ class _LegalDocumentsDialogState extends State<LegalDocumentsDialog> {
               ),
               const SizedBox(height: 4),
               Text(
-                'Upload legal verified documents and keep reference notes',
+                widget.readOnly
+                    ? 'Legal documents and reference notes for this lead'
+                    : 'Upload legal verified documents and keep reference notes',
                 style: TextStyle(
                   fontSize: 12,
                   color: context.fomraTextSecondary,
@@ -301,45 +308,47 @@ class _LegalDocumentsDialogState extends State<LegalDocumentsDialog> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      OutlinedButton.icon(
-                        onPressed:
-                            (_uploading || _remainingSlots <= 0)
-                                ? null
-                                : _uploadDocument,
-                        icon: _uploading
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            : const Icon(Icons.upload_file_outlined, size: 18),
-                        label: Text(
-                          _uploading
-                              ? 'Uploading…'
-                              : _remainingSlots <= 0
-                                  ? 'Maximum $_maxDocuments documents uploaded'
-                                  : 'Upload legal document',
-                        ),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: AppColors.purple,
-                          side: BorderSide(color: context.fomraBorder),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 12,
+                      if (!widget.readOnly) ...[
+                        OutlinedButton.icon(
+                          onPressed:
+                              (_uploading || _remainingSlots <= 0)
+                                  ? null
+                                  : _uploadDocument,
+                          icon: _uploading
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              : const Icon(Icons.upload_file_outlined, size: 18),
+                          label: Text(
+                            _uploading
+                                ? 'Uploading…'
+                                : _remainingSlots <= 0
+                                    ? 'Maximum $_maxDocuments documents uploaded'
+                                    : 'Upload legal document',
                           ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.purple,
+                            side: BorderSide(color: context.fomraBorder),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 12,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        '${_documents.length}/$_maxDocuments uploaded · PDF, JPG, PNG, DOC · images auto-compress to 1 MB',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: context.fomraTextSecondary,
+                        const SizedBox(height: 6),
+                        Text(
+                          '${_documents.length}/$_maxDocuments uploaded · PDF, JPG, PNG, DOC · images auto-compress to 1 MB',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: context.fomraTextSecondary,
+                          ),
                         ),
-                      ),
+                      ],
                       if (_loading)
                         const Padding(
                           padding: EdgeInsets.only(top: 16),
@@ -369,17 +378,29 @@ class _LegalDocumentsDialogState extends State<LegalDocumentsDialog> {
                           ),
                       ],
                       const SizedBox(height: 16),
-                      TextField(
-                        controller: _notesCtrl,
-                        minLines: 4,
-                        maxLines: 6,
-                        maxLength: 500,
-                        decoration: _fieldDecoration(
-                          context,
-                          'Reference notes',
-                          hint: 'Add notes for legal reference…',
+                      if (widget.readOnly)
+                        Text(
+                          _notesCtrl.text.trim().isEmpty
+                              ? 'No reference notes yet.'
+                              : _notesCtrl.text.trim(),
+                          style: TextStyle(
+                            fontSize: 13,
+                            height: 1.45,
+                            color: context.fomraTextPrimary,
+                          ),
+                        )
+                      else
+                        TextField(
+                          controller: _notesCtrl,
+                          minLines: 4,
+                          maxLines: 6,
+                          maxLength: 500,
+                          decoration: _fieldDecoration(
+                            context,
+                            'Reference notes',
+                            hint: 'Add notes for legal reference…',
+                          ),
                         ),
-                      ),
                     ],
                   ),
                 ),
@@ -392,9 +413,10 @@ class _LegalDocumentsDialogState extends State<LegalDocumentsDialog> {
                     onPressed: () => Navigator.pop(context),
                     child: const Text('Close'),
                   ),
-                  const SizedBox(width: 8),
-                  FilledButton(
-                    onPressed: _savingNotes ? null : _saveNotes,
+                  if (!widget.readOnly) ...[
+                    const SizedBox(width: 8),
+                    FilledButton(
+                      onPressed: _savingNotes ? null : _saveNotes,
                     style: FilledButton.styleFrom(
                       backgroundColor: AppColors.purple,
                       padding: const EdgeInsets.symmetric(
@@ -412,7 +434,8 @@ class _LegalDocumentsDialogState extends State<LegalDocumentsDialog> {
                             ),
                           )
                         : const Text('Save Notes'),
-                  ),
+                    ),
+                  ],
                 ],
               ),
             ],
