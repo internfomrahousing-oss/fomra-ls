@@ -268,7 +268,9 @@ class _NavTileState extends State<_NavTile> {
   Widget build(BuildContext context) {
     final active = widget.active;
     final expanded = widget.expanded;
-    final accent = active ? AppColors.primary : context.fomraTextSecondary;
+    final inactiveIconColor = AppColors.primary.withValues(
+      alpha: _hovered ? 1.0 : 0.82,
+    );
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
@@ -288,7 +290,7 @@ class _NavTileState extends State<_NavTile> {
               color: active
                   ? null
                   : (_hovered
-                      ? context.fomraSurfaceVar.withValues(alpha: 0.9)
+                      ? AppColors.primary.withValues(alpha: 0.08)
                       : Colors.transparent),
               borderRadius: BorderRadius.circular(14),
               boxShadow:
@@ -299,7 +301,7 @@ class _NavTileState extends State<_NavTile> {
                     children: [
                       Icon(
                         active ? widget.item.activeIcon : widget.item.icon,
-                        color: active ? Colors.white : accent,
+                        color: active ? Colors.white : inactiveIconColor,
                         size: 20,
                       ),
                       const SizedBox(width: 12),
@@ -323,7 +325,7 @@ class _NavTileState extends State<_NavTile> {
                 : Center(
                     child: Icon(
                       active ? widget.item.activeIcon : widget.item.icon,
-                      color: active ? Colors.white : accent,
+                      color: active ? Colors.white : inactiveIconColor,
                       size: 22,
                     ),
                   ),

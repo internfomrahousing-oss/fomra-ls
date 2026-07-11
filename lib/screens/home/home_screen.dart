@@ -343,8 +343,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     final quickActions = [
       PortalQuickAction(
-        label: 'Add Lead',
-        icon: Icons.add_location_alt_outlined,
+        label: 'View Leads',
+        icon: Icons.list_alt_outlined,
         accent: AppColors.primary,
         onTap: () => _goTo('/land-lead'),
       ),

@@ -61,14 +61,13 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
 
   static const _tabs = [
     'Activity',
-    'Details',
     'Site Photos',
     'Infrastructure',
     'Land Records',
     'Competitor Projects',
   ];
 
-  static const _miTabStart = 3;
+  static const _miTabStart = 2;
   final Set<int> _loadedMiTabs = {};
 
   @override
@@ -662,7 +661,7 @@ class _ProfilePanel extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 10),
-                    _LeadInfoGrid(lead: lead, leadAgeDays: leadAgeDays),
+                    _LeadDetailsList(lead: lead, leadAgeDays: leadAgeDays),
                     const SizedBox(height: 14),
                     SizedBox(
                       width: double.infinity,
@@ -749,29 +748,35 @@ class _LeadTaskCountBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: context.fomraSurface.withValues(alpha: 0.92),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: context.fomraBorder),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        color: AppColors.primary.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.16)),
       ),
       child: Column(
         children: [
-          Icon(Icons.task_alt_outlined, size: 18, color: AppColors.purple),
-          const SizedBox(height: 4),
+          Container(
+            width: 30,
+            height: 30,
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.12),
+              shape: BoxShape.circle,
+            ),
+            alignment: Alignment.center,
+            child: const Icon(
+              Icons.task_alt_outlined,
+              size: 17,
+              color: AppColors.primary,
+            ),
+          ),
+          const SizedBox(height: 6),
           Text(
             '$count',
-            style: TextStyle(
+            style: const TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.w800,
-              color: AppColors.purple,
+              color: AppColors.primary,
               height: 1,
             ),
           ),
@@ -890,20 +895,19 @@ class _WorkspacePanel extends StatelessWidget {
                     callLogs: callLogs,
                     siteVisits: siteVisits,
                   ),
-                  _DetailsTab(lead: lead),
                   _SitePhotosTab(lead: lead),
                   _LazyMarketIntelTab(
-                    active: shouldLoadMiTab(3),
+                    active: shouldLoadMiTab(2),
                     lead: lead,
                     section: MarketIntelLeadSection.infrastructure,
                   ),
                   _LazyMarketIntelTab(
-                    active: shouldLoadMiTab(4),
+                    active: shouldLoadMiTab(3),
                     lead: lead,
                     section: MarketIntelLeadSection.landRecords,
                   ),
                   _LazyMarketIntelTab(
-                    active: shouldLoadMiTab(5),
+                    active: shouldLoadMiTab(4),
                     lead: lead,
                     section: MarketIntelLeadSection.competitorProjects,
                   ),
@@ -925,11 +929,11 @@ class _ActionToolbar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final actions = [
+      (Icons.sticky_note_2_outlined, 'Notes'),
       (Icons.call_outlined, 'Calls'),
       (Icons.location_on_outlined, 'Site visit'),
       (Icons.apartment_outlined, 'Management site visit'),
       (Icons.groups_outlined, 'Meeting'),
-      (Icons.sticky_note_2_outlined, 'Notes'),
       (Icons.gavel_outlined, 'Legal'),
       (Icons.draw_outlined, 'Signed'),
     ];
@@ -1279,34 +1283,45 @@ class _ActivityTimeline extends StatelessWidget {
   }
 }
 
-class _DetailsTab extends StatelessWidget {
+class _LeadDetailsList extends StatelessWidget {
   final LandLead lead;
-  const _DetailsTab({required this.lead});
+  final int leadAgeDays;
+
+  const _LeadDetailsList({
+    required this.lead,
+    required this.leadAgeDays,
+  });
+
+  String _value(String raw) => raw.trim().isEmpty ? '—' : raw.trim();
 
   @override
   Widget build(BuildContext context) {
     final rows = <(String, String)>[
-      ('Owner', lead.ownerName),
-      if (lead.contactDetails.isNotEmpty) ('Contact', lead.contactDetails),
+      ('Owner', _value(lead.ownerName)),
+      ('Contact', _value(lead.contactDetails)),
       ('Input Source', lead.inputSource.label),
       ('Land Type', lead.landType.label),
       ('Status', lead.status.label),
-      ('Location', lead.location),
-      if (lead.village.isNotEmpty) ('Village', lead.village),
-      if (lead.taluk.isNotEmpty) ('Taluk', lead.taluk),
-      if (lead.district.isNotEmpty) ('District', lead.district),
-      if (lead.pincode.isNotEmpty) ('Pincode', lead.pincode),
-      if (lead.gpsCoordinates.isNotEmpty) ('GPS', lead.gpsCoordinates),
-      if (lead.surveyNumber.isNotEmpty) ('Survey No.', lead.surveyNumber),
-      if (lead.subDivision.isNotEmpty) ('Sub Division', lead.subDivision),
-      if (lead.landExtent.isNotEmpty) ('Land Extent', lead.landExtent),
+      ('Location', _value(lead.location)),
+      ('Village', _value(lead.village)),
+      ('Taluk', _value(lead.taluk)),
+      ('District', _value(lead.district)),
+      ('Pincode', _value(lead.pincode)),
+      ('GPS', _value(lead.gpsCoordinates)),
+      ('Survey No.', _value(lead.surveyNumber)),
+      ('Sub Division', _value(lead.subDivision)),
+      ('Land Extent', _value(lead.landExtent)),
       if (lead.roadWidth.isNotEmpty) ('Road Width', lead.roadWidth),
       if (lead.accessDetails.isNotEmpty) ('Terms', lead.accessDetails),
+      ('Received On', _formatReceivedOn(lead.addedOn)),
+      ('Lead Age', '$leadAgeDays days'),
+      ("Lead's Current Date & Time", _formatReceivedOn(DateTime.now())),
       if (lead.createdByName.isNotEmpty)
         (lead.ownershipLabel, lead.createdByName),
     ];
 
-    return ListView(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         for (final row in rows)
           Padding(
@@ -1544,143 +1559,6 @@ class _StageStatusField extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _LeadInfoGrid extends StatelessWidget {
-  final LandLead lead;
-  final int leadAgeDays;
-
-  const _LeadInfoGrid({required this.lead, required this.leadAgeDays});
-
-  @override
-  Widget build(BuildContext context) {
-    final pairs = <(String, String)>[
-      (
-        'Survey Number',
-        lead.surveyNumber.isEmpty ? '—' : lead.surveyNumber,
-      ),
-      (
-        'Sub Division',
-        lead.subDivision.isEmpty ? '—' : lead.subDivision,
-      ),
-      ('Area', lead.landExtent.isEmpty ? '—' : lead.landExtent),
-      ('Input Source', lead.inputSource.label),
-      ('Land Type', lead.landType.label),
-      ('Received On', _formatReceivedOn(lead.addedOn)),
-      ('Lead Age', '$leadAgeDays days'),
-      ('Tags', '${lead.landType.label}, ${lead.inputSource.label}'),
-      ('Posted By', lead.createdByName.isEmpty ? '—' : lead.createdByName),
-      ('Owner Name', lead.ownerName.trim().isEmpty ? '—' : lead.ownerName.trim()),
-      (
-        'Project Interest',
-        lead.village.isEmpty ? lead.location : lead.village,
-      ),
-      (
-        'Contact Details',
-        lead.contactDetails.isEmpty ? '—' : lead.contactDetails,
-      ),
-    ];
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        for (var i = 0; i < 6; i += 2)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: _MetaCell(label: pairs[i].$1, value: pairs[i].$2),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _MetaCell(
-                    label: pairs[i + 1].$1,
-                    value: pairs[i + 1].$2,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        Padding(
-          padding: const EdgeInsets.only(bottom: 10),
-          child: _MetaCell(
-            label: "Lead's Current Date & Time",
-            value: _formatReceivedOn(DateTime.now()),
-          ),
-        ),
-        for (var i = 6; i < pairs.length; i += 2)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: _MetaCell(label: pairs[i].$1, value: pairs[i].$2),
-                ),
-                const SizedBox(width: 12),
-                if (i + 1 < pairs.length)
-                  Expanded(
-                    child: _MetaCell(
-                      label: pairs[i + 1].$1,
-                      value: pairs[i + 1].$2,
-                    ),
-                  )
-                else
-                  const Expanded(child: SizedBox()),
-              ],
-            ),
-          ),
-      ],
-    );
-  }
-}
-
-class _MetaCell extends StatelessWidget {
-  final String label;
-  final String value;
-
-  const _MetaCell({required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: context.fomraSurfaceVar.withValues(alpha: 0.55),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: context.fomraBorder.withValues(alpha: 0.8)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label.toUpperCase(),
-            style: TextStyle(
-              fontSize: 9,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.45,
-              color: context.fomraTextSecondary,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            maxLines: 4,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              height: 1.3,
-              color: context.fomraTextPrimary,
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
