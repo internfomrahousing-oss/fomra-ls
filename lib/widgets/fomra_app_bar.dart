@@ -1,4 +1,7 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
+import '../theme/app_theme.dart';
 import '../theme/fomra_theme_context.dart';
 import 'fomra_breadcrumb.dart';
 import 'fomra_theme_toggle.dart';
@@ -49,18 +52,50 @@ class FomraAppBar extends StatelessWidget implements PreferredSizeWidget {
     );
   }
 
+  Widget _headerBackground(BuildContext context) {
+    final isDark = context.isDarkMode;
+    if (isDark) {
+      return ClipRect(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+          child: Container(
+            decoration: BoxDecoration(
+              gradient: context.fomraHeroGradient,
+              border: Border(
+                bottom: BorderSide(
+                  color: context.fomraBorder.withValues(alpha: 0.65),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+    return Container(decoration: BoxDecoration(gradient: context.fomraHeroGradient));
+  }
+
   @override
   Widget build(BuildContext context) {
+    final isDark = context.isDarkMode;
+    final fg = isDark ? AppColors.darkTextPrimary : Colors.white;
+    final fgMuted = isDark
+        ? AppColors.darkTextSecondary
+        : Colors.white.withValues(alpha: 0.9);
+    final chipBg = isDark
+        ? Colors.white.withValues(alpha: 0.06)
+        : Colors.white.withValues(alpha: 0.14);
+    final chipBorder = isDark
+        ? context.fomraBorder.withValues(alpha: 0.7)
+        : Colors.white.withValues(alpha: 0.22);
+
     return AppBar(
       automaticallyImplyLeading: false,
-      flexibleSpace: Container(
-        decoration: BoxDecoration(gradient: context.fomraHeroGradient),
-      ),
+      flexibleSpace: _headerBackground(context),
       backgroundColor: Colors.transparent,
       surfaceTintColor: Colors.transparent,
       elevation: 0,
       scrolledUnderElevation: 0,
-      titleSpacing: 12,
+      titleSpacing: 16,
       title: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -76,21 +111,22 @@ class FomraAppBar extends StatelessWidget implements PreferredSizeWidget {
                     width: 30,
                     height: 30,
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.18),
+                      color: chipBg,
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.2), width: 1),
+                      border: Border.all(color: chipBorder, width: 1),
                     ),
-                    child: const Icon(Icons.house_outlined,
-                        color: Colors.white, size: 16),
+                    child: Icon(Icons.house_outlined, color: fg, size: 16),
                   ),
                   const SizedBox(width: 10),
-                  const Text('FomraLS',
-                      style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 18,
-                          letterSpacing: 0.1)),
+                  Text(
+                    'FomraLS',
+                    style: TextStyle(
+                      color: fg,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 18,
+                      letterSpacing: 0.1,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -100,15 +136,18 @@ class FomraAppBar extends StatelessWidget implements PreferredSizeWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.14),
+                color: chipBg,
                 borderRadius: BorderRadius.circular(999),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
+                border: Border.all(color: chipBorder),
               ),
-              child: Text(moduleName!,
-                  style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white.withValues(alpha: 0.9))),
+              child: Text(
+                moduleName!,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: fgMuted,
+                ),
+              ),
             ),
           ],
         ],
@@ -118,7 +157,7 @@ class FomraAppBar extends StatelessWidget implements PreferredSizeWidget {
           Padding(
             padding: const EdgeInsets.only(right: 4),
             child: SizedBox(
-              width: MediaQuery.sizeOf(context).width >= 900 ? 260 : 200,
+              width: MediaQuery.sizeOf(context).width >= 900 ? 280 : 220,
               child: const FomraUniversalSearchBar(),
             ),
           ),

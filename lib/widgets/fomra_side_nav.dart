@@ -7,6 +7,7 @@ import 'fomra_brand_logo.dart';
 import '../screens/home/home_screen.dart';
 import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
+import '../theme/fomra_theme_context.dart';
 import 'ui/app_components.dart';
 
 class FomraSideNavItem {
@@ -81,7 +82,7 @@ class _SideNavTokens {
   static const sidebarGradient = LinearGradient(
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
-    colors: [Color(0xFF2563EB), Color(0xFF2563EB)],
+    colors: [Color(0xFF3B82F6), Color(0xFF2563EB)],
   );
 }
 
@@ -131,6 +132,8 @@ class _FomraSideNavState extends State<FomraSideNav> {
     final initial =
         name.trim().isNotEmpty ? name.trim()[0].toUpperCase() : '?';
 
+    final isDark = context.isDarkMode;
+
     return MouseRegion(
       onEnter: (_) => setState(() => _expanded = true),
       onExit: (_) => setState(() => _expanded = false),
@@ -140,13 +143,19 @@ class _FomraSideNavState extends State<FomraSideNav> {
         width: _expanded
             ? FomraSideNav.expandedWidth
             : FomraSideNav.collapsedWidth,
-        decoration: const BoxDecoration(
-          gradient: _SideNavTokens.sidebarGradient,
+        decoration: BoxDecoration(
+          color: isDark ? context.fomraSidebarBg : null,
+          gradient: isDark ? null : _SideNavTokens.sidebarGradient,
+          border: isDark
+              ? const Border(
+                  right: BorderSide(color: AppColors.darkBorder, width: 1),
+                )
+              : null,
           boxShadow: [
             BoxShadow(
-              color: Color(0x40000000),
-              blurRadius: 24,
-              offset: Offset(4, 0),
+              color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.25),
+              blurRadius: isDark ? 16 : 24,
+              offset: const Offset(4, 0),
             ),
           ],
         ),
@@ -279,10 +288,12 @@ class _NavTileState extends State<_NavTile> {
     final active = widget.active;
     final expanded = widget.expanded;
     final hovered = _hovered && !active;
+    final isDark = context.isDarkMode;
 
     final button = _NavIconButton(
       active: active,
       hovered: hovered,
+      isDark: isDark,
       icon: active ? widget.item.activeIcon : widget.item.icon,
     );
 
@@ -303,11 +314,17 @@ class _NavTileState extends State<_NavTile> {
                     style: TextStyle(
                       fontSize: 13.5,
                       fontWeight: active ? FontWeight.w700 : FontWeight.w600,
-                      color: active
-                          ? Colors.white
-                          : Colors.white.withValues(
-                              alpha: hovered ? 1.0 : 0.88,
-                            ),
+                      color: isDark
+                          ? (active
+                              ? AppColors.darkTextPrimary
+                              : AppColors.darkTextSecondary.withValues(
+                                  alpha: hovered ? 1.0 : 0.92,
+                                ))
+                          : (active
+                              ? Colors.white
+                              : Colors.white.withValues(
+                                  alpha: hovered ? 1.0 : 0.88,
+                                )),
                     ),
                     child: Text(
                       widget.item.label,
@@ -343,14 +360,21 @@ class _NavTileState extends State<_NavTile> {
                   curve: _SideNavTokens.animCurve,
                   width: 3,
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: isDark ? AppColors.primary : Colors.white,
                     borderRadius: BorderRadius.circular(999),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.white.withValues(alpha: 0.45),
-                        blurRadius: 6,
-                      ),
-                    ],
+                    boxShadow: isDark
+                        ? [
+                            BoxShadow(
+                              color: AppColors.primary.withValues(alpha: 0.45),
+                              blurRadius: 6,
+                            ),
+                          ]
+                        : [
+                            BoxShadow(
+                              color: Colors.white.withValues(alpha: 0.45),
+                              blurRadius: 6,
+                            ),
+                          ],
                   ),
                 ),
               ),
@@ -375,50 +399,85 @@ class _NavTileState extends State<_NavTile> {
 class _NavIconButton extends StatelessWidget {
   final bool active;
   final bool hovered;
+  final bool isDark;
   final IconData icon;
 
   const _NavIconButton({
     required this.active,
     required this.hovered,
+    required this.isDark,
     required this.icon,
   });
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedContainer(
+    final Color bg;
+    final Color iconColor;
+    List<BoxShadow>? shadow;
+
+    if (isDark) {
+      bg = active
+          ? AppColors.primary.withValues(alpha: 0.18)
+          : (hovered
+              ? Colors.white.withValues(alpha: 0.06)
+              : Colors.transparent);
+      iconColor = active
+          ? AppColors.primaryLight
+          : AppColors.darkTextSecondary.withValues(alpha: hovered ? 1.0 : 0.85);
+      shadow = active
+          ? [
+              BoxShadow(
+                color: AppColors.primary.withValues(alpha: 0.22),
+                blurRadius: 12,
+                offset: const Offset(0, 3),
+              ),
+            ]
+          : null;
+    } else {
+      bg = active
+          ? Colors.white
+          : (hovered
+              ? Colors.white.withValues(alpha: 0.14)
+              : Colors.transparent);
+      iconColor = active
+          ? AppColors.primary
+          : Colors.white.withValues(alpha: hovered ? 1.0 : 0.78);
+      shadow = active
+          ? [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.18),
+                blurRadius: 14,
+                offset: const Offset(0, 4),
+              ),
+            ]
+          : null;
+    }
+
+    final button = AnimatedContainer(
       duration: _SideNavTokens.animDuration,
       curve: _SideNavTokens.animCurve,
       width: _SideNavTokens.navButtonSize,
       height: _SideNavTokens.navButtonSize,
       decoration: BoxDecoration(
-        color: active
-            ? Colors.white
-            : (hovered
-                ? Colors.white.withValues(alpha: 0.14)
-                : Colors.transparent),
+        color: bg,
         borderRadius: BorderRadius.circular(_SideNavTokens.navButtonRadius),
-        boxShadow: active
-            ? [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.18),
-                  blurRadius: 14,
-                  offset: const Offset(0, 4),
-                ),
-              ]
+        border: isDark && active
+            ? Border.all(color: AppColors.primary.withValues(alpha: 0.35))
             : null,
+        boxShadow: shadow,
       ),
-      child: Stack(
-        children: [
-          Center(
-            child: Icon(
-              icon,
-              size: _SideNavTokens.navIconSize,
-              color: active
-                  ? AppColors.primary
-                  : Colors.white.withValues(alpha: hovered ? 1.0 : 0.78),
-            ),
-          ),
-        ],
+      child: Center(
+        child: Icon(icon, size: _SideNavTokens.navIconSize, color: iconColor),
+      ),
+    );
+
+    if (!isDark || !hovered || active) return button;
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(_SideNavTokens.navButtonRadius),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+        child: button,
       ),
     );
   }
@@ -446,13 +505,20 @@ class _FooterUserState extends State<_FooterUser> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = context.isDarkMode;
     final avatar = Container(
       width: 36,
       height: 36,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: Colors.white.withValues(alpha: 0.18),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.32)),
+        color: isDark
+            ? AppColors.primary.withValues(alpha: 0.16)
+            : Colors.white.withValues(alpha: 0.18),
+        border: Border.all(
+          color: isDark
+              ? AppColors.primary.withValues(alpha: 0.35)
+              : Colors.white.withValues(alpha: 0.32),
+        ),
       ),
       alignment: Alignment.center,
       child: Text(
@@ -477,10 +543,14 @@ class _FooterUserState extends State<_FooterUser> {
             vertical: 10,
           ),
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: _hovered ? 0.2 : 0.14),
+            color: isDark
+                ? Colors.white.withValues(alpha: _hovered ? 0.08 : 0.05)
+                : Colors.white.withValues(alpha: _hovered ? 0.2 : 0.14),
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: Colors.white.withValues(alpha: _hovered ? 0.36 : 0.24),
+              color: isDark
+                  ? AppColors.darkBorder.withValues(alpha: _hovered ? 0.9 : 0.6)
+                  : Colors.white.withValues(alpha: _hovered ? 0.36 : 0.24),
             ),
           ),
           child: widget.expanded

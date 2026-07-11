@@ -222,6 +222,7 @@ class _DashboardCard extends StatelessWidget {
   final String? subtitle;
   final IconData? icon;
   final Color? borderColor;
+  final Color? topAccent;
 
   const _DashboardCard({
     required this.child,
@@ -229,6 +230,7 @@ class _DashboardCard extends StatelessWidget {
     this.subtitle,
     this.icon,
     this.borderColor,
+    this.topAccent,
   });
 
   @override
@@ -242,6 +244,22 @@ class _DashboardCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (topAccent != null)
+            Container(
+              height: 2.5,
+              margin: const EdgeInsets.only(bottom: AppSpacing.md),
+              decoration: BoxDecoration(
+                color: topAccent,
+                borderRadius: BorderRadius.circular(999),
+                boxShadow: [
+                  BoxShadow(
+                    color: topAccent!.withValues(alpha: 0.35),
+                    blurRadius: 6,
+                    offset: const Offset(0, 1),
+                  ),
+                ],
+              ),
+            ),
           if (title != null && icon != null) ...[
             SectionHeader(
               title: title!,
@@ -488,6 +506,7 @@ class _CompactKpiCard extends StatelessWidget {
         def.allLeads.where((l) => _isSameMonth(l.addedOn, now)).length;
 
     return _DashboardCard(
+      topAccent: def.accent,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -604,7 +623,7 @@ class _DealTermsDonutCardState extends State<_DealTermsDonutCard> {
     AppColors.secondary,
     AppColors.warning,
     AppColors.success,
-    AppColors.textTertiary,
+    AppColors.cyan,
   ];
 
   @override

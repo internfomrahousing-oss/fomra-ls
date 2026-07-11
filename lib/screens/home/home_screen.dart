@@ -23,6 +23,7 @@ import '../../theme/app_theme.dart';
 import '../../theme/fomra_layout.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../models/app_notification.dart';
+import '../../models/land_lead_site_visit.dart';
 import '../../widgets/fomra_app_bar.dart';
 import '../../widgets/fomra_app_shell.dart';
 import '../../widgets/management_executive_dashboard.dart';
@@ -53,6 +54,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   OverlayEntry? _notifOverlay;
   bool get _notifOpen => _notifOverlay != null;
 
+  List<LandLeadSiteVisit> _pendingApprovals = [];
+  bool _loadingApprovals = false;
+
   String get _notifAudience =>
       AuthService.instance.isManagement ? 'management' : 'employee';
 
@@ -72,6 +76,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     PushService.syncToken();
     _loadNotifications();
     _loadPerformanceData();
+    if (_isManagement) _loadPendingApprovals();
     _notifChannel = NotificationsService.subscribe(
       audience: _notifAudience,
       onChange: _loadNotifications,
@@ -148,6 +153,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         _emitNewNotificationToasts(filtered);
         setState(() => _notifications = filtered);
         _notifOverlay?.markNeedsBuild(); // refresh the open dropdown live
+        if (_isManagement) _loadPendingApprovals();
       }
     } catch (_) {
       // Keep the current list if the fetch fails (e.g. table not created yet).
@@ -349,6 +355,56 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
+  Future<void> _loadPendingApprovals() async {
+    if (!_isManagement) return;
+    setState(() => _loadingApprovals = true);
+    try {
+      final visits =
+          await LandLeadSiteVisitService.getPendingManagementVisits();
+      if (mounted) {
+        setState(() {
+          _pendingApprovals = visits;
+          _loadingApprovals = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loadingApprovals = false);
+    }
+  }
+
+  Future<void> _reviewPendingVisit(LandLeadSiteVisit visit) async {
+    final ok = await showManagementVisitReviewDialog(
+      context,
+      visitId: visit.id,
+      leadId: visit.leadId,
+    );
+    if (ok == true && mounted) await _loadPendingApprovals();
+  }
+
+  Future<void> _approvePendingVisit(LandLeadSiteVisit visit) async {
+    try {
+      await LandLeadSiteVisitService.review(
+        visitId: visit.id,
+        status: SiteVisitApprovalStatus.approved,
+        notes: '',
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Management site visit approved')),
+      );
+      await _loadPendingApprovals();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not approve visit: $e')),
+      );
+    }
+  }
+
+  Future<void> _rejectPendingVisit(LandLeadSiteVisit visit) async {
+    await _reviewPendingVisit(visit);
+  }
+
   void _goTo(String route) => Navigator.pushNamed(context, route);
 
   void _openAllProjectsMap(List<LandLead> leads) {
@@ -518,8 +574,21 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 ),
               ),
               const SizedBox(height: AppSpacing.lg),
+              if (_isManagement)
+                PortalFadeSection(
+                  index: 2,
+                  child: PortalApprovalsSection(
+                    visits: _pendingApprovals,
+                    leads: leads,
+                    loading: _loadingApprovals,
+                    onReview: _reviewPendingVisit,
+                    onApprove: _approvePendingVisit,
+                    onReject: _rejectPendingVisit,
+                  ),
+                ),
+              if (_isManagement) const SizedBox(height: AppSpacing.lg),
               PortalFadeSection(
-                index: 2,
+                index: _isManagement ? 3 : 2,
                 child: _isManagement
                     ? ManagementExecutiveDashboard(
                         leads: leads,

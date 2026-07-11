@@ -1,6 +1,9 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 
 import '../models/land_lead.dart';
+import '../models/land_lead_site_visit.dart';
 import '../models/lead_list_filter.dart';
 import '../services/app_store.dart';
 import '../theme/app_theme.dart';
@@ -374,6 +377,7 @@ class _PortalSummaryTileState extends State<PortalSummaryTile> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = context.isDarkMode;
     final tile = MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
@@ -387,10 +391,25 @@ class _PortalSummaryTileState extends State<PortalSummaryTile> {
             ? Matrix4.translationValues(0, -2, 0)
             : Matrix4.identity(),
         decoration: BoxDecoration(
-          color: widget.accent.withValues(alpha: 0.08),
+          color: isDark ? context.fomraSurface : widget.accent.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(AppColors.radiusSm),
-          border: Border.all(
-            color: widget.accent.withValues(alpha: _hovered ? 0.28 : 0.14),
+          border: Border(
+            top: BorderSide(color: widget.accent, width: 2.5),
+            left: BorderSide(
+              color: isDark
+                  ? context.fomraBorder
+                  : widget.accent.withValues(alpha: _hovered ? 0.28 : 0.14),
+            ),
+            right: BorderSide(
+              color: isDark
+                  ? context.fomraBorder
+                  : widget.accent.withValues(alpha: _hovered ? 0.28 : 0.14),
+            ),
+            bottom: BorderSide(
+              color: isDark
+                  ? context.fomraBorder
+                  : widget.accent.withValues(alpha: _hovered ? 0.28 : 0.14),
+            ),
           ),
           boxShadow: _hovered ? context.fomraCardShadow : null,
         ),
@@ -404,7 +423,7 @@ class _PortalSummaryTileState extends State<PortalSummaryTile> {
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: context.fomraSurface.withValues(alpha: 0.9),
+                color: widget.accent.withValues(alpha: isDark ? 0.14 : 0.12),
                 borderRadius: BorderRadius.circular(12),
               ),
               alignment: Alignment.center,
@@ -564,14 +583,102 @@ class _QuickActionCardState extends State<_QuickActionCard> {
   @override
   Widget build(BuildContext context) {
     final isDark = context.isDarkMode;
-    final cardColor = context.fomraSurface;
-    final borderColor = context.fomraBorder;
+    final cardColor = isDark
+        ? context.fomraSurface.withValues(alpha: 0.88)
+        : context.fomraSurface;
+    final borderColor = _hovered && isDark
+        ? AppColors.primary.withValues(alpha: 0.55)
+        : context.fomraBorder;
     final iconTint = data.accent.withValues(alpha: _hovered ? 0.18 : 0.12);
     final shadowAlpha = isDark
-        ? (_hovered ? 0.35 : 0.22)
+        ? (_hovered ? 0.42 : 0.28)
         : (_hovered ? 0.12 : 0.08);
-    final shadowBlur = _hovered ? 32.0 : 24.0;
-    final shadowOffset = _hovered ? 12.0 : 8.0;
+    final shadowBlur = _hovered ? 28.0 : 20.0;
+    final shadowOffset = _hovered ? 10.0 : 6.0;
+
+    final card = AnimatedContainer(
+      duration: _motion,
+      curve: _curve,
+      transform: Matrix4.translationValues(0, _hovered ? -3 : 0, 0),
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: borderColor,
+          width: _hovered && isDark ? 1.5 : 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: (_hovered && isDark
+                    ? AppColors.primary
+                    : const Color(0xFF0F172A))
+                .withValues(alpha: shadowAlpha),
+            blurRadius: shadowBlur,
+            offset: Offset(0, shadowOffset),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Row(
+        children: [
+          AnimatedScale(
+            scale: _hovered ? 1.05 : 1,
+            duration: _motion,
+            curve: _curve,
+            child: AnimatedContainer(
+              duration: _motion,
+              curve: _curve,
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: iconTint,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              alignment: Alignment.center,
+              child: Icon(
+                data.icon,
+                size: 21,
+                color: data.accent,
+              ),
+            ),
+          ),
+          const SizedBox(width: 24),
+          Expanded(
+            child: Text(
+              data.label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                letterSpacing: -0.2,
+                height: 1.2,
+                color: context.fomraTextPrimary,
+              ),
+            ),
+          ),
+          AnimatedOpacity(
+            opacity: _hovered ? 1 : 0,
+            duration: _motion,
+            curve: _curve,
+            child: AnimatedSlide(
+              duration: _motion,
+              curve: _curve,
+              offset: _hovered ? Offset.zero : const Offset(-0.2, 0),
+              child: Icon(
+                Icons.arrow_forward_rounded,
+                size: 18,
+                color: _hovered && isDark
+                    ? AppColors.primary
+                    : context.fomraTextSecondary.withValues(
+                        alpha: _hovered ? 0.9 : 0,
+                      ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
 
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
@@ -580,79 +687,280 @@ class _QuickActionCardState extends State<_QuickActionCard> {
       child: GestureDetector(
         onTap: data.onTap,
         behavior: HitTestBehavior.opaque,
-        child: AnimatedContainer(
-          duration: _motion,
-          curve: _curve,
-          transform: Matrix4.translationValues(0, _hovered ? -3 : 0, 0),
-          decoration: BoxDecoration(
-            color: cardColor,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: borderColor, width: 1),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF0F172A).withValues(alpha: shadowAlpha),
-                blurRadius: shadowBlur,
-                offset: Offset(0, shadowOffset),
-              ),
-            ],
+        child: isDark
+            ? ClipRRect(
+                borderRadius: BorderRadius.circular(20),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                  child: card,
+                ),
+              )
+            : card,
+      ),
+    );
+  }
+}
+
+String _portalFormatVisitDateTime(DateTime d) {
+  const months = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  ];
+  final hour = d.hour % 12 == 0 ? 12 : d.hour % 12;
+  final minute = d.minute.toString().padLeft(2, '0');
+  final ampm = d.hour >= 12 ? 'PM' : 'AM';
+  return '${months[d.month - 1]} ${d.day}, ${d.year} · $hour:$minute $ampm';
+}
+
+class PortalApprovalsSection extends StatelessWidget {
+  final List<LandLeadSiteVisit> visits;
+  final List<LandLead> leads;
+  final bool loading;
+  final Future<void> Function(LandLeadSiteVisit visit) onReview;
+  final Future<void> Function(LandLeadSiteVisit visit) onApprove;
+  final Future<void> Function(LandLeadSiteVisit visit) onReject;
+
+  const PortalApprovalsSection({
+    super.key,
+    required this.visits,
+    required this.leads,
+    required this.loading,
+    required this.onReview,
+    required this.onApprove,
+    required this.onReject,
+  });
+
+  LandLead? _leadFor(String leadId) {
+    for (final l in leads) {
+      if (l.leadId == leadId) return l;
+    }
+    return null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      radius: AppColors.radiusLg,
+      interactive: false,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SectionHeader(
+            title: 'Approvals',
+            subtitle: 'Pending management site visit requests',
+            icon: Icons.verified_outlined,
+            padding: const EdgeInsets.only(bottom: AppSpacing.md),
           ),
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Row(
-            children: [
-              AnimatedScale(
-                scale: _hovered ? 1.05 : 1,
-                duration: _motion,
-                curve: _curve,
-                child: AnimatedContainer(
-                  duration: _motion,
-                  curve: _curve,
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: iconTint,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  alignment: Alignment.center,
-                  child: Icon(
-                    data.icon,
-                    size: 21,
-                    color: data.accent,
-                  ),
+          if (loading)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: Center(
+                child: SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(strokeWidth: 2),
                 ),
               ),
-              const SizedBox(width: 24),
-              Expanded(
-                child: Text(
-                  data.label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: -0.2,
-                    height: 1.2,
-                    color: context.fomraTextPrimary,
+            )
+          else if (visits.isEmpty)
+            PortalEmptyHint(
+              hint: 'No pending approvals — new requests will appear here.',
+            )
+          else
+            Column(
+              children: [
+                for (var i = 0; i < visits.length; i++) ...[
+                  if (i > 0) const SizedBox(height: 12),
+                  _ApprovalVisitRow(
+                    visit: visits[i],
+                    lead: _leadFor(visits[i].leadId),
+                    onReview: () => onReview(visits[i]),
+                    onApprove: () => onApprove(visits[i]),
+                    onReject: () => onReject(visits[i]),
                   ),
-                ),
-              ),
-              AnimatedOpacity(
-                opacity: _hovered ? 1 : 0,
-                duration: _motion,
-                curve: _curve,
-                child: AnimatedSlide(
-                  duration: _motion,
-                  curve: _curve,
-                  offset: _hovered ? Offset.zero : const Offset(-0.2, 0),
-                  child: Icon(
-                    Icons.arrow_forward_rounded,
-                    size: 18,
-                    color: context.fomraTextSecondary.withValues(
-                      alpha: _hovered ? 0.9 : 0,
+                ],
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ApprovalVisitRow extends StatefulWidget {
+  final LandLeadSiteVisit visit;
+  final LandLead? lead;
+  final Future<void> Function() onReview;
+  final Future<void> Function() onApprove;
+  final Future<void> Function() onReject;
+
+  const _ApprovalVisitRow({
+    required this.visit,
+    required this.lead,
+    required this.onReview,
+    required this.onApprove,
+    required this.onReject,
+  });
+
+  @override
+  State<_ApprovalVisitRow> createState() => _ApprovalVisitRowState();
+}
+
+class _ApprovalVisitRowState extends State<_ApprovalVisitRow> {
+  bool _busy = false;
+
+  Future<void> _act(Future<void> Function() fn) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      await fn();
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final visit = widget.visit;
+    final lead = widget.lead;
+    final ownerLabel = lead != null && lead.ownerName.trim().isNotEmpty
+        ? lead.ownerName.trim()
+        : null;
+    final subtitleParts = <String>[
+      'Lead #${visit.leadId}',
+      if (ownerLabel != null) ownerLabel,
+      if (visit.loggedByName.isNotEmpty) 'Requested by ${visit.loggedByName}',
+      _portalFormatVisitDateTime(visit.visitedAt.toLocal()),
+    ];
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: _busy ? null : () => _act(widget.onReview),
+        borderRadius: BorderRadius.circular(16),
+        child: Ink(
+          decoration: BoxDecoration(
+            color: context.fomraSurfaceVar.withValues(
+              alpha: context.isDarkMode ? 0.55 : 0.65,
+            ),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: context.fomraBorder),
+          ),
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final stacked = constraints.maxWidth < 520;
+              final info = Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: AppColors.warning.withValues(alpha: 0.14),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    alignment: Alignment.center,
+                    child: const Icon(
+                      Icons.apartment_outlined,
+                      color: AppColors.warning,
+                      size: 22,
                     ),
                   ),
-                ),
-              ),
-            ],
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Management site visit',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: context.fomraTextPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          subtitleParts.join(' · '),
+                          style: TextStyle(
+                            fontSize: 12,
+                            height: 1.35,
+                            color: context.fomraTextSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              );
+
+              final actions = _busy
+                  ? const Padding(
+                      padding: EdgeInsets.all(8),
+                      child: SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    )
+                  : Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        OutlinedButton(
+                          onPressed: () => _act(widget.onReject),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.error,
+                            side: BorderSide(
+                              color: AppColors.error.withValues(alpha: 0.45),
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 10,
+                            ),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          child: const Text('Reject'),
+                        ),
+                        const SizedBox(width: 8),
+                        FilledButton(
+                          onPressed: () => _act(widget.onApprove),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 10,
+                            ),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          child: const Text('Approve'),
+                        ),
+                      ],
+                    );
+
+              if (stacked) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    info,
+                    const SizedBox(height: 12),
+                    Align(alignment: Alignment.centerRight, child: actions),
+                  ],
+                );
+              }
+
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: info),
+                  const SizedBox(width: 12),
+                  actions,
+                ],
+              );
+            },
           ),
         ),
       ),

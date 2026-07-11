@@ -120,7 +120,11 @@ class _AppCardState extends State<AppCard> {
               )
             : null,
         boxShadow: widget.boxShadow ??
-            (_lift ? AppColors.elevatedShadow : context.fomraCardShadow),
+            (_lift
+                ? (context.isDarkMode
+                    ? AppColors.darkElevatedShadow
+                    : AppColors.elevatedShadow)
+                : context.fomraCardShadow),
       ),
       child: Padding(padding: widget.padding, child: widget.child),
     );
@@ -660,9 +664,9 @@ class _LoadingSkeletonState extends State<LoadingSkeleton>
 
   @override
   Widget build(BuildContext context) {
-    final base = context.isDarkMode ? const Color(0xFF273449) : const Color(0xFFE9EEF5);
+    final base = context.isDarkMode ? AppColors.darkSurfaceVar : const Color(0xFFE9EEF5);
     final highlight =
-        context.isDarkMode ? const Color(0xFF334155) : const Color(0xFFF5F8FC);
+        context.isDarkMode ? AppColors.darkBorder : const Color(0xFFF5F8FC);
 
     return AnimatedBuilder(
       animation: _c,

@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import '../models/land_lead.dart';
 import '../screens/home/contact_directory_screen.dart';
 import '../screens/land_lead/lead_detail_screen.dart';
-import '../screens/task_management/task_management_screen.dart';
 import '../services/app_store.dart';
 import '../services/universal_search_service.dart';
 import '../theme/app_theme.dart';
@@ -247,28 +246,38 @@ class _FomraUniversalSearchBarState extends State<FomraUniversalSearchBar> {
         UniversalSearchKind.contact => 'Directories',
       };
 
-  InputDecoration _headerDecoration() {
+  InputDecoration _headerDecoration(BuildContext context) {
+    final isDark = context.isDarkMode;
+    final borderColor = isDark
+        ? context.fomraBorder.withValues(alpha: 0.85)
+        : Colors.white.withValues(alpha: 0.28);
     final border = OutlineInputBorder(
       borderRadius: BorderRadius.circular(10),
-      borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.28)),
+      borderSide: BorderSide(color: borderColor),
     );
     return InputDecoration(
       hintText: 'Search…',
       hintStyle: TextStyle(
         fontSize: 12,
-        color: Colors.white.withValues(alpha: 0.65),
+        color: isDark
+            ? AppColors.darkTextTertiary
+            : Colors.white.withValues(alpha: 0.65),
       ),
       prefixIcon: Icon(
         Icons.search_rounded,
         size: 18,
-        color: _focused ? Colors.white : Colors.white.withValues(alpha: 0.75),
+        color: isDark
+            ? (_focused ? AppColors.primary : AppColors.darkTextSecondary)
+            : (_focused ? Colors.white : Colors.white.withValues(alpha: 0.75)),
       ),
       suffixIcon: _ctrl.text.isNotEmpty
           ? IconButton(
               icon: Icon(
                 Icons.close_rounded,
                 size: 16,
-                color: Colors.white.withValues(alpha: 0.85),
+                color: isDark
+                    ? AppColors.darkTextSecondary
+                    : Colors.white.withValues(alpha: 0.85),
               ),
               onPressed: _clear,
               tooltip: 'Clear',
@@ -276,14 +285,18 @@ class _FomraUniversalSearchBarState extends State<FomraUniversalSearchBar> {
           : null,
       isDense: true,
       filled: true,
-      fillColor: Colors.white.withValues(alpha: _focused ? 0.22 : 0.14),
-      contentPadding: const EdgeInsets.symmetric(vertical: 6),
+      fillColor: isDark
+          ? AppColors.darkSurfaceVar.withValues(alpha: _focused ? 0.95 : 0.75)
+          : Colors.white.withValues(alpha: _focused ? 0.22 : 0.14),
+      contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
       border: border,
       enabledBorder: border,
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
         borderSide: BorderSide(
-          color: Colors.white.withValues(alpha: 0.55),
+          color: isDark
+              ? AppColors.primary.withValues(alpha: 0.65)
+              : Colors.white.withValues(alpha: 0.55),
           width: 1.5,
         ),
       ),
@@ -292,6 +305,7 @@ class _FomraUniversalSearchBarState extends State<FomraUniversalSearchBar> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = context.isDarkMode;
     return CompositedTransformTarget(
       link: _layerLink,
       child: KeyedSubtree(
@@ -301,13 +315,13 @@ class _FomraUniversalSearchBarState extends State<FomraUniversalSearchBar> {
           focusNode: _focus,
           onChanged: _onChanged,
           textInputAction: TextInputAction.search,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 12,
-            color: Colors.white,
+            color: isDark ? AppColors.darkTextPrimary : Colors.white,
             fontWeight: FontWeight.w500,
           ),
-          cursorColor: Colors.white,
-          decoration: _headerDecoration(),
+          cursorColor: isDark ? AppColors.primary : Colors.white,
+          decoration: _headerDecoration(context),
         ),
       ),
     );

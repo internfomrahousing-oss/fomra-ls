@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/theme_controller.dart';
-import '../theme/fomra_theme_context.dart';
+import '../theme/app_theme.dart';
 
 /// Theme button for the hero app bar: moon in dark mode, sun in light mode.
 class FomraThemeToggle extends StatelessWidget {
@@ -22,7 +22,9 @@ class FomraThemeToggle extends StatelessWidget {
             iconSize: 20,
             icon: Icon(
               isDark ? Icons.nightlight_round : Icons.wb_sunny_outlined,
-              color: Colors.white.withValues(alpha: isDark ? 0.95 : 0.55),
+              color: isDark
+                  ? AppColors.darkTextPrimary
+                  : Colors.white.withValues(alpha: 0.55),
             ),
             onPressed: () => ThemeController.instance.setDark(!isDark),
           ),

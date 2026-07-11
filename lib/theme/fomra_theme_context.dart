@@ -8,7 +8,12 @@ extension FomraThemeContext on BuildContext {
   Color get fomraPageBg =>
       isDarkMode ? AppColors.darkBackground : AppColors.background;
 
-  Color get fomraSurface => Theme.of(this).colorScheme.surface;
+  /// Optional full-page gradient (dark dashboard background).
+  LinearGradient? get fomraPageGradient =>
+      isDarkMode ? AppColors.darkPageGradient : null;
+
+  Color get fomraSurface =>
+      isDarkMode ? AppColors.darkSurface : AppColors.surface;
 
   Color get fomraSurfaceVar =>
       isDarkMode ? AppColors.darkSurfaceVar : AppColors.surfaceVar;
@@ -16,7 +21,11 @@ extension FomraThemeContext on BuildContext {
   Color get fomraBorder =>
       isDarkMode ? AppColors.darkBorder : AppColors.border;
 
-  Color get fomraTextPrimary => Theme.of(this).colorScheme.onSurface;
+  Color get fomraDivider =>
+      isDarkMode ? AppColors.darkDivider : AppColors.border;
+
+  Color get fomraTextPrimary =>
+      isDarkMode ? AppColors.darkTextPrimary : AppColors.textPrimary;
 
   Color get fomraTextSecondary =>
       isDarkMode ? AppColors.darkTextSecondary : AppColors.textSecondary;
@@ -24,21 +33,22 @@ extension FomraThemeContext on BuildContext {
   Color get fomraTextTertiary =>
       isDarkMode ? AppColors.darkTextTertiary : AppColors.textTertiary;
 
-  List<BoxShadow> get fomraCardShadow => isDarkMode
-      ? const [
-          BoxShadow(
-            color: Color(0x40000000),
-            blurRadius: 12,
-            offset: Offset(0, 4),
-          ),
-        ]
-      : AppColors.cardShadow;
+  List<BoxShadow> get fomraCardShadow =>
+      isDarkMode ? AppColors.darkCardShadow : AppColors.cardShadow;
+
+  List<BoxShadow> get fomraElevatedShadow =>
+      isDarkMode ? AppColors.darkElevatedShadow : AppColors.elevatedShadow;
 
   Color get fomraHoverBg =>
-      isDarkMode ? const Color(0xFF334155) : const Color(0xFFF8FAFC);
+      isDarkMode ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC);
 
   Color get fomraIconChipBg =>
-      isDarkMode ? const Color(0xFF334155) : const Color(0xFFF1F5F9);
+      isDarkMode ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9);
 
-  LinearGradient get fomraHeroGradient => AppColors.heroGradient;
+  Color get fomraSidebarBg =>
+      isDarkMode ? AppColors.sidebarDark : AppColors.primary;
+
+  /// App bar / header chrome — blue gradient in light, dark wash in dark mode.
+  LinearGradient get fomraHeroGradient =>
+      isDarkMode ? AppColors.darkNavGradient : AppColors.heroGradient;
 }

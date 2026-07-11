@@ -26,29 +26,42 @@ class FomraAppShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final pageGradient = context.fomraPageGradient;
     final bg = backgroundColor ?? context.fomraPageBg;
 
-    return Scaffold(
-      backgroundColor: bg,
-      body: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          SizedBox(
-            height: double.infinity,
-            child: FomraSideNav(currentRoute: currentRoute),
-          ),
-          Expanded(
-            child: Scaffold(
-              backgroundColor: bg,
-              appBar: appBar,
-              primary: true,
-              body: body,
-              floatingActionButton: floatingActionButton,
-              floatingActionButtonLocation: floatingActionButtonLocation,
-              bottomNavigationBar: bottomNavigationBar,
+    Widget shellBody(Widget child) {
+      if (pageGradient != null) {
+        return DecoratedBox(
+          decoration: BoxDecoration(gradient: pageGradient),
+          child: child,
+        );
+      }
+      return ColoredBox(color: bg, child: child);
+    }
+
+    return shellBody(
+      Scaffold(
+        backgroundColor: Colors.transparent,
+        body: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SizedBox(
+              height: double.infinity,
+              child: FomraSideNav(currentRoute: currentRoute),
             ),
-          ),
-        ],
+            Expanded(
+              child: Scaffold(
+                backgroundColor: Colors.transparent,
+                appBar: appBar,
+                primary: true,
+                body: body,
+                floatingActionButton: floatingActionButton,
+                floatingActionButtonLocation: floatingActionButtonLocation,
+                bottomNavigationBar: bottomNavigationBar,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -2,62 +2,81 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 class AppColors {
-  // ── Brand ── Royal Blue (#2563EB) ─────────────────────────────────────────────
-  static const Color primary      = Color(0xFF2563EB);
-  static const Color primaryLight = Color(0xFF2563EB);
+  // ── Brand ── Fomra blue (#3B82F6) ────────────────────────────────────────────
+  static const Color primary      = Color(0xFF3B82F6);
+  static const Color primaryLight = Color(0xFF60A5FA);
   static const Color primaryDark  = Color(0xFF2563EB);
   static const Color secondary    = Color(0xFF8B5CF6); // violet-500 (purple accent)
-  static const Color accent       = Color(0xFF2563EB);
+  static const Color accent       = Color(0xFF3B82F6);
   static const Color accentLight  = Color(0xFFFBBF24);
   static const Color purple       = Color(0xFF8B5CF6);
+  static const Color cyan         = Color(0xFF06B6D4);
 
-  // ── Surface ───────────────────────────────────────────────────────────────────
+  // ── Surface (light) ─────────────────────────────────────────────────────────
   static const Color background   = Color(0xFFF8FAFC); // slate-50
   static const Color surface      = Color(0xFFFFFFFF);
   static const Color surfaceVar   = Color(0xFFF1F5F9); // slate-100
   static const Color border       = Color(0xFFE5E7EB); // gray-200
 
-  // ── Text ─────────────────────────────────────────────────────────────────────
+  // ── Text (light) ─────────────────────────────────────────────────────────────
   static const Color textPrimary   = Color(0xFF111827);
   static const Color textSecondary = Color(0xFF6B7280);
   static const Color textTertiary  = Color(0xFF9CA3AF);
 
-  // ── Dark surfaces ─────────────────────────────────────────────────────────────
-  static const Color darkBackground   = Color(0xFF0F172A); // slate-900
-  static const Color darkSurface      = Color(0xFF1E293B); // slate-800
-  static const Color darkSurfaceVar   = Color(0xFF273449);
-  static const Color darkBorder       = Color(0xFF334155); // slate-700
-  static const Color darkTextPrimary   = Color(0xFFF1F5F9);
+  // ── Dark surfaces (enterprise dashboard) ──────────────────────────────────────
+  static const Color darkBackground    = Color(0xFF0B1220);
+  static const Color darkBackgroundEnd = Color(0xFF111827);
+  static const Color darkSurface       = Color(0xFF161B22);
+  static const Color darkSurfaceVar    = Color(0xFF1C2128);
+  static const Color darkBorder        = Color(0xFF2A3441);
+  static const Color darkDivider       = Color(0xFF263241);
+  static const Color sidebarDark       = Color(0xFF0F172A);
+  static const Color darkNavBar        = Color(0xCC0F172A); // 80% matte nav
+  static const Color darkTextPrimary   = Color(0xFFF8FAFC);
   static const Color darkTextSecondary = Color(0xFF94A3B8);
   static const Color darkTextTertiary  = Color(0xFF64748B);
 
   /// Subtle modal scrim for centered dialogs — lighter than Flutter's default black54.
   static const Color modalScrim = Color(0x40000000); // black @ 25%
 
-  // ── Semantic ── aligned to design brief ───────────────────────────────────────
+  // ── Semantic ─────────────────────────────────────────────────────────────────
   static const Color success = Color(0xFF10B981); // emerald-500
   static const Color warning = Color(0xFFF59E0B); // amber-500
   static const Color error   = Color(0xFFEF4444); // red-500
-  static const Color info    = Color(0xFF2563EB); // blue-600
+  static const Color info    = Color(0xFF3B82F6);
 
   // ── Gradients ────────────────────────────────────────────────────────────────
   static const LinearGradient primaryGradient = LinearGradient(
-    colors: [Color(0xFF2563EB), Color(0xFF2563EB)],
+    colors: [Color(0xFF3B82F6), Color(0xFF2563EB)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
 
-  /// Header / hero surfaces — same blue as the sidebar active state.
+  /// Header / hero surfaces — blue gradient for light chrome.
   static const LinearGradient heroGradient = primaryGradient;
 
-  // ── Radius tokens ── design-brief scale, rounder cards ────────────────────────
+  /// Deep charcoal page background for dark dashboard.
+  static const LinearGradient darkPageGradient = LinearGradient(
+    colors: [darkBackground, darkBackgroundEnd],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+
+  /// Subtle dark navbar wash (used under backdrop blur).
+  static const LinearGradient darkNavGradient = LinearGradient(
+    colors: [Color(0xE60F172A), Color(0xD9111827)],
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+  );
+
+  // ── Radius tokens ───────────────────────────────────────────────────────────
   static const double radiusXs = 12; // chips, small controls
   static const double radiusSm = 16; // buttons, inputs
-  static const double radiusMd = 24; // cards (noticeably rounded)
-  static const double radiusLg = 28; // large cards, bottom sheets
-  static const double radiusXl = 32; // hero surfaces
+  static const double radiusMd = 20; // cards
+  static const double radiusLg = 24; // large cards, bottom sheets
+  static const double radiusXl = 28; // hero surfaces
 
-  // ── Shadow tokens ── soft but clearly visible depth ───────────────────────────
+  // ── Shadow tokens ─────────────────────────────────────────────────────────────
   static const List<BoxShadow> cardShadow = [
     BoxShadow(color: Color(0x18000000), blurRadius: 28, offset: Offset(0, 10)),
     BoxShadow(color: Color(0x0C000000), blurRadius: 8,  offset: Offset(0, 2)),
@@ -68,9 +87,20 @@ class AppColors {
     BoxShadow(color: Color(0x12000000), blurRadius: 12, offset: Offset(0, 4)),
   ];
 
+  /// Soft elevation for dark cards — no heavy glows.
+  static const List<BoxShadow> darkCardShadow = [
+    BoxShadow(color: Color(0x40000000), blurRadius: 16, offset: Offset(0, 4)),
+    BoxShadow(color: Color(0x1A000000), blurRadius: 4,  offset: Offset(0, 1)),
+  ];
+
+  static const List<BoxShadow> darkElevatedShadow = [
+    BoxShadow(color: Color(0x50000000), blurRadius: 24, offset: Offset(0, 8)),
+    BoxShadow(color: Color(0x26000000), blurRadius: 8,  offset: Offset(0, 2)),
+  ];
+
   static List<BoxShadow> coloredShadow(Color color) => [
-    BoxShadow(color: color.withValues(alpha: 0.26), blurRadius: 18, offset: const Offset(0, 7)),
-    BoxShadow(color: color.withValues(alpha: 0.12), blurRadius: 6,  offset: const Offset(0, 2)),
+    BoxShadow(color: color.withValues(alpha: 0.22), blurRadius: 14, offset: const Offset(0, 5)),
+    BoxShadow(color: color.withValues(alpha: 0.10), blurRadius: 4,  offset: const Offset(0, 1)),
   ];
 }
 
@@ -324,26 +354,27 @@ ThemeData appThemeDark() {
       secondary: AppColors.secondary,
       tertiary:  AppColors.accent,
       surface:   AppColors.darkSurface,
+      onSurface: AppColors.darkTextPrimary,
       error:     AppColors.error,
     ),
     scaffoldBackgroundColor: AppColors.darkBackground,
     appBarTheme: const AppBarTheme(
       backgroundColor: Colors.transparent,
-      foregroundColor: Colors.white,
+      foregroundColor: AppColors.darkTextPrimary,
       elevation: 0,
       scrolledUnderElevation: 0,
       centerTitle: false,
       systemOverlayStyle: SystemUiOverlayStyle.light,
       titleTextStyle: TextStyle(
         fontFamily: fontFamily,
-        color: Colors.white,
+        color: AppColors.darkTextPrimary,
         fontSize: 18,
         fontWeight: FontWeight.w700,
         letterSpacing: 0.1,
       ),
-      iconTheme: IconThemeData(color: Colors.white),
+      iconTheme: IconThemeData(color: AppColors.darkTextPrimary),
     ),
-    drawerTheme: const DrawerThemeData(backgroundColor: AppColors.darkSurface),
+    drawerTheme: const DrawerThemeData(backgroundColor: AppColors.sidebarDark),
     cardTheme: CardThemeData(
       color: AppColors.darkSurface,
       elevation: 0,
@@ -456,17 +487,17 @@ ThemeData appThemeDark() {
           borderRadius: BorderRadius.circular(AppColors.radiusMd)),
     ),
     snackBarTheme: SnackBarThemeData(
-      backgroundColor: AppColors.darkSurfaceVar,
+      backgroundColor: AppColors.darkSurface,
       contentTextStyle: const TextStyle(
           fontFamily: fontFamily,
-          color: Colors.white,
+          color: AppColors.darkTextPrimary,
           fontSize: 14),
       shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppColors.radiusSm)),
       behavior: SnackBarBehavior.floating,
     ),
     dividerTheme: const DividerThemeData(
-        color: AppColors.darkBorder, thickness: 1, space: 1),
+        color: AppColors.darkDivider, thickness: 1, space: 1),
     listTileTheme: const ListTileThemeData(
       contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
     ),

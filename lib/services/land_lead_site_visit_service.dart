@@ -43,6 +43,18 @@ class LandLeadSiteVisitService {
     return LandLeadSiteVisit.fromJson(row);
   }
 
+  static Future<List<LandLeadSiteVisit>> getPendingManagementVisits() async {
+    final rows = await _db
+        .from('land_lead_site_visits')
+        .select()
+        .eq('visit_type', LandLeadSiteVisitType.management.dbValue)
+        .eq('approval_status', SiteVisitApprovalStatus.pending.dbValue)
+        .order('visited_at', ascending: false);
+    return (rows as List)
+        .map((r) => LandLeadSiteVisit.fromJson(r as Map<String, dynamic>))
+        .toList();
+  }
+
   static Future<String?> findPendingManagementVisitId(String leadId) async {
     final row = await _db
         .from('land_lead_site_visits')

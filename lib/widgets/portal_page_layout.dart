@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
@@ -60,16 +62,33 @@ class FomraSubPageAppBar extends StatelessWidget implements PreferredSizeWidget 
 
   @override
   Widget build(BuildContext context) {
+    final isDark = context.isDarkMode;
     return AppBar(
-      flexibleSpace: Container(
-        decoration: BoxDecoration(gradient: context.fomraHeroGradient),
-      ),
+      flexibleSpace: isDark
+          ? ClipRect(
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: context.fomraHeroGradient,
+                    border: Border(
+                      bottom: BorderSide(
+                        color: context.fomraBorder.withValues(alpha: 0.65),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            )
+          : Container(decoration: BoxDecoration(gradient: context.fomraHeroGradient)),
       backgroundColor: Colors.transparent,
       surfaceTintColor: Colors.transparent,
       elevation: 0,
       scrolledUnderElevation: 0,
       automaticallyImplyLeading: false,
-      iconTheme: const IconThemeData(color: Colors.white),
+      iconTheme: IconThemeData(
+        color: isDark ? AppColors.darkTextPrimary : Colors.white,
+      ),
       leading: IconButton(
         icon: const Icon(Icons.arrow_back_rounded),
         onPressed: () => Navigator.maybePop(context),
@@ -300,9 +319,16 @@ class PortalFrostedTabBar extends StatelessWidget {
         ? Colors.white.withValues(alpha: 0.18)
         : context.fomraBorder;
     final indicator = onDarkBackground
-        ? const LinearGradient(
-            colors: [Color(0xFF2563EB), Color(0xFF2563EB)],
-          )
+        ? (context.isDarkMode
+            ? LinearGradient(
+                colors: [
+                  AppColors.primary.withValues(alpha: 0.85),
+                  AppColors.primary,
+                ],
+              )
+            : const LinearGradient(
+                colors: [Color(0xFF3B82F6), Color(0xFF2563EB)],
+              ))
         : null;
     final indicatorColor = onDarkBackground ? null : AppColors.primary;
 
