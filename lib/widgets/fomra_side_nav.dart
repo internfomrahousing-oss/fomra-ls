@@ -72,7 +72,8 @@ class _SideNavTokens {
   static const navButtonRadius = 15.0;
   static const navIconSize = 24.0;
   static const navItemGap = 14.0;
-  static const horizontalPad = 24.0;
+  static const horizontalPad = 14.0;
+  static const collapsedHorizontalPad = 10.0;
   static const verticalPad = 20.0;
   static const animDuration = Duration(milliseconds: 250);
   static const animCurve = Curves.easeOutCubic;
@@ -153,17 +154,12 @@ class _FomraSideNavState extends State<FomraSideNav> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _BrandHeader(expanded: _expanded),
-            Container(
-              height: 1,
-              margin: EdgeInsets.symmetric(
-                horizontal: _expanded ? _SideNavTokens.horizontalPad : 16,
-              ),
-              color: Colors.white.withValues(alpha: 0.14),
-            ),
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: _SideNavTokens.horizontalPad,
+                padding: EdgeInsets.symmetric(
+                  horizontal: _expanded
+                      ? _SideNavTokens.horizontalPad
+                      : _SideNavTokens.collapsedHorizontalPad,
                 ),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -183,10 +179,14 @@ class _FomraSideNavState extends State<FomraSideNav> {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(
-                _SideNavTokens.horizontalPad,
+              padding: EdgeInsets.fromLTRB(
+                _expanded
+                    ? _SideNavTokens.horizontalPad
+                    : _SideNavTokens.collapsedHorizontalPad,
                 0,
-                _SideNavTokens.horizontalPad,
+                _expanded
+                    ? _SideNavTokens.horizontalPad
+                    : _SideNavTokens.collapsedHorizontalPad,
                 _SideNavTokens.verticalPad,
               ),
               child: Column(
@@ -230,19 +230,30 @@ class _BrandHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedContainer(
-      duration: _SideNavTokens.animDuration,
-      curve: _SideNavTokens.animCurve,
-      padding: EdgeInsets.fromLTRB(
-        expanded ? _SideNavTokens.horizontalPad : 16,
-        _SideNavTokens.verticalPad,
-        expanded ? _SideNavTokens.horizontalPad : 16,
-        16,
+    return SizedBox(
+      height: kToolbarHeight,
+      child: AnimatedPadding(
+        duration: _SideNavTokens.animDuration,
+        curve: _SideNavTokens.animCurve,
+        padding: EdgeInsets.fromLTRB(
+          expanded
+              ? _SideNavTokens.horizontalPad
+              : _SideNavTokens.collapsedHorizontalPad,
+          0,
+          expanded
+              ? _SideNavTokens.horizontalPad
+              : _SideNavTokens.collapsedHorizontalPad,
+          0,
+        ),
+        child: Align(
+          alignment: expanded ? Alignment.centerLeft : Alignment.center,
+          child: FomraBrandLogo(
+            compact: !expanded,
+            showBackground: false,
+            height: expanded ? 44 : 36,
+          ),
+        ),
       ),
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.14),
-      ),
-      child: FomraBrandLogo(compact: !expanded),
     );
   }
 }
@@ -326,7 +337,9 @@ class _NavTileState extends State<_NavTile> {
           children: [
             if (active)
               Positioned(
-                left: expanded ? -_SideNavTokens.horizontalPad + 4 : -16,
+                left: expanded
+                    ? -_SideNavTokens.horizontalPad + 2
+                    : -_SideNavTokens.collapsedHorizontalPad + 2,
                 top: 16,
                 bottom: 16,
                 child: AnimatedContainer(

@@ -207,28 +207,15 @@ class ManagementExecutiveDashboard extends StatelessWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _HeroKpiStrip(leads: leads, isDesktop: isDesktop, isTablet: isTablet),
+            _DealTermsDonutCard(leads: leads),
             SizedBox(height: gap),
-            if (isDesktop)
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    flex: 8,
-                    child: _AcquisitionAnalyticsCard(leads: leads),
-                  ),
-                  SizedBox(width: gap),
-                  Expanded(
-                    flex: 4,
-                    child: _DealTermsDonutCard(leads: leads),
-                  ),
-                ],
-              )
-            else ...[
-              _AcquisitionAnalyticsCard(leads: leads),
-              SizedBox(height: gap),
-              _DealTermsDonutCard(leads: leads),
-            ],
+            _HeroKpiStrip(
+              leads: leads,
+              isDesktop: isDesktop,
+              isTablet: isTablet,
+            ),
+            SizedBox(height: gap),
+            _AcquisitionAnalyticsCard(leads: leads),
             SizedBox(height: gap),
             if (isDesktop)
               Row(
@@ -305,7 +292,7 @@ class _DashboardCard extends StatelessWidget {
   }
 }
 
-// ── Row 1: Hero KPI strip ─────────────────────────────────────────────────────
+// ── Row 2: Hero KPI strip ─────────────────────────────────────────────────────
 
 class _HeroKpiStrip extends StatelessWidget {
   final List<LandLead> leads;
@@ -321,33 +308,10 @@ class _HeroKpiStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final signed = _signedLeads(leads);
-    final total = leads.length;
-    final signedPct = total == 0 ? 0.0 : (signed.length / total) * 100;
-    final now = DateTime.now();
+    final signedPct =
+        leads.isEmpty ? 0.0 : (signed.length / leads.length) * 100;
 
     final kpiDefs = [
-      _CompactKpiDef(
-        label: 'Signed Leads',
-        filterLeads: signed,
-        allLeads: signed,
-        icon: Icons.verified_outlined,
-        accent: AppColors.success,
-        todayLabel: 'Today',
-        periodLabel: 'This month',
-        todayCount: (l) => l.where((x) => _isSameDay(x.addedOn, now)).length,
-        periodCount: (l) => l.where((x) => _isSameMonth(x.addedOn, now)).length,
-      ),
-      _CompactKpiDef(
-        label: 'Pending',
-        filterLeads:
-            _leadsWithStatus(leads, LeadStatus.prospectMeetingPending),
-        allLeads:
-            _leadsWithStatus(leads, LeadStatus.prospectMeetingPending),
-        icon: Icons.schedule_outlined,
-        accent: AppColors.warning,
-        todayLabel: 'Today',
-        periodLabel: 'This month',
-      ),
       _CompactKpiDef(
         label: 'Negotiation',
         filterLeads: _leadsWithStatus(leads, LeadStatus.negotiation),
@@ -366,48 +330,19 @@ class _HeroKpiStrip extends StatelessWidget {
         todayLabel: 'Today',
         periodLabel: 'This month',
       ),
-      _CompactKpiDef(
-        label: 'Registration',
-        filterLeads: signed,
-        allLeads: signed,
-        icon: Icons.assignment_turned_in_outlined,
-        accent: AppColors.primary,
-        todayLabel: 'Today',
-        periodLabel: 'Completed registrations',
-        subtitle: 'Completed registrations',
-      ),
     ];
 
-    final ring = _SignedLeadsRing(percent: signedPct, count: signed.length);
-    final kpiGrid = Wrap(
+    return Wrap(
       spacing: AppSpacing.md,
       runSpacing: AppSpacing.md,
+      crossAxisAlignment: WrapCrossAlignment.center,
       children: [
+        _SignedLeadsRing(percent: signedPct, count: signed.length),
         for (final def in kpiDefs)
           SizedBox(
-            width: isDesktop ? 180 : isTablet ? 200 : double.infinity,
+            width: isDesktop ? 220 : isTablet ? 240 : double.infinity,
             child: _CompactKpiCard(def: def),
           ),
-      ],
-    );
-
-    if (isDesktop) {
-      return Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(width: 140, child: ring),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(child: kpiGrid),
-        ],
-      );
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Center(child: ring),
-        const SizedBox(height: AppSpacing.md),
-        kpiGrid,
       ],
     );
   }
@@ -426,19 +361,9 @@ class _SignedLeadsRing extends StatelessWidget {
       duration: AppMotion.slow,
       curve: AppMotion.curve,
       builder: (context, animatedPct, _) {
-        return Container(
+        return SizedBox(
           width: 132,
           height: 132,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.primary.withValues(alpha: 0.28),
-                blurRadius: 18,
-                spreadRadius: 1,
-              ),
-            ],
-          ),
           child: Stack(
             alignment: Alignment.center,
             children: [
@@ -500,9 +425,6 @@ class _CompactKpiDef {
   final Color accent;
   final String todayLabel;
   final String periodLabel;
-  final String? subtitle;
-  final int Function(List<LandLead>)? todayCount;
-  final int Function(List<LandLead>)? periodCount;
 
   const _CompactKpiDef({
     required this.label,
@@ -512,9 +434,6 @@ class _CompactKpiDef {
     required this.accent,
     required this.todayLabel,
     required this.periodLabel,
-    this.subtitle,
-    this.todayCount,
-    this.periodCount,
   });
 }
 
@@ -527,9 +446,9 @@ class _CompactKpiCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final now = DateTime.now();
     final trend = _weekOverWeekCounts(def.allLeads);
-    final today = def.todayCount?.call(def.allLeads) ??
+    final today =
         def.allLeads.where((l) => _isSameDay(l.addedOn, now)).length;
-    final period = def.periodCount?.call(def.allLeads) ??
+    final period =
         def.allLeads.where((l) => _isSameMonth(l.addedOn, now)).length;
 
     return _DashboardCard(
@@ -571,14 +490,6 @@ class _CompactKpiCard extends StatelessWidget {
               color: context.fomraTextPrimary,
             ),
           ),
-          if (def.subtitle != null)
-            Text(
-              def.subtitle!,
-              style: TextStyle(
-                fontSize: 11,
-                color: context.fomraTextSecondary,
-              ),
-            ),
           const SizedBox(height: 10),
           Row(
             children: [
@@ -634,7 +545,7 @@ class _KpiMetaChip extends StatelessWidget {
   }
 }
 
-// ── Row 2: Acquisition Analytics ──────────────────────────────────────────────
+// ── Row 3: Acquisition Analytics ──────────────────────────────────────────────
 
 class _AcquisitionAnalyticsCard extends StatefulWidget {
   final List<LandLead> leads;
@@ -902,7 +813,7 @@ class _MomBadge extends StatelessWidget {
   }
 }
 
-// ── Row 2: Deal Terms Donut ───────────────────────────────────────────────────
+// ── Row 1: Deal Terms Donut ───────────────────────────────────────────────────
 
 class _DealTermsDonutCard extends StatefulWidget {
   final List<LandLead> leads;
@@ -1063,7 +974,7 @@ class _LegendChip extends StatelessWidget {
   }
 }
 
-// ── Row 3: District Performance ───────────────────────────────────────────────
+// ── Row 4: District Performance ───────────────────────────────────────────────
 
 enum _DistrictSort { district, acres, deals, rate }
 
@@ -1329,7 +1240,7 @@ class _DistrictTableRow extends StatelessWidget {
   }
 }
 
-// ── Row 3: Recent Activities ──────────────────────────────────────────────────
+// ── Row 4: Recent Activities ──────────────────────────────────────────────────
 
 class _RecentActivitiesCard extends StatelessWidget {
   final List<AppNotification> notifications;
@@ -1483,7 +1394,7 @@ class _ActivityTile extends StatelessWidget {
   }
 }
 
-// ── Row 4: Employee Leaderboard ─────────────────────────────────────────────
+// ── Row 5: Employee Leaderboard ─────────────────────────────────────────────
 
 class _EmployeeLeaderboardCard extends StatelessWidget {
   final List<PortalTeamPerf> teamRows;

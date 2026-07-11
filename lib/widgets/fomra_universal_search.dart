@@ -253,14 +253,14 @@ class _FomraUniversalSearchBarState extends State<FomraUniversalSearchBar> {
       borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.28)),
     );
     return InputDecoration(
-      hintText: 'Search leads, owners, tasks, pages…',
+      hintText: 'Search…',
       hintStyle: TextStyle(
-        fontSize: 13,
+        fontSize: 12,
         color: Colors.white.withValues(alpha: 0.65),
       ),
       prefixIcon: Icon(
         Icons.search_rounded,
-        size: 20,
+        size: 18,
         color: _focused ? Colors.white : Colors.white.withValues(alpha: 0.75),
       ),
       suffixIcon: _ctrl.text.isNotEmpty
@@ -277,7 +277,7 @@ class _FomraUniversalSearchBarState extends State<FomraUniversalSearchBar> {
       isDense: true,
       filled: true,
       fillColor: Colors.white.withValues(alpha: _focused ? 0.22 : 0.14),
-      contentPadding: const EdgeInsets.symmetric(vertical: 8),
+      contentPadding: const EdgeInsets.symmetric(vertical: 6),
       border: border,
       enabledBorder: border,
       focusedBorder: OutlineInputBorder(
@@ -302,7 +302,7 @@ class _FomraUniversalSearchBarState extends State<FomraUniversalSearchBar> {
           onChanged: _onChanged,
           textInputAction: TextInputAction.search,
           style: const TextStyle(
-            fontSize: 13,
+            fontSize: 12,
             color: Colors.white,
             fontWeight: FontWeight.w500,
           ),

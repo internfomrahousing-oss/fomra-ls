@@ -33,11 +33,15 @@ class FomraAppShell extends StatelessWidget {
       body: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          FomraSideNav(currentRoute: currentRoute),
+          SizedBox(
+            height: double.infinity,
+            child: FomraSideNav(currentRoute: currentRoute),
+          ),
           Expanded(
             child: Scaffold(
               backgroundColor: bg,
               appBar: appBar,
+              primary: true,
               body: body,
               floatingActionButton: floatingActionButton,
               floatingActionButtonLocation: floatingActionButtonLocation,

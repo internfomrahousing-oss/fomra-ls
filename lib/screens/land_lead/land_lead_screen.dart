@@ -1081,15 +1081,7 @@ class _LeadListRowState extends State<_LeadListRow> {
                     : context.fomraBorder.withValues(alpha: 0.8),
             width: hoverActive ? 1.5 : 1,
           ),
-          boxShadow: hoverActive
-              ? context.fomraCardShadow
-              : [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.04),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
+          boxShadow: context.fomraCardShadow,
         ),
         child: Material(
           color: Colors.transparent,

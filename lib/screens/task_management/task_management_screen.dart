@@ -197,18 +197,13 @@ Future<void> showCreateTaskSheet(
   BuildContext context, {
   String? leadId,
   String? leadLabel,
-  String? leadLocation,
 }) {
   final title = leadLabel != null && leadLabel.trim().isNotEmpty
       ? 'Follow up — ${leadLabel.trim()}'
       : leadId != null
           ? 'Follow up — Lead #$leadId'
           : null;
-  final description = [
-    if (leadId != null) 'Lead #$leadId',
-    if (leadLocation != null && leadLocation.trim().isNotEmpty)
-      leadLocation.trim(),
-  ].join('\n');
+  final description = leadId != null ? 'Lead #$leadId' : null;
 
   return showModalBottomSheet(
     context: context,
@@ -216,7 +211,7 @@ Future<void> showCreateTaskSheet(
     backgroundColor: Colors.transparent,
     builder: (_) => _AddTaskSheet(
       initialTitle: title,
-      initialDescription: description.isEmpty ? null : description,
+      initialDescription: description,
       linkModule: leadId != null ? 'land_lead:$leadId' : null,
       onSave: (task) {
         sharedTasks.insert(0, task);

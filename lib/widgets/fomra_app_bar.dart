@@ -111,13 +111,18 @@ class FomraAppBar extends StatelessWidget implements PreferredSizeWidget {
                       color: Colors.white.withValues(alpha: 0.9))),
             ),
           ],
-          if (showUniversalSearch) ...[
-            const SizedBox(width: 16),
-            const Expanded(child: FomraUniversalSearchBar()),
-          ],
         ],
       ),
       actions: [
+        if (showUniversalSearch) ...[
+          Padding(
+            padding: const EdgeInsets.only(right: 4),
+            child: SizedBox(
+              width: MediaQuery.sizeOf(context).width >= 900 ? 260 : 200,
+              child: const FomraUniversalSearchBar(),
+            ),
+          ),
+        ],
         ...?actions,
         const FomraThemeToggle(),
       ],

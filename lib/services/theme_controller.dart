@@ -9,21 +9,30 @@ class ThemeController {
   static const _key = 'theme_mode';
 
   /// Listenable theme mode — drive [MaterialApp.themeMode] off this.
-  final ValueNotifier<ThemeMode> mode = ValueNotifier(ThemeMode.light);
+  final ValueNotifier<ThemeMode> mode = ValueNotifier(ThemeMode.system);
 
   bool get isDark => mode.value == ThemeMode.dark;
 
   /// Restore the saved theme. Call once before the app builds.
   Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
-    mode.value =
-        prefs.getString(_key) == 'dark' ? ThemeMode.dark : ThemeMode.light;
+    mode.value = switch (prefs.getString(_key)) {
+      'dark' => ThemeMode.dark,
+      'light' => ThemeMode.light,
+      _ => ThemeMode.system,
+    };
   }
 
   Future<void> setDark(bool dark) async {
     mode.value = dark ? ThemeMode.dark : ThemeMode.light;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_key, dark ? 'dark' : 'light');
+  }
+
+  Future<void> setSystem() async {
+    mode.value = ThemeMode.system;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_key, 'system');
   }
 
   Future<void> toggle() => setDark(!isDark);

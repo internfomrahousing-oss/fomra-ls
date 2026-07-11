@@ -228,7 +228,6 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
       context,
       leadId: lead.leadId,
       leadLabel: lead.ownerName.trim().isNotEmpty ? lead.ownerName.trim() : null,
-      leadLocation: lead.location,
     );
     if (mounted) setState(() {});
   }
@@ -582,10 +581,10 @@ class _ProfilePanel extends StatelessWidget {
           border: Border.all(color: context.fomraBorder),
           boxShadow: context.fomraCardShadow,
         ),
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
               Container(
                 padding: const EdgeInsets.fromLTRB(18, 18, 12, 16),
                 decoration: BoxDecoration(
@@ -959,7 +958,7 @@ class _WorkspacePanel extends StatelessWidget {
               ),
               const SizedBox(height: 10),
               Text(
-                'View-only for management. Use Create Task on the left to assign work.',
+                'View-only for management. Summary counts and full activity history below.',
                 style: TextStyle(
                   fontSize: 12,
                   color: context.fomraTextSecondary,
@@ -972,63 +971,73 @@ class _WorkspacePanel extends StatelessWidget {
               callMetrics: callMetrics,
             ),
             const SizedBox(height: 14),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-              decoration: BoxDecoration(
-                color: context.fomraSurfaceVar.withValues(alpha: 0.7),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: TabBar(
-                controller: tabController,
-                isScrollable: true,
-                tabAlignment: TabAlignment.start,
-                dividerColor: Colors.transparent,
-                labelColor: AppColors.purple,
-                unselectedLabelColor: context.fomraTextSecondary,
-                indicator: BoxDecoration(
-                  color: context.fomraSurface,
-                  borderRadius: BorderRadius.circular(10),
-                  boxShadow: context.fomraCardShadow,
+            if (readOnly) ...[
+              Expanded(
+                child: _ActivityTimeline(
+                  lead: lead,
+                  callLogs: callLogs,
+                  siteVisits: siteVisits,
                 ),
-                indicatorSize: TabBarIndicatorSize.tab,
-                labelPadding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                labelStyle: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
+              ),
+            ] else ...[
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                decoration: BoxDecoration(
+                  color: context.fomraSurfaceVar.withValues(alpha: 0.7),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                tabs: [for (final t in tabs) Tab(text: t, height: 34)],
+                child: TabBar(
+                  controller: tabController,
+                  isScrollable: true,
+                  tabAlignment: TabAlignment.start,
+                  dividerColor: Colors.transparent,
+                  labelColor: AppColors.purple,
+                  unselectedLabelColor: context.fomraTextSecondary,
+                  indicator: BoxDecoration(
+                    color: context.fomraSurface,
+                    borderRadius: BorderRadius.circular(10),
+                    boxShadow: context.fomraCardShadow,
+                  ),
+                  indicatorSize: TabBarIndicatorSize.tab,
+                  labelPadding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  labelStyle: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                  tabs: [for (final t in tabs) Tab(text: t, height: 34)],
+                ),
               ),
-            ),
-            const SizedBox(height: 10),
-            Expanded(
-              child: TabBarView(
-                controller: tabController,
-                children: [
-                  _ActivityTimeline(
-                    lead: lead,
-                    callLogs: callLogs,
-                    siteVisits: siteVisits,
-                  ),
-                  _SitePhotosTab(lead: lead),
-                  _LazyMarketIntelTab(
-                    active: shouldLoadMiTab(2),
-                    lead: lead,
-                    section: MarketIntelLeadSection.infrastructure,
-                  ),
-                  _LazyMarketIntelTab(
-                    active: shouldLoadMiTab(3),
-                    lead: lead,
-                    section: MarketIntelLeadSection.landRecords,
-                  ),
-                  _LazyMarketIntelTab(
-                    active: shouldLoadMiTab(4),
-                    lead: lead,
-                    section: MarketIntelLeadSection.competitorProjects,
-                  ),
-                ],
+              const SizedBox(height: 10),
+              Expanded(
+                child: TabBarView(
+                  controller: tabController,
+                  children: [
+                    _ActivityTimeline(
+                      lead: lead,
+                      callLogs: callLogs,
+                      siteVisits: siteVisits,
+                    ),
+                    _SitePhotosTab(lead: lead),
+                    _LazyMarketIntelTab(
+                      active: shouldLoadMiTab(2),
+                      lead: lead,
+                      section: MarketIntelLeadSection.infrastructure,
+                    ),
+                    _LazyMarketIntelTab(
+                      active: shouldLoadMiTab(3),
+                      lead: lead,
+                      section: MarketIntelLeadSection.landRecords,
+                    ),
+                    _LazyMarketIntelTab(
+                      active: shouldLoadMiTab(4),
+                      lead: lead,
+                      section: MarketIntelLeadSection.competitorProjects,
+                    ),
+                  ],
+                ),
               ),
-            ),
+            ],
           ],
         ),
       ),
@@ -1448,38 +1457,81 @@ class _LeadDetailsList extends StatelessWidget {
         (lead.ownershipLabel, lead.createdByName),
     ];
 
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final useTwoColumns = constraints.maxWidth >= 360;
+        if (!useTwoColumns) {
+          return _LeadDetailsColumn(rows: rows);
+        }
+        final split = (rows.length / 2).ceil();
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: _LeadDetailsColumn(rows: rows.sublist(0, split)),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: _LeadDetailsColumn(rows: rows.sublist(split)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _LeadDetailsColumn extends StatelessWidget {
+  final List<(String, String)> rows;
+
+  const _LeadDetailsColumn({required this.rows});
+
+  @override
+  Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         for (final row in rows)
           Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SizedBox(
-                  width: 120,
-                  child: Text(
-                    row.$1,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: context.fomraTextSecondary,
-                    ),
-                  ),
-                ),
-                Expanded(
-                  child: Text(
-                    row.$2,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: context.fomraTextPrimary,
-                    ),
-                  ),
-                ),
-              ],
+            padding: const EdgeInsets.only(bottom: 8),
+            child: _LeadDetailRow(label: row.$1, value: row.$2),
+          ),
+      ],
+    );
+  }
+}
+
+class _LeadDetailRow extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _LeadDetailRow({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 92,
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: context.fomraTextSecondary,
             ),
           ),
+        ),
+        Expanded(
+          child: Text(
+            value,
+            style: TextStyle(
+              fontSize: 12,
+              color: context.fomraTextPrimary,
+            ),
+          ),
+        ),
       ],
     );
   }

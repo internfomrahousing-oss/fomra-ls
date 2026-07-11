@@ -4,18 +4,42 @@ import 'package:flutter/material.dart';
 class FomraBrandLogo extends StatelessWidget {
   final bool compact;
   final double? height;
+  final bool showBackground;
 
   const FomraBrandLogo({
     super.key,
     this.compact = false,
     this.height,
+    this.showBackground = true,
   });
 
   static const _assetPath = 'assets/images/fomra_logo.png';
 
   @override
   Widget build(BuildContext context) {
-    final h = height ?? (compact ? 44.0 : 56.0);
+    final h = height ?? (compact ? 40.0 : 48.0);
+
+    final logo = Image.asset(
+      _assetPath,
+      fit: BoxFit.contain,
+      alignment: compact ? Alignment.center : Alignment.centerLeft,
+      filterQuality: FilterQuality.high,
+      errorBuilder: (_, __, ___) => _VectorFallback(
+        compact: compact,
+        lightOnDark: !showBackground,
+      ),
+    );
+
+    if (!showBackground) {
+      return SizedBox(
+        height: h,
+        width: compact ? h : double.infinity,
+        child: Align(
+          alignment: compact ? Alignment.center : Alignment.centerLeft,
+          child: logo,
+        ),
+      );
+    }
 
     return Container(
       height: h,
@@ -36,23 +60,21 @@ class FomraBrandLogo extends StatelessWidget {
         ],
       ),
       alignment: compact ? Alignment.center : Alignment.centerLeft,
-      child: Image.asset(
-        _assetPath,
-        fit: BoxFit.contain,
-        alignment: compact ? Alignment.center : Alignment.centerLeft,
-        filterQuality: FilterQuality.high,
-        errorBuilder: (_, __, ___) => _VectorFallback(compact: compact),
-      ),
+      child: logo,
     );
   }
 }
 
 class _VectorFallback extends StatelessWidget {
   final bool compact;
+  final bool lightOnDark;
 
-  const _VectorFallback({required this.compact});
+  const _VectorFallback({
+    required this.compact,
+    this.lightOnDark = false,
+  });
 
-  static const Color _ink = Color(0xFF1A1A1A);
+  Color get _ink => lightOnDark ? Colors.white : const Color(0xFF1A1A1A);
 
   @override
   Widget build(BuildContext context) {
@@ -74,7 +96,7 @@ class _VectorFallback extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              const Text(
+              Text(
                 'FOMRA',
                 style: TextStyle(
                   fontSize: 22,

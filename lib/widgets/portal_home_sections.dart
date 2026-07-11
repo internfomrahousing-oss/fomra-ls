@@ -558,16 +558,18 @@ class _QuickActionCardState extends State<_QuickActionCard> {
 
   static const _motion = Duration(milliseconds: 190);
   static const _curve = Curves.easeInOut;
-  static const _borderColor = Color(0xFFE5E7EB);
 
   PortalQuickAction get data => widget.data;
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final cardColor = isDark ? context.fomraSurface : Colors.white;
+    final isDark = context.isDarkMode;
+    final cardColor = context.fomraSurface;
+    final borderColor = context.fomraBorder;
     final iconTint = data.accent.withValues(alpha: _hovered ? 0.18 : 0.12);
-    final shadowAlpha = _hovered ? 0.12 : 0.08;
+    final shadowAlpha = isDark
+        ? (_hovered ? 0.35 : 0.22)
+        : (_hovered ? 0.12 : 0.08);
     final shadowBlur = _hovered ? 32.0 : 24.0;
     final shadowOffset = _hovered ? 12.0 : 8.0;
 
@@ -585,7 +587,7 @@ class _QuickActionCardState extends State<_QuickActionCard> {
           decoration: BoxDecoration(
             color: cardColor,
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: _borderColor, width: 1),
+            border: Border.all(color: borderColor, width: 1),
             boxShadow: [
               BoxShadow(
                 color: const Color(0xFF0F172A).withValues(alpha: shadowAlpha),
@@ -691,6 +693,54 @@ class PortalTeamPerf {
       );
 }
 
+int _leadStatusPerformanceWeight(LeadStatus status) {
+  return switch (status) {
+    LeadStatus.signed => 100,
+    LeadStatus.legal => 80,
+    LeadStatus.negotiation => 65,
+    LeadStatus.prospectMeetingCompleted => 45,
+    LeadStatus.prospectMeetingPending => 25,
+    LeadStatus.dropped => 0,
+  };
+}
+
+double _conversionScore(List<LandLead> leads) {
+  if (leads.isEmpty) return 0;
+  final signed = leads.where((l) => l.status == LeadStatus.signed).length;
+  return signed / leads.length;
+}
+
+double _statusScore(List<LandLead> leads) {
+  if (leads.isEmpty) return 0;
+  final sum = leads.fold<double>(
+    0,
+    (acc, lead) => acc + _leadStatusPerformanceWeight(lead.status),
+  );
+  return (sum / leads.length) / 100;
+}
+
+double _compositePerformanceScore({
+  required List<LandLead> leads,
+  required int maxCount,
+}) {
+  final conversionScore = _conversionScore(leads);
+  final statusScore = _statusScore(leads);
+  final volumeScore = maxCount == 0 ? 0.0 : leads.length / maxCount;
+  return (0.40 * conversionScore +
+          0.35 * statusScore +
+          0.25 * volumeScore)
+      .clamp(0.0, 1.0);
+}
+
+(String, StatusTone) _performanceStatusFromScore(double score) {
+  return switch (score) {
+    >= 0.80 => ('Top performer', StatusTone.success),
+    >= 0.55 => ('On track', StatusTone.primary),
+    >= 0.30 => ('Needs boost', StatusTone.warning),
+    _ => ('Low activity', StatusTone.danger),
+  };
+}
+
 List<PortalTeamPerf> buildPortalTeamPerformance(List<LandLead> leads) {
   final employeeMap = <String, String>{};
   for (final employee in AppStore.instance.employees) {
@@ -715,25 +765,23 @@ List<PortalTeamPerf> buildPortalTeamPerformance(List<LandLead> leads) {
     final total = personLeads.length;
     final today =
         personLeads.where((l) => portalIsSameDay(l.addedOn, now)).length;
-    final pct = (total / maxCount).clamp(0.0, 1.0);
-    final status = switch (pct) {
-      >= 0.8 => ('Top performer', StatusTone.success),
-      >= 0.55 => ('On track', StatusTone.primary),
-      >= 0.3 => ('Needs boost', StatusTone.warning),
-      _ => ('Low activity', StatusTone.danger),
-    };
+    final composite = _compositePerformanceScore(
+      leads: personLeads,
+      maxCount: maxCount,
+    );
+    final status = _performanceStatusFromScore(composite);
     return PortalTeamPerf(
       name: entry.key,
       designation: employeeMap[entry.key] ?? '',
       total: total,
       today: today,
-      percent: pct,
+      percent: composite,
       rank: 0,
       statusLabel: status.$1,
       tone: status.$2,
     );
   }).toList()
-    ..sort((a, b) => b.total.compareTo(a.total));
+    ..sort((a, b) => b.percent.compareTo(a.percent));
 
   for (var i = 0; i < rows.length; i++) {
     rows[i] = rows[i].copyWith(rank: i + 1);
@@ -1495,14 +1543,14 @@ class _PortalProfileMenuItemState extends State<_PortalProfileMenuItem> {
   bool _hovered = false;
 
   static const _destructive = Color(0xFFDC2626);
-  static const _hoverBg = Color(0xFFF8FAFC);
-  static const _iconBg = Color(0xFFF1F5F9);
 
   @override
   Widget build(BuildContext context) {
     final accent =
         widget.destructive ? _destructive : context.fomraTextPrimary;
     final iconColor = widget.destructive ? _destructive : AppColors.primary;
+    final hoverBg = context.fomraHoverBg;
+    final iconBg = context.fomraIconChipBg;
 
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
@@ -1519,7 +1567,7 @@ class _PortalProfileMenuItemState extends State<_PortalProfileMenuItem> {
             height: widget.subtitle == null ? 50 : 52,
             padding: const EdgeInsets.symmetric(horizontal: 8),
             decoration: BoxDecoration(
-              color: _hovered ? _hoverBg : Colors.transparent,
+              color: _hovered ? hoverBg : Colors.transparent,
               borderRadius: BorderRadius.circular(12),
             ),
             child: Row(
@@ -1534,7 +1582,7 @@ class _PortalProfileMenuItemState extends State<_PortalProfileMenuItem> {
                     decoration: BoxDecoration(
                       color: widget.destructive
                           ? _destructive.withValues(alpha: 0.08)
-                          : _iconBg,
+                          : iconBg,
                       borderRadius: BorderRadius.circular(10),
                     ),
                     alignment: Alignment.center,

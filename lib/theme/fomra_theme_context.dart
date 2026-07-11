@@ -34,5 +34,11 @@ extension FomraThemeContext on BuildContext {
         ]
       : AppColors.cardShadow;
 
+  Color get fomraHoverBg =>
+      isDarkMode ? const Color(0xFF334155) : const Color(0xFFF8FAFC);
+
+  Color get fomraIconChipBg =>
+      isDarkMode ? const Color(0xFF334155) : const Color(0xFFF1F5F9);
+
   LinearGradient get fomraHeroGradient => AppColors.heroGradient;
 }
