@@ -12,6 +12,10 @@ import '../../widgets/fomra_breadcrumb.dart';
 import '../../widgets/ui/app_components.dart';
 import '../market_intelligence/market_intelligence_screen.dart';
 import 'add_lead_screen.dart';
+import 'calls_log_dialog.dart';
+import 'legal_documents_dialog.dart';
+import 'meeting_log_dialog.dart';
+import 'site_visit_dialog.dart';
 
 int _leadAgeDaysFromReceived(DateTime receivedOn) {
   final received = receivedOn.toLocal();
@@ -211,6 +215,66 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
   }
 
   Future<void> _showActionDialog(String label) async {
+    if (label == 'Calls') {
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => CallsLogDialog(
+          leadId: lead.leadId,
+          ownerName: lead.ownerName,
+        ),
+      );
+      return;
+    }
+
+    if (label == 'Site visit') {
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => SiteVisitDialog(
+          leadId: lead.leadId,
+          onVisitDone: () {
+            if (lead.status == LeadStatus.prospectMeetingPending) {
+              _changeStatus(LeadStatus.prospectMeetingCompleted);
+            }
+          },
+        ),
+      );
+      return;
+    }
+
+    if (label == 'Management site visit') {
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => SiteVisitDialog.management(
+          leadId: lead.leadId,
+        ),
+      );
+      return;
+    }
+
+    if (label == 'Meeting') {
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => MeetingLogDialog(
+          leadId: lead.leadId,
+          ownerName: lead.ownerName,
+          onMeetingSaved: () {
+            if (lead.status == LeadStatus.prospectMeetingPending) {
+              _changeStatus(LeadStatus.prospectMeetingCompleted);
+            }
+          },
+        ),
+      );
+      return;
+    }
+
+    if (label == 'Legal') {
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => LegalDocumentsDialog(leadId: lead.leadId),
+      );
+      return;
+    }
+
     final icon = switch (label) {
       'Notes' => Icons.sticky_note_2_outlined,
       'Calls' => Icons.call_outlined,
@@ -1191,7 +1255,21 @@ class _LeadInfoGrid extends StatelessWidget {
           ),
         Padding(
           padding: const EdgeInsets.only(bottom: 10),
-          child: _MetaCell(label: 'Last Note', value: _lastNote),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: _MetaCell(label: 'Last Note', value: _lastNote),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _MetaCell(
+                  label: 'Current Date & Time',
+                  value: _formatReceivedOn(DateTime.now()),
+                ),
+              ),
+            ],
+          ),
         ),
         for (var i = 4; i < pairs.length; i += 2)
           Padding(

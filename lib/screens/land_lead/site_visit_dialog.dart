@@ -1,0 +1,376 @@
+import 'package:flutter/material.dart';
+
+import '../../models/land_lead_site_visit.dart';
+import '../../services/land_lead_site_visit_service.dart';
+import '../../theme/app_theme.dart';
+import '../../theme/fomra_theme_context.dart';
+import 'calls_log_dialog.dart';
+
+class SiteVisitDialog extends StatefulWidget {
+  final String leadId;
+  final LandLeadSiteVisitType visitType;
+  final VoidCallback? onVisitDone;
+
+  const SiteVisitDialog({
+    super.key,
+    required this.leadId,
+    this.visitType = LandLeadSiteVisitType.employee,
+    this.onVisitDone,
+  });
+
+  const SiteVisitDialog.management({
+    super.key,
+    required this.leadId,
+    this.onVisitDone,
+  }) : visitType = LandLeadSiteVisitType.management;
+
+  @override
+  State<SiteVisitDialog> createState() => _SiteVisitDialogState();
+}
+
+class _SiteVisitDialogState extends State<SiteVisitDialog> {
+  late DateTime _visitedAt = DateTime.now();
+  bool _saving = false;
+  bool _loading = true;
+  List<LandLeadSiteVisit> _visits = [];
+
+  bool get _isManagement =>
+      widget.visitType == LandLeadSiteVisitType.management;
+
+  String get _title =>
+      _isManagement ? 'Management site visit' : 'Site visit';
+
+  IconData get _headerIcon => _isManagement
+      ? Icons.apartment_outlined
+      : Icons.location_on_outlined;
+
+  String get _doneLabel => _isManagement
+      ? 'Management site visited'
+      : 'Site visit done';
+
+  String get _successMessage => _isManagement
+      ? 'Management site visit recorded'
+      : 'Site visit marked as done';
+
+  String get _previousLabel => _isManagement
+      ? 'Previous management visits'
+      : 'Previous site visits';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadVisits();
+  }
+
+  Future<void> _loadVisits() async {
+    try {
+      final visits = await LandLeadSiteVisitService.getForLead(
+        widget.leadId,
+        visitType: widget.visitType,
+      );
+      if (mounted) setState(() => _visits = visits);
+    } catch (_) {
+      // Table may not exist yet.
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _editDateTime() async {
+    final now = DateTime.now();
+    final date = await showDatePicker(
+      context: context,
+      initialDate: _visitedAt,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(now.year + 1),
+    );
+    if (date == null || !mounted) return;
+
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(_visitedAt),
+    );
+    if (time == null || !mounted) return;
+
+    setState(() {
+      _visitedAt = DateTime(
+        date.year,
+        date.month,
+        date.day,
+        time.hour,
+        time.minute,
+      );
+    });
+  }
+
+  Future<void> _markDone() async {
+    if (_saving) return;
+
+    setState(() => _saving = true);
+    try {
+      final visit = await LandLeadSiteVisitService.markDone(
+        leadId: widget.leadId,
+        visitedAt: _visitedAt,
+        visitType: widget.visitType,
+      );
+      if (!mounted) return;
+      setState(() {
+        _visits = [visit, ..._visits];
+        _visitedAt = DateTime.now();
+      });
+      widget.onVisitDone?.call();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(_successMessage)),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not save site visit: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      backgroundColor: context.fomraSurface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 440, maxHeight: 520),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 18, 12, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: AppColors.purple.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    alignment: Alignment.center,
+                    child: Icon(
+                      _headerIcon,
+                      color: AppColors.purple,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _title,
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            color: context.fomraTextPrimary,
+                          ),
+                        ),
+                        Text(
+                          'Lead #${widget.leadId}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: context.fomraTextSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Flexible(
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _DateTimeField(
+                        value: formatCallDateTime(_visitedAt),
+                        onEdit: _editDateTime,
+                      ),
+                      if (_loading)
+                        const Padding(
+                          padding: EdgeInsets.only(top: 16),
+                          child: Center(
+                            child: SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          ),
+                        )
+                      else if (_visits.isNotEmpty) ...[
+                        const SizedBox(height: 18),
+                        Text(
+                          _previousLabel,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: context.fomraTextSecondary,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        for (final visit in _visits.take(5))
+                          _PreviousVisitTile(visit: visit),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Close'),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton.icon(
+                    onPressed: _saving ? null : _markDone,
+                    icon: _saving
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(Icons.check_circle_outline, size: 18),
+                    label: Text(_saving ? 'Saving…' : _doneLabel),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.purple,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 10,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DateTimeField extends StatelessWidget {
+  final String value;
+  final VoidCallback onEdit;
+
+  const _DateTimeField({required this.value, required this.onEdit});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
+      decoration: BoxDecoration(
+        color: context.fomraSurfaceVar.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: context.fomraBorder),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Date & time',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.4,
+                    color: context.fomraTextSecondary,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: context.fomraTextPrimary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          TextButton.icon(
+            onPressed: onEdit,
+            icon: const Icon(Icons.edit_outlined, size: 16),
+            label: const Text('Edit'),
+            style: TextButton.styleFrom(
+              foregroundColor: AppColors.purple,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PreviousVisitTile extends StatelessWidget {
+  final LandLeadSiteVisit visit;
+
+  const _PreviousVisitTile({required this.visit});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        border: Border.all(color: context.fomraBorder),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.check_circle, size: 16, color: AppColors.purple),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  formatCallDateTime(visit.visitedAt),
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: context.fomraTextPrimary,
+                  ),
+                ),
+                if (visit.loggedByName.isNotEmpty)
+                  Text(
+                    visit.loggedByName,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: context.fomraTextSecondary,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
