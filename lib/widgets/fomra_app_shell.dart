@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../theme/fomra_theme_context.dart';
 import 'fomra_side_nav.dart';
-import 'fomra_universal_search.dart';
 
 /// App layout with a persistent left navigation rail and main content area.
 class FomraAppShell extends StatelessWidget {
@@ -13,7 +12,6 @@ class FomraAppShell extends StatelessWidget {
   final Widget? floatingActionButton;
   final FloatingActionButtonLocation? floatingActionButtonLocation;
   final Widget? bottomNavigationBar;
-  final bool showUniversalSearch;
 
   const FomraAppShell({
     super.key,
@@ -24,7 +22,6 @@ class FomraAppShell extends StatelessWidget {
     this.floatingActionButton,
     this.floatingActionButtonLocation,
     this.bottomNavigationBar,
-    this.showUniversalSearch = true,
   });
 
   @override
@@ -41,13 +38,7 @@ class FomraAppShell extends StatelessWidget {
             child: Scaffold(
               backgroundColor: bg,
               appBar: appBar,
-              body: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  if (showUniversalSearch) const FomraUniversalSearchBar(),
-                  Expanded(child: body),
-                ],
-              ),
+              body: body,
               floatingActionButton: floatingActionButton,
               floatingActionButtonLocation: floatingActionButtonLocation,
               bottomNavigationBar: bottomNavigationBar,

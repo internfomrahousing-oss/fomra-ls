@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../models/add_lead_result.dart';
 import '../../models/land_lead.dart';
 import '../../models/employee_profile.dart';
 import '../../services/app_store.dart';
@@ -19,6 +18,7 @@ import '../../widgets/ui/app_components.dart';
 import 'add_lead_screen.dart';
 import 'lead_detail_screen.dart';
 import 'leads_map_screen.dart';
+import 'meeting_log_dialog.dart';
 
 class LandLeadScreen extends StatefulWidget {
   final bool isTab;
@@ -450,7 +450,7 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
                       const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
-                        colors: [Color(0xFF1D4ED8), Color(0xFF3B82F6)]),
+                        colors: [Color(0xFF2563EB), Color(0xFF2563EB)]),
                     borderRadius: BorderRadius.circular(999),
                     boxShadow: canAssign
                         ? AppColors.coloredShadow(AppColors.primary)
@@ -568,47 +568,53 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
       slivers.add(
         SliverPadding(
           padding: pagePad.copyWith(top: 12, bottom: 96),
-          sliver: SliverToBoxAdapter(
-            child: AppCard(
-              padding: EdgeInsets.zero,
-              radius: AppColors.radiusMd,
-              interactive: false,
-              child: Column(
-                children: [
-                  for (var i = 0; i < _filtered.length; i++)
-                    Dismissible(
-                      key: ValueKey(_filtered[i].leadId),
-                      direction: _selectMode
-                          ? DismissDirection.none
-                          : DismissDirection.endToStart,
-                      confirmDismiss: (_) => _confirmAndDelete(_filtered[i]),
-                      background: Container(
+          sliver: SliverList(
+            delegate: SliverChildBuilderDelegate(
+              (context, i) {
+                final lead = _filtered[i];
+                return Padding(
+                  padding: EdgeInsets.only(
+                    bottom: i < _filtered.length - 1 ? 8 : 0,
+                  ),
+                  child: Dismissible(
+                    key: ValueKey(lead.leadId),
+                    direction: _selectMode
+                        ? DismissDirection.none
+                        : DismissDirection.endToStart,
+                    confirmDismiss: (_) => _confirmAndDelete(lead),
+                    background: Container(
+                      decoration: BoxDecoration(
                         color: AppColors.error,
-                        alignment: Alignment.centerRight,
-                        padding: const EdgeInsets.only(right: 20),
-                        child: const Icon(Icons.delete_outline,
-                            color: Colors.white, size: 22),
+                        borderRadius: BorderRadius.circular(18),
                       ),
-                      child: _LeadListRow(
-                        lead: _filtered[i],
-                        showDivider: i < _filtered.length - 1,
-                        selectionMode: _selectMode,
-                        selected:
-                            _selectedLeadIds.contains(_filtered[i].leadId),
-                        onTap: _selectMode
-                            ? () => _toggleLeadSelected(_filtered[i])
-                            : () => Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => LeadDetailScreen(
-                                      lead: _filtered[i],
-                                    ),
-                                  ),
-                                ),
-                      ),
+                      alignment: Alignment.centerRight,
+                      padding: const EdgeInsets.only(right: 20),
+                      child: const Icon(Icons.delete_outline,
+                          color: Colors.white, size: 22),
                     ),
-                ],
-              ),
+                    child: _LeadListRow(
+                      lead: lead,
+                      isManagement: _isManagement,
+                      selectionMode: _selectMode,
+                      selected: _selectedLeadIds.contains(lead.leadId),
+                      onTap: _selectMode
+                          ? () => _toggleLeadSelected(lead)
+                          : () => _openLeadDetail(lead),
+                      onView: () => _openLeadDetail(lead),
+                      onAssign: _isManagement
+                          ? () => _assignSingleLead(lead)
+                          : null,
+                      onScheduleMeeting: () => _openMeetingForLead(lead),
+                      onViewMap: () => _openLeadsMapFor(lead),
+                      onEdit: _isManagement
+                          ? null
+                          : () => _editLead(lead),
+                      onDelete: () => _confirmAndDelete(lead),
+                    ),
+                  ),
+                );
+              },
+              childCount: _filtered.length,
             ),
           ),
         ),
@@ -678,32 +684,18 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
 
   Future<void> _openAddLead() async {
     if (_isManagement) return;
-    final result = await Navigator.push<AddLeadResult>(
+    final saved = await Navigator.push<LandLead>(
       context,
       MaterialPageRoute(builder: (_) => const AddLeadScreen()),
     );
-    if (result == null) return;
+    if (saved == null) return;
 
-    try {
-      final saved = await LandLeadService.create(
-        result.lead,
-        sitePhotoBytes: result.sitePhotoBytes,
-      );
-      AppStore.instance.addLead(saved);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Lead ${saved.leadId} saved.'),
-          backgroundColor: AppColors.success,
-        ));
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Failed to save lead: ${_errMsg(e)}'),
-          backgroundColor: AppColors.error,
-          duration: const Duration(seconds: 6),
-        ));
-      }
+    AppStore.instance.addLead(saved);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Lead ${saved.leadId} saved.'),
+        backgroundColor: AppColors.success,
+      ));
     }
   }
 
@@ -712,6 +704,134 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
       context,
       MaterialPageRoute(builder: (_) => LeadsMapScreen(leads: _leads)),
     );
+  }
+
+  void _openLeadsMapFor(LandLead lead) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => LeadsMapScreen(leads: _leads)),
+    );
+  }
+
+  void _openLeadDetail(LandLead lead) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => LeadDetailScreen(lead: lead)),
+    );
+  }
+
+  Future<void> _assignSingleLead(LandLead lead) async {
+    final names = _assignableNamesFor({lead.leadId});
+    if (names.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('No other employees to assign this lead to.'),
+        behavior: SnackBarBehavior.floating,
+      ));
+      return;
+    }
+
+    final name = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: context.fomraSurface,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+            child: Row(children: [
+              Text('Assign lead ${lead.leadId} to',
+                  style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: context.fomraTextPrimary)),
+            ]),
+          ),
+          const Divider(height: 1),
+          Flexible(
+            child: ListView(
+              shrinkWrap: true,
+              children: names
+                  .map((n) => ListTile(
+                        leading: CircleAvatar(
+                          backgroundColor:
+                              AppColors.primary.withValues(alpha: 0.12),
+                          child: Text(n.isNotEmpty ? n[0].toUpperCase() : '?',
+                              style: const TextStyle(
+                                  color: AppColors.primary,
+                                  fontWeight: FontWeight.bold)),
+                        ),
+                        title: Text(n),
+                        onTap: () => Navigator.pop(ctx, n),
+                      ))
+                  .toList(),
+            ),
+          ),
+          const SizedBox(height: 8),
+        ]),
+      ),
+    );
+    if (name == null || !mounted) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Assign lead?'),
+        content: Text(
+            'Assign lead ${lead.leadId} to $name? '
+            'They will move to $name\'s leads page and $name will be notified.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Assign')),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    _assignLeadsTo([lead.leadId], name);
+  }
+
+  Future<void> _openMeetingForLead(LandLead lead) async {
+    await showFomraDialog<void>(
+      context: context,
+      builder: (ctx) => MeetingLogDialog(
+        leadId: lead.leadId,
+        ownerName: lead.ownerName,
+        onMeetingSaved: () {
+          if (lead.status == LeadStatus.prospectMeetingPending) {
+            final updated =
+                lead.copyWith(status: LeadStatus.prospectMeetingCompleted);
+            AppStore.instance.replaceLead(updated);
+            LandLeadService.updateStatus(
+                    lead.leadId, LeadStatus.prospectMeetingCompleted)
+                .catchError((_) {
+              AppStore.instance.replaceLead(lead);
+            });
+          }
+        },
+      ),
+    );
+  }
+
+  Future<void> _editLead(LandLead lead) async {
+    if (_isManagement) return;
+    final saved = await Navigator.push<LandLead>(
+      context,
+      MaterialPageRoute(
+          builder: (_) => AddLeadScreen(existingLead: lead)),
+    );
+    if (saved == null) return;
+    AppStore.instance.replaceLead(saved);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Lead ${saved.leadId} updated.'),
+        backgroundColor: AppColors.success,
+      ));
+    }
   }
 
   Future<void> _openFilterPanel() async {
@@ -788,38 +908,41 @@ class _LeadsLoadingSkeleton extends StatelessWidget {
         const SizedBox(height: AppSpacing.md),
         const LoadingSkeleton(height: 48, radius: AppColors.radiusSm),
         const SizedBox(height: AppSpacing.md),
-        AppCard(
-          padding: EdgeInsets.zero,
-          radius: AppColors.radiusMd,
-          interactive: false,
-          child: Column(
-            children: List.generate(
-              6,
-              (i) => Column(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 14,
-                    ),
-                    child: Row(
-                      children: [
-                        const Expanded(
-                          child: LoadingSkeleton(height: 36, radius: 6),
-                        ),
-                        const SizedBox(width: 16),
-                        const Expanded(
-                          child: LoadingSkeleton(height: 36, radius: 6),
-                        ),
-                      ],
-                    ),
+        Column(
+          children: List.generate(
+            6,
+            (i) => Padding(
+              padding: EdgeInsets.only(bottom: i < 5 ? 8 : 0),
+              child: Container(
+                height: 60,
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  color: context.fomraSurface,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(
+                    color: context.fomraBorder.withValues(alpha: 0.75),
                   ),
-                  if (i < 5)
-                    Divider(
-                      height: 1,
-                      color: context.fomraBorder.withValues(alpha: 0.8),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      flex: 5,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: const [
+                          LoadingSkeleton(height: 10, width: 56, radius: 4),
+                          SizedBox(height: 6),
+                          LoadingSkeleton(height: 14, width: 140, radius: 4),
+                          SizedBox(height: 6),
+                          LoadingSkeleton(height: 10, width: 200, radius: 4),
+                        ],
+                      ),
                     ),
-                ],
+                    const SizedBox(width: 12),
+                    const LoadingSkeleton(height: 22, width: 72, radius: 999),
+                  ],
+                ),
               ),
             ),
           ),
@@ -870,230 +993,633 @@ class _LeadSummary extends StatelessWidget {
   }
 }
 
-String _leadLocationLine(LandLead lead) {
-  return [lead.location, lead.village, lead.district]
-      .where((s) => s.trim().isNotEmpty)
-      .join(', ');
-}
-
 // ── Lead list row ─────────────────────────────────────────────────────────────
 
-class _LeadListRow extends StatelessWidget {
+class _LeadListRow extends StatefulWidget {
   final LandLead lead;
+  final bool isManagement;
   final VoidCallback? onTap;
+  final VoidCallback? onView;
+  final VoidCallback? onAssign;
+  final VoidCallback? onScheduleMeeting;
+  final VoidCallback? onViewMap;
+  final VoidCallback? onEdit;
+  final Future<bool> Function()? onDelete;
   final bool selectionMode;
   final bool selected;
-  final bool showDivider;
 
   const _LeadListRow({
     required this.lead,
+    this.isManagement = false,
     this.onTap,
+    this.onView,
+    this.onAssign,
+    this.onScheduleMeeting,
+    this.onViewMap,
+    this.onEdit,
+    this.onDelete,
     this.selectionMode = false,
     this.selected = false,
-    this.showDivider = true,
   });
 
   @override
-  Widget build(BuildContext context) {
-    final owner = lead.ownerName.trim();
-    final title = owner.isNotEmpty ? owner : 'Lead #${lead.leadId}';
-    final location = _leadLocationLine(lead);
-    final statusColor = lead.status.color;
+  State<_LeadListRow> createState() => _LeadListRowState();
+}
 
-    return Material(
-      color: selected
-          ? AppColors.primary.withValues(alpha: 0.06)
-          : Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
+class _LeadListRowState extends State<_LeadListRow> {
+  bool _hovered = false;
+
+  bool get _hoverEnabled =>
+      !widget.selectionMode && FomraLayout.isDesktop(context);
+
+  String get _title {
+    final owner = widget.lead.ownerName.trim();
+    return owner.isNotEmpty ? owner : 'Lead #${widget.lead.leadId}';
+  }
+
+  String get _locationText {
+    final parts = <String>[];
+    if (widget.lead.location.trim().isNotEmpty) {
+      parts.add(widget.lead.location.trim());
+    }
+    if (widget.lead.village.trim().isNotEmpty) {
+      parts.add(widget.lead.village.trim());
+    }
+    return parts.join(', ');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final lead = widget.lead;
+    final statusColor = _crmStatusColor(lead.status);
+    final priorityColor = _leadPriorityColor(lead);
+    final priorityLabel = _leadPriorityLabel(lead);
+    final assignee = lead.createdByName.trim();
+    final dateText =
+        '${lead.addedOn.day}/${lead.addedOn.month}/${lead.addedOn.year}';
+    final statusLabel = lead.status.isProspect
+        ? lead.status.shortLabel
+        : lead.status.label;
+    final hoverActive = _hovered && _hoverEnabled;
+
+    return MouseRegion(
+      onEnter: _hoverEnabled ? (_) => setState(() => _hovered = true) : null,
+      onExit: _hoverEnabled ? (_) => setState(() => _hovered = false) : null,
+      child: AnimatedContainer(
+        duration: AppMotion.slow,
+        curve: AppMotion.curve,
+        decoration: BoxDecoration(
+          color: widget.selected
+              ? AppColors.primary.withValues(alpha: 0.06)
+              : context.fomraSurface,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: hoverActive
+                ? AppColors.primary.withValues(alpha: 0.45)
+                : widget.selected
+                    ? AppColors.primary.withValues(alpha: 0.28)
+                    : context.fomraBorder.withValues(alpha: 0.8),
+            width: hoverActive ? 1.5 : 1,
+          ),
+          boxShadow: hoverActive
+              ? context.fomraCardShadow
+              : [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.04),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(18),
+          child: InkWell(
+            onTap: widget.onTap,
+            borderRadius: BorderRadius.circular(18),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(14, 8, 14, 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  if (selectionMode) ...[
-                    Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 160),
-                        width: 22,
-                        height: 22,
-                        decoration: BoxDecoration(
-                          color:
-                              selected ? AppColors.primary : Colors.transparent,
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: selected
-                                ? AppColors.primary
-                                : context.fomraBorder,
-                            width: 2,
-                          ),
-                        ),
-                        child: selected
-                            ? const Icon(Icons.check,
-                                size: 14, color: Colors.white)
-                            : null,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                  ],
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '#${lead.leadId}',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: context.fomraTextSecondary,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w800,
-                            color: context.fomraTextPrimary,
-                          ),
-                        ),
-                        if (location.isNotEmpty) ...[
-                          const SizedBox(height: 4),
-                          Text(
-                            location,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 12,
-                              height: 1.35,
-                              color: context.fomraTextSecondary,
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (widget.selectionMode) ...[
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2, right: 10),
+                          child: AnimatedContainer(
+                            duration: AppMotion.slow,
+                            curve: AppMotion.curve,
+                            width: 20,
+                            height: 20,
+                            decoration: BoxDecoration(
+                              color: widget.selected
+                                  ? AppColors.primary
+                                  : Colors.transparent,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: widget.selected
+                                    ? AppColors.primary
+                                    : context.fomraBorder,
+                                width: 2,
+                              ),
                             ),
+                            child: widget.selected
+                                ? const Icon(Icons.check,
+                                    size: 13, color: Colors.white)
+                                : null,
                           ),
-                        ],
-                        if (lead.createdByName.trim().isNotEmpty) ...[
-                          const SizedBox(height: 6),
-                          Text(
-                            '${lead.ownershipLabel}: ${lead.createdByName}',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: context.fomraTextTertiary,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: statusColor.withValues(alpha: 0.14),
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          child: Text(
-                            lead.status.label,
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              color: statusColor,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        if (lead.surveyNumber.isNotEmpty)
-                          _LeadMetaLine(
-                            icon: Icons.tag_outlined,
-                            text: 'Survey ${lead.surveyNumber}',
-                          ),
-                        if (lead.landExtent.isNotEmpty)
-                          _LeadMetaLine(
-                            icon: Icons.straighten,
-                            text: lead.landExtent,
-                          ),
-                        _LeadMetaLine(
-                          icon: Icons.terrain_outlined,
-                          text: lead.landType.label,
-                        ),
-                        _LeadMetaLine(
-                          icon: Icons.calendar_today_outlined,
-                          text:
-                              '${lead.addedOn.day}/${lead.addedOn.month}/${lead.addedOn.year}',
                         ),
                       ],
-                    ),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Text(
+                                  '#${lead.leadId}',
+                                  style: TextStyle(
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: 0.2,
+                                    color: context.fomraTextSecondary,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                _LeadPriorityBadge(
+                                  label: priorityLabel,
+                                  color: priorityColor,
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              _title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 14.5,
+                                fontWeight: FontWeight.w800,
+                                height: 1.2,
+                                color: context.fomraTextPrimary,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            _LeadCompactMetaRow(
+                              location: _locationText,
+                              district: lead.district.trim(),
+                              surveyNumber: lead.surveyNumber.trim(),
+                              landExtent: lead.landExtent.trim(),
+                              landType: lead.landType.label,
+                              dateText: dateText,
+                            ),
+                            if (assignee.isNotEmpty) ...[
+                              const SizedBox(height: 5),
+                              Row(
+                                children: [
+                                  CircleAvatar(
+                                    radius: 11,
+                                    backgroundColor: AppColors.primary
+                                        .withValues(alpha: 0.12),
+                                    child: Text(
+                                      _initialsFromName(assignee),
+                                      style: const TextStyle(
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.w800,
+                                        color: AppColors.primary,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(
+                                      assignee,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                        color: context.fomraTextTertiary,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      _CrmStatusChip(
+                        label: statusLabel,
+                        color: statusColor,
+                      ),
+                    ],
                   ),
-                  if (!selectionMode) ...[
-                    const SizedBox(width: 8),
-                    Padding(
-                      padding: const EdgeInsets.only(top: 2),
-                      child: Icon(
-                        Icons.chevron_right_rounded,
-                        size: 20,
-                        color: context.fomraTextTertiary,
+                  AnimatedCrossFade(
+                    duration: AppMotion.slow,
+                    sizeCurve: AppMotion.curve,
+                    firstCurve: AppMotion.curve,
+                    secondCurve: AppMotion.curve,
+                    crossFadeState: hoverActive
+                        ? CrossFadeState.showSecond
+                        : CrossFadeState.showFirst,
+                    firstChild: const SizedBox(width: double.infinity, height: 0),
+                    secondChild: Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: _LeadHoverActions(
+                        onView: widget.onView,
+                        onAssign: widget.onAssign,
+                        onScheduleMeeting: widget.onScheduleMeeting,
+                        onViewMap: widget.onViewMap,
+                        onEdit: widget.onEdit,
+                        onDelete: widget.onDelete,
                       ),
                     ),
-                  ],
+                  ),
                 ],
               ),
             ),
-            if (showDivider)
-              Divider(
-                height: 1,
-                thickness: 1,
-                color: context.fomraBorder.withValues(alpha: 0.85),
-              ),
-          ],
+          ),
         ),
       ),
     );
   }
 }
 
-class _LeadMetaLine extends StatelessWidget {
-  final IconData icon;
-  final String text;
+class _LeadPriorityBadge extends StatelessWidget {
+  final String label;
+  final Color color;
 
-  const _LeadMetaLine({required this.icon, required this.text});
+  const _LeadPriorityBadge({required this.label, required this.color});
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 12, color: context.fomraTextTertiary),
-          const SizedBox(width: 4),
-          Flexible(
-            child: Text(
-              text,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.right,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: context.fomraTextSecondary,
-              ),
-            ),
-          ),
-        ],
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.28)),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 9.5,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0.2,
+          color: color,
+        ),
       ),
     );
   }
+}
+
+class _CrmStatusChip extends StatelessWidget {
+  final String label;
+  final Color color;
+
+  const _CrmStatusChip({required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.22)),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+          color: color,
+        ),
+      ),
+    );
+  }
+}
+
+class _LeadCompactMetaRow extends StatelessWidget {
+  final String location;
+  final String district;
+  final String surveyNumber;
+  final String landExtent;
+  final String landType;
+  final String dateText;
+
+  const _LeadCompactMetaRow({
+    required this.location,
+    required this.district,
+    required this.surveyNumber,
+    required this.landExtent,
+    required this.landType,
+    required this.dateText,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final metaStyle = TextStyle(
+      fontSize: 11,
+      height: 1.25,
+      fontWeight: FontWeight.w500,
+      color: context.fomraTextSecondary,
+    );
+    final areaStyle = metaStyle.copyWith(
+      fontSize: 12.5,
+      fontWeight: FontWeight.w800,
+      color: context.fomraTextPrimary,
+    );
+
+    Widget segment(Widget child) => Flexible(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [Flexible(child: child)],
+          ),
+        );
+
+    Widget bullet() => Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 5),
+          child: Text('•',
+              style: TextStyle(
+                  fontSize: 10, color: context.fomraTextTertiary)),
+        );
+
+    final wide = MediaQuery.sizeOf(context).width >= 720;
+
+    if (!wide) {
+      return Wrap(
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: 0,
+        runSpacing: 2,
+        children: [
+          if (location.isNotEmpty) ...[
+            Icon(Icons.place_outlined,
+                size: 12, color: context.fomraTextTertiary),
+            const SizedBox(width: 3),
+            Text(location,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: metaStyle),
+          ],
+          if (district.isNotEmpty) ...[
+            const SizedBox(width: 6),
+            _DistrictBadge(label: district),
+          ],
+          if (surveyNumber.isNotEmpty) ...[
+            bullet(),
+            Icon(Icons.tag_outlined,
+                size: 12, color: context.fomraTextTertiary),
+            const SizedBox(width: 3),
+            Text('Svy $surveyNumber',
+                maxLines: 1, overflow: TextOverflow.ellipsis, style: metaStyle),
+          ],
+          if (landExtent.isNotEmpty) ...[
+            bullet(),
+            Text(landExtent,
+                maxLines: 1, overflow: TextOverflow.ellipsis, style: areaStyle),
+          ],
+          if (landType.isNotEmpty) ...[
+            bullet(),
+            Text(landType,
+                maxLines: 1, overflow: TextOverflow.ellipsis, style: metaStyle),
+          ],
+          bullet(),
+          Icon(Icons.calendar_today_outlined,
+              size: 11, color: context.fomraTextTertiary),
+          const SizedBox(width: 3),
+          Text(dateText, style: metaStyle),
+        ],
+      );
+    }
+
+    return Row(
+      children: [
+        if (location.isNotEmpty)
+          segment(Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.place_outlined,
+                  size: 12, color: context.fomraTextTertiary),
+              const SizedBox(width: 3),
+              Flexible(
+                child: Text(location,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: metaStyle),
+              ),
+            ],
+          )),
+        if (district.isNotEmpty) ...[
+          const SizedBox(width: 6),
+          _DistrictBadge(label: district),
+        ],
+        if (surveyNumber.isNotEmpty) ...[
+          bullet(),
+          segment(Text('Svy $surveyNumber',
+              maxLines: 1, overflow: TextOverflow.ellipsis, style: metaStyle)),
+        ],
+        if (landExtent.isNotEmpty) ...[
+          bullet(),
+          segment(Text(landExtent,
+              maxLines: 1, overflow: TextOverflow.ellipsis, style: areaStyle)),
+        ],
+        if (landType.isNotEmpty) ...[
+          bullet(),
+          segment(Text(landType,
+              maxLines: 1, overflow: TextOverflow.ellipsis, style: metaStyle)),
+        ],
+        bullet(),
+        segment(Text(dateText, style: metaStyle)),
+      ],
+    );
+  }
+}
+
+class _DistrictBadge extends StatelessWidget {
+  final String label;
+  const _DistrictBadge({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+      decoration: BoxDecoration(
+        color: AppColors.info.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: AppColors.info.withValues(alpha: 0.22)),
+      ),
+      child: Text(
+        label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontSize: 9.5,
+          fontWeight: FontWeight.w700,
+          color: AppColors.info,
+        ),
+      ),
+    );
+  }
+}
+
+class _LeadHoverActions extends StatelessWidget {
+  final VoidCallback? onView;
+  final VoidCallback? onAssign;
+  final VoidCallback? onScheduleMeeting;
+  final VoidCallback? onViewMap;
+  final VoidCallback? onEdit;
+  final Future<bool> Function()? onDelete;
+
+  const _LeadHoverActions({
+    this.onView,
+    this.onAssign,
+    this.onScheduleMeeting,
+    this.onViewMap,
+    this.onEdit,
+    this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        _HoverActionButton(
+          icon: Icons.visibility_outlined,
+          label: 'View',
+          onTap: onView,
+        ),
+        if (onAssign != null) ...[
+          const SizedBox(width: 6),
+          _HoverActionButton(
+            icon: Icons.person_add_alt_1_outlined,
+            label: 'Assign',
+            onTap: onAssign,
+          ),
+        ],
+        const SizedBox(width: 6),
+        _HoverActionButton(
+          icon: Icons.event_outlined,
+          label: 'Schedule Meeting',
+          onTap: onScheduleMeeting,
+        ),
+        const SizedBox(width: 4),
+        PopupMenuButton<String>(
+          tooltip: 'More',
+          padding: EdgeInsets.zero,
+          icon: Icon(Icons.more_horiz,
+              size: 18, color: context.fomraTextSecondary),
+          onSelected: (value) async {
+            switch (value) {
+              case 'map':
+                onViewMap?.call();
+              case 'edit':
+                onEdit?.call();
+              case 'delete':
+                await onDelete?.call();
+            }
+          },
+          itemBuilder: (ctx) => [
+            const PopupMenuItem(value: 'map', child: Text('View Map')),
+            if (onEdit != null)
+              const PopupMenuItem(value: 'edit', child: Text('Edit')),
+            const PopupMenuItem(
+              value: 'delete',
+              child: Text('Delete', style: TextStyle(color: AppColors.error)),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _HoverActionButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback? onTap;
+
+  const _HoverActionButton({
+    required this.icon,
+    required this.label,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: AppColors.primary.withValues(alpha: 0.06),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+                color: AppColors.primary.withValues(alpha: 0.14)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 14, color: AppColors.primary),
+              const SizedBox(width: 5),
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.primary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+String _initialsFromName(String name) {
+  final parts = name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty);
+  final list = parts.toList();
+  if (list.isEmpty) return '?';
+  if (list.length == 1) return list.first[0].toUpperCase();
+  return '${list.first[0]}${list.last[0]}'.toUpperCase();
+}
+
+String _leadPriorityLabel(LandLead lead) {
+  return switch (lead.status) {
+    LeadStatus.signed => 'Low',
+    LeadStatus.dropped => 'Low',
+    LeadStatus.prospectMeetingCompleted => 'Medium',
+    LeadStatus.legal => 'Medium',
+    _ => 'High',
+  };
+}
+
+Color _leadPriorityColor(LandLead lead) {
+  return switch (lead.status) {
+    LeadStatus.signed => AppColors.success,
+    LeadStatus.dropped => AppColors.textSecondary,
+    LeadStatus.prospectMeetingCompleted => AppColors.warning,
+    LeadStatus.legal => AppColors.warning,
+    _ => AppColors.error,
+  };
+}
+
+Color _crmStatusColor(LeadStatus status) {
+  return switch (status) {
+    LeadStatus.signed => AppColors.success,
+    LeadStatus.prospectMeetingCompleted => AppColors.success,
+    LeadStatus.prospectMeetingPending => AppColors.warning,
+    LeadStatus.negotiation => AppColors.primary,
+    LeadStatus.legal => AppColors.purple,
+    LeadStatus.dropped => AppColors.error,
+  };
 }

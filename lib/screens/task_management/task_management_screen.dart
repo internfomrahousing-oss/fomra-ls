@@ -26,6 +26,173 @@ int taskCountForLead(String leadId) {
   return sharedTasks.where((t) => t.module == link).length;
 }
 
+String? leadIdFromTaskModule(String module) {
+  const prefix = 'land_lead:';
+  if (!module.startsWith(prefix)) return null;
+  final id = module.substring(prefix.length).trim();
+  return id.isEmpty ? null : id;
+}
+
+List<Task> tasksForLead(String leadId) {
+  final link = 'land_lead:$leadId';
+  return sharedTasks.where((t) => t.module == link).toList();
+}
+
+/// Push live notifications to the bell when a task is created.
+void notifyTaskCreated(Task task) {
+  if (AuthService.instance.isManagement) {
+    if (task.assignedTo.isEmpty) return;
+    final who = task.assignedTo.join(', ');
+    NotificationsService.create(
+      audience: 'employee',
+      type: 'task',
+      title: 'New task assigned',
+      message: '${task.title} — assigned to $who',
+    ).catchError((_) {});
+    return;
+  }
+  final who = AuthService.instance.currentUser?.fullName ?? 'An employee';
+  final leadId = leadIdFromTaskModule(task.module);
+  NotificationsService.create(
+    audience: 'management',
+    type: 'task',
+    title: 'New task from $who',
+    message: task.title,
+    leadId: leadId,
+  ).catchError((_) {});
+}
+
+void notifyTaskStatusChanged(Task task, TaskStatus status) {
+  if (AuthService.instance.isManagement) return;
+  final who = AuthService.instance.currentUser?.fullName ?? 'An employee';
+  NotificationsService.create(
+    audience: 'management',
+    type: 'task',
+    title: 'Task update by $who',
+    message: '${task.title} → ${_statusLabel(status)}',
+  ).catchError((_) {});
+}
+
+void applyTaskStatusChange(Task task, TaskStatus status) {
+  final changed = task.status != status;
+  task.status = status;
+  if (status == TaskStatus.done) task.completedAt = DateTime.now();
+  if (changed) notifyTaskStatusChanged(task, status);
+}
+
+Future<void> showTaskDetailSheet(BuildContext context, Task task) {
+  return showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (_) => _TaskDetailSheet(
+      task: task,
+      onStatusChange: (s) => applyTaskStatusChange(task, s),
+    ),
+  );
+}
+
+Future<void> showLeadTasksSheet(
+  BuildContext context, {
+  required String leadId,
+  String? leadLabel,
+}) {
+  final tasks = tasksForLead(leadId);
+  final title = leadLabel != null && leadLabel.trim().isNotEmpty
+      ? 'Tasks — ${leadLabel.trim()}'
+      : 'Tasks — Lead #$leadId';
+
+  return showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (ctx) => DraggableScrollableSheet(
+      initialChildSize: 0.55,
+      maxChildSize: 0.9,
+      minChildSize: 0.35,
+      expand: false,
+      builder: (_, controller) => Container(
+        decoration: BoxDecoration(
+          color: ctx.fomraSurface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          children: [
+            _SheetHandle(),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    '${tasks.length}',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            Expanded(
+              child: tasks.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.task_alt_outlined,
+                            size: 44,
+                            color: AppColors.primary.withValues(alpha: 0.35),
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            'No tasks for this lead yet',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: ctx.fomraTextSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : ListView.separated(
+                      controller: controller,
+                      padding: const EdgeInsets.all(12),
+                      itemCount: tasks.length,
+                      separatorBuilder: (_, __) =>
+                          const SizedBox(height: 10),
+                      itemBuilder: (_, i) {
+                        final task = tasks[i];
+                        return _TaskCard(
+                          task: task,
+                          onStatusChange: applyTaskStatusChange,
+                          onTap: () {
+                            Navigator.pop(ctx);
+                            showTaskDetailSheet(context, task);
+                          },
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
 Future<void> showCreateTaskSheet(
   BuildContext context, {
   String? leadId,
@@ -53,6 +220,7 @@ Future<void> showCreateTaskSheet(
       linkModule: leadId != null ? 'land_lead:$leadId' : null,
       onSave: (task) {
         sharedTasks.insert(0, task);
+        notifyTaskCreated(task);
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Task "${task.title}" created')),
@@ -264,46 +432,10 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
     }
   }
 
-  /// When management assigns a task, push a live notification to the employee
-  /// portal's notification bell (audience-based, shown to signed-in employees).
-  void _notifyAssignees(Task task) {
-    if (!AuthService.instance.isManagement) return;
-    if (task.assignedTo.isEmpty) return;
-    final who = task.assignedTo.join(', ');
-    NotificationsService.create(
-      audience: 'employee',
-      type: 'task',
-      title: 'New task assigned',
-      message: '${task.title} — assigned to $who',
-    ).catchError((_) {
-      // Non-fatal: the task is still created if the notification insert fails.
-    });
-  }
-
   /// Apply a task status change and, when an employee makes the change, notify
   /// the management notification bar about the progress.
   void _applyStatusChange(Task task, TaskStatus s) {
-    final changed = task.status != s;
-    setState(() {
-      task.status = s;
-      if (s == TaskStatus.done) task.completedAt = DateTime.now();
-    });
-    if (changed) _notifyManagementOfProgress(task, s);
-  }
-
-  /// When an employee updates a task, push a live notification to the
-  /// management portal's notification bell.
-  void _notifyManagementOfProgress(Task task, TaskStatus s) {
-    if (AuthService.instance.isManagement) return; // only employees make progress
-    final who = AuthService.instance.currentUser?.fullName ?? 'An employee';
-    NotificationsService.create(
-      audience: 'management',
-      type: 'task',
-      title: 'Task update by $who',
-      message: '${task.title} → ${_statusLabel(s)}',
-    ).catchError((_) {
-      // Non-fatal: the status change still applies if the insert fails.
-    });
+    setState(() => applyTaskStatusChange(task, s));
   }
 
   void _pushNotification(Task task, String message, {String? id}) {
@@ -409,7 +541,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
   Widget _buildAddTaskFab() => Container(
         decoration: BoxDecoration(
           gradient: const LinearGradient(
-            colors: [Color(0xFF1D4ED8), Color(0xFF3B82F6)],
+            colors: [Color(0xFF2563EB), Color(0xFF2563EB)],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
@@ -774,22 +906,16 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
             _tasks.insert(0, task);
             _pushNotification(task, '✅ Task "${task.title}" created.');
           });
-          _notifyAssignees(task);
+          notifyTaskCreated(task);
         },
       ),
     );
   }
 
   void _showTaskDetail(Task task) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => _TaskDetailSheet(
-        task: task,
-        onStatusChange: (s) => _applyStatusChange(task, s),
-      ),
-    );
+    showTaskDetailSheet(context, task).then((_) {
+      if (mounted) setState(() {});
+    });
   }
 
   void _showNotificationsSheet() {

@@ -20,9 +20,15 @@ class ReportsScreen extends StatefulWidget {
 class _ReportsScreenState extends State<ReportsScreen> {
   static const _kAllEmployees = 'All';
   bool _generatingReport = false;
+  bool _isOtherReport = false;
   LeadReportType _selectedReportType = LeadReportType.all;
+  OtherReportType _selectedOtherReportType = OtherReportType.ownerReports;
   ReportFormat _selectedReportFormat = ReportFormat.pdf;
   String _selectedEmployeeReport = _kAllEmployees;
+
+  static const _leadBasedTypes = LeadReportType.values;
+
+  static const _otherReportTypes = OtherReportType.values;
 
   List<String> get _employeeNames {
     final names = <String>{};
@@ -44,8 +50,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
       switch (type) {
         LeadReportType.all => (
             icon: Icons.dashboard_customize_outlined,
-            title: 'All Reports',
-            description: 'Complete overview of every section',
+            title: 'All Lead Reports',
+            description: 'Complete overview of every lead section',
           ),
         LeadReportType.totalLeads => (
             icon: Icons.location_on_outlined,
@@ -67,6 +73,27 @@ class _ReportsScreenState extends State<ReportsScreen> {
             title: 'Employee Leads',
             description: 'Performance by team member',
           ),
+      };
+
+  ({IconData icon, String title, String description}) _otherReportTypeMeta(
+    OtherReportType type,
+  ) =>
+      switch (type) {
+        OtherReportType.ownerReports => (
+            icon: Icons.person_outline,
+            title: 'Owner Reports',
+            description: 'Landowners across your lead database',
+          ),
+        OtherReportType.brokerReports => (
+            icon: Icons.handshake_outlined,
+            title: 'Broker Reports',
+            description: 'Brokers and contacts from your leads',
+          ),
+      };
+
+  Color _otherReportTypeColor(OtherReportType type) => switch (type) {
+        OtherReportType.ownerReports => AppColors.success,
+        OtherReportType.brokerReports => AppColors.secondary,
       };
 
   Color _reportTypeColor(LeadReportType type) => switch (type) {
@@ -99,7 +126,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
         AppStore.instance.leads,
         employees: AppStore.instance.employees,
         reportType: _selectedReportType,
-        employeeName: _selectedReportType == LeadReportType.employeeLeads &&
+        otherReportType: _isOtherReport ? _selectedOtherReportType : null,
+        employeeName: !_isOtherReport &&
+                _selectedReportType == LeadReportType.employeeLeads &&
                 _selectedEmployeeReport != _kAllEmployees
             ? _selectedEmployeeReport
             : null,
@@ -123,7 +152,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
       AppStore.instance.leads,
       employees: AppStore.instance.employees,
       reportType: _selectedReportType,
-      employeeName: _selectedReportType == LeadReportType.employeeLeads &&
+      otherReportType: _isOtherReport ? _selectedOtherReportType : null,
+      employeeName: !_isOtherReport &&
+              _selectedReportType == LeadReportType.employeeLeads &&
               _selectedEmployeeReport != _kAllEmployees
           ? _selectedEmployeeReport
           : null,
@@ -151,7 +182,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
             const _EmptyReportNotice(),
           ] else ...[
             const SizedBox(height: 24),
-            _buildReportTypeSection(context),
+            _buildLeadBasedSection(context),
+            const SizedBox(height: 20),
+            _buildOtherReportSection(context),
             const SizedBox(height: 20),
             _buildReportFormatSection(context),
             _buildEmployeeFilter(context),
@@ -211,40 +244,84 @@ class _ReportsScreenState extends State<ReportsScreen> {
     );
   }
 
-  Widget _buildReportTypeSection(BuildContext context) {
+  Widget _buildLeadBasedSection(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const _ReportSectionLabel(
           icon: Icons.category_outlined,
-          label: 'Report Type',
+          label: 'Lead Based',
         ),
         const SizedBox(height: 12),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final width = constraints.maxWidth;
-            final cols = width > 860 ? 3 : (width > 520 ? 2 : 1);
-            const spacing = 12.0;
-            final itemWidth = (width - spacing * (cols - 1)) / cols;
-            return Wrap(
-              spacing: spacing,
-              runSpacing: spacing,
-              children: [
-                for (final type in LeadReportType.values)
-                  SizedBox(
-                    width: cols == 1 ? width : itemWidth,
-                    child: _ReportTypeCard(
-                      meta: _reportTypeMeta(type),
-                      accent: _reportTypeColor(type),
-                      selected: _selectedReportType == type,
-                      onTap: () => setState(() => _selectedReportType = type),
-                    ),
-                  ),
-              ],
-            );
-          },
+        _buildReportTypeGrid(
+          context,
+          children: [
+            for (final type in _leadBasedTypes)
+              _ReportTypeCard(
+                meta: _reportTypeMeta(type),
+                accent: _reportTypeColor(type),
+                selected: !_isOtherReport && _selectedReportType == type,
+                onTap: () => setState(() {
+                  _isOtherReport = false;
+                  _selectedReportType = type;
+                }),
+              ),
+          ],
         ),
       ],
+    );
+  }
+
+  Widget _buildOtherReportSection(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _ReportSectionLabel(
+          icon: Icons.folder_special_outlined,
+          label: 'Other Report',
+        ),
+        const SizedBox(height: 12),
+        _buildReportTypeGrid(
+          context,
+          children: [
+            for (final type in _otherReportTypes)
+              _ReportTypeCard(
+                meta: _otherReportTypeMeta(type),
+                accent: _otherReportTypeColor(type),
+                selected: _isOtherReport && _selectedOtherReportType == type,
+                onTap: () => setState(() {
+                  _isOtherReport = true;
+                  _selectedOtherReportType = type;
+                }),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildReportTypeGrid(
+    BuildContext context, {
+    required List<Widget> children,
+  }) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final cols = width > 860 ? 3 : (width > 520 ? 2 : 1);
+        const spacing = 12.0;
+        final itemWidth = (width - spacing * (cols - 1)) / cols;
+        return Wrap(
+          spacing: spacing,
+          runSpacing: spacing,
+          children: [
+            for (final child in children)
+              SizedBox(
+                width: cols == 1 ? width : itemWidth,
+                child: child,
+              ),
+          ],
+        );
+      },
     );
   }
 
@@ -302,7 +379,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
           child: child,
         ),
       ),
-      child: _selectedReportType != LeadReportType.employeeLeads
+      child: !_isOtherReport &&
+              _selectedReportType != LeadReportType.employeeLeads
           ? const SizedBox(width: double.infinity)
           : Padding(
               key: const ValueKey('employee-filter'),

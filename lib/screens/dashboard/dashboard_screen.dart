@@ -182,7 +182,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _KpiData(
         label: 'Total Leads',
         value: '$totalLeads',
-        accent: isDark ? const Color(0xFF60A5FA) : const Color(0xFF2563EB),
+        accent: AppColors.primary,
         icon: Icons.location_on_outlined,
         trendCurrent: totalTrend.$1,
         trendPrevious: totalTrend.$2,

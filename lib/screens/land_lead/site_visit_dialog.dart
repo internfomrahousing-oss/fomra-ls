@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../models/land_lead_site_visit.dart';
+import '../../services/auth_service.dart';
 import '../../services/land_lead_site_visit_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_theme_context.dart';
@@ -101,7 +102,13 @@ class _SiteVisitDialogState extends State<SiteVisitDialog> {
       if (!mounted) return;
       widget.onVisitDone?.call();
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_successMessage)),
+        SnackBar(
+          content: Text(
+            _isManagement && !AuthService.instance.isManagement
+                ? 'Management site visit sent for approval'
+                : _successMessage,
+          ),
+        ),
       );
       Navigator.pop(context);
     } catch (e) {
@@ -284,6 +291,19 @@ class _PreviousVisitTile extends StatelessWidget {
                     color: context.fomraTextPrimary,
                   ),
                 ),
+                if (visit.visitType == LandLeadSiteVisitType.management &&
+                    visit.approvalStatus != SiteVisitApprovalStatus.approved)
+                  Text(
+                    visit.approvalStatus.label,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: visit.approvalStatus ==
+                              SiteVisitApprovalStatus.rejected
+                          ? AppColors.error
+                          : AppColors.warning,
+                    ),
+                  ),
                 if (visit.loggedByName.isNotEmpty)
                   Text(
                     visit.loggedByName,

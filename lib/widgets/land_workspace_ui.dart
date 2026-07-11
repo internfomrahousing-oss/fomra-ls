@@ -1076,7 +1076,7 @@ class _LandWorkspaceSpeedDialState extends State<LandWorkspaceSpeedDial>
         Container(
           decoration: BoxDecoration(
             gradient: const LinearGradient(
-              colors: [Color(0xFF1D4ED8), Color(0xFF3B82F6)],
+              colors: [Color(0xFF2563EB), Color(0xFF2563EB)],
             ),
             borderRadius: BorderRadius.circular(999),
             boxShadow: AppColors.coloredShadow(AppColors.primary),

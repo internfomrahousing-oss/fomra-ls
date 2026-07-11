@@ -58,6 +58,8 @@ class LandLead {
   /// `management` when management created or assigned it.
   final String createdByRole;
   LeadStatus status;
+  final String dropReason;
+  final String dropNotes;
 
   LandLead({
     required this.leadId,
@@ -85,6 +87,8 @@ class LandLead {
     this.createdByName = '',
     this.createdByRole = '',
     this.status = LeadStatus.prospectMeetingPending,
+    this.dropReason = '',
+    this.dropNotes = '',
   });
 
   /// Chip / summary label: employee-posted leads use "Posted by".
@@ -115,6 +119,8 @@ class LandLead {
     String? createdByName,
     String? createdByRole,
     LeadStatus? status,
+    String? dropReason,
+    String? dropNotes,
   }) =>
       LandLead(
         leadId: leadId,
@@ -142,6 +148,8 @@ class LandLead {
         createdByName: createdByName ?? this.createdByName,
         createdByRole: createdByRole ?? this.createdByRole,
         status: status ?? this.status,
+        dropReason: dropReason ?? this.dropReason,
+        dropNotes: dropNotes ?? this.dropNotes,
       );
 }
 

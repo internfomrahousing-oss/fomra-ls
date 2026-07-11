@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import '../theme/fomra_theme_context.dart';
 import 'fomra_breadcrumb.dart';
 import 'fomra_theme_toggle.dart';
+import 'fomra_universal_search.dart';
 
 class FomraAppBar extends StatelessWidget implements PreferredSizeWidget {
   final String? moduleName;
   final List<Widget>? actions;
   final PreferredSizeWidget? bottom;
   final List<FomraBreadcrumbItem>? breadcrumbs;
+  final bool showUniversalSearch;
 
   const FomraAppBar({
     super.key,
@@ -15,6 +17,7 @@ class FomraAppBar extends StatelessWidget implements PreferredSizeWidget {
     this.actions,
     this.bottom,
     this.breadcrumbs,
+    this.showUniversalSearch = true,
   });
 
   List<FomraBreadcrumbItem> _effectiveBreadcrumbs() {
@@ -57,6 +60,7 @@ class FomraAppBar extends StatelessWidget implements PreferredSizeWidget {
       surfaceTintColor: Colors.transparent,
       elevation: 0,
       scrolledUnderElevation: 0,
+      titleSpacing: 12,
       title: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -106,6 +110,10 @@ class FomraAppBar extends StatelessWidget implements PreferredSizeWidget {
                       fontWeight: FontWeight.w600,
                       color: Colors.white.withValues(alpha: 0.9))),
             ),
+          ],
+          if (showUniversalSearch) ...[
+            const SizedBox(width: 16),
+            const Expanded(child: FomraUniversalSearchBar()),
           ],
         ],
       ),

@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
-import '../../models/add_lead_result.dart';
 import '../../models/land_lead.dart';
 import '../../theme/app_theme.dart';
 import '../../config/maptiler_tiles.dart';
@@ -15,6 +14,7 @@ import '../../widgets/fomra_app_shell.dart';
 import '../../widgets/fomra_breadcrumb.dart';
 import '../../widgets/portal_page_layout.dart';
 import '../../widgets/tngis_parcel_summary.dart';
+import '../../services/land_lead_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/api_client.dart';
 import '../../utils/image_compressor.dart';
@@ -83,6 +83,8 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
   final List<AddLeadPhotoDraft> _photos = [];
   List<String> _keptPhotoUrls = [];
   bool _compressingPhoto = false;
+  bool _saving = false;
+  String _saveStatus = 'Saving lead…';
 
   final _scrollController = ScrollController();
   final _sectionKeys = List.generate(5, (_) => GlobalKey());
@@ -113,12 +115,17 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
   @override
   void initState() {
     super.initState();
-    if (AuthService.instance.isManagement && widget.existingLead == null) {
+    if (AuthService.instance.isManagement) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
+        final editing = widget.existingLead != null;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Management can view leads only — adding is for employees.'),
+          SnackBar(
+            content: Text(
+              editing
+                  ? 'Management can view leads only — editing is for employees.'
+                  : 'Management can view leads only — adding is for employees.',
+            ),
           ),
         );
         Navigator.pop(context);
@@ -154,6 +161,10 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
     if (_keptPhotoUrls.isEmpty && existing.sitePhotoUrl.isNotEmpty) {
       _keptPhotoUrls = [existing.sitePhotoUrl];
     }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _maybeAutoFetchTngisForExistingLead();
+    });
   }
 
   @override
@@ -219,15 +230,68 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
     _pincodeCtrl.clear();
     _surveyCtrl.clear();
     _subDivCtrl.clear();
+    _extentCtrl.clear();
+  }
+
+  void _setCtrlIfNonEmpty(TextEditingController ctrl, String? value) {
+    final text = value?.trim();
+    if (text == null || text.isEmpty || text == '-') return;
+    ctrl.text = text;
   }
 
   void _applyTngisParcelToForm(TngisParcelDetails parcel) {
-    _surveyCtrl.text = parcel.surveyNumber ?? '';
-    _subDivCtrl.text = parcel.subDivision ?? '';
-    _villageCtrl.text = parcel.village ?? '';
-    _talukCtrl.text = parcel.taluk ?? '';
-    _districtCtrl.text = parcel.district ?? '';
-    _locationCtrl.text = parcel.village ?? '';
+    _setCtrlIfNonEmpty(_surveyCtrl, parcel.surveyNumber);
+    _setCtrlIfNonEmpty(_subDivCtrl, parcel.subDivision);
+    _setCtrlIfNonEmpty(_villageCtrl, parcel.village);
+    _setCtrlIfNonEmpty(_talukCtrl, parcel.taluk);
+    _setCtrlIfNonEmpty(_districtCtrl, parcel.district);
+    final village = parcel.village?.trim();
+    if (village != null && village.isNotEmpty) {
+      _locationCtrl.text = village;
+    }
+    _setCtrlIfNonEmpty(_extentCtrl, parcel.landExtentDisplay);
+  }
+
+  bool get _needsTngisBackfill =>
+      _surveyCtrl.text.trim().isEmpty ||
+      _villageCtrl.text.trim().isEmpty ||
+      _extentCtrl.text.trim().isEmpty;
+
+  Future<void> _maybeAutoFetchTngisForExistingLead() async {
+    if (!_isEdit || _pinnedPoint == null || !_needsTngisBackfill) return;
+    final fetchSeq = ++_pinFetchSeq;
+    setState(() {
+      _loadingTngis = true;
+      _resolvingPin = true;
+      _locationStatus = 'Fetching land details from TNGIS…';
+    });
+    try {
+      final point = _pinnedPoint!;
+      final adminEmpty = _villageCtrl.text.trim().isEmpty &&
+          _talukCtrl.text.trim().isEmpty &&
+          _districtCtrl.text.trim().isEmpty;
+      if (adminEmpty) {
+        await _fillFromCoordinates(
+          point.latitude,
+          point.longitude,
+          clearLoading: false,
+          fetchSeq: fetchSeq,
+        );
+      }
+      if (!_isActivePinFetch(fetchSeq)) return;
+      await _fillSurveyFromTngis(point, fetchSeq: fetchSeq);
+    } catch (e) {
+      if (!_isActivePinFetch(fetchSeq)) return;
+      setState(() => _locationStatus =
+          'Error: ${e.toString().replaceAll('Exception: ', '')}');
+    } finally {
+      if (_isActivePinFetch(fetchSeq)) {
+        setState(() {
+          _resolvingPin = false;
+          _fetchingLocation = false;
+        });
+      }
+    }
   }
 
   bool _isActivePinFetch(int fetchSeq) =>
@@ -299,22 +363,34 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
 
       _applyTngisParcelToForm(parcel);
 
-      final pinFromAdmin = await fetchPincodeForAdminArea(
-        village: _villageCtrl.text,
-        taluk: _talukCtrl.text,
-        district: _districtCtrl.text,
-      );
-      if (!_isActivePinFetch(fetchSeq)) return;
-      _pincodeCtrl.text = pinFromAdmin ?? '';
+      if (_pincodeCtrl.text.trim().isEmpty) {
+        final pinFromAdmin = await fetchPincodeForAdminArea(
+          village: _villageCtrl.text,
+          taluk: _talukCtrl.text,
+          district: _districtCtrl.text,
+        );
+        if (!_isActivePinFetch(fetchSeq)) return;
+        if (pinFromAdmin != null && pinFromAdmin.isNotEmpty) {
+          _pincodeCtrl.text = pinFromAdmin;
+        }
+      }
 
+      if (!_isActivePinFetch(fetchSeq)) return;
       setState(() {
         _tngisParcel = parcel;
         _loadingTngis = false;
-        _locationStatus = parcel.hasSurvey
-            ? 'TNGIS village & survey filled ✓'
-            : parcel.hasAdminData
-                ? 'TNGIS village details filled ✓'
-                : 'Location filled — parcel not found at this pin';
+        if (parcel.hasSurvey) {
+          _locationStatus = parcel.landExtentDisplay != null
+              ? 'TNGIS village, survey & extent filled ✓'
+              : 'TNGIS village & survey filled ✓';
+        } else if (parcel.hasAdminData) {
+          _locationStatus = 'TNGIS village details filled ✓';
+        } else if (_locationCtrl.text.trim().isNotEmpty ||
+            _villageCtrl.text.trim().isNotEmpty) {
+          _locationStatus = 'Address filled — parcel not found at this pin';
+        } else {
+          _locationStatus = 'No parcel at this pin — try zooming onto the plot';
+        }
       });
     } on ApiException catch (e) {
       if (!_isActivePinFetch(fetchSeq)) return;
@@ -658,7 +734,17 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
 
   // ── Submit ─────────────────────────────────────────────────────────────────
 
-  void _submit() {
+  Future<void> _submit() async {
+    if (_saving) return;
+    if (_compressingPhoto) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please wait — photo is still compressing'),
+          backgroundColor: AppColors.warning,
+        ),
+      );
+      return;
+    }
     if (_inputSource == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -671,7 +757,6 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
     if (!_formKey.currentState!.validate()) return;
 
     final combinedNotes = _notesCtrl.text.trim();
-
     final existing = widget.existingLead;
     final lead = LandLead(
       leadId: existing?.leadId ?? '',
@@ -701,14 +786,44 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
       sitePhotoUrls: List<String>.from(_keptPhotoUrls),
     );
 
-    Navigator.pop(
-      context,
-      AddLeadResult(
-        lead: lead,
-        sitePhotoBytes: _photos.map((p) => p.bytes).toList(),
-        isEdit: _isEdit,
-      ),
-    );
+    final photoBytes = _photos.map((p) => p.bytes).toList();
+    setState(() {
+      _saving = true;
+      _saveStatus = photoBytes.isNotEmpty
+          ? 'Uploading photos…'
+          : 'Saving lead…';
+    });
+
+    try {
+      final saved = _isEdit
+          ? await LandLeadService.update(
+              lead,
+              sitePhotoBytes: photoBytes,
+              onProgress: _onSaveProgress,
+            )
+          : await LandLeadService.create(
+              lead,
+              sitePhotoBytes: photoBytes,
+              onProgress: _onSaveProgress,
+            );
+      if (!mounted) return;
+      Navigator.pop(context, saved);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(
+          'Failed to save lead: ${e.toString().replaceFirst('Exception: ', '')}',
+        ),
+        backgroundColor: AppColors.error,
+        duration: const Duration(seconds: 6),
+      ));
+    }
+  }
+
+  void _onSaveProgress(String message) {
+    if (!mounted) return;
+    setState(() => _saveStatus = message);
   }
 
   @override
@@ -722,16 +837,20 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
         ),
     ];
 
-    return FomraAppShell(
+    return Stack(
+      children: [
+        FomraAppShell(
       currentRoute: '/land-lead',
       backgroundColor: context.fomraPageBg,
       appBar: AddLeadAppBar(
         title: _isEdit ? 'Edit Land Lead' : 'Add Land Lead',
         onSave: _submit,
+        saving: _saving,
       ),
       bottomNavigationBar: AddLeadStickyFooter(
         onCancel: () => Navigator.pop(context),
         onSave: _submit,
+        saving: _saving,
       ),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1072,6 +1191,9 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
           ),
         ],
       ),
+        ),
+        if (_saving) AddLeadSaveOverlay(message: _saveStatus),
+      ],
     );
   }
 }

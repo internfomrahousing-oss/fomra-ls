@@ -301,7 +301,7 @@ class PortalFrostedTabBar extends StatelessWidget {
         : context.fomraBorder;
     final indicator = onDarkBackground
         ? const LinearGradient(
-            colors: [Color(0xFF3B82F6), Color(0xFF1D4ED8)],
+            colors: [Color(0xFF2563EB), Color(0xFF2563EB)],
           )
         : null;
     final indicatorColor = onDarkBackground ? null : AppColors.primary;

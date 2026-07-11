@@ -11,7 +11,7 @@ import '../services/universal_search_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/fomra_theme_context.dart';
 
-/// App-wide search strip shown below the main header.
+/// App-wide search field — embedded in the blue header bar.
 class FomraUniversalSearchBar extends StatefulWidget {
   const FomraUniversalSearchBar({super.key});
 
@@ -22,7 +22,10 @@ class FomraUniversalSearchBar extends StatefulWidget {
 class _FomraUniversalSearchBarState extends State<FomraUniversalSearchBar> {
   final _ctrl = TextEditingController();
   final _focus = FocusNode();
+  final _layerLink = LayerLink();
+  final _fieldKey = GlobalKey();
   Timer? _debounce;
+  OverlayEntry? _overlayEntry;
 
   List<UniversalSearchHit> _results = [];
   bool _focused = false;
@@ -36,6 +39,7 @@ class _FomraUniversalSearchBarState extends State<FomraUniversalSearchBar> {
 
   @override
   void dispose() {
+    _hideOverlay();
     _debounce?.cancel();
     AppStore.instance.removeListener(_refreshResults);
     _focus.removeListener(_onFocusChanged);
@@ -47,15 +51,21 @@ class _FomraUniversalSearchBarState extends State<FomraUniversalSearchBar> {
   void _onFocusChanged() {
     setState(() => _focused = _focus.hasFocus);
     if (!_focus.hasFocus) {
-      setState(() => _results = []);
+      Future.delayed(const Duration(milliseconds: 150), () {
+        if (!mounted || _focus.hasFocus) return;
+        setState(() => _results = []);
+        _hideOverlay();
+      });
     } else {
       _runSearch(_ctrl.text);
+      _showOverlay();
     }
   }
 
   void _refreshResults() {
     if (_ctrl.text.trim().isNotEmpty && _focused) {
       _runSearch(_ctrl.text);
+      _overlayEntry?.markNeedsBuild();
     }
   }
 
@@ -65,25 +75,105 @@ class _FomraUniversalSearchBarState extends State<FomraUniversalSearchBar> {
     final query = value.trim();
     if (query.isEmpty) {
       setState(() => _results = []);
+      _hideOverlay();
       return;
     }
     _debounce = Timer(const Duration(milliseconds: 200), () {
       _runSearch(query);
+      if (_focused) _showOverlay();
     });
   }
 
   void _runSearch(String query) {
     if (!mounted) return;
     setState(() => _results = UniversalSearchService.search(query));
+    _overlayEntry?.markNeedsBuild();
   }
 
   void _clear() {
     _debounce?.cancel();
     _ctrl.clear();
     setState(() => _results = []);
+    _hideOverlay();
+  }
+
+  double? _fieldWidth() {
+    final box = _fieldKey.currentContext?.findRenderObject() as RenderBox?;
+    return box?.size.width;
+  }
+
+  void _showOverlay() {
+    if (!_focused || _ctrl.text.trim().isEmpty) {
+      _hideOverlay();
+      return;
+    }
+    _hideOverlay();
+    _overlayEntry = OverlayEntry(builder: (ctx) => _buildOverlay(ctx));
+    Overlay.of(context).insert(_overlayEntry!);
+  }
+
+  void _hideOverlay() {
+    _overlayEntry?.remove();
+    _overlayEntry = null;
+  }
+
+  Widget _buildOverlay(BuildContext overlayContext) {
+    final width = _fieldWidth();
+    if (width == null) return const SizedBox.shrink();
+
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: GestureDetector(
+            onTap: () {
+              _focus.unfocus();
+              _hideOverlay();
+            },
+            behavior: HitTestBehavior.translucent,
+            child: const ColoredBox(color: Colors.transparent),
+          ),
+        ),
+        CompositedTransformFollower(
+          link: _layerLink,
+          showWhenUnlinked: false,
+          offset: const Offset(0, 40),
+          child: Material(
+            elevation: 8,
+            shadowColor: Colors.black26,
+            borderRadius: BorderRadius.circular(12),
+            color: overlayContext.fomraSurface,
+            child: Container(
+              width: width,
+              constraints: const BoxConstraints(maxHeight: 320),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: overlayContext.fomraBorder),
+              ),
+              child: _results.isEmpty
+                  ? Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Text(
+                        'No matches for "${_ctrl.text.trim()}".',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: overlayContext.fomraTextSecondary,
+                        ),
+                      ),
+                    )
+                  : ListView(
+                      shrinkWrap: true,
+                      padding: const EdgeInsets.fromLTRB(8, 4, 8, 12),
+                      children: _buildGroupedResults(overlayContext),
+                    ),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 
   Future<void> _openHit(UniversalSearchHit hit) async {
+    _hideOverlay();
     _focus.unfocus();
     _clear();
 
@@ -157,105 +247,73 @@ class _FomraUniversalSearchBarState extends State<FomraUniversalSearchBar> {
         UniversalSearchKind.contact => 'Directories',
       };
 
-  @override
-  Widget build(BuildContext context) {
-    final showResults = _focused && _ctrl.text.trim().isNotEmpty;
-
-    return Material(
-      color: context.fomraSurface,
-      elevation: 0,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: context.fomraSurface,
-          border: Border(bottom: BorderSide(color: context.fomraBorder)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-              child: TextField(
-                controller: _ctrl,
-                focusNode: _focus,
-                onChanged: _onChanged,
-                textInputAction: TextInputAction.search,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: context.fomraTextPrimary,
-                ),
-                decoration: InputDecoration(
-                  hintText: 'Search leads, owners, tasks, pages…',
-                  hintStyle: TextStyle(
-                    fontSize: 13,
-                    color: context.fomraTextSecondary,
-                  ),
-                  prefixIcon: Icon(
-                    Icons.search_rounded,
-                    size: 22,
-                    color: _focused
-                        ? AppColors.primary
-                        : context.fomraTextSecondary,
-                  ),
-                  suffixIcon: _ctrl.text.isNotEmpty
-                      ? IconButton(
-                          icon: const Icon(Icons.close_rounded, size: 18),
-                          onPressed: _clear,
-                          tooltip: 'Clear',
-                        )
-                      : null,
-                  filled: true,
-                  fillColor: context.fomraSurfaceVar.withValues(alpha: 0.65),
-                  contentPadding: const EdgeInsets.symmetric(vertical: 0),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: context.fomraBorder),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: context.fomraBorder),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(
-                      color: AppColors.primary,
-                      width: 1.5,
-                    ),
-                  ),
-                ),
+  InputDecoration _headerDecoration() {
+    final border = OutlineInputBorder(
+      borderRadius: BorderRadius.circular(10),
+      borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.28)),
+    );
+    return InputDecoration(
+      hintText: 'Search leads, owners, tasks, pages…',
+      hintStyle: TextStyle(
+        fontSize: 13,
+        color: Colors.white.withValues(alpha: 0.65),
+      ),
+      prefixIcon: Icon(
+        Icons.search_rounded,
+        size: 20,
+        color: _focused ? Colors.white : Colors.white.withValues(alpha: 0.75),
+      ),
+      suffixIcon: _ctrl.text.isNotEmpty
+          ? IconButton(
+              icon: Icon(
+                Icons.close_rounded,
+                size: 16,
+                color: Colors.white.withValues(alpha: 0.85),
               ),
-            ),
-            if (showResults)
-              Container(
-                constraints: const BoxConstraints(maxHeight: 320),
-                decoration: BoxDecoration(
-                  color: context.fomraSurface,
-                  border: Border(top: BorderSide(color: context.fomraBorder)),
-                ),
-                child: _results.isEmpty
-                    ? Padding(
-                        padding: const EdgeInsets.all(20),
-                        child: Text(
-                          'No matches for "${_ctrl.text.trim()}".',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: context.fomraTextSecondary,
-                          ),
-                        ),
-                      )
-                    : ListView(
-                        shrinkWrap: true,
-                        padding: const EdgeInsets.fromLTRB(8, 4, 8, 12),
-                        children: _buildGroupedResults(),
-                      ),
-              ),
-          ],
+              onPressed: _clear,
+              tooltip: 'Clear',
+            )
+          : null,
+      isDense: true,
+      filled: true,
+      fillColor: Colors.white.withValues(alpha: _focused ? 0.22 : 0.14),
+      contentPadding: const EdgeInsets.symmetric(vertical: 8),
+      border: border,
+      enabledBorder: border,
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide(
+          color: Colors.white.withValues(alpha: 0.55),
+          width: 1.5,
         ),
       ),
     );
   }
 
-  List<Widget> _buildGroupedResults() {
+  @override
+  Widget build(BuildContext context) {
+    return CompositedTransformTarget(
+      link: _layerLink,
+      child: KeyedSubtree(
+        key: _fieldKey,
+        child: TextField(
+          controller: _ctrl,
+          focusNode: _focus,
+          onChanged: _onChanged,
+          textInputAction: TextInputAction.search,
+          style: const TextStyle(
+            fontSize: 13,
+            color: Colors.white,
+            fontWeight: FontWeight.w500,
+          ),
+          cursorColor: Colors.white,
+          decoration: _headerDecoration(),
+        ),
+      ),
+    );
+  }
+
+  List<Widget> _buildGroupedResults(BuildContext context) {
     final grouped = <UniversalSearchKind, List<UniversalSearchHit>>{};
     for (final hit in _results) {
       grouped.putIfAbsent(hit.kind, () => []).add(hit);

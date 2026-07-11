@@ -2,8 +2,11 @@ import 'dart:typed_data';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/land_lead.dart';
+import '../models/lead_drop_reason.dart';
 import '../utils/image_compressor.dart';
 import 'auth_service.dart';
+
+typedef LeadSaveProgressCallback = void Function(String message);
 
 class LandLeadService {
   static SupabaseClient get _db => Supabase.instance.client;
@@ -20,7 +23,9 @@ class LandLeadService {
   static Future<LandLead> create(
     LandLead lead, {
     List<Uint8List> sitePhotoBytes = const [],
+    LeadSaveProgressCallback? onProgress,
   }) async {
+    onProgress?.call('Saving lead details…');
     final userId = _db.auth.currentUser?.id;
     final createdByName = AuthService.instance.currentUser?.fullName ?? '';
     final createdByRole =
@@ -65,10 +70,12 @@ class LandLeadService {
     if (photos.isNotEmpty) {
       sitePhotoUrls = [];
       for (var i = 0; i < photos.length; i++) {
+        onProgress?.call('Uploading photo ${i + 1} of ${photos.length}…');
         final url = await _uploadSitePhoto(leadId, photos[i], index: i + 1);
         sitePhotoUrls.add(url);
       }
       sitePhotoUrl = sitePhotoUrls.first;
+      onProgress?.call('Finalizing lead…');
       await _db.from('land_leads').update({
         'site_photo_url': sitePhotoUrl,
         'site_photo_urls': sitePhotoUrls,
@@ -117,8 +124,26 @@ class LandLeadService {
   }
 
   static Future<void> updateStatus(String leadId, LeadStatus status) async {
-    await _db.from('land_leads').update({
+    final payload = <String, dynamic>{
       'status': status.name,
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    };
+    if (status != LeadStatus.dropped) {
+      payload['drop_reason'] = '';
+      payload['drop_notes'] = '';
+    }
+    await _db.from('land_leads').update(payload).eq('id', leadId);
+  }
+
+  static Future<void> markDropped({
+    required String leadId,
+    required LeadDropReason reason,
+    required String notes,
+  }) async {
+    await _db.from('land_leads').update({
+      'status': LeadStatus.dropped.name,
+      'drop_reason': reason.dbValue,
+      'drop_notes': notes.trim(),
       'updated_at': DateTime.now().toUtc().toIso8601String(),
     }).eq('id', leadId);
   }
@@ -153,7 +178,9 @@ class LandLeadService {
   static Future<LandLead> update(
     LandLead lead, {
     List<Uint8List> sitePhotoBytes = const [],
+    LeadSaveProgressCallback? onProgress,
   }) async {
+    onProgress?.call('Saving lead details…');
     var sitePhotoUrls = List<String>.from(lead.sitePhotoUrls);
     var sitePhotoUrl = sitePhotoUrls.isNotEmpty ? sitePhotoUrls.first : '';
 
@@ -161,7 +188,9 @@ class LandLeadService {
         sitePhotoBytes.where((b) => b.isNotEmpty).take(4).toList();
     final slotsLeft = 4 - sitePhotoUrls.length;
     if (newPhotos.isNotEmpty && slotsLeft > 0) {
+      final uploadCount = newPhotos.length.clamp(0, slotsLeft);
       for (var i = 0; i < newPhotos.length && sitePhotoUrls.length < 4; i++) {
+        onProgress?.call('Uploading photo ${i + 1} of $uploadCount…');
         final url = await _uploadSitePhoto(
           lead.leadId,
           newPhotos[i],
@@ -170,6 +199,7 @@ class LandLeadService {
         sitePhotoUrls.add(url);
       }
       sitePhotoUrl = sitePhotoUrls.first;
+      onProgress?.call('Finalizing lead…');
     }
 
     final row = await _db
@@ -256,6 +286,8 @@ class LandLeadService {
       createdByName: r['created_by_name'] as String? ?? '',
       createdByRole: r['created_by_role'] as String? ?? '',
       status: parseLeadStatus(r['status'] as String?),
+      dropReason: r['drop_reason'] as String? ?? '',
+      dropNotes: r['drop_notes'] as String? ?? '',
     );
   }
 }

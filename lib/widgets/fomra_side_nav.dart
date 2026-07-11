@@ -2,6 +2,8 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
+import 'fomra_brand_logo.dart';
+
 import '../screens/home/home_screen.dart';
 import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
@@ -78,7 +80,7 @@ class _SideNavTokens {
   static const sidebarGradient = LinearGradient(
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
-    colors: [Color(0xFF2563EB), Color(0xFF1D4ED8)],
+    colors: [Color(0xFF2563EB), Color(0xFF2563EB)],
   );
 }
 
@@ -240,49 +242,7 @@ class _BrandHeader extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.black.withValues(alpha: 0.14),
       ),
-      child: Row(
-        mainAxisAlignment:
-            expanded ? MainAxisAlignment.start : MainAxisAlignment.center,
-        children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.16),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
-            ),
-            alignment: Alignment.center,
-            child: const Icon(Icons.domain, color: Colors.white, size: 24),
-          ),
-          if (expanded) ...[
-            const SizedBox(width: 12),
-            const Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'FomraLS',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.2,
-                      color: Colors.white,
-                    ),
-                  ),
-                  Text(
-                    'Fomra Housing',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: Color(0xCCFFFFFF),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ],
-      ),
+      child: FomraBrandLogo(compact: !expanded),
     );
   }
 }

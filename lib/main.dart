@@ -140,7 +140,7 @@ class _StartupScreenState extends State<_StartupScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF1B3A6B),
+      backgroundColor: const Color(0xFF2563EB),
       body: Center(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 32),
@@ -207,7 +207,7 @@ class _StartupScreenState extends State<_StartupScreen> {
                           label: const Text('Retry'),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.white,
-                            foregroundColor: const Color(0xFF1B3A6B),
+                            foregroundColor: const Color(0xFF2563EB),
                             shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(14)),
                           ),

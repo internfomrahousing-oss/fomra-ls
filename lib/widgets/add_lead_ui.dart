@@ -37,11 +37,13 @@ abstract final class AddLeadUi {
 class AddLeadAppBar extends StatelessWidget implements PreferredSizeWidget {
   final String title;
   final VoidCallback onSave;
+  final bool saving;
 
   const AddLeadAppBar({
     super.key,
     required this.title,
     required this.onSave,
+    this.saving = false,
   });
 
   @override
@@ -67,7 +69,7 @@ class AddLeadAppBar extends StatelessWidget implements PreferredSizeWidget {
               IconButton(
                 icon: const Icon(Icons.arrow_back_rounded, size: 22),
                 tooltip: 'Back',
-                onPressed: () => Navigator.maybePop(context),
+                onPressed: saving ? null : () => Navigator.maybePop(context),
                 style: IconButton.styleFrom(
                   foregroundColor: context.fomraTextPrimary,
                 ),
@@ -86,7 +88,7 @@ class AddLeadAppBar extends StatelessWidget implements PreferredSizeWidget {
               Padding(
                 padding: const EdgeInsets.only(right: 8),
                 child: TextButton(
-                  onPressed: onSave,
+                  onPressed: saving ? null : onSave,
                   style: TextButton.styleFrom(
                     foregroundColor: AppColors.primary,
                     padding: const EdgeInsets.symmetric(horizontal: 14),
@@ -1098,6 +1100,64 @@ class AddLeadLiveLocationCard extends StatelessWidget {
   }
 }
 
+// ── Save loading overlay ──────────────────────────────────────────────────────
+
+class AddLeadSaveOverlay extends StatelessWidget {
+  final String message;
+
+  const AddLeadSaveOverlay({super.key, required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned.fill(
+      child: ColoredBox(
+        color: Colors.black.withValues(alpha: 0.45),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 320),
+            child: Material(
+              color: context.fomraSurface,
+              borderRadius: BorderRadius.circular(20),
+              elevation: 12,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const SizedBox(
+                      width: 36,
+                      height: 36,
+                      child: CircularProgressIndicator(strokeWidth: 3),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      message,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: context.fomraTextPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Please wait…',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: context.fomraTextSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 // ── Photo upload ──────────────────────────────────────────────────────────────
 
 class AddLeadPhotoDraft {
@@ -1148,6 +1208,51 @@ class _AddLeadPhotoUploadState extends State<AddLeadPhotoUpload> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        if (widget.compressing) ...[
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: AppColors.primary.withValues(alpha: 0.22),
+              ),
+            ),
+            child: Row(
+              children: [
+                const SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(strokeWidth: 2.5),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Compressing photo…',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: context.fomraTextPrimary,
+                        ),
+                      ),
+                      Text(
+                        'Optimizing to 250 KB before preview',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: context.fomraTextSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
         if (_total > 0) ...[
           Wrap(
             spacing: 10,

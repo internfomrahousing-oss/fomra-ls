@@ -3,6 +3,20 @@ import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_theme_context.dart';
 
+/// Centered modal with the app's lighter scrim (avoids default black54 dullness).
+Future<T?> showFomraDialog<T>({
+  required BuildContext context,
+  required WidgetBuilder builder,
+  bool barrierDismissible = true,
+}) {
+  return showDialog<T>(
+    context: context,
+    barrierDismissible: barrierDismissible,
+    barrierColor: AppColors.modalScrim,
+    builder: builder,
+  );
+}
+
 /// Shows a "Sign out?" confirmation dialog. Returns true if the user confirms.
 Future<bool> confirmSignOut(BuildContext context) async {
   final ok = await showDialog<bool>(

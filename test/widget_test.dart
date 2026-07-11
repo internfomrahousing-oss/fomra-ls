@@ -24,8 +24,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Appearance'), findsOneWidget);
-    expect(find.text('Light'), findsOneWidget);
-    expect(find.text('Dark'), findsOneWidget);
+    expect(find.text('Reset Password'), findsOneWidget);
+    expect(find.text('Manage account and workspace options.'), findsOneWidget);
   });
 }

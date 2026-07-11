@@ -7,6 +7,7 @@ import '../land_lead/add_lead_screen.dart';
 import '../land_lead/filtered_leads_screen.dart';
 import '../land_lead/lead_detail_screen.dart';
 import '../land_lead/leads_map_screen.dart';
+import '../land_lead/management_visit_review_dialog.dart';
 import '../task_management/task_management_screen.dart';
 import 'contact_directory_screen.dart';
 import '../settings/change_password_screen.dart';
@@ -22,6 +23,7 @@ import '../../theme/fomra_theme_context.dart';
 import '../../models/app_notification.dart';
 import '../../widgets/fomra_app_bar.dart';
 import '../../widgets/fomra_app_shell.dart';
+import '../../widgets/management_executive_dashboard.dart';
 import '../../widgets/portal_home_sections.dart';
 import '../../widgets/ui/app_components.dart';
 
@@ -53,7 +55,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       AuthService.instance.isManagement ? 'management' : 'employee';
 
   int get _activeLeads =>
-      AppStore.instance.leads.where((l) => l.status.isActive).length;
+      _homeSummaryLeads.where((l) => l.status.isActive).length;
 
   int get _unreadCount => _notifications.where((n) => !n.isRead).length;
 
@@ -93,13 +95,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   /// Leads added by the currently signed-in user (matched by creator name).
-  int get _myLeadCount {
+  List<LandLead> get _myLeads {
     final me = (AuthService.instance.currentUser?.fullName ?? '').trim();
-    if (me.isEmpty) return 0;
+    if (me.isEmpty) return AppStore.instance.leads;
     return AppStore.instance.leads
         .where((l) => l.createdByName.trim() == me)
-        .length;
+        .toList();
   }
+
+  /// Summary tiles on home — all leads for management, own leads for employees.
+  List<LandLead> get _homeSummaryLeads =>
+      _isManagement ? AppStore.instance.leads : _myLeads;
+
+  int get _myLeadCount => _myLeads.length;
 
   @override
   void dispose() {
@@ -129,7 +137,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     try {
       final list = await NotificationsService.getAll(audience: _notifAudience);
       final filtered = list
-          .where((n) => !_isManagementLeadNotification(n) && _isForMe(n))
+          .where((n) =>
+              !_isManagementLeadNotification(n) &&
+              !_isNewLeadUploadNotification(n) &&
+              _isForMe(n))
           .toList();
       if (mounted) {
         _emitNewNotificationToasts(filtered);
@@ -145,6 +156,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   bool _isManagementLeadNotification(AppNotification n) =>
       n.type == NotificationType.lead &&
       n.title.toLowerCase().contains('by management');
+
+  bool _isNewLeadUploadNotification(AppNotification n) =>
+      n.type == NotificationType.lead &&
+      n.title.toLowerCase().contains('new lead uploaded');
 
   /// An assignment notification is only for the employees it was assigned to.
   /// The assignees are named in the message ("… — assigned to pooja, vijay"),
@@ -208,6 +223,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         NotificationType.document     => AppColors.success,
         NotificationType.alert        => AppColors.error,
         NotificationType.verification => AppColors.secondary,
+        NotificationType.siteVisit    => AppColors.primary,
       };
 
   IconData _notifTypeIcon(NotificationType t) => switch (t) {
@@ -216,6 +232,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         NotificationType.document     => Icons.description,
         NotificationType.alert        => Icons.warning_amber,
         NotificationType.verification => Icons.verified,
+        NotificationType.siteVisit    => Icons.apartment_outlined,
       };
 
   void _toggleNotifications() {
@@ -256,11 +273,21 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           NotificationsService.markAllRead(audience: _notifAudience)
               .catchError((_) {});
         },
-        onOpen: (n) {
+        onOpen: (n) async {
           _hideNotifications();
-          if (n.type != NotificationType.lead) return;
-          // Open the specific lead's detail when we can resolve it; otherwise
-          // fall back to the land lead list.
+          if (n.type == NotificationType.siteVisit &&
+              _isManagement &&
+              n.referenceId != null) {
+            await showManagementVisitReviewDialog(
+              context,
+              visitId: n.referenceId!,
+              leadId: n.leadId,
+            );
+            return;
+          }
+          if (n.type != NotificationType.lead && n.type != NotificationType.siteVisit) {
+            return;
+          }
           LandLead? lead;
           for (final l in AppStore.instance.leads) {
             if (l.leadId == n.leadId) {
@@ -273,7 +300,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               context,
               MaterialPageRoute(builder: (_) => LeadDetailScreen(lead: lead!)),
             );
-          } else {
+          } else if (n.leadId != null) {
             Navigator.pushNamed(context, '/land-lead');
           }
         },
@@ -326,7 +353,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const AddLeadScreen()),
-    );
+    ).then((saved) {
+      if (saved is! LandLead || !mounted) return;
+      AppStore.instance.addLead(saved);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Lead ${saved.leadId} saved.'),
+        backgroundColor: AppColors.success,
+      ));
+    });
   }
 
   @override
@@ -340,16 +374,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final greeting = portalTimeGreeting(_clock, displayName);
     final dateLabel = portalHomeDateLabel(_clock);
     final leads = AppStore.instance.leads;
-    final totalLeads = leads.length;
+    final summaryLeads = _homeSummaryLeads;
+    final totalLeads = summaryLeads.length;
     final brokerLeads =
-        leads.where((l) => l.inputSource == InputSource.broker).length;
+        summaryLeads.where((l) => l.inputSource == InputSource.broker).length;
     final teamRows = buildPortalTeamPerformance(leads);
-    final leadsByEmployee = <String, List<LandLead>>{};
-    for (final lead in leads) {
-      final name = lead.createdByName.trim();
-      if (name.isEmpty || name.toLowerCase() == 'management') continue;
-      leadsByEmployee.putIfAbsent(name, () => []).add(lead);
-    }
 
     final quickActions = [
       if (_isManagement)
@@ -368,7 +397,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         ),
       if (_isManagement)
         PortalQuickAction(
-          label: 'Show all projects map',
+          label: 'Show all projects',
           icon: Icons.map_outlined,
           accent: AppColors.info,
           onTap: () => _openAllProjectsMap(leads),
@@ -482,76 +511,65 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               const SizedBox(height: AppSpacing.lg),
               PortalFadeSection(
                 index: 2,
-                child: PortalSectionCard(
-                  title: _isManagement
-                      ? 'Employee performance'
-                      : 'My performance',
-                  subtitle: _isManagement
-                      ? 'Ranking and activity by employee'
-                      : 'Your lead contribution this period',
-                  icon: Icons.groups_rounded,
-                  child: _isManagement
-                      ? (teamRows.isEmpty
-                          ? Column(
-                              children: [
-                                EmptyState(
-                                  icon: Icons.groups_outlined,
-                                  title: 'No leads yet',
-                                  message:
-                                      'Leads added by your employees will appear here automatically.',
-                                  action: PrimaryButton(
-                                    label: 'View Leads',
-                                    icon: Icons.list_alt_outlined,
-                                    onPressed: () => _goTo('/land-lead'),
-                                  ),
+                child: _isManagement
+                    ? ManagementExecutiveDashboard(
+                        leads: leads,
+                        teamRows: teamRows,
+                        notifications: _notifications,
+                        onViewLead: (lead) {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => LeadDetailScreen(lead: lead),
+                            ),
+                          );
+                        },
+                      )
+                    : LayoutBuilder(
+                        builder: (context, constraints) {
+                          final sideBySide = constraints.maxWidth >= 640;
+                          final performance = PortalSectionCard(
+                            title: 'My performance',
+                            subtitle:
+                                'Your lead contribution this period',
+                            icon: Icons.groups_rounded,
+                            child: _EmployeePerformanceCard(
+                              count: _myLeadCount,
+                            ),
+                          );
+                          final todayTasks = _EmployeeTodayTasksSection(
+                            employeeName: userName,
+                            onOpenLead: (lead) {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      LeadDetailScreen(lead: lead),
                                 ),
-                                const PortalEmptyHint(
-                                  hint:
-                                      'Leads added by your employees will appear here automatically.',
-                                ),
-                              ],
-                            )
-                          : Column(
+                              );
+                            },
+                          );
+                          if (!sideBySide) {
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
-                                for (final row in teamRows) ...[
-                                  PortalPerformanceRow(
-                                    data: row,
-                                    leads: leadsByEmployee[row.name] ?? const [],
-                                    onViewLead: (lead) {
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (_) =>
-                                              LeadDetailScreen(lead: lead),
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                  if (row != teamRows.last)
-                                    const SizedBox(height: AppSpacing.sm),
-                                ],
+                                performance,
+                                const SizedBox(height: AppSpacing.lg),
+                                todayTasks,
                               ],
-                            ))
-                      : _EmployeePerformanceCard(count: _myLeadCount),
-                ),
+                            );
+                          }
+                          return Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(child: performance),
+                              const SizedBox(width: AppSpacing.lg),
+                              Expanded(child: todayTasks),
+                            ],
+                          );
+                        },
+                      ),
               ),
-              if (!_isManagement) ...[
-                const SizedBox(height: AppSpacing.lg),
-                PortalFadeSection(
-                  index: 3,
-                  child: _EmployeeTodayTasksSection(
-                    employeeName: userName,
-                    onOpenLead: (lead) {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => LeadDetailScreen(lead: lead),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
               const SizedBox(height: 88),
             ],
           ),
@@ -991,6 +1009,7 @@ class _NotificationsDropdown extends StatelessWidget {
         NotificationType.document     => AppColors.success,
         NotificationType.alert        => AppColors.error,
         NotificationType.verification => AppColors.secondary,
+        NotificationType.siteVisit    => AppColors.primary,
       };
 
   IconData _typeIcon(NotificationType t) => switch (t) {
@@ -999,6 +1018,7 @@ class _NotificationsDropdown extends StatelessWidget {
         NotificationType.document     => Icons.description,
         NotificationType.alert        => Icons.warning_amber,
         NotificationType.verification => Icons.verified,
+        NotificationType.siteVisit    => Icons.apartment_outlined,
       };
 }
 

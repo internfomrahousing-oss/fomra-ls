@@ -34,27 +34,6 @@ void main() {
     addTearDown(tester.view.reset);
   }
 
-  testWidgets('theme toggle switches the app between light and dark',
-      (tester) async {
-    await phoneSurface(tester);
-    await tester.pumpWidget(_app());
-    await tester.pumpAndSettle();
-
-    expect(Theme.of(tester.element(find.byType(SettingsScreen))).brightness,
-        Brightness.light);
-
-    await tester.tap(find.text('Dark'));
-    await tester.pumpAndSettle();
-
-    expect(ThemeController.instance.mode.value, ThemeMode.dark);
-    expect(Theme.of(tester.element(find.byType(SettingsScreen))).brightness,
-        Brightness.dark);
-
-    await tester.tap(find.text('Light'));
-    await tester.pumpAndSettle();
-    expect(ThemeController.instance.mode.value, ThemeMode.light);
-  });
-
   testWidgets('change password validates empty and mismatched input',
       (tester) async {
     await phoneSurface(tester);

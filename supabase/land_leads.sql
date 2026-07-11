@@ -38,6 +38,8 @@ CREATE TABLE IF NOT EXISTS land_leads (
 
 -- For databases created before created_by_name existed.
 ALTER TABLE land_leads ADD COLUMN IF NOT EXISTS created_by_name TEXT DEFAULT '';
+ALTER TABLE land_leads ADD COLUMN IF NOT EXISTS drop_reason TEXT NOT NULL DEFAULT '';
+ALTER TABLE land_leads ADD COLUMN IF NOT EXISTS drop_notes TEXT NOT NULL DEFAULT '';
 
 -- Backfill leads uploaded before per-user tracking existed. Safe to re-run:
 -- only touches rows with no recorded uploader; new leads always set a name.

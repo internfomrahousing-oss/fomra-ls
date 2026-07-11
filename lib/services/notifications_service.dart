@@ -29,6 +29,7 @@ class NotificationsService {
     String message = '',
     String type = 'alert',
     String? leadId,
+    String? referenceId,
   }) async {
     await _db.from('notifications').insert({
       'audience': audience,
@@ -36,6 +37,7 @@ class NotificationsService {
       'title': title,
       'message': message,
       if (leadId != null) 'lead_id': leadId,
+      if (referenceId != null) 'reference_id': referenceId,
     });
   }
 

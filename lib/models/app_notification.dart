@@ -6,6 +6,7 @@ class AppNotification {
   final NotificationType type;
   final String audience;
   final String? leadId;
+  final String? referenceId;
   bool isRead;
 
   AppNotification({
@@ -16,6 +17,7 @@ class AppNotification {
     required this.type,
     this.audience = 'management',
     this.leadId,
+    this.referenceId,
     this.isRead = false,
   });
 
@@ -27,14 +29,18 @@ class AppNotification {
         type: _typeFromName(r['type'] as String?),
         audience: r['audience'] as String? ?? 'management',
         leadId: r['lead_id'] as String?,
+        referenceId: r['reference_id'] as String?,
         isRead: r['is_read'] as bool? ?? false,
       );
 
-  static NotificationType _typeFromName(String? name) =>
-      NotificationType.values.firstWhere(
-        (t) => t.name == name,
-        orElse: () => NotificationType.alert,
-      );
+  static NotificationType _typeFromName(String? name) => switch (name) {
+        'site_visit' => NotificationType.siteVisit,
+        'lead' => NotificationType.lead,
+        'task' => NotificationType.task,
+        'document' => NotificationType.document,
+        'verification' => NotificationType.verification,
+        _ => NotificationType.alert,
+      };
 }
 
-enum NotificationType { lead, task, document, alert, verification }
+enum NotificationType { lead, task, document, alert, verification, siteVisit }

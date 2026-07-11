@@ -7,6 +7,7 @@ import 'package:pdf/widgets.dart' as pw;
 
 import '../models/employee_profile.dart';
 import '../models/land_lead.dart';
+import '../utils/contact_directory.dart';
 import 'csv_saver_stub.dart'
     if (dart.library.html) 'csv_saver_web.dart'
     if (dart.library.io) 'csv_saver_io.dart';
@@ -20,6 +21,11 @@ enum LeadReportType {
   acquiredLeads,
   brokerLeads,
   employeeLeads,
+}
+
+enum OtherReportType {
+  ownerReports,
+  brokerReports,
 }
 
 enum ReportFormat { pdf, excel }
@@ -72,9 +78,31 @@ class ReportService {
     List<LandLead> leads, {
     List<EmployeeProfile> employees = const [],
     LeadReportType reportType = LeadReportType.all,
+    OtherReportType? otherReportType,
     String? employeeName,
     ReportFormat format = ReportFormat.pdf,
   }) async {
+    if (otherReportType != null) {
+      final fileName = reportFileName(
+        otherReportType: otherReportType,
+        format: format,
+      );
+      if (format == ReportFormat.excel) {
+        final bytes = buildOtherExcelReport(
+          leads,
+          otherReportType: otherReportType,
+        );
+        await saveCsv(bytes, fileName);
+        return;
+      }
+      final bytes = await _buildOtherPdfReport(
+        leads,
+        otherReportType: otherReportType,
+      );
+      await savePdf(bytes, fileName);
+      return;
+    }
+
     final fileName = reportFileName(
       reportType: reportType,
       employeeName: employeeName,
@@ -105,8 +133,13 @@ class ReportService {
     List<LandLead> leads, {
     List<EmployeeProfile> employees = const [],
     LeadReportType reportType = LeadReportType.all,
+    OtherReportType? otherReportType,
     String? employeeName,
   }) {
+    if (otherReportType != null) {
+      return _buildOtherPreview(leads, otherReportType: otherReportType);
+    }
+
     final acquired =
         leads.where((l) => l.status.isAcquired).toList();
     final broker =
@@ -139,12 +172,14 @@ class ReportService {
     List<LandLead> leads, {
     List<EmployeeProfile> employees = const [],
     LeadReportType reportType = LeadReportType.all,
+    OtherReportType? otherReportType,
     String? employeeName,
   }) {
     final preview = buildPreview(
       leads,
       employees: employees,
       reportType: reportType,
+      otherReportType: otherReportType,
       employeeName: employeeName,
     );
     final buffer = StringBuffer();
@@ -177,19 +212,25 @@ class ReportService {
   /// The download file name for a given report selection.
   static String reportFileName({
     LeadReportType reportType = LeadReportType.all,
+    OtherReportType? otherReportType,
     String? employeeName,
     ReportFormat format = ReportFormat.pdf,
   }) {
-    final suffix = switch (reportType) {
-      LeadReportType.all => 'All',
-      LeadReportType.totalLeads => 'Total_Leads',
-      LeadReportType.acquiredLeads => 'Acquired_Leads',
-      LeadReportType.brokerLeads => 'Broker_Leads',
-      LeadReportType.employeeLeads =>
-        employeeName == null || employeeName.trim().isEmpty
-            ? 'Employee_Leads_All'
-            : 'Employee_${_fileSafe(employeeName)}',
-    };
+    final suffix = otherReportType != null
+        ? switch (otherReportType) {
+            OtherReportType.ownerReports => 'Owner_Reports',
+            OtherReportType.brokerReports => 'Broker_Reports',
+          }
+        : switch (reportType) {
+            LeadReportType.all => 'Lead_Based_All',
+            LeadReportType.totalLeads => 'Total_Leads',
+            LeadReportType.acquiredLeads => 'Acquired_Leads',
+            LeadReportType.brokerLeads => 'Broker_Leads',
+            LeadReportType.employeeLeads =>
+              employeeName == null || employeeName.trim().isEmpty
+                  ? 'Employee_Leads_All'
+                  : 'Employee_${_fileSafe(employeeName)}',
+          };
     final ext = format == ReportFormat.excel ? 'csv' : 'pdf';
     return 'FomraLS_Report_${suffix}_'
         '${DateFormat('yyyyMMdd').format(DateTime.now())}.$ext';
@@ -244,7 +285,9 @@ class ReportService {
 
   // ── Sections ────────────────────────────────────────────────────────────
 
-  static pw.Widget _title(DateTime now) => pw.Column(
+  static pw.Widget _title(DateTime now,
+          {String reportLabel = 'Land Acquisition Report'}) =>
+      pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
           pw.Text(
@@ -253,7 +296,7 @@ class ReportService {
                 fontSize: 18, fontWeight: pw.FontWeight.bold, color: _brand),
           ),
           pw.SizedBox(height: 2),
-          pw.Text('Land Acquisition Report',
+          pw.Text(reportLabel,
               style: const pw.TextStyle(fontSize: 12, color: _ink)),
           pw.Text('Generated ${_stamp.format(now)}',
               style: const pw.TextStyle(fontSize: 9, color: _muted)),
@@ -437,6 +480,197 @@ class ReportService {
               emptyMsg: 'No leads found for $requested.'),
         ];
     }
+  }
+
+  // ── Owner / Broker directory reports ─────────────────────────────────────
+
+  static ReportPreviewData _buildOtherPreview(
+    List<LandLead> leads, {
+    required OtherReportType otherReportType,
+  }) {
+    final section = _otherReportSection(leads, otherReportType);
+    final kind = otherReportType == OtherReportType.ownerReports
+        ? ContactDirectoryKind.owner
+        : ContactDirectoryKind.broker;
+    final entries = buildContactDirectoryEntries(leads, kind);
+    final linkedLeads = entries.fold<int>(0, (sum, e) => sum + e.leads.length);
+    final acquired = entries.fold<int>(
+      0,
+      (sum, e) => sum + e.leads.where((l) => l.status.isAcquired).length,
+    );
+
+    return ReportPreviewData(
+      generatedAt: DateTime.now(),
+      summary: [
+        (
+          label: otherReportType == OtherReportType.ownerReports
+              ? 'Owners'
+              : 'Brokers',
+          value: '${entries.length}',
+        ),
+        (label: 'Linked leads', value: '$linkedLeads'),
+        (label: 'Acquired', value: '$acquired'),
+      ],
+      sections: [section],
+    );
+  }
+
+  static ReportPreviewSection _otherReportSection(
+    List<LandLead> leads,
+    OtherReportType otherReportType,
+  ) {
+    final kind = otherReportType == OtherReportType.ownerReports
+        ? ContactDirectoryKind.owner
+        : ContactDirectoryKind.broker;
+    final entries = buildContactDirectoryEntries(leads, kind);
+    final isOwner = otherReportType == OtherReportType.ownerReports;
+
+    return ReportPreviewSection(
+      title: isOwner ? 'Owner Reports' : 'Broker Reports',
+      headers: isOwner
+          ? const [
+              'Owner Name',
+              'Contact',
+              'Leads',
+              'Acquired',
+              'Lead IDs',
+              'Locations',
+            ]
+          : const [
+              'Broker Name',
+              'Contact',
+              'Leads',
+              'Acquired',
+              'Lead IDs',
+            ],
+      rows: entries
+          .map(
+            (e) => isOwner
+                ? [
+                    e.name,
+                    e.contact.isEmpty ? '-' : e.contact,
+                    '${e.leads.length}',
+                    '${e.leads.where((l) => l.status.isAcquired).length}',
+                    e.leads.map((l) => l.leadId).join(', '),
+                    e.leads
+                        .map((l) => l.location.trim())
+                        .where((s) => s.isNotEmpty)
+                        .toSet()
+                        .join('; '),
+                  ]
+                : [
+                    e.name,
+                    e.contact.isEmpty ? '-' : e.contact,
+                    '${e.leads.length}',
+                    '${e.leads.where((l) => l.status.isAcquired).length}',
+                    e.leads.map((l) => l.leadId).join(', '),
+                  ],
+          )
+          .toList(),
+      emptyMessage: isOwner
+          ? 'No owner records found in leads.'
+          : 'No broker records found in leads.',
+    );
+  }
+
+  static Uint8List buildOtherExcelReport(
+    List<LandLead> leads, {
+    required OtherReportType otherReportType,
+  }) {
+    return buildExcelReport(
+      leads,
+      otherReportType: otherReportType,
+    );
+  }
+
+  static Future<Uint8List> _buildOtherPdfReport(
+    List<LandLead> leads, {
+    required OtherReportType otherReportType,
+  }) async {
+    final preview = _buildOtherPreview(leads, otherReportType: otherReportType);
+    final section = preview.sections.first;
+    final now = DateTime.now();
+    final title = otherReportType == OtherReportType.ownerReports
+        ? 'Owner Reports'
+        : 'Broker Reports';
+
+    final doc = pw.Document(
+      title: 'FomraLS $title',
+      author: 'Fomra Housing & Infrastructure Pvt. Ltd.',
+    );
+
+    doc.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4.landscape,
+        margin: const pw.EdgeInsets.all(28),
+        footer: _footer,
+        build: (ctx) => [
+          _title(now, reportLabel: title),
+          pw.SizedBox(height: 14),
+          pw.Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: preview.summary
+                .map(
+                  (s) => pw.Container(
+                    padding: const pw.EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 8,
+                    ),
+                    decoration: pw.BoxDecoration(
+                      color: _tileBg,
+                      borderRadius: pw.BorderRadius.circular(6),
+                      border: pw.Border.all(color: _border),
+                    ),
+                    child: pw.Text(
+                      '${s.label}: ${s.value}',
+                      style: const pw.TextStyle(
+                        fontSize: 10,
+                        fontWeight: pw.FontWeight.bold,
+                        color: _ink,
+                      ),
+                    ),
+                  ),
+                )
+                .toList(),
+          ),
+          pw.SizedBox(height: 20),
+          _sectionTitle(section.title, section.count),
+          _directoryTable(section),
+        ],
+      ),
+    );
+
+    return doc.save();
+  }
+
+  static pw.Widget _directoryTable(ReportPreviewSection section) {
+    if (section.rows.isEmpty) {
+      return pw.Text(
+        section.emptyMessage,
+        style: const pw.TextStyle(
+          fontSize: 10,
+          color: _muted,
+          fontStyle: pw.FontStyle.italic,
+        ),
+      );
+    }
+    return pw.TableHelper.fromTextArray(
+      headers: section.headers,
+      data: section.rows,
+      border: pw.TableBorder.all(color: _border, width: 0.5),
+      headerStyle: const pw.TextStyle(
+        fontSize: 9,
+        fontWeight: pw.FontWeight.bold,
+        color: PdfColors.white,
+      ),
+      headerDecoration: const pw.BoxDecoration(color: _brand),
+      cellStyle: const pw.TextStyle(fontSize: 8.5, color: _ink),
+      oddRowDecoration: const pw.BoxDecoration(color: _zebra),
+      cellAlignment: pw.Alignment.centerLeft,
+      cellPadding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 4),
+      headerHeight: 18,
+    );
   }
 
   static String _csv(String value) {

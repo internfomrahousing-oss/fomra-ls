@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 class AppColors {
-  // ── Brand ── aligned to design brief (reduced blue, softer) ───────────────────
-  static const Color primary      = Color(0xFF2563EB); // blue-600
-  static const Color primaryLight = Color(0xFF60A5FA); // blue-400
-  static const Color primaryDark  = Color(0xFF1D4ED8); // blue-700
+  // ── Brand ── Royal Blue (#2563EB) ─────────────────────────────────────────────
+  static const Color primary      = Color(0xFF2563EB);
+  static const Color primaryLight = Color(0xFF2563EB);
+  static const Color primaryDark  = Color(0xFF2563EB);
   static const Color secondary    = Color(0xFF8B5CF6); // violet-500 (purple accent)
-  static const Color accent       = Color(0xFF60A5FA);
+  static const Color accent       = Color(0xFF2563EB);
   static const Color accentLight  = Color(0xFFFBBF24);
   static const Color purple       = Color(0xFF8B5CF6);
 
@@ -31,6 +31,9 @@ class AppColors {
   static const Color darkTextSecondary = Color(0xFF94A3B8);
   static const Color darkTextTertiary  = Color(0xFF64748B);
 
+  /// Subtle modal scrim for centered dialogs — lighter than Flutter's default black54.
+  static const Color modalScrim = Color(0x40000000); // black @ 25%
+
   // ── Semantic ── aligned to design brief ───────────────────────────────────────
   static const Color success = Color(0xFF10B981); // emerald-500
   static const Color warning = Color(0xFFF59E0B); // amber-500
@@ -39,7 +42,7 @@ class AppColors {
 
   // ── Gradients ────────────────────────────────────────────────────────────────
   static const LinearGradient primaryGradient = LinearGradient(
-    colors: [Color(0xFF1D4ED8), Color(0xFF2563EB)],
+    colors: [Color(0xFF2563EB), Color(0xFF2563EB)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
@@ -170,7 +173,7 @@ ThemeData appTheme() {
       ),
       iconTheme: IconThemeData(color: Colors.white),
     ),
-    drawerTheme: const DrawerThemeData(backgroundColor: AppColors.primaryDark),
+    drawerTheme: const DrawerThemeData(backgroundColor: AppColors.primary),
     cardTheme: CardThemeData(
       color: AppColors.surface,
       elevation: 0,
@@ -317,7 +320,7 @@ ThemeData appThemeDark() {
     colorScheme: ColorScheme.fromSeed(
       seedColor: AppColors.primary,
       brightness: Brightness.dark,
-      primary:   AppColors.primaryLight,
+      primary:   AppColors.primary,
       secondary: AppColors.secondary,
       tertiary:  AppColors.accent,
       surface:   AppColors.darkSurface,
@@ -354,7 +357,7 @@ ThemeData appThemeDark() {
     ),
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
-        backgroundColor: AppColors.primaryLight,
+        backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         elevation: 0,
         shadowColor: Colors.transparent,
@@ -370,8 +373,8 @@ ThemeData appThemeDark() {
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
-        foregroundColor: AppColors.primaryLight,
-        side: const BorderSide(color: AppColors.primaryLight, width: 1.5),
+        foregroundColor: AppColors.primary,
+        side: const BorderSide(color: AppColors.primary, width: 1.5),
         shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppColors.radiusSm)),
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 15),
@@ -383,7 +386,7 @@ ThemeData appThemeDark() {
     ),
     textButtonTheme: TextButtonThemeData(
       style: TextButton.styleFrom(
-        foregroundColor: AppColors.primaryLight,
+        foregroundColor: AppColors.primary,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         textStyle: const TextStyle(
             fontFamily: fontFamily,
@@ -405,7 +408,7 @@ ThemeData appThemeDark() {
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: AppColors.primaryLight, width: 2),
+        borderSide: const BorderSide(color: AppColors.primary, width: 2),
       ),
       errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
@@ -446,7 +449,7 @@ ThemeData appThemeDark() {
           fontWeight: FontWeight.w400),
     ),
     floatingActionButtonTheme: FloatingActionButtonThemeData(
-      backgroundColor: AppColors.primaryLight,
+      backgroundColor: AppColors.primary,
       foregroundColor: Colors.white,
       elevation: 4,
       shape: RoundedRectangleBorder(

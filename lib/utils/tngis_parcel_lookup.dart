@@ -67,6 +67,23 @@ class TngisParcelDetails {
     return '$code (${ruralUrban!.trim()})';
   }
 
+  /// Land extent from TNGIS parcel attributes (Ares).
+  String? get landExtentDisplay {
+    final aresRaw = _field(fields, 'Extent (Ares)');
+    if (aresRaw == null) return null;
+    final ares = double.tryParse(aresRaw.replaceAll(',', ''));
+    if (ares == null || ares <= 0) return '$aresRaw ares';
+    // 1 acre ≈ 40.4686 ares (standard TN cadastral conversion).
+    final acres = ares / 40.4686;
+    if (acres >= 0.05) {
+      final acresText = acres >= 10
+          ? acres.toStringAsFixed(1)
+          : acres.toStringAsFixed(2);
+      return '$acresText acres ($aresRaw ares)';
+    }
+    return '$aresRaw ares';
+  }
+
   static bool _hasText(String? value) => (value ?? '').trim().isNotEmpty;
 }
 

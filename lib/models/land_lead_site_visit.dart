@@ -10,12 +10,36 @@ enum LandLeadSiteVisitType {
       };
 }
 
+enum SiteVisitApprovalStatus {
+  pending,
+  approved,
+  rejected;
+
+  String get dbValue => name;
+
+  String get label => switch (this) {
+        SiteVisitApprovalStatus.pending => 'Pending approval',
+        SiteVisitApprovalStatus.approved => 'Approved',
+        SiteVisitApprovalStatus.rejected => 'Rejected',
+      };
+
+  static SiteVisitApprovalStatus parse(String? raw) =>
+      SiteVisitApprovalStatus.values.firstWhere(
+        (s) => s.dbValue == raw,
+        orElse: () => SiteVisitApprovalStatus.approved,
+      );
+}
+
 class LandLeadSiteVisit {
   final String id;
   final String leadId;
   final DateTime visitedAt;
   final String loggedByName;
   final LandLeadSiteVisitType visitType;
+  final SiteVisitApprovalStatus approvalStatus;
+  final String managementNotes;
+  final DateTime? reviewedAt;
+  final String reviewedByName;
 
   const LandLeadSiteVisit({
     required this.id,
@@ -23,7 +47,15 @@ class LandLeadSiteVisit {
     required this.visitedAt,
     required this.loggedByName,
     this.visitType = LandLeadSiteVisitType.employee,
+    this.approvalStatus = SiteVisitApprovalStatus.approved,
+    this.managementNotes = '',
+    this.reviewedAt,
+    this.reviewedByName = '',
   });
+
+  bool get needsApproval =>
+      visitType == LandLeadSiteVisitType.management &&
+      approvalStatus == SiteVisitApprovalStatus.pending;
 
   factory LandLeadSiteVisit.fromJson(Map<String, dynamic> j) {
     final rawType = j['visit_type'] as String? ?? 'employee';
@@ -31,12 +63,20 @@ class LandLeadSiteVisit {
       (t) => t.dbValue == rawType,
       orElse: () => LandLeadSiteVisitType.employee,
     );
+    final reviewedRaw = j['reviewed_at'];
     return LandLeadSiteVisit(
       id: j['id'] as String,
       leadId: j['lead_id'] as String,
       visitedAt: DateTime.parse(j['visited_at'] as String),
       loggedByName: j['logged_by_name'] as String? ?? '',
       visitType: visitType,
+      approvalStatus:
+          SiteVisitApprovalStatus.parse(j['approval_status'] as String?),
+      managementNotes: j['management_notes'] as String? ?? '',
+      reviewedAt: reviewedRaw == null
+          ? null
+          : DateTime.tryParse(reviewedRaw as String),
+      reviewedByName: j['reviewed_by_name'] as String? ?? '',
     );
   }
 }

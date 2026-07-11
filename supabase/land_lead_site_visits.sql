@@ -8,11 +8,23 @@ CREATE TABLE IF NOT EXISTS land_lead_site_visits (
   visit_type       TEXT        NOT NULL DEFAULT 'employee',
   logged_by_name   TEXT        NOT NULL DEFAULT '',
   logged_by        UUID,
+  approval_status  TEXT        NOT NULL DEFAULT 'approved',
+  management_notes TEXT        NOT NULL DEFAULT '',
+  reviewed_at      TIMESTAMPTZ,
+  reviewed_by_name TEXT        NOT NULL DEFAULT '',
   created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 ALTER TABLE land_lead_site_visits
   ADD COLUMN IF NOT EXISTS visit_type TEXT NOT NULL DEFAULT 'employee';
+ALTER TABLE land_lead_site_visits
+  ADD COLUMN IF NOT EXISTS approval_status TEXT NOT NULL DEFAULT 'approved';
+ALTER TABLE land_lead_site_visits
+  ADD COLUMN IF NOT EXISTS management_notes TEXT NOT NULL DEFAULT '';
+ALTER TABLE land_lead_site_visits
+  ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMPTZ;
+ALTER TABLE land_lead_site_visits
+  ADD COLUMN IF NOT EXISTS reviewed_by_name TEXT NOT NULL DEFAULT '';
 
 CREATE INDEX IF NOT EXISTS idx_land_lead_site_visits_lead_id
   ON land_lead_site_visits(lead_id);

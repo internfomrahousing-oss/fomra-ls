@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../models/add_lead_result.dart';
 import '../../models/land_lead.dart';
 import '../../models/land_lead_site_visit.dart';
 import '../../models/lead_call_log.dart';
+import '../../models/lead_drop_reason.dart';
 import '../../services/app_store.dart';
+import '../../services/auth_service.dart';
 import '../../services/land_lead_service.dart';
 import '../../services/land_lead_site_visit_service.dart';
 import '../../services/lead_call_log_service.dart';
@@ -13,12 +14,12 @@ import '../../theme/app_theme.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../widgets/fomra_app_shell.dart';
 import '../../widgets/fomra_breadcrumb.dart';
-import '../../widgets/separate_date_time_fields.dart';
 import '../../widgets/ui/app_components.dart';
 import '../market_intelligence/market_intelligence_screen.dart';
 import '../task_management/task_management_screen.dart';
 import 'add_lead_screen.dart';
 import 'calls_log_dialog.dart';
+import 'lead_drop_reason_dialog.dart';
 import 'legal_documents_dialog.dart';
 import 'meeting_log_dialog.dart';
 import 'notes_log_dialog.dart';
@@ -118,53 +119,88 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
 
   int get _leadAgeDays => _leadAgeDaysFromReceived(lead.addedOn);
 
+  bool get _readOnly => AuthService.instance.isManagement;
+
   CallActivityMetrics get _callMetrics =>
       CallActivityMetrics.fromLogs(_callLogs);
 
   Future<void> _openEdit() async {
-    final result = await Navigator.push<AddLeadResult>(
+    if (_readOnly) return;
+    final saved = await Navigator.push<LandLead>(
       context,
       MaterialPageRoute(builder: (_) => AddLeadScreen(existingLead: lead)),
     );
-    if (result == null || !mounted) return;
+    if (saved == null || !mounted) return;
 
-    try {
-      final saved = await LandLeadService.update(
-        result.lead,
-        sitePhotoBytes: result.sitePhotoBytes,
+    AppStore.instance.replaceLead(saved);
+    setState(() => lead = saved);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Lead updated')),
       );
-      AppStore.instance.replaceLead(saved);
-      setState(() => lead = saved);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Lead updated')),
-        );
-      }
-    } catch (e) {
-      AppStore.instance.replaceLead(result.lead);
-      setState(() => lead = result.lead);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Saved locally; sync failed: $e')),
-        );
-      }
     }
   }
 
   Future<void> _changeStatus(LeadStatus? status) async {
+    if (_readOnly) return;
     if (status == null || status == lead.status) return;
+
+    if (status == LeadStatus.dropped) {
+      final result = await showLeadDropReasonDialog(context);
+      if (result == null || !mounted) return;
+
+      final previous = lead;
+      final updated = lead.copyWith(
+        status: LeadStatus.dropped,
+        dropReason: result.reason.dbValue,
+        dropNotes: result.notes,
+      );
+      setState(() => lead = updated);
+      AppStore.instance.replaceLead(updated);
+      try {
+        await LandLeadService.markDropped(
+          leadId: lead.leadId,
+          reason: result.reason,
+          notes: result.notes,
+        );
+      } catch (_) {
+        if (!mounted) return;
+        setState(() => lead = previous);
+        AppStore.instance.replaceLead(previous);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not update drop reason')),
+        );
+      }
+      return;
+    }
+
     final previous = lead.status;
-    setState(() => lead.status = status);
-    AppStore.instance.replaceLead(lead);
+    final previousDropReason = lead.dropReason;
+    final previousDropNotes = lead.dropNotes;
+    final updated = lead.copyWith(
+      status: status,
+      dropReason: '',
+      dropNotes: '',
+    );
+    setState(() => lead = updated);
+    AppStore.instance.replaceLead(updated);
     try {
       await LandLeadService.updateStatus(lead.leadId, status);
     } catch (_) {
-      setState(() => lead.status = previous);
+      if (!mounted) return;
+      setState(() {
+        lead = lead.copyWith(
+          status: previous,
+          dropReason: previousDropReason,
+          dropNotes: previousDropNotes,
+        );
+      });
       AppStore.instance.replaceLead(lead);
     }
   }
 
   Future<void> _launchContact(String scheme) async {
+    if (_readOnly) return;
     final raw = lead.contactDetails.replaceAll(RegExp(r'[^\d+]'), '');
     if (raw.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -197,13 +233,24 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
     if (mounted) setState(() {});
   }
 
+  Future<void> _openViewTasks() async {
+    await showLeadTasksSheet(
+      context,
+      leadId: lead.leadId,
+      leadLabel: lead.ownerName.trim().isNotEmpty ? lead.ownerName.trim() : null,
+    );
+    if (mounted) setState(() {});
+  }
+
   void _handleDetailAction(String label) {
+    if (_readOnly) return;
     _showActionDialog(label);
   }
 
   Future<void> _showActionDialog(String label) async {
+    if (_readOnly) return;
     if (label == 'Calls') {
-      await showDialog<void>(
+      await showFomraDialog<void>(
         context: context,
         builder: (ctx) => CallsLogDialog(
           leadId: lead.leadId,
@@ -215,7 +262,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
     }
 
     if (label == 'Site visit') {
-      await showDialog<void>(
+      await showFomraDialog<void>(
         context: context,
         builder: (ctx) => SiteVisitDialog(
           leadId: lead.leadId,
@@ -231,7 +278,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
     }
 
     if (label == 'Management site visit') {
-      await showDialog<void>(
+      await showFomraDialog<void>(
         context: context,
         builder: (ctx) => SiteVisitDialog.management(
           leadId: lead.leadId,
@@ -242,7 +289,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
     }
 
     if (label == 'Meeting') {
-      await showDialog<void>(
+      await showFomraDialog<void>(
         context: context,
         builder: (ctx) => MeetingLogDialog(
           leadId: lead.leadId,
@@ -258,7 +305,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
     }
 
     if (label == 'Notes') {
-      await showDialog<void>(
+      await showFomraDialog<void>(
         context: context,
         builder: (ctx) => NotesLogDialog(
           lead: lead,
@@ -272,7 +319,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
     }
 
     if (label == 'Legal') {
-      await showDialog<void>(
+      await showFomraDialog<void>(
         context: context,
         builder: (ctx) => LegalDocumentsDialog(leadId: lead.leadId),
       );
@@ -289,7 +336,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
       _ => Icons.touch_app_outlined,
     };
 
-    await showDialog<void>(
+    await showFomraDialog<void>(
       context: context,
       builder: (ctx) => _LeadActionDialog(
         actionLabel: label,
@@ -318,7 +365,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
                 _TopBar(
                   leadId: lead.leadId,
                   onBack: () => Navigator.pop(context),
-                  onEdit: _openEdit,
+                  onEdit: _readOnly ? null : _openEdit,
                 ),
                 FomraBreadcrumbStrip(items: _breadcrumbs),
                 Expanded(
@@ -335,9 +382,11 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
                                   displayName: _displayName,
                                   leadAgeDays: _leadAgeDays,
                                   taskCount: taskCountForLead(lead.leadId),
+                                  readOnly: _readOnly,
                                   onStatusChanged: _changeStatus,
                                   onLaunchContact: _launchContact,
                                   onCreateTask: _openCreateTask,
+                                  onViewTasks: _openViewTasks,
                                 ),
                               ),
                               const SizedBox(width: 12),
@@ -345,6 +394,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
                                 flex: 3,
                                 child: _WorkspacePanel(
                                   lead: lead,
+                                  readOnly: _readOnly,
                                   tabController: _tabController,
                                   tabs: _tabs,
                                   siteVisitCount: _siteVisits.length,
@@ -365,15 +415,18 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
                                 displayName: _displayName,
                                 leadAgeDays: _leadAgeDays,
                                 taskCount: taskCountForLead(lead.leadId),
+                                readOnly: _readOnly,
                                 onStatusChanged: _changeStatus,
                                 onLaunchContact: _launchContact,
                                 onCreateTask: _openCreateTask,
+                                onViewTasks: _openViewTasks,
                               ),
                               const SizedBox(height: 12),
                               SizedBox(
                                 height: constraints.maxHeight * 0.72,
                                 child: _WorkspacePanel(
                                   lead: lead,
+                                  readOnly: _readOnly,
                                   tabController: _tabController,
                                   tabs: _tabs,
                                   siteVisitCount: _siteVisits.length,
@@ -401,12 +454,12 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
 class _TopBar extends StatelessWidget {
   final String leadId;
   final VoidCallback onBack;
-  final VoidCallback onEdit;
+  final VoidCallback? onEdit;
 
   const _TopBar({
     required this.leadId,
     required this.onBack,
-    required this.onEdit,
+    this.onEdit,
   });
 
   @override
@@ -469,18 +522,19 @@ class _TopBar extends StatelessWidget {
               ],
             ),
           ),
-          FilledButton.icon(
-            onPressed: onEdit,
-            icon: const Icon(Icons.edit_outlined, size: 16),
-            label: const Text('Edit lead'),
-            style: FilledButton.styleFrom(
-              backgroundColor: AppColors.purple,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
+          if (onEdit != null)
+            FilledButton.icon(
+              onPressed: onEdit,
+              icon: const Icon(Icons.edit_outlined, size: 16),
+              label: const Text('Edit lead'),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.purple,
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
               ),
             ),
-          ),
         ],
       ),
     );
@@ -492,18 +546,22 @@ class _ProfilePanel extends StatelessWidget {
   final String displayName;
   final int leadAgeDays;
   final int taskCount;
+  final bool readOnly;
   final ValueChanged<LeadStatus?> onStatusChanged;
   final Future<void> Function(String scheme) onLaunchContact;
   final VoidCallback onCreateTask;
+  final VoidCallback onViewTasks;
 
   const _ProfilePanel({
     required this.lead,
     required this.displayName,
     required this.leadAgeDays,
     required this.taskCount,
+    this.readOnly = false,
     required this.onStatusChanged,
     required this.onLaunchContact,
     required this.onCreateTask,
+    required this.onViewTasks,
   });
 
   @override
@@ -624,8 +682,61 @@ class _ProfilePanel extends StatelessWidget {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        _LeadTaskCountBadge(count: taskCount),
-                        if (lead.contactDetails.isNotEmpty) ...[
+                        InkWell(
+                          onTap: onViewTasks,
+                          borderRadius: BorderRadius.circular(14),
+                          child: _LeadTaskCountBadge(count: taskCount),
+                        ),
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          width: 118,
+                          child: FilledButton.icon(
+                            onPressed: onCreateTask,
+                            icon: const Icon(Icons.add_task_outlined, size: 14),
+                            label: const Text('Create'),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: AppColors.primary,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 8,
+                              ),
+                              textStyle: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        SizedBox(
+                          width: 118,
+                          child: OutlinedButton.icon(
+                            onPressed: onViewTasks,
+                            icon: const Icon(Icons.list_alt_outlined, size: 14),
+                            label: const Text('View Tasks'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppColors.primary,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 8,
+                              ),
+                              textStyle: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              side: BorderSide(
+                                color: AppColors.primary.withValues(alpha: 0.4),
+                              ),
+                            ),
+                          ),
+                        ),
+                        if (!readOnly && lead.contactDetails.isNotEmpty) ...[
                           const SizedBox(height: 8),
                           IconButton(
                             tooltip: 'WhatsApp',
@@ -650,6 +761,7 @@ class _ProfilePanel extends StatelessWidget {
                   children: [
                     _StageStatusField(
                       status: lead.status,
+                      readOnly: readOnly,
                       onStatusChanged: onStatusChanged,
                     ),
                     const SizedBox(height: 16),
@@ -664,23 +776,7 @@ class _ProfilePanel extends StatelessWidget {
                     ),
                     const SizedBox(height: 10),
                     _LeadDetailsList(lead: lead, leadAgeDays: leadAgeDays),
-                    const SizedBox(height: 14),
-                    SizedBox(
-                      width: double.infinity,
-                      child: FilledButton.icon(
-                        onPressed: onCreateTask,
-                        icon: const Icon(Icons.add_task_outlined, size: 18),
-                        label: const Text('Create Task'),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: AppColors.purple,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                      ),
-                    ),
-                    if (lead.contactDetails.isNotEmpty) ...[
+                    if (!readOnly && lead.contactDetails.isNotEmpty) ...[
                       const SizedBox(height: 14),
                       SizedBox(
                         width: double.infinity,
@@ -799,6 +895,7 @@ class _LeadTaskCountBadge extends StatelessWidget {
 
 class _WorkspacePanel extends StatelessWidget {
   final LandLead lead;
+  final bool readOnly;
   final TabController tabController;
   final List<String> tabs;
   final int siteVisitCount;
@@ -811,6 +908,7 @@ class _WorkspacePanel extends StatelessWidget {
 
   const _WorkspacePanel({
     required this.lead,
+    this.readOnly = false,
     required this.tabController,
     required this.tabs,
     required this.siteVisitCount,
@@ -836,18 +934,39 @@ class _WorkspacePanel extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              'QUICK ACTIONS',
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 0.6,
-                color: context.fomraTextSecondary,
+            if (!readOnly) ...[
+              Text(
+                'QUICK ACTIONS',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.6,
+                  color: context.fomraTextSecondary,
+                ),
               ),
-            ),
-            const SizedBox(height: 10),
-            _ActionToolbar(onAction: onDetailAction),
-            const SizedBox(height: 16),
+              const SizedBox(height: 10),
+              _ActionToolbar(onAction: onDetailAction),
+              const SizedBox(height: 16),
+            ] else ...[
+              Text(
+                'ACTIVITY',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.6,
+                  color: context.fomraTextSecondary,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                'View-only for management. Use Create Task on the left to assign work.',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: context.fomraTextSecondary,
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
             _ActivitySummaryRow(
               siteVisitCount: siteVisitCount,
               callMetrics: callMetrics,
@@ -1302,6 +1421,15 @@ class _LeadDetailsList extends StatelessWidget {
       ('Input Source', lead.inputSource.label),
       ('Land Type', lead.landType.label),
       ('Status', lead.status.label),
+      if (lead.status == LeadStatus.dropped &&
+          lead.dropReason.trim().isNotEmpty)
+        (
+          'Drop reason',
+          LeadDropReason.parse(lead.dropReason)?.label ?? lead.dropReason,
+        ),
+      if (lead.status == LeadStatus.dropped &&
+          lead.dropNotes.trim().isNotEmpty)
+        ('Drop notes', lead.dropNotes.trim()),
       ('Location', _value(lead.location)),
       ('Village', _value(lead.village)),
       ('Taluk', _value(lead.taluk)),
@@ -1439,7 +1567,7 @@ class _SitePhotoThumbnail extends StatelessWidget {
 }
 
 Future<void> _showSitePhotoLightbox(BuildContext context, String url) {
-  return showDialog<void>(
+  return showFomraDialog<void>(
     context: context,
     builder: (ctx) => Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
@@ -1498,10 +1626,12 @@ Future<void> _showSitePhotoLightbox(BuildContext context, String url) {
 
 class _StageStatusField extends StatelessWidget {
   final LeadStatus status;
+  final bool readOnly;
   final ValueChanged<LeadStatus?> onStatusChanged;
 
   const _StageStatusField({
     required this.status,
+    this.readOnly = false,
     required this.onStatusChanged,
   });
 
@@ -1520,44 +1650,73 @@ class _StageStatusField extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 6),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10),
-          decoration: BoxDecoration(
-            border: Border.all(
-              color: status.color.withValues(alpha: 0.45),
+        if (readOnly)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              border: Border.all(
+                color: status.color.withValues(alpha: 0.45),
+              ),
+              borderRadius: BorderRadius.circular(10),
+              color: status.color.withValues(alpha: 0.06),
             ),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: DropdownButtonHideUnderline(
-            child: DropdownButton<LeadStatus>(
-              value: status,
-              isExpanded: true,
-              items: leadStatusPipelineOrder
-                  .map(
-                    (s) => DropdownMenuItem(
-                      value: s,
-                      child: Row(
-                        children: [
-                          CircleAvatar(
-                            radius: 5,
-                            backgroundColor: s.color,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              s.label,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
-                      ),
+            child: Row(
+              children: [
+                CircleAvatar(radius: 5, backgroundColor: status.color),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    status.label,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: context.fomraTextPrimary,
                     ),
-                  )
-                  .toList(),
-              onChanged: onStatusChanged,
+                  ),
+                ),
+              ],
+            ),
+          )
+        else
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            decoration: BoxDecoration(
+              border: Border.all(
+                color: status.color.withValues(alpha: 0.45),
+              ),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<LeadStatus>(
+                value: status,
+                isExpanded: true,
+                items: leadStatusPipelineOrder
+                    .map(
+                      (s) => DropdownMenuItem(
+                        value: s,
+                        child: Row(
+                          children: [
+                            CircleAvatar(
+                              radius: 5,
+                              backgroundColor: s.color,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                s.label,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                    .toList(),
+                onChanged: onStatusChanged,
+              ),
             ),
           ),
-        ),
       ],
     );
   }
