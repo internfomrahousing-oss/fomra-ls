@@ -349,9 +349,21 @@ class _FooterUser extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final avatar = CircleAvatar(
+      radius: 16,
+      backgroundColor: AppColors.primary.withValues(alpha: 0.14),
+      child: Text(
+        initial,
+        style: const TextStyle(
+          color: AppColors.primary,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+
     return Container(
       padding: EdgeInsets.symmetric(
-        horizontal: expanded ? 10 : 0,
+        horizontal: expanded ? 10 : 8,
         vertical: 8,
       ),
       decoration: BoxDecoration(
@@ -359,65 +371,38 @@ class _FooterUser extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: context.fomraBorder.withValues(alpha: 0.7)),
       ),
-      child: Row(
-        children: [
-          if (!expanded)
-            SizedBox(
-              width: 72,
-              child: Center(
-                child: CircleAvatar(
-                  radius: 16,
-                  backgroundColor: AppColors.primary.withValues(alpha: 0.14),
+      child: expanded
+          ? Row(
+              children: [
+                avatar,
+                const SizedBox(width: 10),
+                Expanded(
                   child: Text(
-                    initial,
-                    style: const TextStyle(
-                      color: AppColors.primary,
-                      fontWeight: FontWeight.w800,
+                    name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: context.fomraTextPrimary,
                     ),
                   ),
                 ),
-              ),
-            ),
-          if (expanded) ...[
-            CircleAvatar(
-              radius: 16,
-              backgroundColor: AppColors.primary.withValues(alpha: 0.14),
-              child: Text(
-                initial,
-                style: const TextStyle(
-                  color: AppColors.primary,
-                  fontWeight: FontWeight.w800,
+                IconButton(
+                  tooltip: 'Sign out',
+                  onPressed: onSignOut,
+                  icon: Icon(
+                    Icons.logout_rounded,
+                    size: 18,
+                    color: context.fomraTextSecondary,
+                  ),
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                 ),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: context.fomraTextPrimary,
-                ),
-              ),
-            ),
-            IconButton(
-              tooltip: 'Sign out',
-              onPressed: onSignOut,
-              icon: Icon(
-                Icons.logout_rounded,
-                size: 18,
-                color: context.fomraTextSecondary,
-              ),
-              visualDensity: VisualDensity.compact,
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-            ),
-          ],
-        ],
-      ),
+              ],
+            )
+          : Center(child: avatar),
     );
   }
 }

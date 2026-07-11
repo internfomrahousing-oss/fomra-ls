@@ -5,14 +5,12 @@ import '../../models/add_lead_result.dart';
 import '../../models/land_lead.dart';
 import '../../services/app_store.dart';
 import '../../services/land_lead_service.dart';
-import '../../models/lead_list_filter.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../widgets/fomra_app_shell.dart';
 import '../../widgets/fomra_breadcrumb.dart';
 import '../../widgets/ui/app_components.dart';
 import 'add_lead_screen.dart';
-import 'filtered_leads_screen.dart';
 
 int _leadAgeDaysFromReceived(DateTime receivedOn) {
   final received = receivedOn.toLocal();
@@ -30,8 +28,13 @@ String _formatReceivedOn(DateTime receivedOn) {
 
 class LeadDetailScreen extends StatefulWidget {
   final LandLead lead;
+  final List<FomraBreadcrumbItem>? breadcrumbs;
 
-  const LeadDetailScreen({super.key, required this.lead});
+  const LeadDetailScreen({
+    super.key,
+    required this.lead,
+    this.breadcrumbs,
+  });
 
   @override
   State<LeadDetailScreen> createState() => _LeadDetailScreenState();
@@ -199,6 +202,82 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
     }
   }
 
+  void _handleDetailAction(String label) {
+    switch (label) {
+      case 'Notes':
+        _tabController.animateTo(1);
+      case 'Calls':
+        _launchContact('tel');
+      case 'Site visit':
+        _tabController.animateTo(3);
+      case 'Management site visit':
+        _tabController.animateTo(0);
+      case 'Meeting':
+        _pickMeetingStatus();
+      case 'Legal':
+        _changeStatus(LeadStatus.legal);
+      case 'Signed':
+        _changeStatus(LeadStatus.signed);
+    }
+  }
+
+  Future<void> _pickMeetingStatus() async {
+    final picked = await showModalBottomSheet<LeadStatus>(
+      context: context,
+      backgroundColor: context.fomraSurface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Meeting status',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: context.fomraTextPrimary,
+                ),
+              ),
+              const SizedBox(height: 12),
+              ListTile(
+                leading: CircleAvatar(
+                  radius: 6,
+                  backgroundColor: LeadStatus.prospectMeetingPending.color,
+                ),
+                title: Text(LeadStatus.prospectMeetingPending.label),
+                onTap: () => Navigator.pop(
+                  ctx,
+                  LeadStatus.prospectMeetingPending,
+                ),
+              ),
+              ListTile(
+                leading: CircleAvatar(
+                  radius: 6,
+                  backgroundColor: LeadStatus.prospectMeetingCompleted.color,
+                ),
+                title: Text(LeadStatus.prospectMeetingCompleted.label),
+                onTap: () => Navigator.pop(
+                  ctx,
+                  LeadStatus.prospectMeetingCompleted,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (picked != null) await _changeStatus(picked);
+  }
+
+  List<FomraBreadcrumbItem> get _breadcrumbs =>
+      widget.breadcrumbs ??
+      FomraBreadcrumbs.fromWorkspace('Lead ${lead.leadId}');
+
   @override
   Widget build(BuildContext context) {
     return FomraAppShell(
@@ -216,9 +295,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
                   onBack: () => Navigator.pop(context),
                   onEdit: _openEdit,
                 ),
-                FomraBreadcrumbStrip(
-                  items: FomraBreadcrumbs.fromWorkspace('Lead ${lead.leadId}'),
-                ),
+                FomraBreadcrumbStrip(items: _breadcrumbs),
                 Expanded(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
@@ -251,6 +328,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
                                   contactAttempts: _contactAttempts,
                                   onSaveNote: _saveNote,
                                   onLaunchContact: _launchContact,
+                                  onDetailAction: _handleDetailAction,
                                 ),
                               ),
                             ],
@@ -279,6 +357,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
                                   contactAttempts: _contactAttempts,
                                   onSaveNote: _saveNote,
                                   onLaunchContact: _launchContact,
+                                  onDetailAction: _handleDetailAction,
                                 ),
                               ),
                             ],
@@ -565,6 +644,7 @@ class _WorkspacePanel extends StatelessWidget {
   final int contactAttempts;
   final VoidCallback onSaveNote;
   final Future<void> Function(String scheme) onLaunchContact;
+  final ValueChanged<String> onDetailAction;
 
   const _WorkspacePanel({
     required this.lead,
@@ -576,6 +656,7 @@ class _WorkspacePanel extends StatelessWidget {
     required this.contactAttempts,
     required this.onSaveNote,
     required this.onLaunchContact,
+    required this.onDetailAction,
   });
 
   @override
@@ -587,9 +668,7 @@ class _WorkspacePanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _ActionToolbar(
-            onActionTap: (filter) => FilteredLeadsScreen.open(context, filter),
-          ),
+          _ActionToolbar(onAction: onDetailAction),
           const SizedBox(height: 12),
           _NoteComposer(
             controller: noteCtrl,
@@ -636,9 +715,9 @@ class _WorkspacePanel extends StatelessWidget {
 }
 
 class _ActionToolbar extends StatelessWidget {
-  final ValueChanged<LeadListFilter> onActionTap;
+  final ValueChanged<String> onAction;
 
-  const _ActionToolbar({required this.onActionTap});
+  const _ActionToolbar({required this.onAction});
 
   @override
   Widget build(BuildContext context) {
@@ -660,12 +739,7 @@ class _ActionToolbar extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(right: 14),
               child: InkWell(
-                onTap: () {
-                  final filter = LeadListFilterX.forActionLabel(action.$2);
-                  if (filter != null) {
-                    onActionTap(filter);
-                  }
-                },
+                onTap: () => onAction(action.$2),
                 borderRadius: BorderRadius.circular(10),
                 child: Padding(
                   padding:
@@ -1037,7 +1111,8 @@ class _MetaGrid extends StatelessWidget {
       ),
       ('Lead Age', '$leadAgeDays days'),
       ('Tags', '${lead.landType.label}, ${lead.inputSource.label}'),
-      ('Lead Owner', lead.createdByName.isEmpty ? '—' : lead.createdByName),
+      ('Posted By', lead.createdByName.isEmpty ? '—' : lead.createdByName),
+      ('Owner Name', lead.ownerName.trim().isEmpty ? '—' : lead.ownerName.trim()),
       (
         'Project Interest',
         lead.village.isEmpty ? lead.location : lead.village,

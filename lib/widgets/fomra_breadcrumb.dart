@@ -52,6 +52,29 @@ class FomraBreadcrumbs {
         FomraBreadcrumbItem.current(pageLabel),
       ];
 
+  /// Filtered lead list opened from home or workspace summaries.
+  static List<FomraBreadcrumbItem> fromWorkspaceFilter(String pageLabel) => [
+        const FomraBreadcrumbItem.home(),
+        const FomraBreadcrumbItem.route('Land Workspace', '/land-lead'),
+        FomraBreadcrumbItem.current(pageLabel),
+      ];
+
+  /// Lead detail opened from a filtered lead list.
+  static List<FomraBreadcrumbItem> fromFilteredLeadDetail({
+    required String filterLabel,
+    required String leadId,
+  }) =>
+      [
+        const FomraBreadcrumbItem.home(),
+        const FomraBreadcrumbItem.route('Land Workspace', '/land-lead'),
+        FomraBreadcrumbItem(
+          label: filterLabel,
+          action: FomraBreadcrumbAction.pop,
+          popCount: 1,
+        ),
+        FomraBreadcrumbItem.current('Lead $leadId'),
+      ];
+
   static List<FomraBreadcrumbItem> fromUserManagement(String pageLabel) => [
         const FomraBreadcrumbItem.home(),
         const FomraBreadcrumbItem(

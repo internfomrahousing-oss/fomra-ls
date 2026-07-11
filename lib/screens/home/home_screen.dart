@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../models/land_lead.dart';
 import '../land_lead/filtered_leads_screen.dart';
 import '../land_lead/lead_detail_screen.dart';
+import '../land_lead/leads_map_screen.dart';
 import '../settings/change_password_screen.dart';
 import '../../services/auth_service.dart';
 import '../../services/app_store.dart';
@@ -310,6 +311,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   void _goTo(String route) => Navigator.pushNamed(context, route);
 
+  void _openAllProjectsMap(List<LandLead> leads) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => LeadsMapScreen(leads: leads)),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = AuthService.instance.currentUser;
@@ -338,6 +346,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         icon: Icons.add_location_alt_outlined,
         accent: AppColors.primary,
         onTap: () => _goTo('/land-lead'),
+      ),
+      PortalQuickAction(
+        label: 'Show all projects map',
+        icon: Icons.map_outlined,
+        accent: AppColors.info,
+        onTap: () => _openAllProjectsMap(leads),
       ),
       if (_isManagement)
         PortalQuickAction(

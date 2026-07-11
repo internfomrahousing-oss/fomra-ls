@@ -8,19 +8,33 @@ import '../../theme/fomra_layout.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../widgets/fomra_app_bar.dart';
 import '../../widgets/fomra_app_shell.dart';
+import '../../widgets/fomra_breadcrumb.dart';
 import '../../widgets/ui/app_components.dart';
 import 'lead_detail_screen.dart';
 
 class FilteredLeadsScreen extends StatefulWidget {
   final LeadListFilter filter;
+  final List<FomraBreadcrumbItem> breadcrumbs;
 
-  const FilteredLeadsScreen({super.key, required this.filter});
+  const FilteredLeadsScreen({
+    super.key,
+    required this.filter,
+    required this.breadcrumbs,
+  });
 
-  static void open(BuildContext context, LeadListFilter filter) {
+  static void open(
+    BuildContext context,
+    LeadListFilter filter, {
+    List<FomraBreadcrumbItem>? breadcrumbs,
+  }) {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => FilteredLeadsScreen(filter: filter),
+        builder: (_) => FilteredLeadsScreen(
+          filter: filter,
+          breadcrumbs:
+              breadcrumbs ?? FomraBreadcrumbs.fromWorkspaceFilter(filter.title),
+        ),
       ),
     );
   }
@@ -51,7 +65,10 @@ class _FilteredLeadsScreenState extends State<FilteredLeadsScreen> {
 
     return FomraAppShell(
       currentRoute: '/land-lead',
-      appBar: FomraAppBar(moduleName: filter.title),
+      appBar: FomraAppBar(
+        moduleName: filter.title,
+        breadcrumbs: widget.breadcrumbs,
+      ),
       backgroundColor: context.fomraPageBg,
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -87,7 +104,14 @@ class _FilteredLeadsScreenState extends State<FilteredLeadsScreen> {
                         onTap: () => Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => LeadDetailScreen(lead: lead),
+                            builder: (_) => LeadDetailScreen(
+                              lead: lead,
+                              breadcrumbs:
+                                  FomraBreadcrumbs.fromFilteredLeadDetail(
+                                filterLabel: filter.title,
+                                leadId: lead.leadId,
+                              ),
+                            ),
                           ),
                         ),
                       );
