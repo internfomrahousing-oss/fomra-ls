@@ -6,6 +6,17 @@ import 'auth_service.dart';
 class LandLeadSiteVisitService {
   static SupabaseClient get _db => Supabase.instance.client;
 
+  static Future<List<LandLeadSiteVisit>> getAllForLead(String leadId) async {
+    final rows = await _db
+        .from('land_lead_site_visits')
+        .select()
+        .eq('lead_id', leadId)
+        .order('visited_at', ascending: false);
+    return (rows as List)
+        .map((r) => LandLeadSiteVisit.fromJson(r as Map<String, dynamic>))
+        .toList();
+  }
+
   static Future<List<LandLeadSiteVisit>> getForLead(
     String leadId, {
     required LandLeadSiteVisitType visitType,

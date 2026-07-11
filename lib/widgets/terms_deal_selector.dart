@@ -385,7 +385,6 @@ class _TermsDealSelectorState extends State<TermsDealSelector> {
   String? _primaryTitle;
   final Map<String, String?> _subtypesByDeal = {};
   final Map<String, Map<String, TextEditingController>> _controllers = {};
-  int? _expandedIndex;
 
   @override
   void initState() {
@@ -425,11 +424,6 @@ class _TermsDealSelectorState extends State<TermsDealSelector> {
           ? parsed.subtype
           : _subtypesByDeal[config.id];
     }
-
-    if (_primaryTitle != null) {
-      final idx = kDealTypeConfigs.indexWhere((c) => c.title == _primaryTitle);
-      _expandedIndex = idx >= 0 ? idx : null;
-    }
   }
 
   @override
@@ -465,13 +459,14 @@ class _TermsDealSelectorState extends State<TermsDealSelector> {
     return _subtypesByDeal[config.id];
   }
 
-  void _toggleAccordion(DealTypeConfig config, int index) {
+  void _selectPrimary(String? title) {
     setState(() {
-      if (_expandedIndex == index) {
-        _expandedIndex = null;
-      } else {
-        _expandedIndex = index;
-        _primaryTitle = config.title;
+      _primaryTitle = title;
+      if (title != null) {
+        final config = dealConfigByTitle(title);
+        if (config != null) {
+          _subtypesByDeal[config.id] = null;
+        }
       }
     });
     _emitChange();
@@ -481,7 +476,6 @@ class _TermsDealSelectorState extends State<TermsDealSelector> {
     setState(() {
       _primaryTitle = config.title;
       _subtypesByDeal[config.id] = subtype;
-      _expandedIndex = kDealTypeConfigs.indexOf(config);
     });
     _emitChange();
   }
@@ -491,40 +485,70 @@ class _TermsDealSelectorState extends State<TermsDealSelector> {
     final activeConfig = _activeConfig;
     final showFields =
         activeConfig != null && (_activeSubtype ?? '').isNotEmpty;
+    final iconColor = Theme.of(context).brightness == Brightness.dark
+        ? AppColors.primaryLight
+        : AppColors.primary;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          'Deal Type',
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: context.fomraTextSecondary,
-            letterSpacing: 0.2,
+        DropdownButtonFormField<String>(
+          isExpanded: true,
+          value: _primaryTitle,
+          onChanged: _selectPrimary,
+          menuMaxHeight: 320,
+          borderRadius: BorderRadius.circular(AddLeadUi.fieldRadius),
+          decoration: addLeadInputDecoration(
+            context,
+            label: 'Deal Type',
+            hint: 'Select deal type',
+            icon: Icons.handshake_outlined,
           ),
+          items: kDealTypeConfigs
+              .map(
+                (config) => DropdownMenuItem(
+                  value: config.title,
+                  child: addLeadDropdownRow(
+                    icon: config.icon,
+                    label: config.title,
+                    iconColor: iconColor,
+                  ),
+                ),
+              )
+              .toList(),
         ),
-        const SizedBox(height: 10),
-        ...List.generate(kDealTypeConfigs.length, (index) {
-          final config = kDealTypeConfigs[index];
-          final isSelected = _primaryTitle == config.title;
-          final isExpanded = _expandedIndex == index;
-          final subtype = _subtypesByDeal[config.id];
-
-          return Padding(
-            padding: EdgeInsets.only(
-              bottom: index < kDealTypeConfigs.length - 1 ? 10 : 0,
+        if (activeConfig != null) ...[
+          const SizedBox(height: 16),
+          Text(
+            'Subtype',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: context.fomraTextSecondary,
             ),
-            child: _DealAccordionCard(
-              config: config,
-              isSelected: isSelected,
-              isExpanded: isExpanded,
-              selectedSubtype: isSelected ? subtype : null,
-              onHeaderTap: () => _toggleAccordion(config, index),
-              onSubtypeSelected: (s) => _selectSubtype(config, s),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            activeConfig.description,
+            style: TextStyle(
+              fontSize: 11,
+              color: context.fomraTextSecondary,
             ),
-          );
-        }),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final subtype in activeConfig.subtypes)
+                _SubtypeChip(
+                  label: subtype,
+                  selected: _activeSubtype == subtype,
+                  onTap: () => _selectSubtype(activeConfig, subtype),
+                ),
+            ],
+          ),
+        ],
         AnimatedSwitcher(
           duration: _kFieldMotion,
           switchInCurve: Curves.easeOutCubic,
@@ -533,7 +557,9 @@ class _TermsDealSelectorState extends State<TermsDealSelector> {
             final slide = Tween<Offset>(
               begin: const Offset(0, 0.06),
               end: Offset.zero,
-            ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic));
+            ).animate(
+              CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+            );
             return FadeTransition(
               opacity: animation,
               child: SlideTransition(position: slide, child: child),
@@ -541,7 +567,7 @@ class _TermsDealSelectorState extends State<TermsDealSelector> {
           },
           child: showFields
               ? _DealFieldsPanel(
-                  key: ValueKey('${activeConfig.id}_$_activeSubtype'),
+                  key: ValueKey('${activeConfig!.id}_$_activeSubtype'),
                   config: activeConfig,
                   controllers: _controllers[activeConfig.id]!,
                   onFieldChanged: _emitChange,

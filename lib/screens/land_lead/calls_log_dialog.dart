@@ -24,6 +24,7 @@ class CallsLogDialog extends StatefulWidget {
 class _CallsLogDialogState extends State<CallsLogDialog> {
   late DateTime _calledAt = DateTime.now();
   CallDirection _direction = CallDirection.outgoing;
+  CallOutcome _outcome = CallOutcome.answered;
   final _durationCtrl = TextEditingController();
   final _detailsCtrl = TextEditingController();
   bool _saving = false;
@@ -69,13 +70,13 @@ class _CallsLogDialogState extends State<CallsLogDialog> {
   Future<void> _save() async {
     final duration = _durationCtrl.text.trim();
     final details = _detailsCtrl.text.trim();
-    if (duration.isEmpty) {
+    if (_outcome == CallOutcome.answered && duration.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter call duration')),
+        const SnackBar(content: Text('Enter call duration for answered calls')),
       );
       return;
     }
-    if (details.isEmpty) {
+    if (_outcome == CallOutcome.answered && details.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Enter call details')),
       );
@@ -91,6 +92,7 @@ class _CallsLogDialogState extends State<CallsLogDialog> {
         duration: duration,
         details: details,
         direction: _direction,
+        outcome: _outcome,
       );
       if (!mounted) return;
       setState(() {
@@ -99,6 +101,7 @@ class _CallsLogDialogState extends State<CallsLogDialog> {
         _detailsCtrl.clear();
         _calledAt = DateTime.now();
         _direction = CallDirection.outgoing;
+        _outcome = CallOutcome.answered;
       });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Call logged')),
@@ -231,6 +234,38 @@ class _CallsLogDialogState extends State<CallsLogDialog> {
                         ],
                       ),
                       const SizedBox(height: 12),
+                      Text(
+                        'Call status',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: context.fomraTextSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          for (final option in CallOutcome.values) ...[
+                            Expanded(
+                              child: Padding(
+                                padding: EdgeInsets.only(
+                                  right: option == CallOutcome.answered ? 6 : 0,
+                                ),
+                                child: _DirectionChip(
+                                  label: option.label,
+                                  icon: option == CallOutcome.answered
+                                      ? Icons.call_end_outlined
+                                      : Icons.phone_missed_outlined,
+                                  selected: _outcome == option,
+                                  onTap: () =>
+                                      setState(() => _outcome = option),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 12),
                       TextField(
                         controller: _durationCtrl,
                         keyboardType: TextInputType.number,
@@ -240,7 +275,9 @@ class _CallsLogDialogState extends State<CallsLogDialog> {
                         ],
                         decoration: InputDecoration(
                           labelText: 'Call duration (minutes)',
-                          hintText: 'e.g. 5',
+                          hintText: _outcome == CallOutcome.answered
+                              ? 'e.g. 5'
+                              : 'Optional for not answered',
                           filled: true,
                           fillColor:
                               context.fomraSurfaceVar.withValues(alpha: 0.55),
@@ -259,10 +296,12 @@ class _CallsLogDialogState extends State<CallsLogDialog> {
                         controller: _detailsCtrl,
                         minLines: 3,
                         maxLines: 5,
-                        maxLength: 2000,
+                        maxLength: 500,
                         decoration: InputDecoration(
                           labelText: 'Call details',
-                          hintText: 'What was discussed with the landowner?',
+                          hintText: _outcome == CallOutcome.answered
+                              ? 'What was discussed with the landowner?'
+                              : 'Optional notes about the missed call',
                           alignLabelWithHint: true,
                           filled: true,
                           fillColor:
@@ -444,13 +483,24 @@ class _PreviousCallTile extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Text(
-                '${log.duration} min',
-                style: const TextStyle(
+                log.outcome.label,
+                style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
-                  color: AppColors.purple,
+                  color: log.isAnswered ? AppColors.success : AppColors.warning,
                 ),
               ),
+              if (log.duration.isNotEmpty) ...[
+                const SizedBox(width: 8),
+                Text(
+                  '${log.duration} min',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.purple,
+                  ),
+                ),
+              ],
             ],
           ),
           if (log.loggedByName.isNotEmpty) ...[

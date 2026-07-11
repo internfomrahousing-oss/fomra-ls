@@ -84,7 +84,7 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
   bool _compressingPhoto = false;
 
   final _scrollController = ScrollController();
-  final _sectionKeys = List.generate(4, (_) => GlobalKey());
+  final _sectionKeys = List.generate(5, (_) => GlobalKey());
   int _activeSection = 0;
 
   void _onInputSourceChanged(InputSource? source) {
@@ -106,6 +106,7 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
     'Data Captured',
     'Terms',
     'Site Photos',
+    'Notes',
   ];
 
   @override
@@ -152,13 +153,12 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
     for (final c in [
       _locationCtrl, _gpsCtrl, _villageCtrl, _talukCtrl, _districtCtrl,
       _pincodeCtrl, _surveyCtrl, _subDivCtrl, _extentCtrl, _ownerCtrl,
-      _contactCtrl, _brokerNameCtrl, _brokerContactCtrl, _roadWidthCtrl,
+      _contactCtrl, _brokerNameCtrl,       _brokerContactCtrl, _roadWidthCtrl,
       _notesCtrl,
     ]) {
       c.dispose();
     }
     _mapController.dispose();
-    _notesCtrl.dispose();
     super.dispose();
   }
 
@@ -608,10 +608,11 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
             _surveyCtrl.text.trim().isNotEmpty &&
             _extentCtrl.text.trim().isNotEmpty;
       case 2:
-        return (_termsType ?? '').isNotEmpty ||
-            _notesCtrl.text.trim().isNotEmpty;
+        return (_termsType ?? '').isNotEmpty;
       case 3:
         return _photos.isNotEmpty || _keptPhotoUrls.isNotEmpty;
+      case 4:
+        return _notesCtrl.text.trim().isNotEmpty;
       default:
         return false;
     }
@@ -825,8 +826,12 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
                                       : _LocationMode.live,
                                 ),
                               ),
-                              const SizedBox(height: AddLeadUi.fieldGap),
                               if (_locationMode == _LocationMode.manual) ...[
+                                const SizedBox(height: AddLeadUi.fieldGap),
+                                AddLeadLocationSearch(
+                                  onSelected: _placePinAndFetchDetails,
+                                ),
+                                const SizedBox(height: AddLeadUi.fieldGap),
                                 AddLeadMapPicker(
                                   mapController: _mapController,
                                   tileUrl: _kMapTileUrl,
@@ -1013,7 +1018,7 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
                         AddLeadSectionCard(
                           number: '3',
                           title: 'Terms',
-                          subtitle: 'Choose deal type, subtype, and details',
+                          subtitle: 'Select deal type, then subtype and details',
                           icon: Icons.handshake_outlined,
                           compact: true,
                           child: TermsDealSelector(
@@ -1027,6 +1032,24 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
                       _sectionAnchor(
                         3,
                         _buildSitePhotosSection('4'),
+                      ),
+                      const SizedBox(height: AddLeadUi.sectionGap),
+                      _sectionAnchor(
+                        4,
+                        AddLeadSectionCard(
+                          number: '5',
+                          title: 'Notes',
+                          subtitle: 'Any additional observations',
+                          icon: Icons.sticky_note_2_outlined,
+                          child: _Field(
+                            ctrl: _notesCtrl,
+                            label: 'Notes',
+                            hint: 'Any additional observations',
+                            icon: Icons.notes_outlined,
+                            maxLines: 3,
+                            maxLength: 500,
+                          ),
+                        ),
                       ),
                       const SizedBox(height: 8),
                     ],
@@ -1173,6 +1196,7 @@ class _Field extends StatelessWidget {
   final IconData icon;
   final bool required;
   final int maxLines;
+  final int? maxLength;
   final TextInputType keyboardType;
   final bool light;
   final ValueChanged<String>? onFieldSubmitted;
@@ -1184,6 +1208,7 @@ class _Field extends StatelessWidget {
     required this.icon,
     this.required = false,
     this.maxLines = 1,
+    this.maxLength,
     this.keyboardType = TextInputType.text,
     this.light = false,
     this.onFieldSubmitted,
@@ -1203,6 +1228,7 @@ class _Field extends StatelessWidget {
     return TextFormField(
       controller: ctrl,
       maxLines: maxLines,
+      maxLength: maxLength,
       keyboardType: keyboardType,
       onFieldSubmitted: onFieldSubmitted,
       style: TextStyle(

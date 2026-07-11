@@ -44,11 +44,8 @@ class AppColors {
     end: Alignment.bottomRight,
   );
 
-  static const LinearGradient heroGradient = LinearGradient(
-    colors: [Color(0xFF1E3A8A), Color(0xFF2563EB)],
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-  );
+  /// Header / hero surfaces — same blue as the sidebar active state.
+  static const LinearGradient heroGradient = primaryGradient;
 
   // ── Radius tokens ── design-brief scale, rounder cards ────────────────────────
   static const double radiusXs = 12; // chips, small controls

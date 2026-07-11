@@ -3,6 +3,11 @@ enum LandLeadSiteVisitType {
   management;
 
   String get dbValue => name;
+
+  String get label => switch (this) {
+        LandLeadSiteVisitType.employee => 'Site visit',
+        LandLeadSiteVisitType.management => 'Management site visit',
+      };
 }
 
 class LandLeadSiteVisit {

@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 
 import '../screens/home/home_screen.dart';
@@ -68,36 +66,6 @@ class FomraSideNav extends StatefulWidget {
 
 class _FomraSideNavState extends State<FomraSideNav> {
   bool _expanded = false;
-  Timer? _expandTimer;
-  Timer? _collapseTimer;
-
-  static const _expandDelay = Duration(milliseconds: 420);
-  static const _collapseDelay = Duration(milliseconds: 520);
-
-  @override
-  void dispose() {
-    _expandTimer?.cancel();
-    _collapseTimer?.cancel();
-    super.dispose();
-  }
-
-  void _scheduleExpand() {
-    _collapseTimer?.cancel();
-    if (_expanded) return;
-    _expandTimer?.cancel();
-    _expandTimer = Timer(_expandDelay, () {
-      if (mounted) setState(() => _expanded = true);
-    });
-  }
-
-  void _scheduleCollapse() {
-    _expandTimer?.cancel();
-    if (!_expanded) return;
-    _collapseTimer?.cancel();
-    _collapseTimer = Timer(_collapseDelay, () {
-      if (mounted) setState(() => _expanded = false);
-    });
-  }
 
   bool _isActive(FomraSideNavItem item) {
     if (widget.currentRoute == item.route) return true;
@@ -146,11 +114,11 @@ class _FomraSideNavState extends State<FomraSideNav> {
     final border = context.fomraBorder;
 
     return MouseRegion(
-      onEnter: (_) => _scheduleExpand(),
-      onExit: (_) => _scheduleCollapse(),
+      onEnter: (_) => setState(() => _expanded = true),
+      onExit: (_) => setState(() => _expanded = false),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 320),
-        curve: Curves.easeInOutCubic,
+        duration: const Duration(milliseconds: 260),
+        curve: Curves.easeOutCubic,
         width: _expanded ? FomraSideNav.expandedWidth : FomraSideNav.collapsedWidth,
         decoration: BoxDecoration(
           color: surface,
@@ -295,24 +263,6 @@ class _NavTile extends StatefulWidget {
 
 class _NavTileState extends State<_NavTile> {
   bool _hovered = false;
-  Timer? _hoverTimer;
-
-  @override
-  void dispose() {
-    _hoverTimer?.cancel();
-    super.dispose();
-  }
-
-  void _setHovered(bool value) {
-    _hoverTimer?.cancel();
-    if (value) {
-      _hoverTimer = Timer(const Duration(milliseconds: 180), () {
-        if (mounted) setState(() => _hovered = true);
-      });
-      return;
-    }
-    setState(() => _hovered = false);
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -323,32 +273,26 @@ class _NavTileState extends State<_NavTile> {
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
       child: MouseRegion(
-        onEnter: (_) => _setHovered(true),
-        onExit: (_) => _setHovered(false),
+        onEnter: (_) => setState(() => _hovered = true),
+        onExit: (_) => setState(() => _hovered = false),
         cursor: SystemMouseCursors.click,
         child: GestureDetector(
           onTap: widget.onTap,
           child: AnimatedContainer(
-            duration: const Duration(milliseconds: 280),
-            curve: Curves.easeInOutCubic,
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOutCubic,
             height: 46,
             padding: EdgeInsets.symmetric(horizontal: expanded ? 12 : 0),
             decoration: BoxDecoration(
+              gradient: active ? AppColors.primaryGradient : null,
               color: active
-                  ? AppColors.primary.withValues(alpha: 0.92)
+                  ? null
                   : (_hovered
-                      ? context.fomraSurfaceVar.withValues(alpha: 0.55)
+                      ? context.fomraSurfaceVar.withValues(alpha: 0.9)
                       : Colors.transparent),
               borderRadius: BorderRadius.circular(14),
-              boxShadow: active
-                  ? [
-                      BoxShadow(
-                        color: AppColors.primary.withValues(alpha: 0.18),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ]
-                  : null,
+              boxShadow:
+                  active ? AppColors.coloredShadow(AppColors.primary) : null,
             ),
             child: expanded
                 ? Row(

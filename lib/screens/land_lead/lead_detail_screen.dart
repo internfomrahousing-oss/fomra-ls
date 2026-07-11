@@ -21,6 +21,7 @@ import 'add_lead_screen.dart';
 import 'calls_log_dialog.dart';
 import 'legal_documents_dialog.dart';
 import 'meeting_log_dialog.dart';
+import 'notes_log_dialog.dart';
 import 'site_visit_dialog.dart';
 
 int _leadAgeDaysFromReceived(DateTime receivedOn) {
@@ -82,10 +83,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
     try {
       final results = await Future.wait([
         LeadCallLogService.getForLead(lead.leadId),
-        LandLeadSiteVisitService.getForLead(
-          lead.leadId,
-          visitType: LandLeadSiteVisitType.employee,
-        ),
+        LandLeadSiteVisitService.getAllForLead(lead.leadId),
       ]);
       if (!mounted) return;
       setState(() {
@@ -190,13 +188,14 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
     }
   }
 
-  void _openCreateTask() {
-    showCreateTaskSheet(
+  Future<void> _openCreateTask() async {
+    await showCreateTaskSheet(
       context,
       leadId: lead.leadId,
       leadLabel: lead.ownerName.trim().isNotEmpty ? lead.ownerName.trim() : null,
       leadLocation: lead.location,
     );
+    if (mounted) setState(() {});
   }
 
   void _handleDetailAction(String label) {
@@ -239,6 +238,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
           leadId: lead.leadId,
         ),
       );
+      await _loadActivityData();
       return;
     }
 
@@ -252,6 +252,20 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
             if (lead.status == LeadStatus.prospectMeetingPending) {
               _changeStatus(LeadStatus.prospectMeetingCompleted);
             }
+          },
+        ),
+      );
+      return;
+    }
+
+    if (label == 'Notes') {
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => NotesLogDialog(
+          lead: lead,
+          onSaved: (saved) {
+            AppStore.instance.replaceLead(saved);
+            setState(() => lead = saved);
           },
         ),
       );
@@ -321,6 +335,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
                                   lead: lead,
                                   displayName: _displayName,
                                   leadAgeDays: _leadAgeDays,
+                                  taskCount: taskCountForLead(lead.leadId),
                                   onStatusChanged: _changeStatus,
                                   onLaunchContact: _launchContact,
                                   onCreateTask: _openCreateTask,
@@ -350,6 +365,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
                                 lead: lead,
                                 displayName: _displayName,
                                 leadAgeDays: _leadAgeDays,
+                                taskCount: taskCountForLead(lead.leadId),
                                 onStatusChanged: _changeStatus,
                                 onLaunchContact: _launchContact,
                                 onCreateTask: _openCreateTask,
@@ -474,6 +490,7 @@ class _ProfilePanel extends StatelessWidget {
   final LandLead lead;
   final String displayName;
   final int leadAgeDays;
+  final int taskCount;
   final ValueChanged<LeadStatus?> onStatusChanged;
   final Future<void> Function(String scheme) onLaunchContact;
   final VoidCallback onCreateTask;
@@ -482,6 +499,7 @@ class _ProfilePanel extends StatelessWidget {
     required this.lead,
     required this.displayName,
     required this.leadAgeDays,
+    required this.taskCount,
     required this.onStatusChanged,
     required this.onLaunchContact,
     required this.onCreateTask,
@@ -602,17 +620,25 @@ class _ProfilePanel extends StatelessWidget {
                         ],
                       ),
                     ),
-                    if (lead.contactDetails.isNotEmpty)
-                      IconButton(
-                        tooltip: 'WhatsApp',
-                        onPressed: () => onLaunchContact('https://wa.me'),
-                        style: IconButton.styleFrom(
-                          backgroundColor: const Color(0xFF25D366)
-                              .withValues(alpha: 0.12),
-                        ),
-                        icon: const Icon(Icons.chat_rounded,
-                            color: Color(0xFF25D366)),
-                      ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        _LeadTaskCountBadge(count: taskCount),
+                        if (lead.contactDetails.isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          IconButton(
+                            tooltip: 'WhatsApp',
+                            onPressed: () => onLaunchContact('https://wa.me'),
+                            style: IconButton.styleFrom(
+                              backgroundColor: const Color(0xFF25D366)
+                                  .withValues(alpha: 0.12),
+                            ),
+                            icon: const Icon(Icons.chat_rounded,
+                                color: Color(0xFF25D366)),
+                          ),
+                        ],
+                      ],
+                    ),
                   ],
                 ),
               ),
@@ -705,6 +731,55 @@ class _InfoChip extends StatelessWidget {
             label,
             style: TextStyle(
               fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: context.fomraTextSecondary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LeadTaskCountBadge extends StatelessWidget {
+  final int count;
+
+  const _LeadTaskCountBadge({required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: context.fomraSurface.withValues(alpha: 0.92),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: context.fomraBorder),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Icon(Icons.task_alt_outlined, size: 18, color: AppColors.purple),
+          const SizedBox(height: 4),
+          Text(
+            '$count',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w800,
+              color: AppColors.purple,
+              height: 1,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            count == 1 ? 'Task' : 'Tasks',
+            style: TextStyle(
+              fontSize: 10,
               fontWeight: FontWeight.w600,
               color: context.fomraTextSecondary,
             ),
@@ -854,6 +929,7 @@ class _ActionToolbar extends StatelessWidget {
       (Icons.location_on_outlined, 'Site visit'),
       (Icons.apartment_outlined, 'Management site visit'),
       (Icons.groups_outlined, 'Meeting'),
+      (Icons.sticky_note_2_outlined, 'Notes'),
       (Icons.gavel_outlined, 'Legal'),
       (Icons.draw_outlined, 'Signed'),
     ];
@@ -1078,16 +1154,17 @@ class _ActivityTimeline extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final events = <({String title, String subtitle, IconData icon})>[];
+    final events = <({DateTime at, String title, String subtitle, IconData icon})>[];
 
     for (final log in callLogs) {
-      final outcome = log.isAnswered ? 'Answered' : 'Not answered';
       final subtitleParts = [
         _formatReceivedOn(log.calledAt),
-        '$outcome · ${log.duration} min',
+        log.outcome.label,
+        if (log.isAnswered && log.duration.isNotEmpty) '${log.duration} min',
         if (log.details.isNotEmpty) log.details,
       ];
       events.add((
+        at: log.calledAt,
         title: '${log.direction.label} call',
         subtitle: subtitleParts.join('\n'),
         icon: log.direction == CallDirection.outgoing
@@ -1098,15 +1175,20 @@ class _ActivityTimeline extends StatelessWidget {
 
     for (final visit in siteVisits) {
       events.add((
-        title: 'Site visit conducted',
+        at: visit.visitedAt,
+        title: visit.visitType.label,
         subtitle: visit.loggedByName.isEmpty
             ? _formatReceivedOn(visit.visitedAt)
             : '${_formatReceivedOn(visit.visitedAt)}\n${visit.loggedByName}',
-        icon: Icons.location_on_outlined,
+        icon: visit.visitType == LandLeadSiteVisitType.management
+            ? Icons.apartment_outlined
+            : Icons.location_on_outlined,
       ));
     }
 
-    events.addAll([
+    events.sort((a, b) => b.at.compareTo(a.at));
+
+    final staticEvents = <({String title, String subtitle, IconData icon})>[
       (
         title: 'Current stage',
         subtitle: lead.status.label,
@@ -1123,7 +1205,7 @@ class _ActivityTimeline extends StatelessWidget {
         subtitle: _formatReceivedOn(lead.addedOn),
         icon: Icons.add_circle_outline,
       ),
-    ]);
+    ];
 
     return ListView(
       children: [
@@ -1137,6 +1219,34 @@ class _ActivityTimeline extends StatelessWidget {
         ),
         const SizedBox(height: 10),
         for (final e in events)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(e.icon, size: 18, color: AppColors.purple),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(e.title,
+                          style: const TextStyle(fontWeight: FontWeight.w700)),
+                      const SizedBox(height: 2),
+                      Text(
+                        e.subtitle,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: context.fomraTextSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        for (final e in staticEvents)
           Padding(
             padding: const EdgeInsets.only(bottom: 10),
             child: Row(
@@ -1447,8 +1557,15 @@ class _LeadInfoGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final pairs = <(String, String)>[
+      (
+        'Survey Number',
+        lead.surveyNumber.isEmpty ? '—' : lead.surveyNumber,
+      ),
+      (
+        'Sub Division',
+        lead.subDivision.isEmpty ? '—' : lead.subDivision,
+      ),
       ('Area', lead.landExtent.isEmpty ? '—' : lead.landExtent),
-      ('Survey Number', lead.surveyNumber.isEmpty ? '—' : lead.surveyNumber),
       ('Input Source', lead.inputSource.label),
       ('Land Type', lead.landType.label),
       ('Received On', _formatReceivedOn(lead.addedOn)),
@@ -1469,7 +1586,7 @@ class _LeadInfoGrid extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        for (var i = 0; i < 4; i += 2)
+        for (var i = 0; i < 6; i += 2)
           Padding(
             padding: const EdgeInsets.only(bottom: 10),
             child: Row(
@@ -1491,11 +1608,11 @@ class _LeadInfoGrid extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.only(bottom: 10),
           child: _MetaCell(
-            label: 'Current Date & Time',
+            label: "Lead's Current Date & Time",
             value: _formatReceivedOn(DateTime.now()),
           ),
         ),
-        for (var i = 4; i < pairs.length; i += 2)
+        for (var i = 6; i < pairs.length; i += 2)
           Padding(
             padding: const EdgeInsets.only(bottom: 10),
             child: Row(

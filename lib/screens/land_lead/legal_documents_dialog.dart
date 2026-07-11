@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -6,6 +8,7 @@ import '../../models/land_lead_legal_document.dart';
 import '../../services/land_lead_legal_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_theme_context.dart';
+import '../../utils/image_compressor.dart';
 import '../../widgets/separate_date_time_fields.dart';
 
 class LegalDocumentsDialog extends StatefulWidget {
@@ -18,6 +21,8 @@ class LegalDocumentsDialog extends StatefulWidget {
 }
 
 class _LegalDocumentsDialogState extends State<LegalDocumentsDialog> {
+  static const _maxDocuments = 4;
+
   final _notesCtrl = TextEditingController();
   bool _loading = true;
   bool _uploading = false;
@@ -73,42 +78,112 @@ class _LegalDocumentsDialogState extends State<LegalDocumentsDialog> {
     );
   }
 
+  int get _remainingSlots => _maxDocuments - _documents.length;
+
+  bool _isImageFile(String fileName) {
+    final lower = fileName.toLowerCase();
+    return lower.endsWith('.jpg') ||
+        lower.endsWith('.jpeg') ||
+        lower.endsWith('.png');
+  }
+
+  String _jpegFileName(String fileName) {
+    final dot = fileName.lastIndexOf('.');
+    final base = dot > 0 ? fileName.substring(0, dot) : fileName;
+    return '$base.jpg';
+  }
+
+  Future<({Uint8List bytes, String fileName})> _prepareUploadBytes(
+    Uint8List bytes,
+    String fileName,
+  ) async {
+    if (_isImageFile(fileName)) {
+      final compressed = await ImageCompressor.compressTo1Mb(bytes);
+      return (bytes: compressed, fileName: _jpegFileName(fileName));
+    }
+    if (bytes.length > ImageCompressor.maxBytes1Mb) {
+      throw Exception(
+        '$fileName exceeds 1 MB. Use a smaller file or upload as JPG/PNG.',
+      );
+    }
+    return (bytes: bytes, fileName: fileName);
+  }
+
   Future<void> _uploadDocument() async {
     if (_uploading) return;
+    if (_remainingSlots <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Maximum $_maxDocuments documents allowed')),
+      );
+      return;
+    }
 
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: const ['pdf', 'png', 'jpg', 'jpeg', 'doc', 'docx'],
-      allowMultiple: false,
+      allowMultiple: true,
       withData: true,
     );
     if (result == null || result.files.isEmpty) return;
-    final file = result.files.first;
-    if (file.bytes == null) {
+
+    final picked = result.files
+        .where((f) => f.bytes != null && f.name.trim().isNotEmpty)
+        .take(_remainingSlots)
+        .toList();
+    if (picked.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not read selected file')),
+          const SnackBar(content: Text('Could not read selected file(s)')),
         );
       }
       return;
     }
+    if (result.files.length > _remainingSlots && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Only $_remainingSlots more file${_remainingSlots == 1 ? '' : 's'} allowed (max $_maxDocuments)',
+          ),
+        ),
+      );
+    }
 
     setState(() => _uploading = true);
+    var uploaded = 0;
     try {
-      final doc = await LandLeadLegalService.uploadDocument(
-        leadId: widget.leadId,
-        bytes: file.bytes!,
-        fileName: file.name,
-      );
-      if (!mounted) return;
-      setState(() => _documents = [doc, ..._documents]);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Uploaded ${file.name}')),
-      );
+      for (final file in picked) {
+        if (!mounted || _documents.length >= _maxDocuments) break;
+        final prepared = await _prepareUploadBytes(file.bytes!, file.name);
+        final doc = await LandLeadLegalService.uploadDocument(
+          leadId: widget.leadId,
+          bytes: prepared.bytes,
+          fileName: prepared.fileName,
+        );
+        if (!mounted) return;
+        setState(() => _documents = [doc, ..._documents]);
+        uploaded++;
+      }
+      if (mounted && uploaded > 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              uploaded == 1
+                  ? 'Uploaded 1 document'
+                  : 'Uploaded $uploaded documents',
+            ),
+          ),
+        );
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Upload failed: $e')),
+          SnackBar(
+            content: Text(
+              uploaded > 0
+                  ? 'Uploaded $uploaded file(s); then failed: $e'
+                  : 'Upload failed: $e',
+            ),
+          ),
         );
       }
     } finally {
@@ -226,7 +301,10 @@ class _LegalDocumentsDialogState extends State<LegalDocumentsDialog> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       OutlinedButton.icon(
-                        onPressed: _uploading ? null : _uploadDocument,
+                        onPressed:
+                            (_uploading || _remainingSlots <= 0)
+                                ? null
+                                : _uploadDocument,
                         icon: _uploading
                             ? const SizedBox(
                                 width: 16,
@@ -235,7 +313,11 @@ class _LegalDocumentsDialogState extends State<LegalDocumentsDialog> {
                               )
                             : const Icon(Icons.upload_file_outlined, size: 18),
                         label: Text(
-                          _uploading ? 'Uploading…' : 'Upload legal document',
+                          _uploading
+                              ? 'Uploading…'
+                              : _remainingSlots <= 0
+                                  ? 'Maximum $_maxDocuments documents uploaded'
+                                  : 'Upload legal document',
                         ),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: AppColors.purple,
@@ -251,7 +333,7 @@ class _LegalDocumentsDialogState extends State<LegalDocumentsDialog> {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        'PDF, JPG, PNG, DOC supported',
+                        '${_documents.length}/$_maxDocuments uploaded · PDF, JPG, PNG, DOC · images auto-compress to 1 MB',
                         style: TextStyle(
                           fontSize: 11,
                           color: context.fomraTextSecondary,
@@ -290,7 +372,7 @@ class _LegalDocumentsDialogState extends State<LegalDocumentsDialog> {
                         controller: _notesCtrl,
                         minLines: 4,
                         maxLines: 6,
-                        maxLength: 4000,
+                        maxLength: 500,
                         decoration: _fieldDecoration(
                           context,
                           'Reference notes',

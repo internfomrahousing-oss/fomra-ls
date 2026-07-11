@@ -8,6 +8,7 @@ import 'package:latlong2/latlong.dart' show LatLng;
 import '../config/maptiler_tiles.dart';
 import '../theme/app_theme.dart';
 import '../theme/fomra_theme_context.dart';
+import '../utils/reverse_geocode.dart';
 
 /// Design tokens for the Add Land Lead enterprise form.
 abstract final class AddLeadUi {
@@ -641,6 +642,172 @@ class AddLeadLocationSegment extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+// ── Location search ───────────────────────────────────────────────────────────
+
+class AddLeadLocationSearch extends StatefulWidget {
+  final ValueChanged<LatLng> onSelected;
+
+  const AddLeadLocationSearch({super.key, required this.onSelected});
+
+  @override
+  State<AddLeadLocationSearch> createState() => _AddLeadLocationSearchState();
+}
+
+class _AddLeadLocationSearchState extends State<AddLeadLocationSearch> {
+  final _ctrl = TextEditingController();
+  bool _searching = false;
+  String? _error;
+  List<LocationSearchHit> _results = [];
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _search() async {
+    final query = _ctrl.text.trim();
+    if (query.isEmpty || _searching) return;
+
+    setState(() {
+      _searching = true;
+      _error = null;
+      _results = [];
+    });
+
+    try {
+      final hits = await searchLocations(query);
+      if (!mounted) return;
+      setState(() {
+        _results = hits;
+        if (hits.isEmpty) {
+          _error = 'No locations found. Try village, area, or pincode.';
+        }
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(() => _error = 'Search failed. Check your connection.');
+      }
+    } finally {
+      if (mounted) setState(() => _searching = false);
+    }
+  }
+
+  void _pick(LocationSearchHit hit) {
+    setState(() {
+      _results = [];
+      _ctrl.text = hit.displayName.split(',').first.trim();
+    });
+    widget.onSelected(LatLng(hit.lat, hit.lng));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _ctrl,
+                textInputAction: TextInputAction.search,
+                onSubmitted: (_) => _search(),
+                decoration: InputDecoration(
+                  labelText: 'Search location',
+                  hintText: 'Village, area, landmark, pincode…',
+                  prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                  filled: true,
+                  fillColor: context.fomraSurfaceVar.withValues(alpha: 0.55),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: AddLeadUi.cardBorder),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: AddLeadUi.cardBorder),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            SizedBox(
+              height: 48,
+              child: FilledButton(
+                onPressed: _searching ? null : _search,
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: _searching
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Text('Go'),
+              ),
+            ),
+          ],
+        ),
+        if (_error != null) ...[
+          const SizedBox(height: 6),
+          Text(
+            _error!,
+            style: TextStyle(
+              fontSize: 11,
+              color: context.fomraTextSecondary,
+            ),
+          ),
+        ],
+        if (_results.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Container(
+            constraints: const BoxConstraints(maxHeight: 180),
+            decoration: BoxDecoration(
+              border: Border.all(color: AddLeadUi.cardBorder),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: ListView.separated(
+              shrinkWrap: true,
+              itemCount: _results.length,
+              separatorBuilder: (_, __) => Divider(
+                height: 1,
+                color: AddLeadUi.cardBorder,
+              ),
+              itemBuilder: (context, i) {
+                final hit = _results[i];
+                return ListTile(
+                  dense: true,
+                  leading: Icon(
+                    Icons.place_outlined,
+                    size: 18,
+                    color: AppColors.primary,
+                  ),
+                  title: Text(
+                    hit.displayName,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                  onTap: () => _pick(hit),
+                );
+              },
+            ),
+          ),
+        ],
+      ],
     );
   }
 }

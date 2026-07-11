@@ -21,7 +21,12 @@ enum TaskPortalMode { full, employee, management }
 /// Shared in-memory task list (management adds, employees view).
 final List<Task> sharedTasks = [];
 
-void showCreateTaskSheet(
+int taskCountForLead(String leadId) {
+  final link = 'land_lead:$leadId';
+  return sharedTasks.where((t) => t.module == link).length;
+}
+
+Future<void> showCreateTaskSheet(
   BuildContext context, {
   String? leadId,
   String? leadLabel,
@@ -38,7 +43,7 @@ void showCreateTaskSheet(
       leadLocation.trim(),
   ].join('\n');
 
-  showModalBottomSheet(
+  return showModalBottomSheet(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,

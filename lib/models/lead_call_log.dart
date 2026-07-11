@@ -17,6 +17,26 @@ enum CallDirection {
   }
 }
 
+enum CallOutcome {
+  answered,
+  notAnswered;
+
+  String get label => switch (this) {
+        CallOutcome.answered => 'Answered',
+        CallOutcome.notAnswered => 'Not answered',
+      };
+
+  String get dbValue => switch (this) {
+        CallOutcome.answered => 'answered',
+        CallOutcome.notAnswered => 'not_answered',
+      };
+
+  static CallOutcome fromDb(String? raw) {
+    if (raw == 'not_answered') return CallOutcome.notAnswered;
+    return CallOutcome.answered;
+  }
+}
+
 class LeadCallLog {
   final String id;
   final String leadId;
@@ -24,6 +44,7 @@ class LeadCallLog {
   final String duration;
   final String details;
   final CallDirection direction;
+  final CallOutcome outcome;
   final String loggedByName;
 
   const LeadCallLog({
@@ -33,6 +54,7 @@ class LeadCallLog {
     required this.duration,
     required this.details,
     this.direction = CallDirection.outgoing,
+    this.outcome = CallOutcome.answered,
     required this.loggedByName,
   });
 
@@ -43,14 +65,11 @@ class LeadCallLog {
         duration: j['duration'] as String? ?? '',
         details: j['details'] as String? ?? '',
         direction: CallDirection.fromDb(j['direction'] as String?),
+        outcome: CallOutcome.fromDb(j['outcome'] as String?),
         loggedByName: j['logged_by_name'] as String? ?? '',
       );
 
-  /// Logged calls require duration; treat non-zero minutes as answered.
-  bool get isAnswered {
-    final mins = int.tryParse(duration.trim()) ?? 0;
-    return mins > 0;
-  }
+  bool get isAnswered => outcome == CallOutcome.answered;
 }
 
 class CallActivityMetrics {

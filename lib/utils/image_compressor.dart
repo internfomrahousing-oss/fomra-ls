@@ -7,8 +7,18 @@ class ImageCompressor {
   ImageCompressor._();
 
   static const int maxBytes = 250 * 1024;
+  static const int maxBytes1Mb = 1024 * 1024;
 
-  static Future<Uint8List> compressTo250Kb(Uint8List input) async {
+  static Future<Uint8List> compressTo250Kb(Uint8List input) =>
+      compressImage(input, maxTargetBytes: maxBytes);
+
+  static Future<Uint8List> compressTo1Mb(Uint8List input) =>
+      compressImage(input, maxTargetBytes: maxBytes1Mb);
+
+  static Future<Uint8List> compressImage(
+    Uint8List input, {
+    int maxTargetBytes = maxBytes,
+  }) async {
     final decoded = img.decodeImage(input);
     if (decoded == null) {
       throw Exception('Could not read image. Use JPG or PNG.');
@@ -37,7 +47,7 @@ class ImageCompressor {
       for (var quality = 85; quality >= 25; quality -= 5) {
         final out = Uint8List.fromList(img.encodeJpg(working, quality: quality));
         best = out;
-        if (out.length <= maxBytes) return out;
+        if (out.length <= maxTargetBytes) return out;
       }
       scale -= 0.15;
     }

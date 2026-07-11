@@ -173,3 +173,49 @@ Future<String?> fetchPincodeForAdminArea({
   final parsed = parseNominatimSearchHit(hit);
   return parsed?.pincode;
 }
+
+class LocationSearchHit {
+  final double lat;
+  final double lng;
+  final String displayName;
+
+  const LocationSearchHit({
+    required this.lat,
+    required this.lng,
+    required this.displayName,
+  });
+}
+
+/// Forward-geocodes a place name to coordinates (Nominatim, India-biased).
+Future<List<LocationSearchHit>> searchLocations(
+  String query, {
+  int limit = 5,
+}) async {
+  final trimmed = query.trim();
+  if (trimmed.isEmpty) return [];
+
+  final uri = Uri.parse(
+    'https://nominatim.openstreetmap.org/search'
+    '?format=jsonv2&limit=$limit&addressdetails=1&countrycodes=in'
+    '&q=${Uri.encodeComponent('$trimmed, Tamil Nadu, India')}',
+  );
+
+  final response = await http
+      .get(uri, headers: _geoHeaders)
+      .timeout(const Duration(seconds: 12));
+
+  if (response.statusCode != 200) return [];
+
+  final results = jsonDecode(response.body) as List<dynamic>;
+  return results.map((raw) {
+    final hit = raw as Map<String, dynamic>;
+    final lat = double.tryParse(hit['lat']?.toString() ?? '');
+    final lng = double.tryParse(hit['lon']?.toString() ?? '');
+    if (lat == null || lng == null) return null;
+    return LocationSearchHit(
+      lat: lat,
+      lng: lng,
+      displayName: hit['display_name']?.toString() ?? trimmed,
+    );
+  }).whereType<LocationSearchHit>().toList();
+}

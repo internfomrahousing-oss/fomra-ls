@@ -1,70 +1,46 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
-import '../../models/land_lead_meeting.dart';
-import '../../services/land_lead_meeting_service.dart';
+import '../../models/land_lead.dart';
+import '../../services/land_lead_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_theme_context.dart';
-import '../../widgets/separate_date_time_fields.dart';
 
-class MeetingLogDialog extends StatefulWidget {
-  final String leadId;
-  final String ownerName;
-  final VoidCallback? onMeetingSaved;
+class NotesLogDialog extends StatefulWidget {
+  final LandLead lead;
+  final ValueChanged<LandLead>? onSaved;
 
-  const MeetingLogDialog({
+  const NotesLogDialog({
     super.key,
-    required this.leadId,
-    this.ownerName = '',
-    this.onMeetingSaved,
+    required this.lead,
+    this.onSaved,
   });
 
   @override
-  State<MeetingLogDialog> createState() => _MeetingLogDialogState();
+  State<NotesLogDialog> createState() => _NotesLogDialogState();
 }
 
-class _MeetingLogDialogState extends State<MeetingLogDialog> {
-  late DateTime _metAt = DateTime.now();
-  final _durationCtrl = TextEditingController();
-  final _notesCtrl = TextEditingController();
+class _NotesLogDialogState extends State<NotesLogDialog> {
+  final _noteCtrl = TextEditingController();
   bool _saving = false;
-  bool _loading = true;
-  List<LandLeadMeeting> _meetings = [];
+  late List<String> _previousNotes;
+  late String _existingNotes;
 
   @override
   void initState() {
     super.initState();
-    _loadMeetings();
+    _existingNotes = widget.lead.notes;
+    _previousNotes = _parseNotes(_existingNotes);
   }
 
   @override
   void dispose() {
-    _durationCtrl.dispose();
-    _notesCtrl.dispose();
+    _noteCtrl.dispose();
     super.dispose();
   }
 
-  Future<void> _loadMeetings() async {
-    try {
-      final meetings = await LandLeadMeetingService.getForLead(widget.leadId);
-      if (mounted) setState(() => _meetings = meetings);
-    } catch (_) {
-      // Table may not exist yet.
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
-  }
-
-  Future<void> _editDate() async {
-    final updated = await pickLogDate(context, _metAt);
-    if (updated == null || !mounted) return;
-    setState(() => _metAt = updated);
-  }
-
-  Future<void> _editTime() async {
-    final updated = await pickLogTime(context, _metAt);
-    if (updated == null || !mounted) return;
-    setState(() => _metAt = updated);
+  List<String> _parseNotes(String raw) {
+    if (raw.trim().isEmpty) return [];
+    return raw.trim().split('\n').reversed.toList();
   }
 
   InputDecoration _fieldDecoration(BuildContext context, String label,
@@ -86,38 +62,40 @@ class _MeetingLogDialogState extends State<MeetingLogDialog> {
   }
 
   Future<void> _save() async {
-    final duration = _durationCtrl.text.trim();
-    if (duration.isEmpty) {
+    final text = _noteCtrl.text.trim();
+    if (text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter meeting duration')),
+        const SnackBar(content: Text('Type a note before saving')),
       );
       return;
     }
     if (_saving) return;
 
     setState(() => _saving = true);
+    final stamp = DateTime.now().toLocal();
+    final entry =
+        '[${stamp.day}/${stamp.month}/${stamp.year} ${stamp.hour}:${stamp.minute.toString().padLeft(2, '0')}] $text';
+    final merged = _existingNotes.trim().isEmpty
+        ? entry
+        : '${_existingNotes.trim()}\n$entry';
+
     try {
-      final meeting = await LandLeadMeetingService.create(
-        leadId: widget.leadId,
-        metAt: _metAt,
-        duration: duration,
-        notes: _notesCtrl.text.trim(),
-      );
+      final updated = widget.lead.copyWith(notes: merged);
+      final saved = await LandLeadService.update(updated);
       if (!mounted) return;
       setState(() {
-        _meetings = [meeting, ..._meetings];
-        _durationCtrl.clear();
-        _notesCtrl.clear();
-        _metAt = DateTime.now();
+        _existingNotes = merged;
+        _previousNotes = _parseNotes(merged);
+        _noteCtrl.clear();
       });
-      widget.onMeetingSaved?.call();
+      widget.onSaved?.call(saved);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Meeting logged')),
+        const SnackBar(content: Text('Note saved')),
       );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not save meeting: $e')),
+          SnackBar(content: Text('Could not save note: $e')),
         );
       }
     } finally {
@@ -127,10 +105,6 @@ class _MeetingLogDialogState extends State<MeetingLogDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final withLabel = widget.ownerName.trim().isNotEmpty
-        ? 'with ${widget.ownerName.trim()}'
-        : 'with landowner';
-
     return Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
       backgroundColor: context.fomraSurface,
@@ -154,7 +128,7 @@ class _MeetingLogDialogState extends State<MeetingLogDialog> {
                     ),
                     alignment: Alignment.center,
                     child: const Icon(
-                      Icons.groups_outlined,
+                      Icons.sticky_note_2_outlined,
                       color: AppColors.purple,
                       size: 20,
                     ),
@@ -165,7 +139,7 @@ class _MeetingLogDialogState extends State<MeetingLogDialog> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Meeting',
+                          'Notes',
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w800,
@@ -173,7 +147,7 @@ class _MeetingLogDialogState extends State<MeetingLogDialog> {
                           ),
                         ),
                         Text(
-                          'Lead #${widget.leadId}',
+                          'Lead #${widget.lead.leadId}',
                           style: TextStyle(
                             fontSize: 12,
                             color: context.fomraTextSecondary,
@@ -190,7 +164,7 @@ class _MeetingLogDialogState extends State<MeetingLogDialog> {
               ),
               const SizedBox(height: 4),
               Text(
-                'Log your meeting $withLabel',
+                'Add a note for this lead',
                 style: TextStyle(
                   fontSize: 12,
                   color: context.fomraTextSecondary,
@@ -202,52 +176,21 @@ class _MeetingLogDialogState extends State<MeetingLogDialog> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      SeparateDateTimeFields(
-                        value: _metAt,
-                        onEditDate: _editDate,
-                        onEditTime: _editTime,
-                      ),
-                      const SizedBox(height: 12),
                       TextField(
-                        controller: _durationCtrl,
-                        keyboardType: TextInputType.number,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.digitsOnly,
-                          LengthLimitingTextInputFormatter(3),
-                        ],
-                        decoration: _fieldDecoration(
-                          context,
-                          'Meeting duration (minutes)',
-                          hint: 'e.g. 30',
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: _notesCtrl,
-                        minLines: 3,
-                        maxLines: 5,
+                        controller: _noteCtrl,
+                        minLines: 4,
+                        maxLines: 8,
                         maxLength: 500,
                         decoration: _fieldDecoration(
                           context,
-                          'Meeting notes (optional)',
-                          hint: 'What was discussed?',
+                          'Your note',
+                          hint: 'Type your note here…',
                         ).copyWith(alignLabelWithHint: true),
                       ),
-                      if (_loading)
-                        const Padding(
-                          padding: EdgeInsets.only(top: 16),
-                          child: Center(
-                            child: SizedBox(
-                              width: 22,
-                              height: 22,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            ),
-                          ),
-                        )
-                      else if (_meetings.isNotEmpty) ...[
+                      if (_previousNotes.isNotEmpty) ...[
                         const SizedBox(height: 18),
                         Text(
-                          'Previous meetings',
+                          'Previous notes',
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w700,
@@ -255,8 +198,8 @@ class _MeetingLogDialogState extends State<MeetingLogDialog> {
                           ),
                         ),
                         const SizedBox(height: 8),
-                        for (final meeting in _meetings.take(5))
-                          _PreviousMeetingTile(meeting: meeting),
+                        for (final note in _previousNotes.take(8))
+                          _PreviousNoteTile(text: note),
                       ],
                     ],
                   ),
@@ -289,7 +232,7 @@ class _MeetingLogDialogState extends State<MeetingLogDialog> {
                               color: Colors.white,
                             ),
                           )
-                        : const Text('Save Meeting'),
+                        : const Text('Save Note'),
                   ),
                 ],
               ),
@@ -301,10 +244,10 @@ class _MeetingLogDialogState extends State<MeetingLogDialog> {
   }
 }
 
-class _PreviousMeetingTile extends StatelessWidget {
-  final LandLeadMeeting meeting;
+class _PreviousNoteTile extends StatelessWidget {
+  final String text;
 
-  const _PreviousMeetingTile({required this.meeting});
+  const _PreviousNoteTile({required this.text});
 
   @override
   Widget build(BuildContext context) {
@@ -315,53 +258,13 @@ class _PreviousMeetingTile extends StatelessWidget {
         border: Border.all(color: context.fomraBorder),
         borderRadius: BorderRadius.circular(10),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  formatCallDateTime(meeting.metAt),
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: context.fomraTextPrimary,
-                  ),
-                ),
-              ),
-              Text(
-                '${meeting.duration} min',
-                style: const TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.purple,
-                ),
-              ),
-            ],
-          ),
-          if (meeting.loggedByName.isNotEmpty) ...[
-            const SizedBox(height: 2),
-            Text(
-              meeting.loggedByName,
-              style: TextStyle(
-                fontSize: 11,
-                color: context.fomraTextSecondary,
-              ),
-            ),
-          ],
-          if (meeting.notes.isNotEmpty) ...[
-            const SizedBox(height: 6),
-            Text(
-              meeting.notes,
-              style: TextStyle(
-                fontSize: 12,
-                height: 1.35,
-                color: context.fomraTextSecondary,
-              ),
-            ),
-          ],
-        ],
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: 12,
+          height: 1.4,
+          color: context.fomraTextPrimary,
+        ),
       ),
     );
   }

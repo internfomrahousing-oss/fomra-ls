@@ -5,6 +5,7 @@ import '../../models/land_lead.dart';
 import '../land_lead/filtered_leads_screen.dart';
 import '../land_lead/lead_detail_screen.dart';
 import '../land_lead/leads_map_screen.dart';
+import 'contact_directory_screen.dart';
 import '../settings/change_password_screen.dart';
 import '../../services/auth_service.dart';
 import '../../services/app_store.dart';
@@ -352,6 +353,24 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         icon: Icons.map_outlined,
         accent: AppColors.info,
         onTap: () => _openAllProjectsMap(leads),
+      ),
+      PortalQuickAction(
+        label: 'Owner details',
+        icon: Icons.person_outline,
+        accent: AppColors.success,
+        onTap: () => ContactDirectoryScreen.open(
+          context,
+          kind: ContactDirectoryKind.owner,
+        ),
+      ),
+      PortalQuickAction(
+        label: 'Broker details',
+        icon: Icons.handshake_outlined,
+        accent: AppColors.secondary,
+        onTap: () => ContactDirectoryScreen.open(
+          context,
+          kind: ContactDirectoryKind.broker,
+        ),
       ),
       if (_isManagement)
         PortalQuickAction(
