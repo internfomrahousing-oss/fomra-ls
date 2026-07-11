@@ -798,7 +798,6 @@ class _ProfilePanel extends StatelessWidget {
             ],
           ),
         ),
-      ),
     );
   }
 }
