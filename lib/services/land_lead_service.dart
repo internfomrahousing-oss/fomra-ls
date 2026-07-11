@@ -132,7 +132,14 @@ class LandLeadService {
       payload['drop_reason'] = '';
       payload['drop_notes'] = '';
     }
-    await _db.from('land_leads').update(payload).eq('id', leadId);
+    final rows = await _db
+        .from('land_leads')
+        .update(payload)
+        .eq('id', leadId)
+        .select('id');
+    if ((rows as List).isEmpty) {
+      throw Exception('Lead $leadId was not updated (not found or blocked)');
+    }
   }
 
   static Future<void> markDropped({

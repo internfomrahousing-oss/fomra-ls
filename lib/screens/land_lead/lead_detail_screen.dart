@@ -142,8 +142,16 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
   }
 
   Future<void> _changeStatus(LeadStatus? status) async {
-    if (_readOnly) return;
     if (status == null || status == lead.status) return;
+    if (_readOnly) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Management view is read-only. Sign in as employee to update status.'),
+        ),
+      );
+      return;
+    }
 
     if (status == LeadStatus.dropped) {
       final result = await showLeadDropReasonDialog(context);
@@ -186,7 +194,11 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
     AppStore.instance.replaceLead(updated);
     try {
       await LandLeadService.updateStatus(lead.leadId, status);
-    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Status updated to ${status.label}')),
+      );
+    } catch (e) {
       if (!mounted) return;
       setState(() {
         lead = lead.copyWith(
@@ -196,6 +208,9 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
         );
       });
       AppStore.instance.replaceLead(lead);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not update status: $e')),
+      );
     }
   }
 
@@ -241,13 +256,16 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
     if (mounted) setState(() {});
   }
 
+  bool _isActionAllowed(String label) =>
+      !_readOnly || label == 'Management site visit';
+
   void _handleDetailAction(String label) {
-    if (_readOnly) return;
+    if (!_isActionAllowed(label)) return;
     _showActionDialog(label);
   }
 
   Future<void> _showActionDialog(String label) async {
-    if (_readOnly) return;
+    if (!_isActionAllowed(label)) return;
     if (label == 'Calls') {
       await showFomraDialog<void>(
         context: context,
@@ -961,6 +979,43 @@ class _WorkspacePanel extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 12,
                   color: context.fomraTextSecondary,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Material(
+                  color: AppColors.purple.withValues(alpha: 0.07),
+                  borderRadius: BorderRadius.circular(24),
+                  child: InkWell(
+                    onTap: () => onDetailAction('Management site visit'),
+                    borderRadius: BorderRadius.circular(24),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.apartment_outlined,
+                            size: 16,
+                            color: AppColors.purple,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Management site visit',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: context.fomraTextPrimary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(height: 16),
@@ -1730,43 +1785,78 @@ class _StageStatusField extends StatelessWidget {
             ),
           )
         else
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10),
-            decoration: BoxDecoration(
-              border: Border.all(
-                color: status.color.withValues(alpha: 0.45),
+          MenuAnchor(
+            alignmentOffset: const Offset(0, 4),
+            style: MenuStyle(
+              backgroundColor: WidgetStatePropertyAll(context.fomraSurface),
+              elevation: const WidgetStatePropertyAll(6),
+              padding: const WidgetStatePropertyAll(
+                EdgeInsets.symmetric(vertical: 4),
               ),
-              borderRadius: BorderRadius.circular(10),
+              shape: WidgetStatePropertyAll(
+                RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: BorderSide(color: context.fomraBorder),
+                ),
+              ),
             ),
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<LeadStatus>(
-                value: status,
-                isExpanded: true,
-                items: leadStatusPipelineOrder
-                    .map(
-                      (s) => DropdownMenuItem(
-                        value: s,
-                        child: Row(
-                          children: [
-                            CircleAvatar(
-                              radius: 5,
-                              backgroundColor: s.color,
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                s.label,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
+            builder: (context, controller, _) {
+              return InkWell(
+                onTap: () => controller.isOpen
+                    ? controller.close()
+                    : controller.open(),
+                borderRadius: BorderRadius.circular(10),
+                child: Container(
+                  width: double.infinity,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    border: Border.all(
+                      color: status.color.withValues(alpha: 0.45),
+                    ),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    children: [
+                      CircleAvatar(radius: 5, backgroundColor: status.color),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          status.label,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: context.fomraTextPrimary,
+                          ),
                         ),
                       ),
-                    )
-                    .toList(),
-                onChanged: onStatusChanged,
-              ),
-            ),
+                      Icon(
+                        controller.isOpen
+                            ? Icons.arrow_drop_up
+                            : Icons.arrow_drop_down,
+                        color: context.fomraTextSecondary,
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+            menuChildren: [
+              for (final s in leadStatusPipelineOrder)
+                MenuItemButton(
+                  onPressed: s == status
+                      ? null
+                      : () => onStatusChanged(s),
+                  leadingIcon: CircleAvatar(
+                    radius: 5,
+                    backgroundColor: s.color,
+                  ),
+                  child: Text(
+                    s.label,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+            ],
           ),
       ],
     );

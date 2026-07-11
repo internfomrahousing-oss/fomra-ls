@@ -43,6 +43,19 @@ class LandLeadSiteVisitService {
     return LandLeadSiteVisit.fromJson(row);
   }
 
+  static Future<String?> findPendingManagementVisitId(String leadId) async {
+    final row = await _db
+        .from('land_lead_site_visits')
+        .select('id')
+        .eq('lead_id', leadId)
+        .eq('visit_type', LandLeadSiteVisitType.management.dbValue)
+        .eq('approval_status', SiteVisitApprovalStatus.pending.dbValue)
+        .order('visited_at', ascending: false)
+        .limit(1)
+        .maybeSingle();
+    return row?['id'] as String?;
+  }
+
   static Future<LandLeadSiteVisit> markDone({
     required String leadId,
     required DateTime visitedAt,
@@ -71,14 +84,18 @@ class LandLeadSiteVisitService {
 
     if (needsApproval) {
       final who = loggedByName.isNotEmpty ? loggedByName : 'An employee';
-      NotificationsService.create(
-        audience: 'management',
-        type: 'site_visit',
-        title: 'Management site visit requested',
-        message: '$who requested a management site visit for Lead #$leadId',
-        leadId: leadId,
-        referenceId: visit.id,
-      ).catchError((_) {});
+      try {
+        await NotificationsService.create(
+          audience: 'management',
+          type: 'site_visit',
+          title: 'Management site visit requested',
+          message: '$who requested a management site visit for Lead #$leadId',
+          leadId: leadId,
+          referenceId: visit.id,
+        );
+      } catch (_) {
+        // Visit is saved even if notification insert fails (e.g. missing reference_id column).
+      }
     }
 
     return visit;

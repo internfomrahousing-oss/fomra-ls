@@ -16,6 +16,7 @@ import '../../services/auth_service.dart';
 import '../../services/app_store.dart';
 import '../../services/employee_service.dart';
 import '../../services/land_lead_service.dart';
+import '../../services/land_lead_site_visit_service.dart';
 import '../../services/notifications_service.dart';
 import '../../services/push_service.dart';
 import '../../theme/app_theme.dart';
@@ -276,15 +277,22 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         },
         onOpen: (n) async {
           _hideNotifications();
-          if (n.type == NotificationType.siteVisit &&
-              _isManagement &&
-              n.referenceId != null) {
-            await showManagementVisitReviewDialog(
-              context,
-              visitId: n.referenceId!,
-              leadId: n.leadId,
-            );
-            return;
+          if (n.type == NotificationType.siteVisit && _isManagement) {
+            var visitId = n.referenceId;
+            if (visitId == null && n.leadId != null) {
+              visitId = await LandLeadSiteVisitService.findPendingManagementVisitId(
+                n.leadId!,
+              );
+            }
+            if (!mounted) return;
+            if (visitId != null) {
+              await showManagementVisitReviewDialog(
+                context,
+                visitId: visitId,
+                leadId: n.leadId,
+              );
+              return;
+            }
           }
           if (n.type != NotificationType.lead && n.type != NotificationType.siteVisit) {
             return;
