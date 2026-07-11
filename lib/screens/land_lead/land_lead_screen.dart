@@ -1496,7 +1496,7 @@ class _LeadHoverActions extends StatelessWidget {
         const SizedBox(width: 6),
         _HoverActionButton(
           icon: Icons.event_outlined,
-          label: 'Schedule Meeting',
+          label: 'Meeting',
           onTap: onScheduleMeeting,
         ),
         const SizedBox(width: 4),

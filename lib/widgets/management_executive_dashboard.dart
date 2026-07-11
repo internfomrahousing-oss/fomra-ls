@@ -28,11 +28,6 @@ const _kDealCategories = [
   'Others',
 ];
 
-const _kMonthLabels = [
-  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-];
-
 // ── Date / KPI helpers (from dashboard_screen patterns) ─────────────────────
 
 DateTime _dayOnly(DateTime d) => DateTime(d.year, d.month, d.day);
@@ -103,32 +98,6 @@ Map<String, int> _dealTermsDistribution(List<LandLead> leads) {
     counts[cat] = (counts[cat] ?? 0) + 1;
   }
   return counts;
-}
-
-List<int> _monthlySignedCounts(List<LandLead> leads, int year) {
-  final signed = _signedLeads(leads);
-  return List.generate(12, (i) {
-    final month = i + 1;
-    return signed
-        .where((l) => l.addedOn.year == year && l.addedOn.month == month)
-        .length;
-  });
-}
-
-List<int> _monthlyAddedCounts(List<LandLead> leads, int year) =>
-    List.generate(12, (i) {
-      final month = i + 1;
-      return leads
-          .where((l) => l.addedOn.year == year && l.addedOn.month == month)
-          .length;
-    });
-
-double _momGrowthPercent(List<int> monthly, int monthIndex) {
-  if (monthIndex <= 0 || monthIndex >= monthly.length) return 0;
-  final prev = monthly[monthIndex - 1];
-  final curr = monthly[monthIndex];
-  if (prev == 0) return curr > 0 ? 100 : 0;
-  return ((curr - prev) / prev) * 100;
 }
 
 ({int signed, int total, double acres}) _employeeMetrics(
@@ -212,8 +181,6 @@ class ManagementExecutiveDashboard extends StatelessWidget {
               isDesktop: isDesktop,
               isTablet: isTablet,
             ),
-            SizedBox(height: gap),
-            _AcquisitionAnalyticsCard(leads: leads),
             SizedBox(height: gap),
             if (isDesktop)
               Row(
@@ -389,7 +356,7 @@ class _HeroKpiStrip extends StatelessWidget {
 
     if (inRow) {
       return Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           _SignedLeadsRing(percent: signedPct, count: signed.length),
           const SizedBox(width: AppSpacing.md),
@@ -606,274 +573,6 @@ class _KpiMetaChip extends StatelessWidget {
               fontSize: 12,
               fontWeight: FontWeight.w700,
               color: context.fomraTextPrimary,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ── Row 3: Acquisition Analytics ──────────────────────────────────────────────
-
-class _AcquisitionAnalyticsCard extends StatefulWidget {
-  final List<LandLead> leads;
-
-  const _AcquisitionAnalyticsCard({required this.leads});
-
-  @override
-  State<_AcquisitionAnalyticsCard> createState() =>
-      _AcquisitionAnalyticsCardState();
-}
-
-class _AcquisitionAnalyticsCardState extends State<_AcquisitionAnalyticsCard> {
-  int _touchedIndex = -1;
-
-  @override
-  Widget build(BuildContext context) {
-    final year = DateTime.now().year;
-    final monthlySigned = _monthlySignedCounts(widget.leads, year);
-    final monthlyAdded = _monthlyAddedCounts(widget.leads, year);
-    final maxSigned = monthlySigned.fold<int>(0, math.max);
-    final target = (maxSigned * 1.2).ceil().clamp(1, 9999);
-    final currentMonth = DateTime.now().month - 1;
-    final mom = _momGrowthPercent(monthlySigned, currentMonth);
-
-    return _DashboardCard(
-      title: 'Acquisition Analytics',
-      subtitle: 'Monthly signed deals vs target',
-      icon: Icons.trending_up_rounded,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              _MomBadge(percent: mom),
-              const Spacer(),
-              Text(
-                'Target: $target / month',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: context.fomraTextSecondary,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.md),
-          ...List.generate(12, (i) {
-            final count = monthlySigned[i];
-            final isCurrent = i == currentMonth;
-            final progress = target == 0 ? 0.0 : (count / target).clamp(0.0, 1.0);
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Row(
-                children: [
-                  SizedBox(
-                    width: 32,
-                    child: Text(
-                      _kMonthLabels[i],
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: isCurrent ? FontWeight.w800 : FontWeight.w500,
-                        color: isCurrent
-                            ? AppColors.primary
-                            : context.fomraTextSecondary,
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(6),
-                      child: TweenAnimationBuilder<double>(
-                        tween: Tween(begin: 0, end: progress),
-                        duration: AppMotion.slow,
-                        curve: AppMotion.curve,
-                        builder: (_, v, __) => LinearProgressIndicator(
-                          value: v,
-                          minHeight: 8,
-                          backgroundColor: context.fomraSurfaceVar,
-                          color: isCurrent
-                              ? AppColors.primary
-                              : AppColors.primary.withValues(alpha: 0.55),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  SizedBox(
-                    width: 28,
-                    child: Text(
-                      '$count',
-                      textAlign: TextAlign.right,
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: context.fomraTextPrimary,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }),
-          const SizedBox(height: AppSpacing.md),
-          Text(
-            'Monthly trend — leads added',
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: context.fomraTextPrimary,
-            ),
-          ),
-          const SizedBox(height: 8),
-          SizedBox(
-            height: 180,
-            child: BarChart(
-              BarChartData(
-                maxY: (monthlyAdded.fold<int>(0, math.max) + 1).toDouble(),
-                gridData: FlGridData(
-                  show: true,
-                  drawVerticalLine: false,
-                  getDrawingHorizontalLine: (v) => FlLine(
-                    color: context.fomraBorder.withValues(alpha: 0.5),
-                    strokeWidth: 1,
-                  ),
-                ),
-                borderData: FlBorderData(show: false),
-                titlesData: FlTitlesData(
-                  topTitles: const AxisTitles(
-                    sideTitles: SideTitles(showTitles: false),
-                  ),
-                  rightTitles: const AxisTitles(
-                    sideTitles: SideTitles(showTitles: false),
-                  ),
-                  leftTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      reservedSize: 28,
-                      getTitlesWidget: (v, _) => Text(
-                        v.toInt().toString(),
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: context.fomraTextTertiary,
-                        ),
-                      ),
-                    ),
-                  ),
-                  bottomTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      getTitlesWidget: (v, _) {
-                        final i = v.toInt();
-                        if (i < 0 || i >= 12) return const SizedBox.shrink();
-                        return Padding(
-                          padding: const EdgeInsets.only(top: 4),
-                          child: Text(
-                            _kMonthLabels[i],
-                            style: TextStyle(
-                              fontSize: 9,
-                              color: context.fomraTextTertiary,
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ),
-                barTouchData: BarTouchData(
-                  touchTooltipData: BarTouchTooltipData(
-                    tooltipBgColor: context.fomraSurface,
-                    getTooltipItem: (group, _, rod, __) => BarTooltipItem(
-                      '${_kMonthLabels[group.x]}: ${rod.toY.toInt()}',
-                      TextStyle(
-                        color: context.fomraTextPrimary,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ),
-                  touchCallback: (event, response) {
-                    setState(() {
-                      if (response?.spot == null) {
-                        _touchedIndex = -1;
-                      } else {
-                        _touchedIndex = response!.spot!.touchedBarGroupIndex;
-                      }
-                    });
-                  },
-                ),
-                barGroups: List.generate(12, (i) {
-                  final val = monthlyAdded[i].toDouble();
-                  final touched = i == _touchedIndex;
-                  return BarChartGroupData(
-                    x: i,
-                    barRods: [
-                      BarChartRodData(
-                        toY: val,
-                        width: touched ? 14 : 10,
-                        borderRadius: const BorderRadius.vertical(
-                          top: Radius.circular(6),
-                        ),
-                        gradient: LinearGradient(
-                          begin: Alignment.bottomCenter,
-                          end: Alignment.topCenter,
-                          colors: [
-                            AppColors.primary.withValues(alpha: 0.7),
-                            AppColors.primary,
-                          ],
-                        ),
-                      ),
-                    ],
-                  );
-                }),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MomBadge extends StatelessWidget {
-  final double percent;
-
-  const _MomBadge({required this.percent});
-
-  @override
-  Widget build(BuildContext context) {
-    final isUp = percent > 0;
-    final isDown = percent < 0;
-    final color = isUp
-        ? AppColors.success
-        : isDown
-            ? AppColors.error
-            : context.fomraTextSecondary;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            isUp
-                ? Icons.north_east_rounded
-                : isDown
-                    ? Icons.south_east_rounded
-                    : Icons.remove_rounded,
-            size: 14,
-            color: color,
-          ),
-          const SizedBox(width: 4),
-          Text(
-            '${percent >= 0 ? '+' : ''}${percent.round()}% MoM',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: color,
             ),
           ),
         ],
