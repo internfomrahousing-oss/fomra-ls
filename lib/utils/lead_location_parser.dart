@@ -21,6 +21,13 @@ LatLng? parseLeadGps(String gps) {
     final lng = double.tryParse(parts[1].replaceAll(RegExp(r'[^\d.\-]'), ''));
     if (lat != null && lng != null) return LatLng(lat, lng);
   }
+
+  final spaceParts = trimmed.split(RegExp(r'\s+'));
+  if (spaceParts.length >= 2) {
+    final lat = double.tryParse(spaceParts[0].replaceAll(RegExp(r'[^\d.\-]'), ''));
+    final lng = double.tryParse(spaceParts[1].replaceAll(RegExp(r'[^\d.\-]'), ''));
+    if (lat != null && lng != null) return LatLng(lat, lng);
+  }
   return null;
 }
 

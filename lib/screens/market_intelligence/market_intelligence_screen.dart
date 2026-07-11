@@ -24,6 +24,8 @@ import '../../widgets/patta_document_preview.dart';
 import '../../widgets/patta_html_preview.dart';
 import '../../widgets/portal_home_sections.dart';
 import '../../widgets/portal_page_layout.dart';
+import '../../widgets/tngis_parcel_summary.dart';
+import '../../utils/tngis_parcel_lookup.dart';
 
 // â”€â”€ POI category definitions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -125,17 +127,25 @@ String _fmtIndianRupee(double value) {
   return '₹${value.round()}';
 }
 
+/// When [embeddedInLead] is true, show only this section (lead detail tabs).
+enum MarketIntelLeadSection {
+  infrastructure,
+  landRecords,
+  competitorProjects,
+}
 
 // â”€â”€ Main Screen â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class MarketIntelligenceScreen extends StatefulWidget {
   final LandLead? lead;
   final bool embeddedInLead;
+  final MarketIntelLeadSection? leadSectionOnly;
 
   const MarketIntelligenceScreen({
     super.key,
     this.lead,
     this.embeddedInLead = false,
+    this.leadSectionOnly,
   });
 
   @override
@@ -176,6 +186,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
   bool _poisCollected = false;
   Map<String, double> _infraScoreMap = {};
   int _poiFetchSeq = 0;
+  int _tngisFetchSeq = 0;
 
   // Valuation inputs
   final _roadWidthCtrl = TextEditingController();
@@ -291,12 +302,39 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
 
     if (loc != null) {
       _fetchLocationDetails(loc);
-      _fetchTngisParcelDetails(loc);
-      _collectPois();
-      _fetchMagicBricksProjects();
+      _fetchLeadSectionData(loc);
     } else {
-      _geocodeLeadLocation(lead);
+      _maybeGeocodeLeadLocation(lead);
     }
+  }
+
+  bool get _needsInfrastructureData =>
+      widget.leadSectionOnly == null ||
+      widget.leadSectionOnly == MarketIntelLeadSection.infrastructure;
+
+  bool get _needsLandRecordsData =>
+      widget.leadSectionOnly == null ||
+      widget.leadSectionOnly == MarketIntelLeadSection.landRecords;
+
+  bool get _needsCompetitorData =>
+      widget.leadSectionOnly == null ||
+      widget.leadSectionOnly == MarketIntelLeadSection.competitorProjects;
+
+  void _fetchLeadSectionData(LatLng loc) {
+    if (_needsLandRecordsData) {
+      _fetchTngisParcelDetails(loc);
+    }
+    if (_needsInfrastructureData) {
+      _collectPois();
+    }
+    if (_needsCompetitorData) {
+      _fetchMagicBricksProjects();
+    }
+  }
+
+  void _maybeGeocodeLeadLocation(LandLead lead) {
+    if (!_needsInfrastructureData && !_needsCompetitorData) return;
+    _geocodeLeadLocation(lead);
   }
 
   /// Falls back to geocoding the lead's address text (village/taluk/district)
@@ -330,8 +368,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
           if (lat != null && lon != null && mounted) {
             final loc = LatLng(lat, lon);
             setState(() => _leadLocation = loc);
-            _collectPois();
-            _fetchMagicBricksProjects();
+            _fetchLeadSectionData(loc);
           }
         }
       }
@@ -534,12 +571,20 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
       _poiPlaces = {};
       _infraScoreMap = {};
       _valuationResult = null;
+      _detectedDistrict = null;
+      _detectedTaluk = null;
+      _detectedVillage = null;
       _tngisSurvey = null;
       _tngisSubDiv = null;
       _tngisRuralUrban = null;
       _tngisDc = null;
       _tngisTc = null;
       _tngisVc = null;
+      _tngisUlpin = null;
+      _tngisCentroid = null;
+      _tngisGiViewerUrl = null;
+      _tngisGiServices = null;
+      _tngisParcelPreview = null;
       _tngisSubdivisions = [];
       _tngisFmbAvailable = false;
       _tngisFmbNote = null;
@@ -575,6 +620,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
 
   /// Fetch survey no & sub-division from TNGIS for the tapped map point.
   Future<void> _fetchTngisParcelDetails(LatLng loc) async {
+    final fetchSeq = ++_tngisFetchSeq;
     setState(() {
       _tngisParcelLoading = true;
       _tngisParcelError = null;
@@ -611,6 +657,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
         }
       }
       if (result == null) throw lastError ?? Exception('TNGIS lookup failed');
+      if (!mounted || fetchSeq != _tngisFetchSeq) return;
       final data = result;
       final fields = (data['fields'] as Map<String, dynamic>? ?? {})
           .map((k, v) => MapEntry(k, v.toString()));
@@ -637,6 +684,14 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
         survey,
       );
 
+      String? pickAdmin(String? primary, String? fallback) {
+        final p = primary?.trim();
+        if (p != null && p.isNotEmpty) return p;
+        final f = fallback?.trim();
+        if (f != null && f.isNotEmpty && f != '-') return f;
+        return null;
+      }
+
       setState(() {
         _tngisGiViewerUrl = data['giViewerUrl'] as String?;
         _tngisGiServices = (data['giServices'] as Map?)?.cast<String, dynamic>();
@@ -648,15 +703,18 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
         _tngisTc = fields['Taluk Code'];
         _tngisVc = fields['Village Code'];
         _tngisRuralUrban = data['ruralUrban']?.toString();
-        _detectedDistrict = (data['district'] as String?)?.trim().isNotEmpty == true
-            ? data['district'] as String
-            : (fields['District']?.isNotEmpty == true ? fields['District'] : _detectedDistrict);
-        _detectedTaluk = (data['taluk'] as String?)?.trim().isNotEmpty == true
-            ? data['taluk'] as String
-            : (fields['Taluk']?.isNotEmpty == true ? fields['Taluk'] : _detectedTaluk);
-        _detectedVillage = (data['village'] as String?)?.trim().isNotEmpty == true
-            ? data['village'] as String
-            : (fields['Village']?.isNotEmpty == true ? fields['Village'] : _detectedVillage);
+        _detectedDistrict = pickAdmin(
+          data['district'] as String?,
+          fields['District'],
+        );
+        _detectedTaluk = pickAdmin(
+          data['taluk'] as String?,
+          fields['Taluk'],
+        );
+        _detectedVillage = pickAdmin(
+          data['village'] as String?,
+          fields['Village'],
+        );
         _tngisParcelPreview = fields.isNotEmpty ? fields : null;
         _tngisParcelError = null;
         _tngisFmbAvailable = data['fmbAvailable'] == true;
@@ -682,6 +740,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
         }
       });
     } on ApiException catch (e) {
+      if (!mounted || fetchSeq != _tngisFetchSeq) return;
       setState(() {
         _tngisParcelError = e.message;
         _tngisGiServices = null;
@@ -693,6 +752,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
         _tngisFmbNote = null;
       });
     } catch (e) {
+      if (!mounted || fetchSeq != _tngisFetchSeq) return;
       setState(() {
         _tngisParcelError = e.toString().replaceAll('Exception: ', '');
         _tngisGiServices = null;
@@ -704,7 +764,9 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
         _tngisFmbNote = null;
       });
     } finally {
-      if (mounted) setState(() => _tngisParcelLoading = false);
+      if (mounted && fetchSeq == _tngisFetchSeq) {
+        setState(() => _tngisParcelLoading = false);
+      }
     }
   }
 
@@ -1799,6 +1861,90 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
 
   // â”€â”€ Build â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
+  Widget _buildLeadSectionOnlyBody() {
+    final section = widget.leadSectionOnly!;
+    final loc = _activeLatLng;
+
+    Widget content;
+    switch (section) {
+      case MarketIntelLeadSection.infrastructure:
+        if (loc == null && _geocodingLead) {
+          content = _leadSectionLoadingCard('Locating this lead…');
+        } else if (loc == null) {
+          content = _leadSectionEmptyCard(
+            icon: Icons.location_off_outlined,
+            title: 'Location required',
+            message:
+                'Add GPS coordinates to this lead to load nearby infrastructure from Market Intelligence.',
+          );
+        } else {
+          content = _buildInfrastructureSection();
+        }
+      case MarketIntelLeadSection.landRecords:
+        content = _buildGovtDocsSection();
+      case MarketIntelLeadSection.competitorProjects:
+        if (loc == null && _geocodingLead) {
+          content = _leadSectionLoadingCard('Locating this lead…');
+        } else if (loc == null) {
+          content = _leadSectionEmptyCard(
+            icon: Icons.location_off_outlined,
+            title: 'Location required',
+            message:
+                'Add GPS coordinates to this lead to load competitor projects from Market Intelligence.',
+          );
+        } else {
+          content = _buildMagicBricksSection();
+        }
+    }
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.only(top: 2, bottom: 8),
+      child: content,
+    );
+  }
+
+  Widget _leadSectionLoadingCard(String message) {
+    return _SectionCard(
+      title: 'Market Intelligence',
+      icon: Icons.insights_outlined,
+      child: Row(
+        children: [
+          const SizedBox(
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              message,
+              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _leadSectionEmptyCard({
+    required IconData icon,
+    required String title,
+    required String message,
+  }) {
+    return _SectionCard(
+      title: title,
+      icon: icon,
+      child: Text(
+        message,
+        style: const TextStyle(
+          fontSize: 12,
+          color: AppColors.textSecondary,
+          height: 1.4,
+        ),
+      ),
+    );
+  }
+
   Widget _buildLeadEmbeddedBody() {
     final loc = _activeLatLng;
 
@@ -1974,6 +2120,9 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
   @override
   Widget build(BuildContext context) {
     if (widget.embeddedInLead) {
+      if (widget.leadSectionOnly != null) {
+        return _buildLeadSectionOnlyBody();
+      }
       return _buildLeadEmbeddedBody();
     }
 
@@ -5477,7 +5626,22 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
       subtitle: 'Patta, FMB, EC, G-Value and Crop from TNGIS',
       icon: Icons.layers_outlined,
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        _buildGiParcelHeader(),
+        TngisParcelSummary(
+          parcel: TngisParcelDetails(
+            district: widget.district,
+            taluk: widget.taluk,
+            village: widget.village,
+            districtCode: widget.districtCode,
+            talukCode: widget.talukCode,
+            villageCode: widget.villageCode,
+            ulpin: widget.ulpin,
+            centroid: widget.centroid,
+            ruralUrban: widget.ruralUrban,
+            surveyNumber: widget.surveyNumber,
+            subDivision: widget.subDivision,
+          ),
+          loading: widget.tngisParcelLoading,
+        ),
         const SizedBox(height: 10),
         Container(
           width: double.infinity,
@@ -5544,71 +5708,6 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
           ),
         ],
       ]),
-    );
-  }
-
-  Widget _buildGiParcelHeader() {
-    final survey = widget.surveyNumber?.trim();
-    final sub = widget.subDivision?.trim();
-    final hasPlot = widget.lat != null && widget.lon != null;
-    final centroid = widget.centroid?.trim().isNotEmpty == true
-        ? widget.centroid!
-        : (hasPlot ? '${widget.lat}, ${widget.lon}' : '-');
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            AppColors.primary.withValues(alpha: 0.08),
-            AppColors.accent.withValues(alpha: 0.04),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(AppColors.radiusSm),
-        border: Border.all(color: context.fomraBorder),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('Land Parcel Information',
-            style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w800,
-                color: context.fomraTextPrimary)),
-        const SizedBox(height: 10),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            _buildGiDataCard('ULPIN', widget.ulpin?.isNotEmpty == true ? widget.ulpin! : '-'),
-            _buildGiDataCard('Centroid', centroid),
-            if (widget.ruralUrban != null && widget.ruralUrban!.isNotEmpty)
-              _buildGiDataCard('Land Type', _isUrban ? 'Urban (TSLR)' : 'Rural (FMB)'),
-            _buildGiDataCard(_surveyLabel, survey?.isNotEmpty == true ? survey! : '-'),
-            _buildGiDataCard(_subLabel, sub != null && sub.isNotEmpty && sub != '-' ? sub : '-'),
-          ],
-        ),
-        if (widget.village != null && widget.village!.isNotEmpty) ...[
-          const SizedBox(height: 8),
-          Text('${widget.village}${widget.taluk != null ? ', ${widget.taluk}' : ''}',
-              style: TextStyle(
-                  fontSize: 10, color: context.fomraTextSecondary)),
-        ],
-      ]),
-    );
-  }
-
-  Widget _buildGiDataCard(String label, String value) {
-    return MarketIntelInfoTile(
-      label: label,
-      value: value,
-      icon: marketIntelIconForField(label),
     );
   }
 

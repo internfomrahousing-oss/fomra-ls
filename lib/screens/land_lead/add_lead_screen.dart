@@ -1,10 +1,8 @@
 ﻿import 'dart:async';
-import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 import '../../models/add_lead_result.dart';
 import '../../models/land_lead.dart';
@@ -15,9 +13,11 @@ import '../../widgets/add_lead_ui.dart';
 import '../../widgets/fomra_app_shell.dart';
 import '../../widgets/fomra_breadcrumb.dart';
 import '../../widgets/portal_page_layout.dart';
+import '../../widgets/tngis_parcel_summary.dart';
 import '../../services/api_client.dart';
 import '../../utils/image_compressor.dart';
 import '../../utils/lead_location_parser.dart';
+import '../../utils/reverse_geocode.dart';
 import '../../utils/tngis_parcel_lookup.dart';
 
 enum _LocationMode { manual, live }
@@ -70,8 +70,12 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
   LatLng? _pinnedPoint;
   final _mapController = MapController();
   bool _mapReady = false;
+  LatLng? _pendingMapCenter;
   Timer? _gpsDebounce;
   bool _suppressGpsListener = false;
+  TngisParcelDetails? _tngisParcel;
+  bool _loadingTngis = false;
+  int _pinFetchSeq = 0;
 
   static const _kDefaultMapCenter = LatLng(13.0827, 80.2707);
   static final _kMapTileUrl = MapTilerTiles.standard;
@@ -160,81 +164,93 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
     final parsed = parseLeadGps(_gpsCtrl.text);
     if (parsed == null) return;
 
-    if (_pinnedPoint != null &&
+    final samePin = _pinnedPoint != null &&
         (_pinnedPoint!.latitude - parsed.latitude).abs() < 1e-5 &&
-        (_pinnedPoint!.longitude - parsed.longitude).abs() < 1e-5) {
+        (_pinnedPoint!.longitude - parsed.longitude).abs() < 1e-5;
+    if (samePin) {
+      _centerMapOn(parsed);
       return;
     }
 
     if (_locationMode == _LocationMode.live) {
-      setState(() => _locationMode = _LocationMode.manual);
+      setState(() {
+        _locationMode = _LocationMode.manual;
+        _pinnedPoint = parsed;
+      });
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        _onMapPin(parsed);
+        _centerMapOn(parsed, zoom: 16.0);
+        _placePinAndFetchDetails(parsed);
       });
       return;
     }
 
-    await _onMapPin(parsed);
+    await _placePinAndFetchDetails(parsed);
   }
+
+  void _clearPinDerivedFields() {
+    _locationCtrl.clear();
+    _villageCtrl.clear();
+    _talukCtrl.clear();
+    _districtCtrl.clear();
+    _pincodeCtrl.clear();
+    _surveyCtrl.clear();
+    _subDivCtrl.clear();
+  }
+
+  void _applyTngisParcelToForm(TngisParcelDetails parcel) {
+    _surveyCtrl.text = parcel.surveyNumber ?? '';
+    _subDivCtrl.text = parcel.subDivision ?? '';
+    _villageCtrl.text = parcel.village ?? '';
+    _talukCtrl.text = parcel.taluk ?? '';
+    _districtCtrl.text = parcel.district ?? '';
+    _locationCtrl.text = parcel.village ?? '';
+  }
+
+  bool _isActivePinFetch(int fetchSeq) =>
+      mounted && fetchSeq == _pinFetchSeq;
 
   Future<void> _fillFromCoordinates(
     double lat,
     double lng, {
     bool clearLoading = true,
+    int? fetchSeq,
   }) async {
     _suppressGpsListener = true;
     _gpsCtrl.text =
         '${lat.toStringAsFixed(6)}° N, ${lng.toStringAsFixed(6)}° E';
     _suppressGpsListener = false;
 
+    if (!_isActivePinFetch(fetchSeq ?? _pinFetchSeq) && fetchSeq != null) {
+      return;
+    }
     if (!mounted) return;
     setState(() => _locationStatus = 'Fetching address…');
 
     try {
-      final uri = Uri.parse(
-        'https://nominatim.openstreetmap.org/reverse'
-        '?lat=$lat&lon=$lng&format=json&addressdetails=1',
-      );
-      final response = await http.get(uri, headers: {
-        'Accept-Language': 'en',
-        'User-Agent': 'FomraLS/1.0 (in.fomrahousing)',
-      });
+      final geocoded = await fetchReverseGeocode(lat, lng);
 
+      if (fetchSeq != null && !_isActivePinFetch(fetchSeq)) return;
       if (!mounted) return;
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body) as Map<String, dynamic>;
-        final addr = data['address'] as Map<String, dynamic>? ?? {};
-
-        final location = _first(addr, [
-          'suburb', 'neighbourhood', 'quarter',
-          'town', 'village', 'city', 'municipality',
-        ]);
-        if (location.isNotEmpty) _locationCtrl.text = location;
-
-        final village = _first(addr, ['village', 'hamlet', 'suburb', 'neighbourhood']);
-        if (village.isNotEmpty) _villageCtrl.text = village;
-
-        final taluk = _first(addr, ['county', 'city_district', 'district']);
-        if (taluk.isNotEmpty) _talukCtrl.text = taluk;
-
-        final district = _first(addr, ['state_district', 'county']);
-        if (district.isNotEmpty) _districtCtrl.text = district;
-
-        final postcode = addr['postcode'] as String? ?? '';
-        if (postcode.isNotEmpty) _pincodeCtrl.text = postcode;
+      if (geocoded != null) {
+        if (geocoded.location.isNotEmpty) _locationCtrl.text = geocoded.location;
+        if (geocoded.village.isNotEmpty) _villageCtrl.text = geocoded.village;
+        if (geocoded.taluk.isNotEmpty) _talukCtrl.text = geocoded.taluk;
+        if (geocoded.district.isNotEmpty) _districtCtrl.text = geocoded.district;
+        if (geocoded.pincode.isNotEmpty) _pincodeCtrl.text = geocoded.pincode;
 
         setState(() => _locationStatus = 'Location filled ✓');
       } else {
         setState(() => _locationStatus = 'Address lookup failed — GPS coordinates saved.');
       }
     } catch (e) {
+      if (fetchSeq != null && !_isActivePinFetch(fetchSeq)) return;
       if (!mounted) return;
       setState(() => _locationStatus =
           'Error: ${e.toString().replaceAll('Exception: ', '')}');
     } finally {
-      if (clearLoading && mounted) {
+      if (clearLoading && mounted && (fetchSeq == null || _isActivePinFetch(fetchSeq))) {
         setState(() {
           _fetchingLocation = false;
           _resolvingPin = false;
@@ -243,44 +259,56 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
     }
   }
 
-  Future<void> _fillSurveyFromTngis(LatLng point) async {
-    if (!mounted) return;
-    setState(() => _locationStatus = 'Fetching survey from TNGIS…');
+  Future<void> _fillSurveyFromTngis(
+    LatLng point, {
+    required int fetchSeq,
+  }) async {
+    if (!_isActivePinFetch(fetchSeq)) return;
+
+    setState(() {
+      _loadingTngis = true;
+      _tngisParcel = null;
+      _locationStatus = 'Fetching village & parcel from TNGIS…';
+    });
 
     try {
       final parcel = await fetchTngisParcelAt(point);
-      if (!mounted) return;
+      if (!_isActivePinFetch(fetchSeq)) return;
 
-      if (parcel.surveyNumber != null && parcel.surveyNumber!.isNotEmpty) {
-        _surveyCtrl.text = parcel.surveyNumber!;
-      }
-      if (parcel.subDivision != null && parcel.subDivision!.isNotEmpty) {
-        _subDivCtrl.text = parcel.subDivision!;
-      }
-      if (parcel.village != null && parcel.village!.isNotEmpty) {
-        _villageCtrl.text = parcel.village!;
-      }
-      if (parcel.taluk != null && parcel.taluk!.isNotEmpty) {
-        _talukCtrl.text = parcel.taluk!;
-      }
-      if (parcel.district != null && parcel.district!.isNotEmpty) {
-        _districtCtrl.text = parcel.district!;
-      }
+      _applyTngisParcelToForm(parcel);
 
-      if (!mounted) return;
-      setState(() => _locationStatus = parcel.hasSurvey
-          ? 'Location & survey filled ✓'
-          : 'Location filled — survey not found at this pin');
+      final pinFromAdmin = await fetchPincodeForAdminArea(
+        village: _villageCtrl.text,
+        taluk: _talukCtrl.text,
+        district: _districtCtrl.text,
+      );
+      if (!_isActivePinFetch(fetchSeq)) return;
+      _pincodeCtrl.text = pinFromAdmin ?? '';
+
+      setState(() {
+        _tngisParcel = parcel;
+        _loadingTngis = false;
+        _locationStatus = parcel.hasSurvey
+            ? 'TNGIS village & survey filled ✓'
+            : parcel.hasAdminData
+                ? 'TNGIS village details filled ✓'
+                : 'Location filled — parcel not found at this pin';
+      });
     } on ApiException catch (e) {
-      if (!mounted) return;
-      final hadLocation = _locationStatus?.contains('✓') == true;
-      setState(() => _locationStatus = hadLocation
-          ? 'Location filled — survey lookup failed (${e.message})'
-          : 'Survey lookup failed: ${e.message}');
+      if (!_isActivePinFetch(fetchSeq)) return;
+      setState(() {
+        _loadingTngis = false;
+        _tngisParcel = null;
+        _locationStatus = 'TNGIS lookup failed: ${e.message}';
+      });
     } catch (e) {
-      if (!mounted) return;
-      setState(() => _locationStatus =
-          'Survey lookup error: ${e.toString().replaceAll('Exception: ', '')}');
+      if (!_isActivePinFetch(fetchSeq)) return;
+      setState(() {
+        _loadingTngis = false;
+        _tngisParcel = null;
+        _locationStatus =
+            'TNGIS lookup error: ${e.toString().replaceAll('Exception: ', '')}';
+      });
     }
   }
 
@@ -289,43 +317,78 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
     if (mode == _LocationMode.manual) {
       final parsed = parseLeadGps(_gpsCtrl.text) ?? _pinnedPoint;
       if (parsed != null) {
-        _pinnedPoint = parsed;
-        WidgetsBinding.instance
-            .addPostFrameCallback((_) => _centerMapOn(parsed));
+        final firstPin = _pinnedPoint == null;
+        setState(() => _pinnedPoint = parsed);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _centerMapOn(parsed, zoom: firstPin ? 16.0 : null);
+        });
       }
     }
   }
 
   void _onMapReady() {
     setState(() => _mapReady = true);
-    final parsed = _pinnedPoint ?? parseLeadGps(_gpsCtrl.text);
-    if (parsed != null) {
-      _pinnedPoint = parsed;
-      _centerMapOn(parsed);
+    final parsed =
+        _pinnedPoint ?? _pendingMapCenter ?? parseLeadGps(_gpsCtrl.text);
+    if (parsed == null) return;
+    final firstPin = _pinnedPoint == null;
+    if (firstPin) {
+      setState(() => _pinnedPoint = parsed);
     }
+    _centerMapOn(parsed, zoom: firstPin ? 16.0 : null);
   }
 
-  void _centerMapOn(LatLng point) {
+  void _centerMapOn(LatLng point, {double? zoom}) {
+    _pendingMapCenter = point;
     if (!_mapReady) return;
-    _mapController.move(point, _mapController.camera.zoom.clamp(12.0, 18.0));
+
+    _mapController.move(
+      point,
+      zoom ?? _mapController.camera.zoom.clamp(12.0, 18.0),
+    );
+    _pendingMapCenter = null;
   }
 
   Future<void> _onMapPin(LatLng point) async {
+    await _placePinAndFetchDetails(point);
+  }
+
+  Future<void> _placePinAndFetchDetails(LatLng point) async {
+    final fetchSeq = ++_pinFetchSeq;
+    final firstPin = _pinnedPoint == null;
+
+    _clearPinDerivedFields();
     setState(() {
       _pinnedPoint = point;
+      _tngisParcel = null;
+      _loadingTngis = true;
       _resolvingPin = true;
       _locationStatus = 'Pin placed — fetching land details…';
     });
+    _centerMapOn(point, zoom: firstPin ? 16.0 : null);
+    await _fetchPinDetailsOnly(point, fetchSeq: fetchSeq);
+  }
+
+  Future<void> _fetchPinDetailsOnly(
+    LatLng point, {
+    required int fetchSeq,
+  }) async {
     _centerMapOn(point);
     try {
-      await _fillFromCoordinates(point.latitude, point.longitude, clearLoading: false);
-      await _fillSurveyFromTngis(point);
+      await _fillFromCoordinates(
+        point.latitude,
+        point.longitude,
+        clearLoading: false,
+        fetchSeq: fetchSeq,
+      );
+      if (!_isActivePinFetch(fetchSeq)) return;
+      await _fillSurveyFromTngis(point, fetchSeq: fetchSeq);
     } catch (e) {
-      if (!mounted) return;
+      if (!_isActivePinFetch(fetchSeq)) return;
       setState(() => _locationStatus =
           'Error: ${e.toString().replaceAll('Exception: ', '')}');
     } finally {
-      if (mounted) {
+      if (_isActivePinFetch(fetchSeq)) {
         setState(() {
           _resolvingPin = false;
           _fetchingLocation = false;
@@ -410,21 +473,15 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
 
       final lat = position.latitude;
       final lng = position.longitude;
-      // Drop the point on the map (switch to manual mode) so survey/sub-division
-      // can be verified and the pin nudged onto the exact parcel if the GPS
-      // reading is slightly off the land.
+      final point = LatLng(lat, lng);
       if (mounted) {
-        setState(() {
-          _pinnedPoint = LatLng(lat, lng);
-          _locationMode = _LocationMode.manual;
-        });
+        setState(() => _locationMode = _LocationMode.manual);
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          final p = _pinnedPoint;
-          if (p != null) _centerMapOn(p);
+          if (!mounted) return;
+          _centerMapOn(point);
         });
       }
-      await _fillFromCoordinates(lat, lng, clearLoading: false);
-      await _fillSurveyFromTngis(LatLng(lat, lng));
+      await _placePinAndFetchDetails(point);
     } on LocationServiceDisabledException {
       _setStatus('Location services are disabled. Enable them in browser settings.');
     } catch (e) {
@@ -441,14 +498,6 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
       _resolvingPin = false;
       _locationStatus = msg;
     });
-  }
-
-  String _first(Map<String, dynamic> addr, List<String> keys) {
-    for (final k in keys) {
-      final v = addr[k];
-      if (v != null && (v as String).isNotEmpty) return v;
-    }
-    return '';
   }
 
   // ── Photo picker ───────────────────────────────────────────────────────────
@@ -769,6 +818,19 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
                                   ),
                                 ],
                                 const SizedBox(height: AddLeadUi.fieldGap),
+                                if (_loadingTngis || _tngisParcel != null) ...[
+                                  TngisParcelSummary(
+                                    key: ValueKey(
+                                      '${_pinnedPoint?.latitude}_'
+                                      '${_pinnedPoint?.longitude}_'
+                                      '$_pinFetchSeq',
+                                    ),
+                                    parcel: _tngisParcel ??
+                                        const TngisParcelDetails(),
+                                    loading: _loadingTngis,
+                                  ),
+                                  const SizedBox(height: AddLeadUi.fieldGap),
+                                ],
                               ],
                               if (_locationMode == _LocationMode.live) ...[
                                 AddLeadLiveLocationCard(

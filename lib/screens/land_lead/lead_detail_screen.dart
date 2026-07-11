@@ -10,6 +10,7 @@ import '../../theme/fomra_theme_context.dart';
 import '../../widgets/fomra_app_shell.dart';
 import '../../widgets/fomra_breadcrumb.dart';
 import '../../widgets/ui/app_components.dart';
+import '../market_intelligence/market_intelligence_screen.dart';
 import 'add_lead_screen.dart';
 
 int _leadAgeDaysFromReceived(DateTime receivedOn) {
@@ -52,16 +53,35 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
     'Notes',
     'Details',
     'Site Photos',
+    'Infrastructure',
+    'Land Records',
+    'Competitor Projects',
   ];
+
+  static const _miTabStart = 4;
+  final Set<int> _loadedMiTabs = {};
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: _tabs.length, vsync: this);
+    _tabController.addListener(_onTabChanged);
   }
+
+  void _onTabChanged() {
+    if (_tabController.indexIsChanging) return;
+    final index = _tabController.index;
+    if (index >= _miTabStart && !_loadedMiTabs.contains(index)) {
+      setState(() => _loadedMiTabs.add(index));
+    }
+  }
+
+  bool _shouldLoadMiTab(int index) =>
+      _loadedMiTabs.contains(index) || _tabController.index == index;
 
   @override
   void dispose() {
+    _tabController.removeListener(_onTabChanged);
     _tabController.dispose();
     _noteCtrl.dispose();
     super.dispose();
@@ -71,23 +91,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
       ? 'Lead #${lead.leadId}'
       : lead.ownerName.trim();
 
-  String get _initials {
-    final parts = _displayName.split(RegExp(r'\s+')).where((p) => p.isNotEmpty);
-    final list = parts.take(2).toList();
-    if (list.isEmpty) return '#';
-    return list.map((p) => p[0]).join().toUpperCase();
-  }
-
   int get _leadAgeDays => _leadAgeDaysFromReceived(lead.addedOn);
-
-  int get _statusScore => switch (lead.status) {
-        LeadStatus.prospectMeetingPending => 16,
-        LeadStatus.prospectMeetingCompleted => 32,
-        LeadStatus.negotiation => 48,
-        LeadStatus.legal => 64,
-        LeadStatus.signed => 100,
-        LeadStatus.dropped => 12,
-      };
 
   int get _siteVisitCount => lead.status ==
           LeadStatus.prospectMeetingCompleted ||
@@ -203,75 +207,29 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
   }
 
   void _handleDetailAction(String label) {
-    switch (label) {
-      case 'Notes':
-        _tabController.animateTo(1);
-      case 'Calls':
-        _launchContact('tel');
-      case 'Site visit':
-        _tabController.animateTo(3);
-      case 'Management site visit':
-        _tabController.animateTo(0);
-      case 'Meeting':
-        _pickMeetingStatus();
-      case 'Legal':
-        _changeStatus(LeadStatus.legal);
-      case 'Signed':
-        _changeStatus(LeadStatus.signed);
-    }
+    _showActionDialog(label);
   }
 
-  Future<void> _pickMeetingStatus() async {
-    final picked = await showModalBottomSheet<LeadStatus>(
+  Future<void> _showActionDialog(String label) async {
+    final icon = switch (label) {
+      'Notes' => Icons.sticky_note_2_outlined,
+      'Calls' => Icons.call_outlined,
+      'Site visit' => Icons.location_on_outlined,
+      'Management site visit' => Icons.apartment_outlined,
+      'Meeting' => Icons.groups_outlined,
+      'Legal' => Icons.gavel_outlined,
+      'Signed' => Icons.draw_outlined,
+      _ => Icons.touch_app_outlined,
+    };
+
+    await showDialog<void>(
       context: context,
-      backgroundColor: context.fomraSurface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                'Meeting status',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w800,
-                  color: context.fomraTextPrimary,
-                ),
-              ),
-              const SizedBox(height: 12),
-              ListTile(
-                leading: CircleAvatar(
-                  radius: 6,
-                  backgroundColor: LeadStatus.prospectMeetingPending.color,
-                ),
-                title: Text(LeadStatus.prospectMeetingPending.label),
-                onTap: () => Navigator.pop(
-                  ctx,
-                  LeadStatus.prospectMeetingPending,
-                ),
-              ),
-              ListTile(
-                leading: CircleAvatar(
-                  radius: 6,
-                  backgroundColor: LeadStatus.prospectMeetingCompleted.color,
-                ),
-                title: Text(LeadStatus.prospectMeetingCompleted.label),
-                onTap: () => Navigator.pop(
-                  ctx,
-                  LeadStatus.prospectMeetingCompleted,
-                ),
-              ),
-            ],
-          ),
-        ),
+      builder: (ctx) => _LeadActionDialog(
+        actionLabel: label,
+        icon: icon,
+        leadId: lead.leadId,
       ),
     );
-    if (picked != null) await _changeStatus(picked);
   }
 
   List<FomraBreadcrumbItem> get _breadcrumbs =>
@@ -308,9 +266,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
                                 child: _ProfilePanel(
                                   lead: lead,
                                   displayName: _displayName,
-                                  initials: _initials,
                                   leadAgeDays: _leadAgeDays,
-                                  statusScore: _statusScore,
                                   onStatusChanged: _changeStatus,
                                   onLaunchContact: _launchContact,
                                 ),
@@ -329,6 +285,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
                                   onSaveNote: _saveNote,
                                   onLaunchContact: _launchContact,
                                   onDetailAction: _handleDetailAction,
+                                  shouldLoadMiTab: _shouldLoadMiTab,
                                 ),
                               ),
                             ],
@@ -338,9 +295,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
                               _ProfilePanel(
                                 lead: lead,
                                 displayName: _displayName,
-                                initials: _initials,
                                 leadAgeDays: _leadAgeDays,
-                                statusScore: _statusScore,
                                 onStatusChanged: _changeStatus,
                                 onLaunchContact: _launchContact,
                               ),
@@ -358,6 +313,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
                                   onSaveNote: _saveNote,
                                   onLaunchContact: _launchContact,
                                   onDetailAction: _handleDetailAction,
+                                  shouldLoadMiTab: _shouldLoadMiTab,
                                 ),
                               ),
                             ],
@@ -421,18 +377,14 @@ class _TopBar extends StatelessWidget {
 class _ProfilePanel extends StatelessWidget {
   final LandLead lead;
   final String displayName;
-  final String initials;
   final int leadAgeDays;
-  final int statusScore;
   final ValueChanged<LeadStatus?> onStatusChanged;
   final Future<void> Function(String scheme) onLaunchContact;
 
   const _ProfilePanel({
     required this.lead,
     required this.displayName,
-    required this.initials,
     required this.leadAgeDays,
-    required this.statusScore,
     required this.onStatusChanged,
     required this.onLaunchContact,
   });
@@ -514,112 +466,15 @@ class _ProfilePanel extends StatelessWidget {
                   ),
               ],
             ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                _MetricPill(
-                  label: lead.landExtent.isEmpty ? '—' : lead.landExtent,
-                  caption: 'Area',
-                ),
-                _MetricPill(
-                  label: lead.surveyNumber.isEmpty ? '—' : lead.surveyNumber,
-                  caption: 'Survey',
-                ),
-              ],
-            ),
             const SizedBox(height: 16),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _AvatarRing(initials: initials, score: statusScore),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Stage & Status',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: context.fomraTextSecondary,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10),
-                        decoration: BoxDecoration(
-                          border: Border.all(
-                            color: lead.status.color.withValues(alpha: 0.45),
-                          ),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: DropdownButtonHideUnderline(
-                          child: DropdownButton<LeadStatus>(
-                            value: lead.status,
-                            isExpanded: true,
-                            items: leadStatusPipelineOrder
-                                .map(
-                                  (s) => DropdownMenuItem(
-                                    value: s,
-                                    child: Row(
-                                      children: [
-                                        CircleAvatar(
-                                          radius: 5,
-                                          backgroundColor: s.color,
-                                        ),
-                                        const SizedBox(width: 8),
-                                        Text(s.label),
-                                      ],
-                                    ),
-                                  ),
-                                )
-                                .toList(),
-                            onChanged: onStatusChanged,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      _InfoLine(
-                        label: 'Input Source',
-                        value: lead.inputSource.label,
-                      ),
-                      _InfoLine(
-                        label: 'Land Type',
-                        value: lead.landType.label,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+            _StageStatusField(
+              status: lead.status,
+              onStatusChanged: onStatusChanged,
             ),
             const SizedBox(height: 14),
             const Divider(),
             const SizedBox(height: 10),
-            Text(
-              'Last Note',
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                color: context.fomraTextSecondary,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              lead.notes.trim().isEmpty
-                  ? 'No notes yet'
-                  : lead.notes.trim().split('\n').last,
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 12,
-                color: context.fomraTextPrimary,
-              ),
-            ),
-            const SizedBox(height: 14),
-            _MetaGrid(lead: lead, leadAgeDays: leadAgeDays),
+            _LeadInfoGrid(lead: lead, leadAgeDays: leadAgeDays),
             if (lead.contactDetails.isNotEmpty) ...[
               const SizedBox(height: 12),
               OutlinedButton(
@@ -645,6 +500,7 @@ class _WorkspacePanel extends StatelessWidget {
   final VoidCallback onSaveNote;
   final Future<void> Function(String scheme) onLaunchContact;
   final ValueChanged<String> onDetailAction;
+  final bool Function(int tabIndex) shouldLoadMiTab;
 
   const _WorkspacePanel({
     required this.lead,
@@ -657,6 +513,7 @@ class _WorkspacePanel extends StatelessWidget {
     required this.onSaveNote,
     required this.onLaunchContact,
     required this.onDetailAction,
+    required this.shouldLoadMiTab,
   });
 
   @override
@@ -705,6 +562,21 @@ class _WorkspacePanel extends StatelessWidget {
                 _NotesTab(lead: lead),
                 _DetailsTab(lead: lead),
                 _SitePhotosTab(lead: lead),
+                _LazyMarketIntelTab(
+                  active: shouldLoadMiTab(4),
+                  lead: lead,
+                  section: MarketIntelLeadSection.infrastructure,
+                ),
+                _LazyMarketIntelTab(
+                  active: shouldLoadMiTab(5),
+                  lead: lead,
+                  section: MarketIntelLeadSection.landRecords,
+                ),
+                _LazyMarketIntelTab(
+                  active: shouldLoadMiTab(6),
+                  lead: lead,
+                  section: MarketIntelLeadSection.competitorProjects,
+                ),
               ],
             ),
           ),
@@ -763,6 +635,106 @@ class _ActionToolbar extends StatelessWidget {
               ),
             ),
         ],
+      ),
+    );
+  }
+}
+
+class _LeadActionDialog extends StatelessWidget {
+  final String actionLabel;
+  final IconData icon;
+  final String leadId;
+
+  const _LeadActionDialog({
+    required this.actionLabel,
+    required this.icon,
+    required this.leadId,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      backgroundColor: context.fomraSurface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 420),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 18, 12, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: AppColors.purple.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    alignment: Alignment.center,
+                    child: Icon(icon, color: AppColors.purple, size: 20),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          actionLabel,
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            color: context.fomraTextPrimary,
+                          ),
+                        ),
+                        Text(
+                          'Lead #$leadId',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: context.fomraTextSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: context.fomraSurfaceVar.withValues(alpha: 0.65),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: context.fomraBorder),
+                ),
+                child: Text(
+                  'Action window ready. Tell me what fields or actions to add here.',
+                  style: TextStyle(
+                    fontSize: 13,
+                    height: 1.4,
+                    color: context.fomraTextSecondary,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Close'),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -1096,19 +1068,91 @@ class _SitePhotosTab extends StatelessWidget {
   }
 }
 
-class _MetaGrid extends StatelessWidget {
-  final LandLead lead;
-  final int leadAgeDays;
+class _StageStatusField extends StatelessWidget {
+  final LeadStatus status;
+  final ValueChanged<LeadStatus?> onStatusChanged;
 
-  const _MetaGrid({required this.lead, required this.leadAgeDays});
+  const _StageStatusField({
+    required this.status,
+    required this.onStatusChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final items = <(String, String)>[
-      (
-        'Received On',
-        _formatReceivedOn(lead.addedOn),
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'STAGE & STATUS',
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.4,
+            color: context.fomraTextSecondary,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          decoration: BoxDecoration(
+            border: Border.all(
+              color: status.color.withValues(alpha: 0.45),
+            ),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<LeadStatus>(
+              value: status,
+              isExpanded: true,
+              items: leadStatusPipelineOrder
+                  .map(
+                    (s) => DropdownMenuItem(
+                      value: s,
+                      child: Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 5,
+                            backgroundColor: s.color,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              s.label,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                  .toList(),
+              onChanged: onStatusChanged,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _LeadInfoGrid extends StatelessWidget {
+  final LandLead lead;
+  final int leadAgeDays;
+
+  const _LeadInfoGrid({required this.lead, required this.leadAgeDays});
+
+  String get _lastNote => lead.notes.trim().isEmpty
+      ? 'No notes yet'
+      : lead.notes.trim().split('\n').last;
+
+  @override
+  Widget build(BuildContext context) {
+    final pairs = <(String, String)>[
+      ('Area', lead.landExtent.isEmpty ? '—' : lead.landExtent),
+      ('Survey Number', lead.surveyNumber.isEmpty ? '—' : lead.surveyNumber),
+      ('Input Source', lead.inputSource.label),
+      ('Land Type', lead.landType.label),
+      ('Received On', _formatReceivedOn(lead.addedOn)),
       ('Lead Age', '$leadAgeDays days'),
       ('Tags', '${lead.landType.label}, ${lead.inputSource.label}'),
       ('Posted By', lead.createdByName.isEmpty ? '—' : lead.createdByName),
@@ -1117,24 +1161,53 @@ class _MetaGrid extends StatelessWidget {
         'Project Interest',
         lead.village.isEmpty ? lead.location : lead.village,
       ),
-      ('Contact Details', lead.contactDetails.isEmpty ? '—' : 'Available'),
+      (
+        'Contact Details',
+        lead.contactDetails.isEmpty ? '—' : lead.contactDetails,
+      ),
     ];
 
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        for (var i = 0; i < items.length; i += 2)
+        for (var i = 0; i < 4; i += 2)
           Padding(
             padding: const EdgeInsets.only(bottom: 10),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(child: _MetaCell(label: items[i].$1, value: items[i].$2)),
+                Expanded(
+                  child: _MetaCell(label: pairs[i].$1, value: pairs[i].$2),
+                ),
                 const SizedBox(width: 12),
-                if (i + 1 < items.length)
+                Expanded(
+                  child: _MetaCell(
+                    label: pairs[i + 1].$1,
+                    value: pairs[i + 1].$2,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: _MetaCell(label: 'Last Note', value: _lastNote),
+        ),
+        for (var i = 4; i < pairs.length; i += 2)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: _MetaCell(label: pairs[i].$1, value: pairs[i].$2),
+                ),
+                const SizedBox(width: 12),
+                if (i + 1 < pairs.length)
                   Expanded(
                     child: _MetaCell(
-                      label: items[i + 1].$1,
-                      value: items[i + 1].$2,
+                      label: pairs[i + 1].$1,
+                      value: pairs[i + 1].$2,
                     ),
                   )
                 else
@@ -1170,6 +1243,8 @@ class _MetaCell extends StatelessWidget {
         const SizedBox(height: 3),
         Text(
           value,
+          maxLines: 4,
+          overflow: TextOverflow.ellipsis,
           style: TextStyle(
             fontSize: 12.5,
             fontWeight: FontWeight.w600,
@@ -1181,103 +1256,36 @@ class _MetaCell extends StatelessWidget {
   }
 }
 
-class _MetricPill extends StatelessWidget {
-  final String label;
-  final String caption;
+class _LazyMarketIntelTab extends StatelessWidget {
+  final bool active;
+  final LandLead lead;
+  final MarketIntelLeadSection section;
 
-  const _MetricPill({required this.label, required this.caption});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        border: Border.all(color: context.fomraBorder),
-      ),
-      child: Column(
-        children: [
-          Text(label, style: const TextStyle(fontWeight: FontWeight.w800)),
-          Text(caption,
-              style: TextStyle(fontSize: 10, color: context.fomraTextSecondary)),
-        ],
-      ),
-    );
-  }
-}
-
-class _AvatarRing extends StatelessWidget {
-  final String initials;
-  final int score;
-
-  const _AvatarRing({required this.initials, required this.score});
+  const _LazyMarketIntelTab({
+    required this.active,
+    required this.lead,
+    required this.section,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 74,
-      height: 74,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          CircularProgressIndicator(
-            value: score / 100,
-            strokeWidth: 4,
-            color: AppColors.purple,
-            backgroundColor: AppColors.purple.withValues(alpha: 0.12),
+    if (!active) {
+      return Center(
+        child: Text(
+          'Open this tab to load Market Intelligence data.',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 12,
+            color: context.fomraTextSecondary,
           ),
-          CircleAvatar(
-            radius: 28,
-            backgroundColor: AppColors.purple.withValues(alpha: 0.12),
-            child: Text(
-              initials,
-              style: const TextStyle(
-                fontWeight: FontWeight.w800,
-                color: AppColors.purple,
-              ),
-            ),
-          ),
-          Positioned(
-            right: 2,
-            bottom: 2,
-            child: Container(
-              width: 22,
-              height: 22,
-              alignment: Alignment.center,
-              decoration: const BoxDecoration(
-                color: AppColors.purple,
-                shape: BoxShape.circle,
-              ),
-              child: Text(
-                '$score',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 9,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
+        ),
+      );
+    }
 
-class _InfoLine extends StatelessWidget {
-  final String label;
-  final String value;
-
-  const _InfoLine({required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Text(
-        '$label: $value',
-        style: TextStyle(fontSize: 11, color: context.fomraTextSecondary),
-      ),
+    return MarketIntelligenceScreen(
+      lead: lead,
+      embeddedInLead: true,
+      leadSectionOnly: section,
     );
   }
 }
