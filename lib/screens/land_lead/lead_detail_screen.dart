@@ -304,7 +304,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
   Widget build(BuildContext context) {
     return FomraAppShell(
       currentRoute: '/land-lead',
-      backgroundColor: const Color(0xFFF3F4F8),
+      backgroundColor: const Color(0xFFEEF1F6),
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
@@ -326,7 +326,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
                               Expanded(
-                                flex: 1,
+                                flex: 2,
                                 child: _ProfilePanel(
                                   lead: lead,
                                   displayName: _displayName,
@@ -337,7 +337,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
                               ),
                               const SizedBox(width: 12),
                               Expanded(
-                                flex: 1,
+                                flex: 3,
                                 child: _WorkspacePanel(
                                   lead: lead,
                                   tabController: _tabController,
@@ -407,10 +407,17 @@ class _TopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(8, 6, 12, 6),
+      padding: const EdgeInsets.fromLTRB(8, 8, 12, 8),
       decoration: BoxDecoration(
         color: context.fomraSurface,
         border: Border(bottom: BorderSide(color: context.fomraBorder)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Row(
         children: [
@@ -418,19 +425,54 @@ class _TopBar extends StatelessWidget {
             onPressed: onBack,
             icon: const Icon(Icons.arrow_back_rounded),
           ),
-          Text(
-            'Lead #$leadId',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w800,
-              color: context.fomraTextPrimary,
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: AppColors.purple.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            alignment: Alignment.center,
+            child: const Icon(
+              Icons.person_pin_circle_outlined,
+              color: AppColors.purple,
+              size: 20,
             ),
           ),
-          const Spacer(),
-          TextButton.icon(
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Lead #$leadId',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    color: context.fomraTextPrimary,
+                  ),
+                ),
+                Text(
+                  'Lead workspace',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: context.fomraTextSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          FilledButton.icon(
             onPressed: onEdit,
             icon: const Icon(Icons.edit_outlined, size: 16),
             label: const Text('Edit lead'),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.purple,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
           ),
         ],
       ),
@@ -459,95 +501,207 @@ class _ProfilePanel extends StatelessWidget {
       if (lead.village.isNotEmpty) lead.village,
       if (lead.district.isNotEmpty) lead.district,
     ].join(', ');
+    final initial = displayName.isNotEmpty
+        ? displayName.trim()[0].toUpperCase()
+        : '#';
 
-    return AppCard(
-      interactive: false,
-      padding: const EdgeInsets.all(18),
-      radius: 16,
-      child: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '#${lead.leadId}',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: context.fomraTextSecondary,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              displayName,
-                              style: TextStyle(
-                                fontSize: 22,
-                                fontWeight: FontWeight.w800,
-                                color: context.fomraTextPrimary,
-                              ),
-                            ),
-                          ),
-                          Icon(Icons.edit_outlined,
-                              size: 16, color: context.fomraTextSecondary),
-                        ],
-                      ),
-                      if (locationLabel.isNotEmpty) ...[
-                        const SizedBox(height: 6),
-                        Row(
-                          children: [
-                            const Text('🇮🇳', style: TextStyle(fontSize: 14)),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: Text(
-                                locationLabel,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: context.fomraTextSecondary,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        decoration: BoxDecoration(
+          color: context.fomraSurface,
+          border: Border.all(color: context.fomraBorder),
+          boxShadow: AppColors.cardShadow,
+        ),
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(
+                padding: const EdgeInsets.fromLTRB(18, 18, 12, 16),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      lead.status.color.withValues(alpha: 0.18),
+                      lead.status.color.withValues(alpha: 0.04),
                     ],
                   ),
-                ),
-                if (lead.contactDetails.isNotEmpty)
-                  IconButton(
-                    tooltip: 'WhatsApp',
-                    onPressed: () => onLaunchContact('https://wa.me'),
-                    icon: const Icon(Icons.chat_rounded,
-                        color: Color(0xFF25D366)),
+                  border: Border(
+                    bottom: BorderSide(color: context.fomraBorder),
                   ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            _StageStatusField(
-              status: lead.status,
-              onStatusChanged: onStatusChanged,
-            ),
-            const SizedBox(height: 14),
-            const Divider(),
-            const SizedBox(height: 10),
-            _LeadInfoGrid(lead: lead, leadAgeDays: leadAgeDays),
-            if (lead.contactDetails.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              OutlinedButton(
-                onPressed: () => onLaunchContact('tel'),
-                child: const Text('View contact details'),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    CircleAvatar(
+                      radius: 26,
+                      backgroundColor: lead.status.color.withValues(alpha: 0.2),
+                      child: Text(
+                        initial,
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                          color: lead.status.color,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '#${lead.leadId}',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.3,
+                              color: context.fomraTextSecondary,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            displayName,
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w800,
+                              color: context.fomraTextPrimary,
+                            ),
+                          ),
+                          if (locationLabel.isNotEmpty) ...[
+                            const SizedBox(height: 6),
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.place_outlined,
+                                  size: 14,
+                                  color: context.fomraTextSecondary,
+                                ),
+                                const SizedBox(width: 4),
+                                Expanded(
+                                  child: Text(
+                                    locationLabel,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: context.fomraTextSecondary,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                          const SizedBox(height: 10),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 6,
+                            children: [
+                              _InfoChip(
+                                label: '$leadAgeDays days old',
+                                icon: Icons.schedule_outlined,
+                              ),
+                              _InfoChip(
+                                label: lead.landType.label,
+                                icon: Icons.landscape_outlined,
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (lead.contactDetails.isNotEmpty)
+                      IconButton(
+                        tooltip: 'WhatsApp',
+                        onPressed: () => onLaunchContact('https://wa.me'),
+                        style: IconButton.styleFrom(
+                          backgroundColor: const Color(0xFF25D366)
+                              .withValues(alpha: 0.12),
+                        ),
+                        icon: const Icon(Icons.chat_rounded,
+                            color: Color(0xFF25D366)),
+                      ),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _StageStatusField(
+                      status: lead.status,
+                      onStatusChanged: onStatusChanged,
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'LEAD DETAILS',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.6,
+                        color: context.fomraTextSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    _LeadInfoGrid(lead: lead, leadAgeDays: leadAgeDays),
+                    if (lead.contactDetails.isNotEmpty) ...[
+                      const SizedBox(height: 14),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: () => onLaunchContact('tel'),
+                          icon: const Icon(Icons.phone_outlined, size: 18),
+                          label: const Text('View contact details'),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
               ),
             ],
-          ],
+          ),
         ),
+      ),
+    );
+  }
+}
+
+class _InfoChip extends StatelessWidget {
+  final String label;
+  final IconData icon;
+
+  const _InfoChip({required this.label, required this.icon});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: context.fomraSurface.withValues(alpha: 0.85),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: context.fomraBorder),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: context.fomraTextSecondary),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: context.fomraTextSecondary,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -582,69 +736,115 @@ class _WorkspacePanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AppCard(
-      interactive: false,
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
-      radius: 16,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _ActionToolbar(onAction: onDetailAction),
-          const SizedBox(height: 12),
-          _NoteComposer(
-            controller: noteCtrl,
-            saving: savingNote,
-            onSave: onSaveNote,
-          ),
-          const SizedBox(height: 14),
-          _ActivitySummaryRow(
-            siteVisitCount: siteVisitCount,
-            contactAttempts: contactAttempts,
-            status: lead.status,
-          ),
-          const SizedBox(height: 12),
-          TabBar(
-            controller: tabController,
-            isScrollable: true,
-            tabAlignment: TabAlignment.start,
-            labelColor: AppColors.purple,
-            unselectedLabelColor: context.fomraTextSecondary,
-            indicatorColor: AppColors.purple,
-            indicatorWeight: 2.5,
-            labelStyle: const TextStyle(
-              fontSize: 12.5,
-              fontWeight: FontWeight.w700,
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        decoration: BoxDecoration(
+          color: context.fomraSurface,
+          border: Border.all(color: context.fomraBorder),
+          boxShadow: AppColors.cardShadow,
+        ),
+        padding: const EdgeInsets.fromLTRB(18, 16, 18, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'QUICK ACTIONS',
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.6,
+                color: context.fomraTextSecondary,
+              ),
             ),
-            tabs: [for (final t in tabs) Tab(text: t)],
-          ),
-          const SizedBox(height: 10),
-          Expanded(
-            child: TabBarView(
-              controller: tabController,
-              children: [
-                _ActivityTimeline(lead: lead),
-                _NotesTab(lead: lead),
-                _DetailsTab(lead: lead),
-                _SitePhotosTab(lead: lead),
-                _LazyMarketIntelTab(
-                  active: shouldLoadMiTab(4),
-                  lead: lead,
-                  section: MarketIntelLeadSection.infrastructure,
-                ),
-                _LazyMarketIntelTab(
-                  active: shouldLoadMiTab(5),
-                  lead: lead,
-                  section: MarketIntelLeadSection.landRecords,
-                ),
-                _LazyMarketIntelTab(
-                  active: shouldLoadMiTab(6),
-                  lead: lead,
-                  section: MarketIntelLeadSection.competitorProjects,
-                ),
-              ],
+            const SizedBox(height: 10),
+            _ActionToolbar(onAction: onDetailAction),
+            const SizedBox(height: 16),
+            Text(
+              'ADD NOTE',
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.6,
+                color: context.fomraTextSecondary,
+              ),
             ),
-          ),
-        ],
+            const SizedBox(height: 8),
+            _NoteComposer(
+              controller: noteCtrl,
+              saving: savingNote,
+              onSave: onSaveNote,
+            ),
+            const SizedBox(height: 16),
+            _ActivitySummaryRow(
+              siteVisitCount: siteVisitCount,
+              contactAttempts: contactAttempts,
+              status: lead.status,
+            ),
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+              decoration: BoxDecoration(
+                color: context.fomraSurfaceVar.withValues(alpha: 0.7),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: TabBar(
+                controller: tabController,
+                isScrollable: true,
+                tabAlignment: TabAlignment.start,
+                dividerColor: Colors.transparent,
+                labelColor: AppColors.purple,
+                unselectedLabelColor: context.fomraTextSecondary,
+                indicator: BoxDecoration(
+                  color: context.fomraSurface,
+                  borderRadius: BorderRadius.circular(10),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.06),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                indicatorSize: TabBarIndicatorSize.tab,
+                labelPadding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                labelStyle: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+                tabs: [for (final t in tabs) Tab(text: t, height: 34)],
+              ),
+            ),
+            const SizedBox(height: 10),
+            Expanded(
+              child: TabBarView(
+                controller: tabController,
+                children: [
+                  _ActivityTimeline(lead: lead),
+                  _NotesTab(lead: lead),
+                  _DetailsTab(lead: lead),
+                  _SitePhotosTab(lead: lead),
+                  _LazyMarketIntelTab(
+                    active: shouldLoadMiTab(4),
+                    lead: lead,
+                    section: MarketIntelLeadSection.infrastructure,
+                  ),
+                  _LazyMarketIntelTab(
+                    active: shouldLoadMiTab(5),
+                    lead: lead,
+                    section: MarketIntelLeadSection.landRecords,
+                  ),
+                  _LazyMarketIntelTab(
+                    active: shouldLoadMiTab(6),
+                    lead: lead,
+                    section: MarketIntelLeadSection.competitorProjects,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -673,27 +873,33 @@ class _ActionToolbar extends StatelessWidget {
         children: [
           for (final action in actions)
             Padding(
-              padding: const EdgeInsets.only(right: 14),
-              child: InkWell(
-                onTap: () => onAction(action.$2),
-                borderRadius: BorderRadius.circular(10),
-                child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-                  child: Column(
-                    children: [
-                      Icon(action.$1, size: 20, color: AppColors.purple),
-                      const SizedBox(height: 4),
-                      Text(
-                        action.$2,
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: context.fomraTextSecondary,
+              padding: const EdgeInsets.only(right: 8),
+              child: Material(
+                color: AppColors.purple.withValues(alpha: 0.07),
+                borderRadius: BorderRadius.circular(24),
+                child: InkWell(
+                  onTap: () => onAction(action.$2),
+                  borderRadius: BorderRadius.circular(24),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(action.$1, size: 16, color: AppColors.purple),
+                        const SizedBox(width: 6),
+                        Text(
+                          action.$2,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: context.fomraTextPrimary,
+                          ),
                         ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -819,11 +1025,18 @@ class _NoteComposer extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: context.fomraSurfaceVar.withValues(alpha: 0.55),
-        borderRadius: BorderRadius.circular(12),
+        color: context.fomraSurface,
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(color: context.fomraBorder),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -897,46 +1110,47 @@ class _ActivitySummaryRow extends StatelessWidget {
       ('Incoming\nAnswered', '0'),
     ];
 
-    return Container(
-      decoration: BoxDecoration(
-        border: Border.all(color: context.fomraBorder),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          for (var i = 0; i < cells.length; i++) ...[
-            if (i > 0)
-              Container(width: 1, height: 54, color: context.fomraBorder),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-                child: Column(
-                  children: [
-                    Text(
-                      cells[i].$1,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 10,
-                        height: 1.2,
-                        color: context.fomraTextSecondary,
-                      ),
+    return Row(
+      children: [
+        for (var i = 0; i < cells.length; i++) ...[
+          if (i > 0) const SizedBox(width: 8),
+          Expanded(
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+              decoration: BoxDecoration(
+                color: context.fomraSurfaceVar.withValues(alpha: 0.65),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: context.fomraBorder),
+              ),
+              child: Column(
+                children: [
+                  Text(
+                    cells[i].$1,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 10,
+                      height: 1.2,
+                      fontWeight: FontWeight.w600,
+                      color: context.fomraTextSecondary,
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      cells[i].$2,
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                        color: context.fomraTextPrimary,
-                      ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    cells[i].$2,
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                      color: i == 0
+                          ? AppColors.purple
+                          : context.fomraTextPrimary,
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
-          ],
+          ),
         ],
-      ),
+      ],
     );
   }
 }
@@ -1306,30 +1520,40 @@ class _MetaCell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label.toUpperCase(),
-          style: TextStyle(
-            fontSize: 10,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.4,
-            color: context.fomraTextSecondary,
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: context.fomraSurfaceVar.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: context.fomraBorder.withValues(alpha: 0.8)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label.toUpperCase(),
+            style: TextStyle(
+              fontSize: 9,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.45,
+              color: context.fomraTextSecondary,
+            ),
           ),
-        ),
-        const SizedBox(height: 3),
-        Text(
-          value,
-          maxLines: 4,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            fontSize: 12.5,
-            fontWeight: FontWeight.w600,
-            color: context.fomraTextPrimary,
+          const SizedBox(height: 4),
+          Text(
+            value,
+            maxLines: 4,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              height: 1.3,
+              color: context.fomraTextPrimary,
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
