@@ -236,21 +236,17 @@ class _BrandHeader extends StatelessWidget {
         duration: _SideNavTokens.animDuration,
         curve: _SideNavTokens.animCurve,
         padding: EdgeInsets.fromLTRB(
-          expanded
-              ? _SideNavTokens.horizontalPad
-              : _SideNavTokens.collapsedHorizontalPad,
-          0,
-          expanded
-              ? _SideNavTokens.horizontalPad
-              : _SideNavTokens.collapsedHorizontalPad,
-          0,
+          expanded ? 10 : 6,
+          3,
+          expanded ? 10 : 6,
+          3,
         ),
         child: Align(
           alignment: expanded ? Alignment.centerLeft : Alignment.center,
           child: FomraBrandLogo(
             compact: !expanded,
-            showBackground: false,
-            height: expanded ? 44 : 36,
+            showBackground: true,
+            height: kToolbarHeight - 6,
           ),
         ),
       ),

@@ -207,9 +207,7 @@ class ManagementExecutiveDashboard extends StatelessWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _DealTermsDonutCard(leads: leads),
-            SizedBox(height: gap),
-            _HeroKpiStrip(
+            _ExecutiveTopRow(
               leads: leads,
               isDesktop: isDesktop,
               isTablet: isTablet,
@@ -292,17 +290,74 @@ class _DashboardCard extends StatelessWidget {
   }
 }
 
+// ── Row 1: KPIs left, deal terms right ────────────────────────────────────────
+
+class _ExecutiveTopRow extends StatelessWidget {
+  final List<LandLead> leads;
+  final bool isDesktop;
+  final bool isTablet;
+
+  const _ExecutiveTopRow({
+    required this.leads,
+    required this.isDesktop,
+    required this.isTablet,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final gap = AppSpacing.md;
+
+    if (!isTablet) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _HeroKpiStrip(
+            leads: leads,
+            isDesktop: isDesktop,
+            isTablet: isTablet,
+            inRow: false,
+          ),
+          SizedBox(height: gap),
+          _DealTermsDonutCard(leads: leads),
+        ],
+      );
+    }
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          flex: isDesktop ? 6 : 5,
+          child: _HeroKpiStrip(
+            leads: leads,
+            isDesktop: isDesktop,
+            isTablet: isTablet,
+            inRow: true,
+          ),
+        ),
+        SizedBox(width: gap),
+        Expanded(
+          flex: isDesktop ? 4 : 5,
+          child: _DealTermsDonutCard(leads: leads, inline: true),
+        ),
+      ],
+    );
+  }
+}
+
 // ── Row 2: Hero KPI strip ─────────────────────────────────────────────────────
 
 class _HeroKpiStrip extends StatelessWidget {
   final List<LandLead> leads;
   final bool isDesktop;
   final bool isTablet;
+  final bool inRow;
 
   const _HeroKpiStrip({
     required this.leads,
     required this.isDesktop,
     required this.isTablet,
+    this.inRow = false,
   });
 
   @override
@@ -331,6 +386,20 @@ class _HeroKpiStrip extends StatelessWidget {
         periodLabel: 'This month',
       ),
     ];
+
+    if (inRow) {
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _SignedLeadsRing(percent: signedPct, count: signed.length),
+          const SizedBox(width: AppSpacing.md),
+          for (var i = 0; i < kpiDefs.length; i++) ...[
+            Expanded(child: _CompactKpiCard(def: kpiDefs[i])),
+            if (i < kpiDefs.length - 1) const SizedBox(width: AppSpacing.md),
+          ],
+        ],
+      );
+    }
 
     return Wrap(
       spacing: AppSpacing.md,
@@ -817,8 +886,12 @@ class _MomBadge extends StatelessWidget {
 
 class _DealTermsDonutCard extends StatefulWidget {
   final List<LandLead> leads;
+  final bool inline;
 
-  const _DealTermsDonutCard({required this.leads});
+  const _DealTermsDonutCard({
+    required this.leads,
+    this.inline = false,
+  });
 
   @override
   State<_DealTermsDonutCard> createState() => _DealTermsDonutCardState();
@@ -841,6 +914,11 @@ class _DealTermsDonutCardState extends State<_DealTermsDonutCard> {
     final total = dist.values.fold<int>(0, (a, b) => a + b);
     final sections = <PieChartSectionData>[];
 
+    final chartSize = widget.inline ? 120.0 : 180.0;
+    final pieRadius = widget.inline ? 36.0 : 46.0;
+    final touchedRadius = widget.inline ? 40.0 : 52.0;
+    final centerRadius = widget.inline ? 28.0 : 42.0;
+
     for (var i = 0; i < _kDealCategories.length; i++) {
       final cat = _kDealCategories[i];
       final count = dist[cat] ?? 0;
@@ -852,12 +930,12 @@ class _DealTermsDonutCardState extends State<_DealTermsDonutCard> {
           value: count == 0 ? 1 : count.toDouble(),
           title: touched ? '${pct.round()}%' : '',
           titleStyle: TextStyle(
-            fontSize: 11,
+            fontSize: widget.inline ? 9 : 11,
             fontWeight: FontWeight.w700,
             color: context.fomraTextPrimary,
           ),
           color: _colors[i % _colors.length],
-          radius: touched ? 52 : 46,
+          radius: touched ? touchedRadius : pieRadius,
           titlePositionPercentageOffset: 0.55,
         ),
       );
@@ -868,58 +946,73 @@ class _DealTermsDonutCardState extends State<_DealTermsDonutCard> {
         PieChartSectionData(
           value: 1,
           color: context.fomraSurfaceVar,
-          radius: 46,
+          radius: pieRadius,
           title: '',
         ),
       );
     }
 
+    final legend = Wrap(
+      spacing: widget.inline ? 6 : 8,
+      runSpacing: widget.inline ? 4 : 6,
+      children: List.generate(_kDealCategories.length, (i) {
+        final cat = _kDealCategories[i];
+        final count = dist[cat] ?? 0;
+        final pct = total == 0 ? 0 : ((count / total) * 100).round();
+        return _LegendChip(
+          color: _colors[i % _colors.length],
+          label: cat,
+          value: '$pct%',
+          selected: i == _touchedIndex,
+          compact: widget.inline,
+        );
+      }),
+    );
+
+    final chart = SizedBox(
+      width: widget.inline ? chartSize : null,
+      height: chartSize,
+      child: PieChart(
+        PieChartData(
+          sectionsSpace: 2,
+          centerSpaceRadius: centerRadius,
+          sections: sections,
+          pieTouchData: PieTouchData(
+            touchCallback: (event, response) {
+              setState(() {
+                if (response?.touchedSection == null) {
+                  _touchedIndex = -1;
+                } else {
+                  _touchedIndex =
+                      response!.touchedSection!.touchedSectionIndex;
+                }
+              });
+            },
+          ),
+        ),
+      ),
+    );
+
     return _DashboardCard(
       title: 'Deal Terms Distribution',
-      subtitle: 'Parsed from access details',
+      subtitle: widget.inline ? null : 'Parsed from access details',
       icon: Icons.pie_chart_outline_rounded,
-      child: Column(
-        children: [
-          SizedBox(
-            height: 180,
-            child: PieChart(
-              PieChartData(
-                sectionsSpace: 2,
-                centerSpaceRadius: 42,
-                sections: sections,
-                pieTouchData: PieTouchData(
-                  touchCallback: (event, response) {
-                    setState(() {
-                      if (response?.touchedSection == null) {
-                        _touchedIndex = -1;
-                      } else {
-                        _touchedIndex =
-                            response!.touchedSection!.touchedSectionIndex;
-                      }
-                    });
-                  },
-                ),
-              ),
+      child: widget.inline
+          ? Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                chart,
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(child: legend),
+              ],
+            )
+          : Column(
+              children: [
+                chart,
+                const SizedBox(height: AppSpacing.sm),
+                legend,
+              ],
             ),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Wrap(
-            spacing: 8,
-            runSpacing: 6,
-            children: List.generate(_kDealCategories.length, (i) {
-              final cat = _kDealCategories[i];
-              final count = dist[cat] ?? 0;
-              final pct = total == 0 ? 0 : ((count / total) * 100).round();
-              return _LegendChip(
-                color: _colors[i % _colors.length],
-                label: cat,
-                value: '$pct%',
-                selected: i == _touchedIndex,
-              );
-            }),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -929,18 +1022,23 @@ class _LegendChip extends StatelessWidget {
   final String label;
   final String value;
   final bool selected;
+  final bool compact;
 
   const _LegendChip({
     required this.color,
     required this.label,
     required this.value,
     this.selected = false,
+    this.compact = false,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 6 : 8,
+        vertical: compact ? 3 : 4,
+      ),
       decoration: BoxDecoration(
         color: selected ? color.withValues(alpha: 0.14) : context.fomraSurfaceVar,
         borderRadius: BorderRadius.circular(8),

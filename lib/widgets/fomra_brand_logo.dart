@@ -17,7 +17,7 @@ class FomraBrandLogo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final h = height ?? (compact ? 40.0 : 48.0);
+    final h = height ?? (compact ? 48.0 : 52.0);
 
     final logo = Image.asset(
       _assetPath,
@@ -33,7 +33,7 @@ class FomraBrandLogo extends StatelessWidget {
     if (!showBackground) {
       return SizedBox(
         height: h,
-        width: compact ? h : double.infinity,
+        width: double.infinity,
         child: Align(
           alignment: compact ? Alignment.center : Alignment.centerLeft,
           child: logo,
@@ -43,10 +43,10 @@ class FomraBrandLogo extends StatelessWidget {
 
     return Container(
       height: h,
-      width: compact ? h : double.infinity,
+      width: double.infinity,
       padding: EdgeInsets.symmetric(
-        horizontal: compact ? 6 : 10,
-        vertical: 6,
+        horizontal: compact ? 4 : 8,
+        vertical: compact ? 3 : 4,
       ),
       decoration: BoxDecoration(
         color: Colors.white,
