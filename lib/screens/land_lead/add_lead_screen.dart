@@ -15,6 +15,7 @@ import '../../widgets/fomra_app_shell.dart';
 import '../../widgets/fomra_breadcrumb.dart';
 import '../../widgets/portal_page_layout.dart';
 import '../../widgets/tngis_parcel_summary.dart';
+import '../../services/auth_service.dart';
 import '../../services/api_client.dart';
 import '../../utils/image_compressor.dart';
 import '../../utils/lead_location_parser.dart';
@@ -112,6 +113,17 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
   @override
   void initState() {
     super.initState();
+    if (AuthService.instance.isManagement && widget.existingLead == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Management can view leads only — adding is for employees.'),
+          ),
+        );
+        Navigator.pop(context);
+      });
+    }
     _scrollController.addListener(_onScroll);
     _gpsCtrl.addListener(_onGpsTextChanged);
     final existing = widget.existingLead;
@@ -712,7 +724,7 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
 
     return FomraAppShell(
       currentRoute: '/land-lead',
-      backgroundColor: AddLeadUi.pageBg,
+      backgroundColor: context.fomraPageBg,
       appBar: AddLeadAppBar(
         title: _isEdit ? 'Edit Land Lead' : 'Add Land Lead',
         onSave: _submit,

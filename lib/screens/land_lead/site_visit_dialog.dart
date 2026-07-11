@@ -99,14 +99,11 @@ class _SiteVisitDialogState extends State<SiteVisitDialog> {
         visitType: widget.visitType,
       );
       if (!mounted) return;
-      setState(() {
-        _visits = [visit, ..._visits];
-        _visitedAt = DateTime.now();
-      });
       widget.onVisitDone?.call();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(_successMessage)),
       );
+      Navigator.pop(context);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

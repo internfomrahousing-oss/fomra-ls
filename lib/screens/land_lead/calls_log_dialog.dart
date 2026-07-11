@@ -5,6 +5,7 @@ import '../../models/lead_call_log.dart';
 import '../../services/lead_call_log_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_theme_context.dart';
+import '../../widgets/log_dialog_tabs.dart';
 import '../../widgets/separate_date_time_fields.dart';
 
 class CallsLogDialog extends StatefulWidget {
@@ -22,6 +23,7 @@ class CallsLogDialog extends StatefulWidget {
 }
 
 class _CallsLogDialogState extends State<CallsLogDialog> {
+  int _tabIndex = 0;
   late DateTime _calledAt = DateTime.now();
   CallDirection _direction = CallDirection.outgoing;
   CallOutcome _outcome = CallOutcome.answered;
@@ -95,17 +97,10 @@ class _CallsLogDialogState extends State<CallsLogDialog> {
         outcome: _outcome,
       );
       if (!mounted) return;
-      setState(() {
-        _logs = [log, ..._logs];
-        _durationCtrl.clear();
-        _detailsCtrl.clear();
-        _calledAt = DateTime.now();
-        _direction = CallDirection.outgoing;
-        _outcome = CallOutcome.answered;
-      });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Call logged')),
       );
+      Navigator.pop(context);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -189,197 +184,205 @@ class _CallsLogDialogState extends State<CallsLogDialog> {
                 ),
               ),
               const SizedBox(height: 14),
-              Flexible(
-                child: SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      SeparateDateTimeFields(
-                        value: _calledAt,
-                        onEditDate: _editDate,
-                        onEditTime: _editTime,
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        'Call type',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: context.fomraTextSecondary,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          for (final option in CallDirection.values) ...[
-                            Expanded(
-                              child: Padding(
-                                padding: EdgeInsets.only(
-                                  right: option == CallDirection.outgoing
-                                      ? 6
-                                      : 0,
-                                ),
-                                child: _DirectionChip(
-                                  label: option.label,
-                                  icon: option == CallDirection.outgoing
-                                      ? Icons.call_made_outlined
-                                      : Icons.call_received_outlined,
-                                  selected: _direction == option,
-                                  onTap: () =>
-                                      setState(() => _direction = option),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        'Call status',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: context.fomraTextSecondary,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          for (final option in CallOutcome.values) ...[
-                            Expanded(
-                              child: Padding(
-                                padding: EdgeInsets.only(
-                                  right: option == CallOutcome.answered ? 6 : 0,
-                                ),
-                                child: _DirectionChip(
-                                  label: option.label,
-                                  icon: option == CallOutcome.answered
-                                      ? Icons.call_end_outlined
-                                      : Icons.phone_missed_outlined,
-                                  selected: _outcome == option,
-                                  onTap: () =>
-                                      setState(() => _outcome = option),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: _durationCtrl,
-                        keyboardType: TextInputType.number,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.digitsOnly,
-                          LengthLimitingTextInputFormatter(3),
-                        ],
-                        decoration: InputDecoration(
-                          labelText: 'Call duration (minutes)',
-                          hintText: _outcome == CallOutcome.answered
-                              ? 'e.g. 5'
-                              : 'Optional for not answered',
-                          filled: true,
-                          fillColor:
-                              context.fomraSurfaceVar.withValues(alpha: 0.55),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: context.fomraBorder),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: context.fomraBorder),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: _detailsCtrl,
-                        minLines: 3,
-                        maxLines: 5,
-                        maxLength: 500,
-                        decoration: InputDecoration(
-                          labelText: 'Call details',
-                          hintText: _outcome == CallOutcome.answered
-                              ? 'What was discussed with the landowner?'
-                              : 'Optional notes about the missed call',
-                          alignLabelWithHint: true,
-                          filled: true,
-                          fillColor:
-                              context.fomraSurfaceVar.withValues(alpha: 0.55),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: context.fomraBorder),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: context.fomraBorder),
-                          ),
-                        ),
-                      ),
-                      if (_loading)
-                        const Padding(
-                          padding: EdgeInsets.only(top: 16),
-                          child: Center(
-                            child: SizedBox(
-                              width: 22,
-                              height: 22,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            ),
-                          ),
-                        )
-                      else if (_logs.isNotEmpty) ...[
-                        const SizedBox(height: 18),
-                        Text(
-                          'Previous calls',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: context.fomraTextSecondary,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        for (final log in _logs.take(5))
-                          _PreviousCallTile(log: log),
-                      ],
-                    ],
-                  ),
-                ),
+              LogDialogTabBar(
+                selectedIndex: _tabIndex,
+                onChanged: (index) => setState(() => _tabIndex = index),
+                historyCount: _logs.length,
               ),
               const SizedBox(height: 14),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
+              Flexible(
+                child: _tabIndex == 0
+                    ? SingleChildScrollView(child: _buildNewForm(context))
+                    : _buildHistory(context),
+              ),
+              if (_tabIndex == 0) ...[
+                const SizedBox(height: 14),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Close'),
+                    ),
+                    const SizedBox(width: 8),
+                    FilledButton(
+                      onPressed: _saving ? null : _save,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.purple,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 18,
+                          vertical: 10,
+                        ),
+                      ),
+                      child: _saving
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Text('Save Call'),
+                    ),
+                  ],
+                ),
+              ] else ...[
+                const SizedBox(height: 14),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
                     onPressed: () => Navigator.pop(context),
                     child: const Text('Close'),
                   ),
-                  const SizedBox(width: 8),
-                  FilledButton(
-                    onPressed: _saving ? null : _save,
-                    style: FilledButton.styleFrom(
-                      backgroundColor: AppColors.purple,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 18,
-                        vertical: 10,
-                      ),
-                    ),
-                    child: _saving
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Text('Save Call'),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildNewForm(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SeparateDateTimeFields(
+          value: _calledAt,
+          onEditDate: _editDate,
+          onEditTime: _editTime,
+        ),
+        const SizedBox(height: 12),
+        Text(
+          'Call type',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: context.fomraTextSecondary,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            for (final option in CallDirection.values) ...[
+              Expanded(
+                child: Padding(
+                  padding: EdgeInsets.only(
+                    right: option == CallDirection.outgoing ? 6 : 0,
+                  ),
+                  child: _DirectionChip(
+                    label: option.label,
+                    icon: option == CallDirection.outgoing
+                        ? Icons.call_made_outlined
+                        : Icons.call_received_outlined,
+                    selected: _direction == option,
+                    onTap: () => setState(() => _direction = option),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+        const SizedBox(height: 12),
+        Text(
+          'Call status',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: context.fomraTextSecondary,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            for (final option in CallOutcome.values) ...[
+              Expanded(
+                child: Padding(
+                  padding: EdgeInsets.only(
+                    right: option == CallOutcome.answered ? 6 : 0,
+                  ),
+                  child: _DirectionChip(
+                    label: option.label,
+                    icon: option.icon,
+                    selected: _outcome == option,
+                    onTap: () => setState(() => _outcome = option),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _durationCtrl,
+          keyboardType: TextInputType.number,
+          inputFormatters: [
+            FilteringTextInputFormatter.digitsOnly,
+            LengthLimitingTextInputFormatter(3),
+          ],
+          decoration: InputDecoration(
+            labelText: 'Call duration (minutes)',
+            hintText: _outcome == CallOutcome.answered
+                ? 'e.g. 5'
+                : 'Optional for not answered',
+            filled: true,
+            fillColor: context.fomraSurfaceVar.withValues(alpha: 0.55),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: context.fomraBorder),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: context.fomraBorder),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _detailsCtrl,
+          minLines: 3,
+          maxLines: 5,
+          maxLength: 500,
+          decoration: InputDecoration(
+            labelText: 'Call details',
+            hintText: _outcome == CallOutcome.answered
+                ? 'What was discussed with the landowner?'
+                : 'Optional notes about the missed call',
+            alignLabelWithHint: true,
+            filled: true,
+            fillColor: context.fomraSurfaceVar.withValues(alpha: 0.55),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: context.fomraBorder),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: context.fomraBorder),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildHistory(BuildContext context) {
+    if (_loading) {
+      return const Center(
+        child: SizedBox(
+          width: 22,
+          height: 22,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+      );
+    }
+    if (_logs.isEmpty) {
+      return const LogDialogHistoryEmpty(message: 'No previous calls yet.');
+    }
+    return ListView.separated(
+      itemCount: _logs.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 8),
+      itemBuilder: (_, index) => _PreviousCallTile(log: _logs[index]),
     );
   }
 }
@@ -482,6 +485,12 @@ class _PreviousCallTile extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
+              Icon(
+                log.outcome.icon,
+                size: 14,
+                color: log.isAnswered ? AppColors.success : AppColors.warning,
+              ),
+              const SizedBox(width: 4),
               Text(
                 log.outcome.label,
                 style: TextStyle(

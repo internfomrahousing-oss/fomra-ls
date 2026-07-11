@@ -1,0 +1,328 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+
+import '../models/land_lead.dart';
+import '../screens/home/contact_directory_screen.dart';
+import '../screens/land_lead/lead_detail_screen.dart';
+import '../screens/task_management/task_management_screen.dart';
+import '../services/app_store.dart';
+import '../services/universal_search_service.dart';
+import '../theme/app_theme.dart';
+import '../theme/fomra_theme_context.dart';
+
+/// App-wide search strip shown below the main header.
+class FomraUniversalSearchBar extends StatefulWidget {
+  const FomraUniversalSearchBar({super.key});
+
+  @override
+  State<FomraUniversalSearchBar> createState() => _FomraUniversalSearchBarState();
+}
+
+class _FomraUniversalSearchBarState extends State<FomraUniversalSearchBar> {
+  final _ctrl = TextEditingController();
+  final _focus = FocusNode();
+  Timer? _debounce;
+
+  List<UniversalSearchHit> _results = [];
+  bool _focused = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _focus.addListener(_onFocusChanged);
+    AppStore.instance.addListener(_refreshResults);
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    AppStore.instance.removeListener(_refreshResults);
+    _focus.removeListener(_onFocusChanged);
+    _ctrl.dispose();
+    _focus.dispose();
+    super.dispose();
+  }
+
+  void _onFocusChanged() {
+    setState(() => _focused = _focus.hasFocus);
+    if (!_focus.hasFocus) {
+      setState(() => _results = []);
+    } else {
+      _runSearch(_ctrl.text);
+    }
+  }
+
+  void _refreshResults() {
+    if (_ctrl.text.trim().isNotEmpty && _focused) {
+      _runSearch(_ctrl.text);
+    }
+  }
+
+  void _onChanged(String value) {
+    setState(() {});
+    _debounce?.cancel();
+    final query = value.trim();
+    if (query.isEmpty) {
+      setState(() => _results = []);
+      return;
+    }
+    _debounce = Timer(const Duration(milliseconds: 200), () {
+      _runSearch(query);
+    });
+  }
+
+  void _runSearch(String query) {
+    if (!mounted) return;
+    setState(() => _results = UniversalSearchService.search(query));
+  }
+
+  void _clear() {
+    _debounce?.cancel();
+    _ctrl.clear();
+    setState(() => _results = []);
+  }
+
+  Future<void> _openHit(UniversalSearchHit hit) async {
+    _focus.unfocus();
+    _clear();
+
+    if (!mounted) return;
+
+    switch (hit.kind) {
+      case UniversalSearchKind.lead:
+        final lead = hit.lead;
+        if (lead == null) return;
+        await Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => LeadDetailScreen(lead: lead)),
+        );
+      case UniversalSearchKind.task:
+        final task = hit.task;
+        if (task == null) return;
+        final leadId = task.module.trim();
+        if (leadId.isNotEmpty) {
+          LandLead? lead;
+          for (final l in AppStore.instance.leads) {
+            if (l.leadId == leadId) {
+              lead = l;
+              break;
+            }
+          }
+          if (lead != null) {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => LeadDetailScreen(lead: lead!)),
+            );
+            return;
+          }
+        }
+        Navigator.pushNamed(context, '/task-management');
+      case UniversalSearchKind.employee:
+        Navigator.pushNamed(context, '/employee-management');
+      case UniversalSearchKind.page:
+        final route = hit.route;
+        if (route != null && route.isNotEmpty) {
+          Navigator.pushNamed(context, route);
+        }
+      case UniversalSearchKind.contact:
+        final kind = hit.contactKind;
+        if (kind != null) {
+          ContactDirectoryScreen.open(context, kind: kind);
+        }
+    }
+  }
+
+  IconData _iconFor(UniversalSearchKind kind) => switch (kind) {
+        UniversalSearchKind.lead => Icons.person_pin_circle_outlined,
+        UniversalSearchKind.task => Icons.task_alt_outlined,
+        UniversalSearchKind.employee => Icons.badge_outlined,
+        UniversalSearchKind.page => Icons.open_in_new_rounded,
+        UniversalSearchKind.contact => Icons.contacts_outlined,
+      };
+
+  Color _accentFor(UniversalSearchKind kind) => switch (kind) {
+        UniversalSearchKind.lead => AppColors.primary,
+        UniversalSearchKind.task => AppColors.warning,
+        UniversalSearchKind.employee => AppColors.secondary,
+        UniversalSearchKind.page => AppColors.info,
+        UniversalSearchKind.contact => AppColors.success,
+      };
+
+  String _sectionLabel(UniversalSearchKind kind) => switch (kind) {
+        UniversalSearchKind.lead => 'Leads',
+        UniversalSearchKind.task => 'Tasks',
+        UniversalSearchKind.employee => 'Team',
+        UniversalSearchKind.page => 'Pages',
+        UniversalSearchKind.contact => 'Directories',
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    final showResults = _focused && _ctrl.text.trim().isNotEmpty;
+
+    return Material(
+      color: context.fomraSurface,
+      elevation: 0,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: context.fomraSurface,
+          border: Border(bottom: BorderSide(color: context.fomraBorder)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+              child: TextField(
+                controller: _ctrl,
+                focusNode: _focus,
+                onChanged: _onChanged,
+                textInputAction: TextInputAction.search,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: context.fomraTextPrimary,
+                ),
+                decoration: InputDecoration(
+                  hintText: 'Search leads, owners, tasks, pages…',
+                  hintStyle: TextStyle(
+                    fontSize: 13,
+                    color: context.fomraTextSecondary,
+                  ),
+                  prefixIcon: Icon(
+                    Icons.search_rounded,
+                    size: 22,
+                    color: _focused
+                        ? AppColors.primary
+                        : context.fomraTextSecondary,
+                  ),
+                  suffixIcon: _ctrl.text.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.close_rounded, size: 18),
+                          onPressed: _clear,
+                          tooltip: 'Clear',
+                        )
+                      : null,
+                  filled: true,
+                  fillColor: context.fomraSurfaceVar.withValues(alpha: 0.65),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: context.fomraBorder),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: context.fomraBorder),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(
+                      color: AppColors.primary,
+                      width: 1.5,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            if (showResults)
+              Container(
+                constraints: const BoxConstraints(maxHeight: 320),
+                decoration: BoxDecoration(
+                  color: context.fomraSurface,
+                  border: Border(top: BorderSide(color: context.fomraBorder)),
+                ),
+                child: _results.isEmpty
+                    ? Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Text(
+                          'No matches for "${_ctrl.text.trim()}".',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: context.fomraTextSecondary,
+                          ),
+                        ),
+                      )
+                    : ListView(
+                        shrinkWrap: true,
+                        padding: const EdgeInsets.fromLTRB(8, 4, 8, 12),
+                        children: _buildGroupedResults(),
+                      ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  List<Widget> _buildGroupedResults() {
+    final grouped = <UniversalSearchKind, List<UniversalSearchHit>>{};
+    for (final hit in _results) {
+      grouped.putIfAbsent(hit.kind, () => []).add(hit);
+    }
+
+    final widgets = <Widget>[];
+    for (final kind in UniversalSearchKind.values) {
+      final items = grouped[kind];
+      if (items == null || items.isEmpty) continue;
+      widgets.add(
+        Padding(
+          padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
+          child: Text(
+            _sectionLabel(kind),
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.4,
+              color: context.fomraTextSecondary,
+            ),
+          ),
+        ),
+      );
+      for (final hit in items) {
+        widgets.add(
+          ListTile(
+            dense: true,
+            leading: Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: _accentFor(kind).withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              alignment: Alignment.center,
+              child: Icon(
+                _iconFor(kind),
+                size: 18,
+                color: _accentFor(kind),
+              ),
+            ),
+            title: Text(
+              hit.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: context.fomraTextPrimary,
+              ),
+            ),
+            subtitle: hit.subtitle.isEmpty
+                ? null
+                : Text(
+                    hit.subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: context.fomraTextSecondary,
+                    ),
+                  ),
+            onTap: () => _openHit(hit),
+          ),
+        );
+      }
+    }
+    return widgets;
+  }
+}

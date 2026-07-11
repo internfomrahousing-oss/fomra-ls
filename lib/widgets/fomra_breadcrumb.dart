@@ -48,7 +48,7 @@ class FomraBreadcrumbs {
 
   static List<FomraBreadcrumbItem> fromWorkspace(String pageLabel) => [
         const FomraBreadcrumbItem.home(),
-        const FomraBreadcrumbItem.pop('Land Workspace'),
+        const FomraBreadcrumbItem.route('Land Workspace', '/land-lead'),
         FomraBreadcrumbItem.current(pageLabel),
       ];
 

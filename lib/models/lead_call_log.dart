@@ -1,3 +1,5 @@
+import 'package:flutter/material.dart';
+
 enum CallDirection {
   outgoing,
   incoming;
@@ -35,6 +37,11 @@ enum CallOutcome {
     if (raw == 'not_answered') return CallOutcome.notAnswered;
     return CallOutcome.answered;
   }
+
+  IconData get icon => switch (this) {
+        CallOutcome.answered => Icons.check_circle_outline_rounded,
+        CallOutcome.notAnswered => Icons.phone_missed_rounded,
+      };
 }
 
 class LeadCallLog {

@@ -311,11 +311,12 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
   Widget build(BuildContext context) {
     final body = _buildScrollableBody();
 
-    // The "+" button goes straight to Add Lead. Management's Select / View all
-    // projects live as always-visible pills next to the lead summary.
-    final fab = LandWorkspaceSpeedDial(
-      onAddLead: _openAddLead,
-    );
+    // Employees get the "+" Add Lead FAB; management only views leads.
+    final fab = _isManagement
+        ? null
+        : LandWorkspaceSpeedDial(
+            onAddLead: _openAddLead,
+          );
 
     if (widget.isTab) {
       return Scaffold(
@@ -556,7 +557,10 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
           hasScrollBody: false,
           child: _EmptyState(
             hasLeads: _leads.isNotEmpty,
-            onAddLead: _leads.isNotEmpty ? _clearAllFilters : _openAddLead,
+            canAddLead: !_isManagement,
+            onAddLead: _leads.isNotEmpty
+                ? _clearAllFilters
+                : (_isManagement ? null : _openAddLead),
           ),
         ),
       );
@@ -673,6 +677,7 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
   }
 
   Future<void> _openAddLead() async {
+    if (_isManagement) return;
     final result = await Navigator.push<AddLeadResult>(
       context,
       MaterialPageRoute(builder: (_) => const AddLeadScreen()),
@@ -723,21 +728,36 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
 
 class _EmptyState extends StatelessWidget {
   final bool hasLeads;
+  final bool canAddLead;
   final VoidCallback? onAddLead;
-  const _EmptyState({required this.hasLeads, this.onAddLead});
+  const _EmptyState({
+    required this.hasLeads,
+    this.canAddLead = true,
+    this.onAddLead,
+  });
 
   @override
   Widget build(BuildContext context) => EmptyState(
-        icon: Icons.add_location_alt_outlined,
+        icon: hasLeads
+            ? Icons.search_off_rounded
+            : (canAddLead
+                ? Icons.add_location_alt_outlined
+                : Icons.folder_open_outlined),
         title: hasLeads ? 'No matching leads' : 'No leads yet',
         message: hasLeads
             ? 'Try adjusting filters or search terms.'
-            : 'Start by adding your first land lead.',
+            : (canAddLead
+                ? 'Start by adding your first land lead.'
+                : 'Leads added by employees will appear here.'),
         action: onAddLead == null
             ? null
             : PrimaryButton(
-                label: hasLeads ? 'Clear filters' : 'Add Lead',
-                icon: hasLeads ? Icons.filter_alt_off : Icons.add,
+                label: hasLeads
+                    ? 'Clear filters'
+                    : (canAddLead ? 'Add Lead' : 'Clear filters'),
+                icon: hasLeads
+                    ? Icons.filter_alt_off
+                    : (canAddLead ? Icons.add : Icons.filter_alt_off),
                 onPressed: onAddLead,
               ),
       );

@@ -5,6 +5,7 @@ import '../../models/land_lead_meeting.dart';
 import '../../services/land_lead_meeting_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_theme_context.dart';
+import '../../widgets/log_dialog_tabs.dart';
 import '../../widgets/separate_date_time_fields.dart';
 
 class MeetingLogDialog extends StatefulWidget {
@@ -24,6 +25,7 @@ class MeetingLogDialog extends StatefulWidget {
 }
 
 class _MeetingLogDialogState extends State<MeetingLogDialog> {
+  int _tabIndex = 0;
   late DateTime _metAt = DateTime.now();
   final _durationCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
@@ -104,16 +106,11 @@ class _MeetingLogDialogState extends State<MeetingLogDialog> {
         notes: _notesCtrl.text.trim(),
       );
       if (!mounted) return;
-      setState(() {
-        _meetings = [meeting, ..._meetings];
-        _durationCtrl.clear();
-        _notesCtrl.clear();
-        _metAt = DateTime.now();
-      });
       widget.onMeetingSaved?.call();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Meeting logged')),
       );
+      Navigator.pop(context);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -197,106 +194,123 @@ class _MeetingLogDialogState extends State<MeetingLogDialog> {
                 ),
               ),
               const SizedBox(height: 14),
-              Flexible(
-                child: SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      SeparateDateTimeFields(
-                        value: _metAt,
-                        onEditDate: _editDate,
-                        onEditTime: _editTime,
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: _durationCtrl,
-                        keyboardType: TextInputType.number,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.digitsOnly,
-                          LengthLimitingTextInputFormatter(3),
-                        ],
-                        decoration: _fieldDecoration(
-                          context,
-                          'Meeting duration (minutes)',
-                          hint: 'e.g. 30',
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: _notesCtrl,
-                        minLines: 3,
-                        maxLines: 5,
-                        maxLength: 500,
-                        decoration: _fieldDecoration(
-                          context,
-                          'Meeting notes (optional)',
-                          hint: 'What was discussed?',
-                        ).copyWith(alignLabelWithHint: true),
-                      ),
-                      if (_loading)
-                        const Padding(
-                          padding: EdgeInsets.only(top: 16),
-                          child: Center(
-                            child: SizedBox(
-                              width: 22,
-                              height: 22,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            ),
-                          ),
-                        )
-                      else if (_meetings.isNotEmpty) ...[
-                        const SizedBox(height: 18),
-                        Text(
-                          'Previous meetings',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: context.fomraTextSecondary,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        for (final meeting in _meetings.take(5))
-                          _PreviousMeetingTile(meeting: meeting),
-                      ],
-                    ],
-                  ),
-                ),
+              LogDialogTabBar(
+                selectedIndex: _tabIndex,
+                onChanged: (index) => setState(() => _tabIndex = index),
+                historyCount: _meetings.length,
               ),
               const SizedBox(height: 14),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
+              Flexible(
+                child: _tabIndex == 0
+                    ? SingleChildScrollView(child: _buildNewForm(context))
+                    : _buildHistory(context),
+              ),
+              if (_tabIndex == 0) ...[
+                const SizedBox(height: 14),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Close'),
+                    ),
+                    const SizedBox(width: 8),
+                    FilledButton(
+                      onPressed: _saving ? null : _save,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.purple,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 18,
+                          vertical: 10,
+                        ),
+                      ),
+                      child: _saving
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Text('Save Meeting'),
+                    ),
+                  ],
+                ),
+              ] else ...[
+                const SizedBox(height: 14),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
                     onPressed: () => Navigator.pop(context),
                     child: const Text('Close'),
                   ),
-                  const SizedBox(width: 8),
-                  FilledButton(
-                    onPressed: _saving ? null : _save,
-                    style: FilledButton.styleFrom(
-                      backgroundColor: AppColors.purple,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 18,
-                        vertical: 10,
-                      ),
-                    ),
-                    child: _saving
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Text('Save Meeting'),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildNewForm(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SeparateDateTimeFields(
+          value: _metAt,
+          onEditDate: _editDate,
+          onEditTime: _editTime,
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _durationCtrl,
+          keyboardType: TextInputType.number,
+          inputFormatters: [
+            FilteringTextInputFormatter.digitsOnly,
+            LengthLimitingTextInputFormatter(3),
+          ],
+          decoration: _fieldDecoration(
+            context,
+            'Meeting duration (minutes)',
+            hint: 'e.g. 30',
+          ),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _notesCtrl,
+          minLines: 3,
+          maxLines: 5,
+          maxLength: 500,
+          decoration: _fieldDecoration(
+            context,
+            'Meeting notes (optional)',
+            hint: 'What was discussed?',
+          ).copyWith(alignLabelWithHint: true),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildHistory(BuildContext context) {
+    if (_loading) {
+      return const Center(
+        child: SizedBox(
+          width: 22,
+          height: 22,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+      );
+    }
+    if (_meetings.isEmpty) {
+      return const LogDialogHistoryEmpty(message: 'No previous meetings yet.');
+    }
+    return ListView.separated(
+      itemCount: _meetings.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 8),
+      itemBuilder: (_, index) =>
+          _PreviousMeetingTile(meeting: _meetings[index]),
     );
   }
 }

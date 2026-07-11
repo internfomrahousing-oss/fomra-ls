@@ -4,6 +4,7 @@ import '../../models/land_lead.dart';
 import '../../services/land_lead_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_theme_context.dart';
+import '../../widgets/log_dialog_tabs.dart';
 
 class NotesLogDialog extends StatefulWidget {
   final LandLead lead;
@@ -20,6 +21,7 @@ class NotesLogDialog extends StatefulWidget {
 }
 
 class _NotesLogDialogState extends State<NotesLogDialog> {
+  int _tabIndex = 0;
   final _noteCtrl = TextEditingController();
   bool _saving = false;
   late List<String> _previousNotes;
@@ -83,15 +85,11 @@ class _NotesLogDialogState extends State<NotesLogDialog> {
       final updated = widget.lead.copyWith(notes: merged);
       final saved = await LandLeadService.update(updated);
       if (!mounted) return;
-      setState(() {
-        _existingNotes = merged;
-        _previousNotes = _parseNotes(merged);
-        _noteCtrl.clear();
-      });
       widget.onSaved?.call(saved);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Note saved')),
       );
+      Navigator.pop(context);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -171,75 +169,88 @@ class _NotesLogDialogState extends State<NotesLogDialog> {
                 ),
               ),
               const SizedBox(height: 14),
-              Flexible(
-                child: SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      TextField(
-                        controller: _noteCtrl,
-                        minLines: 4,
-                        maxLines: 8,
-                        maxLength: 500,
-                        decoration: _fieldDecoration(
-                          context,
-                          'Your note',
-                          hint: 'Type your note here…',
-                        ).copyWith(alignLabelWithHint: true),
-                      ),
-                      if (_previousNotes.isNotEmpty) ...[
-                        const SizedBox(height: 18),
-                        Text(
-                          'Previous notes',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: context.fomraTextSecondary,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        for (final note in _previousNotes.take(8))
-                          _PreviousNoteTile(text: note),
-                      ],
-                    ],
-                  ),
-                ),
+              LogDialogTabBar(
+                selectedIndex: _tabIndex,
+                onChanged: (index) => setState(() => _tabIndex = index),
+                historyCount: _previousNotes.length,
               ),
               const SizedBox(height: 14),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
+              Flexible(
+                child: _tabIndex == 0
+                    ? SingleChildScrollView(child: _buildNewForm(context))
+                    : _buildHistory(context),
+              ),
+              if (_tabIndex == 0) ...[
+                const SizedBox(height: 14),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Close'),
+                    ),
+                    const SizedBox(width: 8),
+                    FilledButton(
+                      onPressed: _saving ? null : _save,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.purple,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 18,
+                          vertical: 10,
+                        ),
+                      ),
+                      child: _saving
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Text('Save Note'),
+                    ),
+                  ],
+                ),
+              ] else ...[
+                const SizedBox(height: 14),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
                     onPressed: () => Navigator.pop(context),
                     child: const Text('Close'),
                   ),
-                  const SizedBox(width: 8),
-                  FilledButton(
-                    onPressed: _saving ? null : _save,
-                    style: FilledButton.styleFrom(
-                      backgroundColor: AppColors.purple,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 18,
-                        vertical: 10,
-                      ),
-                    ),
-                    child: _saving
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Text('Save Note'),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildNewForm(BuildContext context) {
+    return TextField(
+      controller: _noteCtrl,
+      minLines: 4,
+      maxLines: 8,
+      maxLength: 500,
+      decoration: _fieldDecoration(
+        context,
+        'Your note',
+        hint: 'Type your note here…',
+      ).copyWith(alignLabelWithHint: true),
+    );
+  }
+
+  Widget _buildHistory(BuildContext context) {
+    if (_previousNotes.isEmpty) {
+      return const LogDialogHistoryEmpty(message: 'No previous notes yet.');
+    }
+    return ListView.separated(
+      itemCount: _previousNotes.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 8),
+      itemBuilder: (_, index) => _PreviousNoteTile(text: _previousNotes[index]),
     );
   }
 }

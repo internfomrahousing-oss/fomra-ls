@@ -190,14 +190,18 @@ class LocationSearchHit {
 Future<List<LocationSearchHit>> searchLocations(
   String query, {
   int limit = 5,
+  bool appendRegionBias = true,
 }) async {
   final trimmed = query.trim();
   if (trimmed.isEmpty) return [];
 
+  final searchQ =
+      appendRegionBias ? '$trimmed, Tamil Nadu, India' : trimmed;
+
   final uri = Uri.parse(
     'https://nominatim.openstreetmap.org/search'
     '?format=jsonv2&limit=$limit&addressdetails=1&countrycodes=in'
-    '&q=${Uri.encodeComponent('$trimmed, Tamil Nadu, India')}',
+    '&q=${Uri.encodeComponent(searchQ)}',
   );
 
   final response = await http

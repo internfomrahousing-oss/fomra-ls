@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 import 'dart:ui';
 
@@ -659,17 +660,54 @@ class AddLeadLocationSearch extends StatefulWidget {
 
 class _AddLeadLocationSearchState extends State<AddLeadLocationSearch> {
   final _ctrl = TextEditingController();
+  Timer? _debounce;
   bool _searching = false;
   String? _error;
   List<LocationSearchHit> _results = [];
 
   @override
   void dispose() {
+    _debounce?.cancel();
     _ctrl.dispose();
     super.dispose();
   }
 
+  void _onQueryChanged(String value) {
+    _debounce?.cancel();
+    final query = value.trim();
+    if (query.isEmpty) {
+      setState(() {
+        _results = [];
+        _error = null;
+      });
+      return;
+    }
+    _debounce = Timer(const Duration(milliseconds: 300), () {
+      _suggestLocations(query);
+    });
+  }
+
+  Future<void> _suggestLocations(String query) async {
+    if (query.isEmpty) return;
+
+    try {
+      final hits = await searchLocations(
+        query,
+        limit: 8,
+        appendRegionBias: false,
+      );
+      if (!mounted || _ctrl.text.trim() != query) return;
+      setState(() {
+        _results = hits;
+        _error = null;
+      });
+    } catch (_) {
+      // Silent for live suggestions — Go button surfaces hard errors.
+    }
+  }
+
   Future<void> _search() async {
+    _debounce?.cancel();
     final query = _ctrl.text.trim();
     if (query.isEmpty || _searching) return;
 
@@ -698,8 +736,10 @@ class _AddLeadLocationSearchState extends State<AddLeadLocationSearch> {
   }
 
   void _pick(LocationSearchHit hit) {
+    _debounce?.cancel();
     setState(() {
       _results = [];
+      _error = null;
       _ctrl.text = hit.displayName.split(',').first.trim();
     });
     widget.onSelected(LatLng(hit.lat, hit.lng));
@@ -717,6 +757,7 @@ class _AddLeadLocationSearchState extends State<AddLeadLocationSearch> {
               child: TextField(
                 controller: _ctrl,
                 textInputAction: TextInputAction.search,
+                onChanged: _onQueryChanged,
                 onSubmitted: (_) => _search(),
                 decoration: InputDecoration(
                   labelText: 'Search location',

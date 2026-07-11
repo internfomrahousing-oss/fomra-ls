@@ -34,17 +34,5 @@ extension FomraThemeContext on BuildContext {
         ]
       : AppColors.cardShadow;
 
-  LinearGradient get fomraHeroGradient => isDarkMode
-      ? const LinearGradient(
-          colors: [
-            Color(0xFF0B1220),
-            Color(0xFF152A52),
-            Color(0xFF1E293B),
-            Color(0xFF231B4A),
-          ],
-          stops: [0.0, 0.38, 0.72, 1.0],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        )
-      : AppColors.heroGradient;
+  LinearGradient get fomraHeroGradient => AppColors.heroGradient;
 }

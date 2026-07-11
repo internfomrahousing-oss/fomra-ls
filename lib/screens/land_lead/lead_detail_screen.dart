@@ -307,7 +307,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
   Widget build(BuildContext context) {
     return FomraAppShell(
       currentRoute: '/land-lead',
-      backgroundColor: const Color(0xFFEEF1F6),
+      backgroundColor: context.fomraPageBg,
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
@@ -416,13 +416,15 @@ class _TopBar extends StatelessWidget {
       decoration: BoxDecoration(
         color: context.fomraSurface,
         border: Border(bottom: BorderSide(color: context.fomraBorder)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        boxShadow: context.isDarkMode
+            ? null
+            : [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
       ),
       child: Row(
         children: [
@@ -520,7 +522,7 @@ class _ProfilePanel extends StatelessWidget {
         decoration: BoxDecoration(
           color: context.fomraSurface,
           border: Border.all(color: context.fomraBorder),
-          boxShadow: AppColors.cardShadow,
+          boxShadow: context.fomraCardShadow,
         ),
         child: SingleChildScrollView(
           child: Column(
@@ -828,7 +830,7 @@ class _WorkspacePanel extends StatelessWidget {
         decoration: BoxDecoration(
           color: context.fomraSurface,
           border: Border.all(color: context.fomraBorder),
-          boxShadow: AppColors.cardShadow,
+          boxShadow: context.fomraCardShadow,
         ),
         padding: const EdgeInsets.fromLTRB(18, 16, 18, 12),
         child: Column(
@@ -867,13 +869,7 @@ class _WorkspacePanel extends StatelessWidget {
                 indicator: BoxDecoration(
                   color: context.fomraSurface,
                   borderRadius: BorderRadius.circular(10),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.06),
-                      blurRadius: 6,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
+                  boxShadow: context.fomraCardShadow,
                 ),
                 indicatorSize: TabBarIndicatorSize.tab,
                 labelPadding:
@@ -1093,11 +1089,11 @@ class _ActivitySummaryRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cells = [
-      ('Conducted\nSite Visits', '$siteVisitCount'),
-      ('Outgoing\nNot Answered', '${callMetrics.outgoingNotAnswered}'),
-      ('Outgoing\nAnswered', '${callMetrics.outgoingAnswered}'),
-      ('Incoming\nNot Answered', '${callMetrics.incomingNotAnswered}'),
-      ('Incoming\nAnswered', '${callMetrics.incomingAnswered}'),
+      (label: 'Conducted\nSite Visits', value: '$siteVisitCount', icon: Icons.location_on_outlined, color: AppColors.purple),
+      (label: 'Outgoing\nNot Answered', value: '${callMetrics.outgoingNotAnswered}', icon: CallOutcome.notAnswered.icon, color: AppColors.warning),
+      (label: 'Outgoing\nAnswered', value: '${callMetrics.outgoingAnswered}', icon: CallOutcome.answered.icon, color: AppColors.success),
+      (label: 'Incoming\nNot Answered', value: '${callMetrics.incomingNotAnswered}', icon: CallOutcome.notAnswered.icon, color: AppColors.warning),
+      (label: 'Incoming\nAnswered', value: '${callMetrics.incomingAnswered}', icon: CallOutcome.answered.icon, color: AppColors.success),
     ];
 
     return Row(
@@ -1114,8 +1110,14 @@ class _ActivitySummaryRow extends StatelessWidget {
               ),
               child: Column(
                 children: [
+                  Icon(
+                    cells[i].icon,
+                    size: 18,
+                    color: cells[i].color,
+                  ),
+                  const SizedBox(height: 6),
                   Text(
-                    cells[i].$1,
+                    cells[i].label,
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 10,
@@ -1126,7 +1128,7 @@ class _ActivitySummaryRow extends StatelessWidget {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    cells[i].$2,
+                    cells[i].value,
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.w800,
@@ -1171,9 +1173,7 @@ class _ActivityTimeline extends StatelessWidget {
         at: log.calledAt,
         title: '${log.direction.label} call',
         subtitle: subtitleParts.join('\n'),
-        icon: log.direction == CallDirection.outgoing
-            ? Icons.call_made_outlined
-            : Icons.call_received_outlined,
+        icon: log.outcome.icon,
       ));
     }
 
@@ -1418,7 +1418,7 @@ class _SitePhotoThumbnail extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
             border: Border.all(color: context.fomraBorder),
-            boxShadow: AppColors.cardShadow,
+            boxShadow: context.fomraCardShadow,
           ),
           clipBehavior: Clip.antiAlias,
           child: Image.network(

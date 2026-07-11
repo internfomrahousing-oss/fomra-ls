@@ -203,6 +203,7 @@ class _LegalDocumentsDialogState extends State<LegalDocumentsDialog> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Reference notes saved')),
         );
+        Navigator.pop(context);
       }
     } catch (e) {
       if (mounted) {
