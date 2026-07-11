@@ -1,5 +1,6 @@
 import '../models/employee_profile.dart';
 import '../models/land_lead.dart';
+import '../utils/contact_directory.dart';
 import '../screens/home/contact_directory_screen.dart';
 import '../screens/task_management/task_management_screen.dart';
 import '../services/app_store.dart';
