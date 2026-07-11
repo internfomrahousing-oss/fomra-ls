@@ -55,14 +55,11 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
     with SingleTickerProviderStateMixin {
   late LandLead lead = widget.lead;
   late final TabController _tabController;
-  final _noteCtrl = TextEditingController();
-  bool _savingNote = false;
   List<LeadCallLog> _callLogs = [];
   List<LandLeadSiteVisit> _siteVisits = [];
 
   static const _tabs = [
     'Activity',
-    'Notes',
     'Details',
     'Site Photos',
     'Infrastructure',
@@ -70,7 +67,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
     'Competitor Projects',
   ];
 
-  static const _miTabStart = 4;
+  static const _miTabStart = 3;
   final Set<int> _loadedMiTabs = {};
 
   @override
@@ -115,7 +112,6 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
   void dispose() {
     _tabController.removeListener(_onTabChanged);
     _tabController.dispose();
-    _noteCtrl.dispose();
     super.dispose();
   }
 
@@ -168,42 +164,6 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
     } catch (_) {
       setState(() => lead.status = previous);
       AppStore.instance.replaceLead(lead);
-    }
-  }
-
-  Future<void> _saveNote() async {
-    final text = _noteCtrl.text.trim();
-    if (text.isEmpty || _savingNote) return;
-    setState(() => _savingNote = true);
-    final stamp = DateTime.now().toLocal();
-    final entry =
-        '[${stamp.day}/${stamp.month}/${stamp.year} ${stamp.hour}:${stamp.minute.toString().padLeft(2, '0')}] $text';
-    final merged = lead.notes.trim().isEmpty
-        ? entry
-        : '${lead.notes.trim()}\n$entry';
-    final updated = lead.copyWith(notes: merged);
-    try {
-      final saved = await LandLeadService.update(updated);
-      AppStore.instance.replaceLead(saved);
-      if (mounted) {
-        setState(() {
-          lead = saved;
-          _noteCtrl.clear();
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Note saved')),
-        );
-      }
-    } catch (_) {
-      AppStore.instance.replaceLead(updated);
-      if (mounted) {
-        setState(() {
-          lead = updated;
-          _noteCtrl.clear();
-        });
-      }
-    } finally {
-      if (mounted) setState(() => _savingNote = false);
     }
   }
 
@@ -307,7 +267,6 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
     }
 
     final icon = switch (label) {
-      'Notes' => Icons.sticky_note_2_outlined,
       'Calls' => Icons.call_outlined,
       'Site visit' => Icons.location_on_outlined,
       'Management site visit' => Icons.apartment_outlined,
@@ -374,13 +333,10 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
                                   lead: lead,
                                   tabController: _tabController,
                                   tabs: _tabs,
-                                  noteCtrl: _noteCtrl,
-                                  savingNote: _savingNote,
                                   siteVisitCount: _siteVisits.length,
                                   callMetrics: _callMetrics,
                                   callLogs: _callLogs,
                                   siteVisits: _siteVisits,
-                                  onSaveNote: _saveNote,
                                   onLaunchContact: _launchContact,
                                   onDetailAction: _handleDetailAction,
                                   shouldLoadMiTab: _shouldLoadMiTab,
@@ -405,13 +361,10 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
                                   lead: lead,
                                   tabController: _tabController,
                                   tabs: _tabs,
-                                  noteCtrl: _noteCtrl,
-                                  savingNote: _savingNote,
                                   siteVisitCount: _siteVisits.length,
                                   callMetrics: _callMetrics,
                                   callLogs: _callLogs,
                                   siteVisits: _siteVisits,
-                                  onSaveNote: _saveNote,
                                   onLaunchContact: _launchContact,
                                   onDetailAction: _handleDetailAction,
                                   shouldLoadMiTab: _shouldLoadMiTab,
@@ -672,7 +625,19 @@ class _ProfilePanel extends StatelessWidget {
                       status: lead.status,
                       onStatusChanged: onStatusChanged,
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 16),
+                    Text(
+                      'LEAD DETAILS',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.6,
+                        color: context.fomraTextSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    _LeadInfoGrid(lead: lead, leadAgeDays: leadAgeDays),
+                    const SizedBox(height: 14),
                     SizedBox(
                       width: double.infinity,
                       child: FilledButton.icon(
@@ -688,18 +653,6 @@ class _ProfilePanel extends StatelessWidget {
                         ),
                       ),
                     ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'LEAD DETAILS',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 0.6,
-                        color: context.fomraTextSecondary,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    _LeadInfoGrid(lead: lead, leadAgeDays: leadAgeDays),
                     if (lead.contactDetails.isNotEmpty) ...[
                       const SizedBox(height: 14),
                       SizedBox(
@@ -766,13 +719,10 @@ class _WorkspacePanel extends StatelessWidget {
   final LandLead lead;
   final TabController tabController;
   final List<String> tabs;
-  final TextEditingController noteCtrl;
-  final bool savingNote;
   final int siteVisitCount;
   final CallActivityMetrics callMetrics;
   final List<LeadCallLog> callLogs;
   final List<LandLeadSiteVisit> siteVisits;
-  final VoidCallback onSaveNote;
   final Future<void> Function(String scheme) onLaunchContact;
   final ValueChanged<String> onDetailAction;
   final bool Function(int tabIndex) shouldLoadMiTab;
@@ -781,13 +731,10 @@ class _WorkspacePanel extends StatelessWidget {
     required this.lead,
     required this.tabController,
     required this.tabs,
-    required this.noteCtrl,
-    required this.savingNote,
     required this.siteVisitCount,
     required this.callMetrics,
     required this.callLogs,
     required this.siteVisits,
-    required this.onSaveNote,
     required this.onLaunchContact,
     required this.onDetailAction,
     required this.shouldLoadMiTab,
@@ -818,22 +765,6 @@ class _WorkspacePanel extends StatelessWidget {
             ),
             const SizedBox(height: 10),
             _ActionToolbar(onAction: onDetailAction),
-            const SizedBox(height: 16),
-            Text(
-              'ADD NOTE',
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 0.6,
-                color: context.fomraTextSecondary,
-              ),
-            ),
-            const SizedBox(height: 8),
-            _NoteComposer(
-              controller: noteCtrl,
-              saving: savingNote,
-              onSave: onSaveNote,
-            ),
             const SizedBox(height: 16),
             _ActivitySummaryRow(
               siteVisitCount: siteVisitCount,
@@ -884,21 +815,20 @@ class _WorkspacePanel extends StatelessWidget {
                     callLogs: callLogs,
                     siteVisits: siteVisits,
                   ),
-                  _NotesTab(lead: lead),
                   _DetailsTab(lead: lead),
                   _SitePhotosTab(lead: lead),
                   _LazyMarketIntelTab(
-                    active: shouldLoadMiTab(4),
+                    active: shouldLoadMiTab(3),
                     lead: lead,
                     section: MarketIntelLeadSection.infrastructure,
                   ),
                   _LazyMarketIntelTab(
-                    active: shouldLoadMiTab(5),
+                    active: shouldLoadMiTab(4),
                     lead: lead,
                     section: MarketIntelLeadSection.landRecords,
                   ),
                   _LazyMarketIntelTab(
-                    active: shouldLoadMiTab(6),
+                    active: shouldLoadMiTab(5),
                     lead: lead,
                     section: MarketIntelLeadSection.competitorProjects,
                   ),
@@ -920,7 +850,6 @@ class _ActionToolbar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final actions = [
-      (Icons.sticky_note_2_outlined, 'Notes'),
       (Icons.call_outlined, 'Calls'),
       (Icons.location_on_outlined, 'Site visit'),
       (Icons.apartment_outlined, 'Management site visit'),
@@ -1072,84 +1001,6 @@ class _LeadActionDialog extends StatelessWidget {
   }
 }
 
-class _NoteComposer extends StatelessWidget {
-  final TextEditingController controller;
-  final bool saving;
-  final VoidCallback onSave;
-
-  const _NoteComposer({
-    required this.controller,
-    required this.saving,
-    required this.onSave,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: context.fomraSurface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: context.fomraBorder),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          TextField(
-            controller: controller,
-            minLines: 3,
-            maxLines: 5,
-            maxLength: 2000,
-            decoration: const InputDecoration(
-              hintText: 'Add a note about this lead…',
-              border: InputBorder.none,
-              counterText: '',
-            ),
-          ),
-          const SizedBox(height: 4),
-          Row(
-            children: [
-              Text(
-                'Maximum 2000 characters are allowed',
-                style: TextStyle(
-                  fontSize: 11,
-                  color: context.fomraTextSecondary,
-                ),
-              ),
-              const Spacer(),
-              FilledButton(
-                onPressed: saving ? null : onSave,
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.purple,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-                ),
-                child: saving
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : const Text('Save Note'),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _ActivitySummaryRow extends StatelessWidget {
   final int siteVisitCount;
   final CallActivityMetrics callMetrics;
@@ -1267,12 +1118,6 @@ class _ActivityTimeline extends StatelessWidget {
           subtitle: lead.createdByName,
           icon: Icons.person_outline,
         ),
-      if (lead.notes.trim().isNotEmpty)
-        (
-          title: 'Latest note',
-          subtitle: lead.notes.trim().split('\n').last,
-          icon: Icons.sticky_note_2_outlined,
-        ),
       (
         title: 'Lead created',
         subtitle: _formatReceivedOn(lead.addedOn),
@@ -1320,29 +1165,6 @@ class _ActivityTimeline extends StatelessWidget {
             ),
           ),
       ],
-    );
-  }
-}
-
-class _NotesTab extends StatelessWidget {
-  final LandLead lead;
-  const _NotesTab({required this.lead});
-
-  @override
-  Widget build(BuildContext context) {
-    if (lead.notes.trim().isEmpty) {
-      return Center(
-        child: Text(
-          'No notes yet',
-          style: TextStyle(color: context.fomraTextSecondary),
-        ),
-      );
-    }
-    final lines = lead.notes.trim().split('\n').reversed.toList();
-    return ListView.separated(
-      itemCount: lines.length,
-      separatorBuilder: (_, __) => const Divider(height: 16),
-      itemBuilder: (_, i) => Text(lines[i]),
     );
   }
 }
@@ -1622,10 +1444,6 @@ class _LeadInfoGrid extends StatelessWidget {
 
   const _LeadInfoGrid({required this.lead, required this.leadAgeDays});
 
-  String get _lastNote => lead.notes.trim().isEmpty
-      ? 'No notes yet'
-      : lead.notes.trim().split('\n').last;
-
   @override
   Widget build(BuildContext context) {
     final pairs = <(String, String)>[
@@ -1672,20 +1490,9 @@ class _LeadInfoGrid extends StatelessWidget {
           ),
         Padding(
           padding: const EdgeInsets.only(bottom: 10),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: _MetaCell(label: 'Last Note', value: _lastNote),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _MetaCell(
-                  label: 'Current Date & Time',
-                  value: _formatReceivedOn(DateTime.now()),
-                ),
-              ),
-            ],
+          child: _MetaCell(
+            label: 'Current Date & Time',
+            value: _formatReceivedOn(DateTime.now()),
           ),
         ),
         for (var i = 4; i < pairs.length; i += 2)
