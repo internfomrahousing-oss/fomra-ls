@@ -5,6 +5,7 @@ import '../../services/land_lead_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../widgets/log_dialog_tabs.dart';
+import '../../widgets/ui/app_feedback.dart';
 
 class NotesLogDialog extends StatefulWidget {
   final LandLead lead;
@@ -69,9 +70,7 @@ class _NotesLogDialogState extends State<NotesLogDialog> {
   Future<void> _save() async {
     final text = _noteCtrl.text.trim();
     if (text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Type a note before saving')),
-      );
+      AppFeedback.warning(context, 'Type a note before saving');
       return;
     }
     if (_saving) return;
@@ -89,15 +88,11 @@ class _NotesLogDialogState extends State<NotesLogDialog> {
       final saved = await LandLeadService.update(updated);
       if (!mounted) return;
       widget.onSaved?.call(saved);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Note saved')),
-      );
+      AppFeedback.success(context, 'Note saved');
       Navigator.pop(context);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not save note: $e')),
-        );
+        AppFeedback.error(context, 'Could not save note: $e');
       }
     } finally {
       if (mounted) setState(() => _saving = false);

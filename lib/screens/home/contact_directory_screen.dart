@@ -8,6 +8,7 @@ import '../../theme/app_theme.dart';
 import '../../theme/fomra_layout.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../widgets/fomra_app_bar.dart';
+import '../../widgets/ui/app_feedback.dart';
 import '../../widgets/fomra_app_shell.dart';
 import '../../widgets/fomra_breadcrumb.dart';
 import '../../widgets/ui/app_components.dart';
@@ -80,9 +81,7 @@ class _ContactDirectoryScreenState extends State<ContactDirectoryScreen> {
   Future<void> _launchContact(String contact, String scheme) async {
     final raw = contact.replaceAll(RegExp(r'[^\d+]'), '');
     if (raw.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No contact number available')),
-      );
+      AppFeedback.warning(context, 'No contact number available');
       return;
     }
     final Uri uri;
@@ -93,9 +92,7 @@ class _ContactDirectoryScreenState extends State<ContactDirectoryScreen> {
     }
     if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not open contact action')),
-        );
+        AppFeedback.error(context, 'Could not open contact action');
       }
     }
   }

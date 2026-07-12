@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/land_lead.dart';
+import '../services/app_store.dart';
 import '../theme/app_theme.dart';
 import '../theme/fomra_theme_context.dart';
 import 'ui/app_components.dart';
@@ -180,6 +181,14 @@ class LandWorkspaceFilters {
   String? assignedEmployee;
   DateTime? createdFrom;
   DateTime? createdTo;
+  String? district;
+  String? taluk;
+  String? village;
+  String? broker;
+  double? acresMin;
+  double? acresMax;
+  /// meeting | negotiation | survey | legal | overdue
+  String? pendingStatus;
 
   LandWorkspaceFilters({
     this.status,
@@ -189,6 +198,13 @@ class LandWorkspaceFilters {
     this.assignedEmployee,
     this.createdFrom,
     this.createdTo,
+    this.district,
+    this.taluk,
+    this.village,
+    this.broker,
+    this.acresMin,
+    this.acresMax,
+    this.pendingStatus,
   })  : landTypes = landTypes ?? {},
         sources = sources ?? {};
 
@@ -207,6 +223,14 @@ class LandWorkspaceFilters {
 
   static const statusOptions = leadStatusPipelineOrder;
 
+  static const pendingStatusOptions = <({String value, String label})>[
+    (value: 'meeting', label: 'Meeting pending'),
+    (value: 'negotiation', label: 'Negotiation'),
+    (value: 'survey', label: 'Survey pending'),
+    (value: 'legal', label: 'Legal pending'),
+    (value: 'overdue', label: 'Overdue / ageing (14+ days)'),
+  ];
+
   LandWorkspaceFilters copy() => LandWorkspaceFilters(
         status: status,
         landTypes: {...landTypes},
@@ -215,6 +239,13 @@ class LandWorkspaceFilters {
         assignedEmployee: assignedEmployee,
         createdFrom: createdFrom,
         createdTo: createdTo,
+        district: district,
+        taluk: taluk,
+        village: village,
+        broker: broker,
+        acresMin: acresMin,
+        acresMax: acresMax,
+        pendingStatus: pendingStatus,
       );
 
   void clear() {
@@ -225,6 +256,13 @@ class LandWorkspaceFilters {
     assignedEmployee = null;
     createdFrom = null;
     createdTo = null;
+    district = null;
+    taluk = null;
+    village = null;
+    broker = null;
+    acresMin = null;
+    acresMax = null;
+    pendingStatus = null;
   }
 
   int get activeCount {
@@ -235,6 +273,12 @@ class LandWorkspaceFilters {
     if (highPriority) n++;
     if (assignedEmployee != null && assignedEmployee!.trim().isNotEmpty) n++;
     if (createdFrom != null || createdTo != null) n++;
+    if (district != null && district!.trim().isNotEmpty) n++;
+    if (taluk != null && taluk!.trim().isNotEmpty) n++;
+    if (village != null && village!.trim().isNotEmpty) n++;
+    if (broker != null && broker!.trim().isNotEmpty) n++;
+    if (acresMin != null || acresMax != null) n++;
+    if (pendingStatus != null && pendingStatus!.isNotEmpty) n++;
     return n;
   }
 
@@ -299,6 +343,47 @@ class LandWorkspaceFilters {
         onRemove: () {
           createdFrom = null;
           createdTo = null;
+          notify();
+        },
+      ));
+    }
+    void geoChip(String prefix, String? value, void Function() clear) {
+      final v = value?.trim();
+      if (v == null || v.isEmpty) return;
+      chips.add((
+        label: '$prefix: $v',
+        onRemove: () {
+          clear();
+          notify();
+        },
+      ));
+    }
+
+    geoChip('District', district, () => district = null);
+    geoChip('Taluk', taluk, () => taluk = null);
+    geoChip('Village', village, () => village = null);
+    geoChip('Broker', broker, () => broker = null);
+    if (acresMin != null || acresMax != null) {
+      final lo = acresMin?.toStringAsFixed(1) ?? '…';
+      final hi = acresMax?.toStringAsFixed(1) ?? '…';
+      chips.add((
+        label: 'Acres: $lo – $hi',
+        onRemove: () {
+          acresMin = null;
+          acresMax = null;
+          notify();
+        },
+      ));
+    }
+    if (pendingStatus != null && pendingStatus!.isNotEmpty) {
+      final label = pendingStatusOptions
+          .where((o) => o.value == pendingStatus)
+          .map((o) => o.label)
+          .firstOrNull;
+      chips.add((
+        label: 'Pending: ${label ?? pendingStatus}',
+        onRemove: () {
+          pendingStatus = null;
           notify();
         },
       ));
@@ -614,6 +699,58 @@ class _LandWorkspaceFilterPanelState extends State<_LandWorkspaceFilterPanel> {
   String _dateLabel(DateTime? d) =>
       d == null ? 'Any' : '${d.day}/${d.month}/${d.year}';
 
+  List<String> _distinctField(String Function(LandLead) pick) {
+    final set = <String>{};
+    for (final l in AppStore.instance.leads) {
+      final v = pick(l).trim();
+      if (v.isNotEmpty) set.add(v);
+    }
+    final list = set.toList()..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    return list;
+  }
+
+  Widget _dropdownFilter({
+    required BuildContext context,
+    required String label,
+    required String? value,
+    required List<String> options,
+    required ValueChanged<String?> onChanged,
+  }) {
+    final items = <String?>[null, ...options];
+    final effective = items.contains(value) ? value : null;
+    return DropdownButtonFormField<String?>(
+      key: ValueKey('$label-${effective ?? 'all'}'),
+      initialValue: effective,
+      isExpanded: true,
+      decoration: InputDecoration(
+        labelText: label,
+        filled: true,
+        fillColor: context.fomraSurfaceVar,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide.none,
+        ),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 12,
+        ),
+      ),
+      items: [
+        DropdownMenuItem<String?>(
+          value: null,
+          child: Text('All $label'),
+        ),
+        ...options.map(
+          (n) => DropdownMenuItem<String?>(
+            value: n,
+            child: Text(n, overflow: TextOverflow.ellipsis),
+          ),
+        ),
+      ],
+      onChanged: onChanged,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
@@ -742,9 +879,45 @@ class _LandWorkspaceFilterPanelState extends State<_LandWorkspaceFilterPanel> {
                           ),
                         ),
                       ),
+                      const Divider(height: 28),
+                      _sectionTitle('Location'),
+                      const SizedBox(height: 8),
+                      _dropdownFilter(
+                        context: context,
+                        label: 'District',
+                        value: _draft.district,
+                        options: _distinctField((l) => l.district),
+                        onChanged: (v) => setState(() => _draft.district = v),
+                      ),
+                      const SizedBox(height: 10),
+                      _dropdownFilter(
+                        context: context,
+                        label: 'Taluk',
+                        value: _draft.taluk,
+                        options: _distinctField((l) => l.taluk),
+                        onChanged: (v) => setState(() => _draft.taluk = v),
+                      ),
+                      const SizedBox(height: 10),
+                      _dropdownFilter(
+                        context: context,
+                        label: 'Village',
+                        value: _draft.village,
+                        options: _distinctField((l) => l.village),
+                        onChanged: (v) => setState(() => _draft.village = v),
+                      ),
+                      const Divider(height: 28),
+                      _sectionTitle('Broker'),
+                      const SizedBox(height: 8),
+                      _dropdownFilter(
+                        context: context,
+                        label: 'Broker',
+                        value: _draft.broker,
+                        options: _distinctField((l) => l.brokerName),
+                        onChanged: (v) => setState(() => _draft.broker = v),
+                      ),
                       if (widget.employeeNames.isNotEmpty) ...[
                         const Divider(height: 28),
-                        _sectionTitle('Assigned Employee'),
+                        _sectionTitle('Executive'),
                         const SizedBox(height: 8),
                         DropdownButtonFormField<String?>(
                           key: ValueKey(_draft.assignedEmployee ?? 'all'),
@@ -765,7 +938,7 @@ class _LandWorkspaceFilterPanelState extends State<_LandWorkspaceFilterPanel> {
                           items: [
                             const DropdownMenuItem<String?>(
                               value: null,
-                              child: Text('All employees'),
+                              child: Text('All executives'),
                             ),
                             ...widget.employeeNames.map(
                               (n) => DropdownMenuItem<String?>(
@@ -778,6 +951,71 @@ class _LandWorkspaceFilterPanelState extends State<_LandWorkspaceFilterPanel> {
                               setState(() => _draft.assignedEmployee = v),
                         ),
                       ],
+                      const Divider(height: 28),
+                      _sectionTitle('Acres'),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextFormField(
+                              initialValue: _draft.acresMin?.toString() ?? '',
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                      decimal: true),
+                              decoration: InputDecoration(
+                                labelText: 'Min',
+                                filled: true,
+                                fillColor: context.fomraSurfaceVar,
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: BorderSide.none,
+                                ),
+                              ),
+                              onChanged: (v) => setState(() {
+                                _draft.acresMin = double.tryParse(v.trim());
+                              }),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: TextFormField(
+                              initialValue: _draft.acresMax?.toString() ?? '',
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                      decimal: true),
+                              decoration: InputDecoration(
+                                labelText: 'Max',
+                                filled: true,
+                                fillColor: context.fomraSurfaceVar,
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: BorderSide.none,
+                                ),
+                              ),
+                              onChanged: (v) => setState(() {
+                                _draft.acresMax = double.tryParse(v.trim());
+                              }),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const Divider(height: 28),
+                      _sectionTitle('Pending Status'),
+                      const SizedBox(height: 8),
+                      _radioTile(
+                        label: 'Any',
+                        selected: _draft.pendingStatus == null,
+                        onTap: () =>
+                            setState(() => _draft.pendingStatus = null),
+                      ),
+                      ...LandWorkspaceFilters.pendingStatusOptions.map((o) {
+                        return _radioTile(
+                          label: o.label,
+                          selected: _draft.pendingStatus == o.value,
+                          onTap: () =>
+                              setState(() => _draft.pendingStatus = o.value),
+                        );
+                      }),
                       const Divider(height: 28),
                       _sectionTitle('Created Date Range'),
                       const SizedBox(height: 10),

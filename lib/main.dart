@@ -5,8 +5,10 @@ import 'services/auth_link.dart';
 import 'services/auth_service.dart';
 import 'services/session_scoped_local_storage.dart';
 import 'services/push_service.dart';
+import 'services/offline_sync_service.dart';
 import 'services/supabase_config.dart';
 import 'services/theme_controller.dart';
+import 'services/role_access.dart';
 import 'theme/app_theme.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/set_password_screen.dart';
@@ -14,9 +16,21 @@ import 'screens/home/home_screen.dart';
 import 'screens/land_lead/land_workspace_screen.dart';
 import 'screens/dashboard/dashboard_screen.dart';
 import 'screens/reports/reports_screen.dart';
+import 'screens/documents/document_management_screen.dart';
+import 'screens/audit/audit_trail_screen.dart';
+import 'screens/notifications/notification_center_screen.dart';
 import 'screens/task_management/task_management_screen.dart';
 import 'screens/settings/change_password_screen.dart';
 import 'screens/settings/settings_screen.dart';
+import 'screens/business/business_modules_hub_screen.dart';
+import 'screens/broker/broker_management_screen.dart';
+import 'screens/land_bank/land_bank_screen.dart';
+import 'screens/legal/legal_tracker_screen.dart';
+import 'screens/legal_verification/legal_verification_screen.dart';
+import 'screens/survey/survey_tracker_screen.dart';
+import 'screens/owner/owner_history_screen.dart';
+import 'screens/cost/cost_calculator_screen.dart';
+import 'screens/calendar/field_calendar_screen.dart';
 
 void main() {
   // Snapshot the launch URL before Flutter's hash router can rewrite the
@@ -58,12 +72,25 @@ class FomraLSApp extends StatelessWidget {
           '/employee-management': (_) => const SettingsScreen(),
           '/task-management':     (_) => const LandWorkspaceScreen(initialTab: 0),
           '/market-intelligence': (_) => const HomeScreen(),
-          '/legal-verification':  (_) => const LandWorkspaceScreen(initialTab: 0),
+          '/legal-verification':  (_) => const LegalVerificationScreen(),
+          '/business-modules':    (_) => const BusinessModulesHubScreen(),
+          '/broker-management':   (_) => const BrokerManagementScreen(),
+          '/land-bank':           (_) => const LandBankScreen(),
+          '/legal-tracker':       (_) => const LegalTrackerScreen(),
+          '/survey-tracker':      (_) => const SurveyTrackerScreen(),
+          '/owner-history':       (_) => const OwnerHistoryScreen(),
+          '/cost-calculator':     (_) => const CostCalculatorScreen(),
+          '/field-calendar':      (_) => const FieldCalendarScreen(),
           '/dashboard':           (_) => AuthService.instance.isManagement
                                       ? const DashboardScreen()
                                       : const HomeScreen(),
           '/reports':             (_) => AuthService.instance.isManagement
                                       ? const ReportsScreen()
+                                      : const HomeScreen(),
+          '/document-management': (_) => const DocumentManagementScreen(),
+          '/notifications':       (_) => const NotificationCenterScreen(),
+          '/audit-trail':         (_) => RoleAccess.canViewAudit
+                                      ? const AuditTrailScreen()
                                       : const HomeScreen(),
           '/settings':            (_) => const SettingsScreen(),
           '/change-password':     (_) => const ChangePasswordScreen(),
@@ -116,6 +143,7 @@ class _StartupScreenState extends State<_StartupScreen> {
     // Bring up Firebase push in the background — fully guarded, never blocks or
     // crashes startup if Firebase isn't configured on this platform.
     if (error == null) unawaited(PushService.init());
+    if (error == null) unawaited(OfflineSyncService.instance.start());
     bool loggedIn = false;
     if (error == null) {
       try {

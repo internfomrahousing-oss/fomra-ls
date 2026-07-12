@@ -1,9 +1,10 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
+import '../../models/gps_fix.dart';
 import '../../models/land_lead.dart';
 import '../../theme/app_theme.dart';
 import '../../config/maptiler_tiles.dart';
@@ -14,15 +15,18 @@ import '../../widgets/fomra_app_shell.dart';
 import '../../widgets/fomra_breadcrumb.dart';
 import '../../widgets/portal_page_layout.dart';
 import '../../widgets/tngis_parcel_summary.dart';
+import '../../widgets/ui/app_feedback.dart';
+import '../../services/gps_verification_service.dart';
 import '../../services/land_lead_service.dart';
 import '../../services/auth_service.dart';
+import '../../services/offline_sync_service.dart';
 import '../../services/api_client.dart';
 import '../../utils/image_compressor.dart';
 import '../../utils/lead_location_parser.dart';
 import '../../utils/reverse_geocode.dart';
 import '../../utils/tngis_parcel_lookup.dart';
 
-enum _LocationMode { manual, live }
+enum _LocationMode { live }
 
 const _kMaxSitePhotos = 4;
 
@@ -58,7 +62,8 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
   final _roadWidthCtrl  = TextEditingController();
   LandType _landType = LandType.agricultural;
 
-  _LocationMode _locationMode = _LocationMode.manual;
+  _LocationMode _locationMode = _LocationMode.live;
+  GpsFix? _verifiedGps;
   bool _fetchingLocation = false;
   bool _resolvingPin = false;
   String? _locationStatus;
@@ -119,14 +124,11 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         final editing = widget.existingLead != null;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              editing
-                  ? 'Management can view leads only — editing is for employees.'
-                  : 'Management can view leads only — adding is for employees.',
-            ),
-          ),
+        AppFeedback.info(
+          context,
+          editing
+              ? 'Management can view leads only — editing is for employees.'
+              : 'Management can view leads only — adding is for employees.',
         );
         Navigator.pop(context);
       });
@@ -141,6 +143,7 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
     _brokerContactCtrl.text = existing.brokerContact;
     _locationCtrl.text = existing.location;
     _gpsCtrl.text = existing.gpsCoordinates;
+    _verifiedGps = GpsFix.tryParse(existing.gpsCoordinates);
     _villageCtrl.text = existing.village;
     _talukCtrl.text = existing.taluk;
     _districtCtrl.text = existing.district;
@@ -188,38 +191,19 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
   // ── Location fill from coordinates ─────────────────────────────────────────
 
   void _onGpsTextChanged() {
-    if (_suppressGpsListener) return;
-    _gpsDebounce?.cancel();
-    _gpsDebounce = Timer(const Duration(milliseconds: 650), _applyGpsFromText);
+    // Typed / pasted GPS is rejected — live capture only.
   }
 
   Future<void> _applyGpsFromText() async {
     if (!mounted) return;
-    final parsed = parseLeadGps(_gpsCtrl.text);
-    if (parsed == null) {
-      setState(() => _locationStatus =
-          'Could not read coordinates — use DMS (13°07\'08.7"N 80°16\'53.0"E) or decimal ° N / ° E.');
-      return;
+    // Restore verified live storage if the user tried to edit the field.
+    if (_verifiedGps != null) {
+      _suppressGpsListener = true;
+      _gpsCtrl.text = _verifiedGps!.toStorage();
+      _suppressGpsListener = false;
     }
-
-    final samePin = _pinnedPoint != null &&
-        (_pinnedPoint!.latitude - parsed.latitude).abs() < 1e-5 &&
-        (_pinnedPoint!.longitude - parsed.longitude).abs() < 1e-5;
-    if (samePin) {
-      _centerMapOn(parsed);
-      return;
-    }
-
-    if (_locationMode == _LocationMode.live) {
-      setState(() => _locationMode = _LocationMode.manual);
-    }
-
-    setState(() => _pinnedPoint = parsed);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      _centerMapOn(parsed, zoom: 16.0);
-    });
-    await _placePinAndFetchDetails(parsed);
+    AppFeedback.error(
+        context, 'Manual GPS entry is not allowed. Capture live GPS.');
   }
 
   void _clearPinDerivedFields() {
@@ -411,17 +395,7 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
   }
 
   void _onLocationModeChanged(_LocationMode mode) {
-    setState(() => _locationMode = mode);
-    if (mode == _LocationMode.manual) {
-      final parsed = parseLeadGps(_gpsCtrl.text) ?? _pinnedPoint;
-      if (parsed != null) {
-        final firstPin = _pinnedPoint == null;
-        setState(() => _pinnedPoint = parsed);
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _centerMapOn(parsed, zoom: firstPin ? 16.0 : null);
-        });
-      }
-    }
+    setState(() => _locationMode = _LocationMode.live);
   }
 
   void _onMapReady() {
@@ -448,7 +422,10 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
   }
 
   Future<void> _onMapPin(LatLng point) async {
-    await _placePinAndFetchDetails(point);
+    // Manual map pins are rejected — live GPS only.
+    if (!mounted) return;
+    AppFeedback.error(
+        context, 'Manual map pins are not allowed. Capture live GPS.');
   }
 
   Future<void> _placePinAndFetchDetails(LatLng point) async {
@@ -538,52 +515,31 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
   Future<void> _fetchLiveLocation() async {
     setState(() {
       _fetchingLocation = true;
-      _locationStatus = 'Requesting permission…';
+      _locationStatus = 'Capturing live GPS…';
+      _locationMode = _LocationMode.live;
     });
 
     try {
-      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) {
-        _setStatus('Location services disabled. Please enable GPS in device settings.');
-        return;
-      }
-      LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-      }
-      if (permission == LocationPermission.deniedForever) {
-        _setStatus('Location permission permanently denied. Enable it in App Settings.');
-        return;
-      }
-      if (permission == LocationPermission.denied) {
-        _setStatus('Location permission denied.');
-        return;
-      }
-
-      setState(() => _locationStatus = 'Getting GPS coordinates…');
-
-      final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          timeLimit: Duration(seconds: 15),
-        ),
-      );
-
-      final lat = position.latitude;
-      final lng = position.longitude;
-      final point = LatLng(lat, lng);
-      if (mounted) {
-        setState(() => _locationMode = _LocationMode.manual);
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted) return;
-          _centerMapOn(point);
-        });
-      }
+      final fix = await GpsVerificationService.captureLive();
+      final point = fix.point;
+      if (!mounted) return;
+      setState(() {
+        _verifiedGps = fix;
+        _gpsCtrl.text = fix.toStorage();
+        _locationStatus =
+            '✓ Live GPS · ${fix.summaryLabel}';
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _centerMapOn(point);
+      });
       await _placePinAndFetchDetails(point);
-    } on LocationServiceDisabledException {
-      _setStatus('Location services are disabled. Enable them in browser settings.');
+    } on GpsVerificationException catch (e) {
+      _setStatus(e.message);
+      setState(() => _verifiedGps = null);
     } catch (e) {
       _setStatus('Error: ${e.toString().replaceAll('Exception: ', '')}');
+      setState(() => _verifiedGps = null);
     } finally {
       if (mounted) setState(() => _fetchingLocation = false);
     }
@@ -602,12 +558,7 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
 
   Future<void> _pickPhoto() async {
     if (_keptPhotoUrls.length + _photos.length >= _kMaxSitePhotos) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Maximum $_kMaxSitePhotos photos per lead'),
-          backgroundColor: AppColors.warning,
-        ),
-      );
+      AppFeedback.warning(context, 'Maximum $_kMaxSitePhotos photos per lead');
       return;
     }
 
@@ -636,10 +587,7 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _compressingPhoto = false);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(e.toString().replaceFirst('Exception: ', '')),
-        backgroundColor: AppColors.error,
-      ));
+      AppFeedback.error(context, e.toString().replaceFirst('Exception: ', ''));
     }
   }
 
@@ -737,24 +685,22 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
   Future<void> _submit() async {
     if (_saving) return;
     if (_compressingPhoto) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please wait — photo is still compressing'),
-          backgroundColor: AppColors.warning,
-        ),
-      );
+      AppFeedback.warning(context, 'Please wait — photo is still compressing');
       return;
     }
     if (_inputSource == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please select an Input Source'),
-          backgroundColor: AppColors.error,
-        ),
-      );
+      AppFeedback.error(context, 'Please select an Input Source');
       return;
     }
     if (!_formKey.currentState!.validate()) return;
+
+    // Require a live GPS fix (reject manual pins / typed coords).
+    final liveFix = _verifiedGps ?? GpsFix.tryParse(_gpsCtrl.text.trim());
+    if (liveFix == null || !liveFix.isLive) {
+      AppFeedback.error(context,
+          'Capture live GPS before saving. Manual pins are not allowed.');
+      return;
+    }
 
     final combinedNotes = _notesCtrl.text.trim();
     final existing = widget.existingLead;
@@ -762,7 +708,7 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
       leadId: existing?.leadId ?? '',
       inputSource: _inputSource!,
       location: _locationCtrl.text.trim(),
-      gpsCoordinates: _gpsCtrl.text.trim(),
+      gpsCoordinates: liveFix.toStorage(),
       village: _villageCtrl.text.trim(),
       taluk: _talukCtrl.text.trim(),
       district: _districtCtrl.text.trim(),
@@ -795,6 +741,20 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
     });
 
     try {
+      final sync = OfflineSyncService.instance;
+      if (!sync.isOnline) {
+        if (_isEdit) {
+          await sync.enqueueUpdateLead(lead: lead, photoBytes: photoBytes);
+        } else {
+          await sync.enqueueCreateLead(lead: lead, photoBytes: photoBytes);
+        }
+        if (!mounted) return;
+        AppFeedback.warning(
+            context, 'Saved offline — will sync when network returns.');
+        Navigator.pop(context, lead);
+        return;
+      }
+
       final saved = _isEdit
           ? await LandLeadService.update(
               lead,
@@ -809,15 +769,27 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
       if (!mounted) return;
       Navigator.pop(context, saved);
     } catch (e) {
+      // Network failure mid-save → queue for later.
+      try {
+        final sync = OfflineSyncService.instance;
+        if (_isEdit) {
+          await sync.enqueueUpdateLead(lead: lead, photoBytes: photoBytes);
+        } else {
+          await sync.enqueueCreateLead(lead: lead, photoBytes: photoBytes);
+        }
+        if (!mounted) return;
+        AppFeedback.warning(
+            context, 'Network error — queued offline for sync.');
+        Navigator.pop(context, lead);
+        return;
+      } catch (_) {}
       if (!mounted) return;
       setState(() => _saving = false);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(
-          'Failed to save lead: ${e.toString().replaceFirst('Exception: ', '')}',
-        ),
-        backgroundColor: AppColors.error,
+      AppFeedback.error(
+        context,
+        'Failed to save lead: ${e.toString().replaceFirst('Exception: ', '')}',
         duration: const Duration(seconds: 6),
-      ));
+      );
     }
   }
 
@@ -947,97 +919,67 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
                                 value: 'Auto-generated (1, 2, 3 …)',
                               ),
                               const SizedBox(height: AddLeadUi.fieldGap),
-                              AddLeadLocationSegment(
-                                mode: _locationMode == _LocationMode.manual
-                                    ? AddLeadLocationMode.manual
-                                    : AddLeadLocationMode.live,
-                                onChanged: (m) => _onLocationModeChanged(
-                                  m == AddLeadLocationMode.manual
-                                      ? _LocationMode.manual
-                                      : _LocationMode.live,
+                              Text(
+                                'Live GPS only — map pins and typed coordinates are rejected.',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: context.fomraTextSecondary,
                                 ),
                               ),
-                              if (_locationMode == _LocationMode.manual) ...[
-                                const SizedBox(height: AddLeadUi.fieldGap),
-                                AddLeadLocationSearch(
-                                  onSelected: _placePinAndFetchDetails,
-                                ),
-                                const SizedBox(height: AddLeadUi.fieldGap),
-                                AddLeadMapPicker(
-                                  mapController: _mapController,
-                                  tileUrl: _kMapTileUrl,
-                                  defaultCenter: _kDefaultMapCenter,
-                                  pinnedPoint: _pinnedPoint,
-                                  resolving: _resolvingPin,
-                                  status: _locationStatus,
-                                  fetchingMyLocation: _fetchingLocation,
-                                  onMapReady: _onMapReady,
-                                  onTap: _onMapPin,
-                                  onMyLocation: _centerMapOnMyLocation,
-                                ),
-                                if (_locationStatus != null) ...[
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    _locationStatus!,
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: _locationStatus!.contains('✓')
-                                          ? AppColors.success
-                                          : context.fomraTextSecondary,
-                                      fontWeight: _locationStatus!.contains('✓')
-                                          ? FontWeight.w600
-                                          : FontWeight.normal,
-                                    ),
+                              const SizedBox(height: AddLeadUi.fieldGap),
+                              AddLeadLiveLocationCard(
+                                fetching: _fetchingLocation,
+                                status: _locationStatus,
+                                onTap: _fetchingLocation
+                                    ? null
+                                    : _fetchLiveLocation,
+                              ),
+                              if (_verifiedGps != null) ...[
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Lat ${_verifiedGps!.latitude.toStringAsFixed(6)} · '
+                                  'Lng ${_verifiedGps!.longitude.toStringAsFixed(6)} · '
+                                  '±${_verifiedGps!.accuracyMeters.toStringAsFixed(0)} m · '
+                                  '${_verifiedGps!.timestamp.toLocal()}',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: AppColors.success,
+                                    fontWeight: FontWeight.w600,
                                   ),
-                                ],
-                                const SizedBox(height: AddLeadUi.fieldGap),
-                                if (_loadingTngis || _tngisParcel != null) ...[
-                                  TngisParcelSummary(
-                                    key: ValueKey(
-                                      '${_pinnedPoint?.latitude}_'
-                                      '${_pinnedPoint?.longitude}_'
-                                      '$_pinFetchSeq',
-                                    ),
-                                    parcel: _tngisParcel ??
-                                        const TngisParcelDetails(),
-                                    loading: _loadingTngis,
-                                  ),
-                                  const SizedBox(height: AddLeadUi.fieldGap),
-                                ],
+                                ),
                               ],
-                              if (_locationMode == _LocationMode.live) ...[
-                                AddLeadLiveLocationCard(
-                                  fetching: _fetchingLocation,
-                                  status: _locationStatus,
-                                  onTap: _fetchingLocation
-                                      ? null
-                                      : _fetchLiveLocation,
-                                ),
-                                if (_locationStatus != null) ...[
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    _locationStatus!,
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: _locationStatus!.contains('✓')
-                                          ? AppColors.success
-                                          : context.fomraTextSecondary,
-                                    ),
+                              if (_locationStatus != null) ...[
+                                const SizedBox(height: 8),
+                                Text(
+                                  _locationStatus!,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: _locationStatus!.contains('✓')
+                                        ? AppColors.success
+                                        : context.fomraTextSecondary,
                                   ),
-                                ],
+                                ),
+                              ],
+                              const SizedBox(height: AddLeadUi.fieldGap),
+                              if (_loadingTngis || _tngisParcel != null) ...[
+                                TngisParcelSummary(
+                                  key: ValueKey(
+                                    '${_pinnedPoint?.latitude}_'
+                                    '${_pinnedPoint?.longitude}_'
+                                    '$_pinFetchSeq',
+                                  ),
+                                  parcel: _tngisParcel ??
+                                      const TngisParcelDetails(),
+                                  loading: _loadingTngis,
+                                ),
                                 const SizedBox(height: AddLeadUi.fieldGap),
                               ],
                               _Field(
                                 ctrl: _gpsCtrl,
-                                label: 'GPS Coordinates',
-                                hint: _locationMode == _LocationMode.live
-                                    ? 'Auto-filled after capture'
-                                    : 'DMS or decimal — e.g. 13°07\'08.7"N 80°16\'53.0"E',
+                                label: 'GPS (live verified)',
+                                hint: 'Capture live GPS above — manual entry blocked',
                                 icon: Icons.gps_fixed_rounded,
-                                onFieldSubmitted: (_) {
-                                  _gpsDebounce?.cancel();
-                                  _applyGpsFromText();
-                                },
+                                readOnly: true,
                               ),
                               const SizedBox(height: AddLeadUi.fieldGap),
                               _Field(
@@ -1333,6 +1275,7 @@ class _Field extends StatelessWidget {
   final int? maxLength;
   final TextInputType keyboardType;
   final bool light;
+  final bool readOnly;
   final ValueChanged<String>? onFieldSubmitted;
 
   const _Field({
@@ -1345,6 +1288,7 @@ class _Field extends StatelessWidget {
     this.maxLength,
     this.keyboardType = TextInputType.text,
     this.light = false,
+    this.readOnly = false,
     this.onFieldSubmitted,
   });
 
@@ -1364,6 +1308,7 @@ class _Field extends StatelessWidget {
       maxLines: maxLines,
       maxLength: maxLength,
       keyboardType: keyboardType,
+      readOnly: readOnly,
       onFieldSubmitted: onFieldSubmitted,
       style: TextStyle(
         fontSize: 14,

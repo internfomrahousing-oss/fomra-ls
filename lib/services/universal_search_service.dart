@@ -1,12 +1,15 @@
 import '../models/employee_profile.dart';
 import '../models/land_lead.dart';
+import '../models/land_lead_legal_document.dart';
 import '../utils/contact_directory.dart';
+import '../utils/legal_document_catalog.dart';
 import '../screens/home/contact_directory_screen.dart';
 import '../screens/task_management/task_management_screen.dart';
 import '../services/app_store.dart';
 import '../services/auth_service.dart';
+import '../services/document_index_service.dart';
 
-enum UniversalSearchKind { lead, employee, task, page, contact }
+enum UniversalSearchKind { lead, employee, task, page, contact, document }
 
 class UniversalSearchHit {
   final UniversalSearchKind kind;
@@ -17,6 +20,7 @@ class UniversalSearchHit {
   final Task? task;
   final String? route;
   final ContactDirectoryKind? contactKind;
+  final LandLeadLegalDocument? document;
 
   const UniversalSearchHit({
     required this.kind,
@@ -27,6 +31,7 @@ class UniversalSearchHit {
     this.task,
     this.route,
     this.contactKind,
+    this.document,
   });
 }
 
@@ -50,6 +55,7 @@ abstract final class UniversalSearchService {
   static bool _contains(String? value, String q) =>
       value != null && value.trim().isNotEmpty && value.toLowerCase().contains(q);
 
+  /// Lead ID, owner, mobile, village, broker, survey number (+ location extras).
   static bool _leadMatches(LandLead lead, String q) {
     return _contains(lead.leadId, q) ||
         _contains(lead.ownerName, q) ||
@@ -68,6 +74,16 @@ abstract final class UniversalSearchService {
         _contains(lead.landType.name, q) ||
         _contains(lead.status.name, q) ||
         _contains(lead.inputSource.name, q);
+  }
+
+  static bool _documentMatches(LandLeadLegalDocument doc, String q) {
+    final cat = LegalDocumentCatalog.classify(doc.fileName);
+    final num = LegalDocumentCatalog.extractDocumentNumber(doc.fileName);
+    return _contains(doc.fileName, q) ||
+        _contains(doc.leadId, q) ||
+        _contains(cat.label, q) ||
+        _contains(num, q) ||
+        _contains(doc.loggedByName, q);
   }
 
   static bool _employeeMatches(EmployeeProfile employee, String q) {
@@ -116,6 +132,64 @@ abstract final class UniversalSearchService {
         route: '/settings',
         keywords: ['preferences', 'account', 'users'],
       ),
+      const _NavEntry(
+        label: 'Notifications',
+        route: '/notifications',
+        keywords: ['alerts', 'bell', 'unread', 'sla', 'approvals'],
+      ),
+      const _NavEntry(
+        label: 'Documents',
+        route: '/document-management',
+        keywords: ['patta', 'chitta', 'fmb', 'ec', 'sale deed', 'repository'],
+      ),
+      const _NavEntry(
+        label: 'Business Modules',
+        route: '/business-modules',
+        keywords: [
+          'broker',
+          'land bank',
+          'legal',
+          'survey',
+          'owner history',
+          'cost',
+          'calendar',
+        ],
+      ),
+      const _NavEntry(
+        label: 'Broker Management',
+        route: '/broker-management',
+        keywords: ['broker', 'performance', 'conversion', 'success rate'],
+      ),
+      const _NavEntry(
+        label: 'Land Bank',
+        route: '/land-bank',
+        keywords: ['gis', 'inventory', 'map', 'parcels'],
+      ),
+      const _NavEntry(
+        label: 'Legal Tracker',
+        route: '/legal-tracker',
+        keywords: ['ec', 'verification', 'approvals', 'legal'],
+      ),
+      const _NavEntry(
+        label: 'Survey Tracker',
+        route: '/survey-tracker',
+        keywords: ['survey', 'schedule', 'pending'],
+      ),
+      const _NavEntry(
+        label: 'Owner History',
+        route: '/owner-history',
+        keywords: ['owner', 'negotiation', 'history'],
+      ),
+      const _NavEntry(
+        label: 'Cost Calculator',
+        route: '/cost-calculator',
+        keywords: ['cost', 'acre', 'acquisition', 'price'],
+      ),
+      const _NavEntry(
+        label: 'Field Calendar',
+        route: '/field-calendar',
+        keywords: ['calendar', 'site visit', 'meeting', 'reminder'],
+      ),
     ];
     if (isManagement) {
       entries.addAll(const [
@@ -127,7 +201,12 @@ abstract final class UniversalSearchService {
         _NavEntry(
           label: 'Reports',
           route: '/reports',
-          keywords: ['export', 'summary'],
+          keywords: ['export', 'summary', 'pdf', 'excel'],
+        ),
+        _NavEntry(
+          label: 'Audit Trail',
+          route: '/audit-trail',
+          keywords: ['logs', 'history', 'changes'],
         ),
         _NavEntry(
           label: 'User management',
@@ -169,6 +248,33 @@ abstract final class UniversalSearchService {
           lead.status.name,
         ].join(' · '),
         lead: lead,
+      ));
+      if (hits.length >= _maxResults) return hits;
+    }
+
+    // Document number / filename hits from cached legal repository.
+    for (final doc in DocumentIndexService.instance.documents) {
+      if (!_documentMatches(doc, q)) continue;
+      if (!isManagement && me.isNotEmpty) {
+        final lead = AppStore.instance.leads
+            .where((l) => l.leadId == doc.leadId)
+            .firstOrNull;
+        if (lead == null || lead.createdByName.trim().toLowerCase() != me) {
+          continue;
+        }
+      }
+      final cat = LegalDocumentCatalog.classify(doc.fileName);
+      final num = LegalDocumentCatalog.extractDocumentNumber(doc.fileName);
+      hits.add(UniversalSearchHit(
+        kind: UniversalSearchKind.document,
+        title: doc.fileName,
+        subtitle: [
+          cat.label,
+          'Lead #${doc.leadId}',
+          if (num != null) 'Doc #$num',
+        ].join(' · '),
+        document: doc,
+        route: '/document-management',
       ));
       if (hits.length >= _maxResults) return hits;
     }
@@ -221,4 +327,8 @@ abstract final class UniversalSearchService {
 
     return hits;
   }
+
+  /// Warm the document index in the background (non-blocking).
+  static Future<void> warmDocumentIndex() =>
+      DocumentIndexService.instance.ensureLoaded();
 }

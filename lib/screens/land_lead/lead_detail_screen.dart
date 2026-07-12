@@ -1,18 +1,29 @@
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../models/land_lead.dart';
+import '../../models/land_lead_legal_document.dart';
+import '../../models/land_lead_meeting.dart';
 import '../../models/land_lead_site_visit.dart';
 import '../../models/lead_call_log.dart';
 import '../../models/lead_drop_reason.dart';
 import '../../services/app_store.dart';
 import '../../services/auth_service.dart';
+import '../../services/land_lead_legal_service.dart';
+import '../../services/land_lead_meeting_service.dart';
 import '../../services/land_lead_service.dart';
 import '../../services/land_lead_site_visit_service.dart';
 import '../../services/lead_call_log_service.dart';
+import '../../services/voice_note_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_theme_context.dart';
+import '../../widgets/ui/app_feedback.dart';
+import '../../utils/employee_lead_next_action.dart';
+import '../../utils/maps_navigation.dart';
+import '../../widgets/employee_lead_workflow_ui.dart';
 import '../../widgets/fomra_app_shell.dart';
+import '../../widgets/offline_status_banner.dart';
 import '../../widgets/fomra_breadcrumb.dart';
 import '../../widgets/ui/app_components.dart';
 import '../market_intelligence/market_intelligence_screen.dart';
@@ -59,6 +70,8 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
   late final TabController _tabController;
   List<LeadCallLog> _callLogs = [];
   List<LandLeadSiteVisit> _siteVisits = [];
+  List<LandLeadMeeting> _meetings = [];
+  List<LandLeadLegalDocument> _legalDocs = [];
 
   static const _tabs = [
     'Activity',
@@ -84,14 +97,65 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
       final results = await Future.wait([
         LeadCallLogService.getForLead(lead.leadId),
         LandLeadSiteVisitService.getAllForLead(lead.leadId),
+        LandLeadMeetingService.getForLead(lead.leadId),
+        LandLeadLegalService.getDocuments(lead.leadId),
       ]);
       if (!mounted) return;
       setState(() {
         _callLogs = results[0] as List<LeadCallLog>;
         _siteVisits = results[1] as List<LandLeadSiteVisit>;
+        _meetings = results[2] as List<LandLeadMeeting>;
+        _legalDocs = results[3] as List<LandLeadLegalDocument>;
       });
     } catch (_) {
       // Tables may not exist yet — keep counts at zero.
+      try {
+        final results = await Future.wait([
+          LeadCallLogService.getForLead(lead.leadId),
+          LandLeadSiteVisitService.getAllForLead(lead.leadId),
+        ]);
+        if (!mounted) return;
+        setState(() {
+          _callLogs = results[0] as List<LeadCallLog>;
+          _siteVisits = results[1] as List<LandLeadSiteVisit>;
+        });
+      } catch (_) {}
+    }
+  }
+
+  EmployeeLeadWorkflowInsight get _workflowInsight =>
+      EmployeeLeadWorkflow.build(
+        lead: lead,
+        callLogs: _callLogs,
+        siteVisits: _siteVisits,
+        meetings: _meetings,
+        legalDocCount: _legalDocs.length,
+      );
+
+  void _onNextActionTap() {
+    final action = _workflowInsight.nextAction;
+    switch (action.kind) {
+      case EmployeeNextActionKind.callOwner:
+        _handleDetailAction('Calls');
+        break;
+      case EmployeeNextActionKind.scheduleVisit:
+        _handleDetailAction('Site visit');
+        break;
+      case EmployeeNextActionKind.scheduleMeeting:
+        _handleDetailAction('Meeting');
+        break;
+      case EmployeeNextActionKind.collectChitta:
+      case EmployeeNextActionKind.collectFmb:
+      case EmployeeNextActionKind.collectPatta:
+      case EmployeeNextActionKind.uploadDocuments:
+      case EmployeeNextActionKind.uploadSaleDeed:
+        _handleDetailAction('Legal');
+        break;
+      case EmployeeNextActionKind.followUpTask:
+        _openViewTasks();
+        break;
+      case EmployeeNextActionKind.none:
+        break;
     }
   }
 
@@ -135,9 +199,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
     AppStore.instance.replaceLead(saved);
     setState(() => lead = saved);
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Lead updated')),
-      );
+      AppFeedback.success(context, 'Lead updated');
     }
   }
 
@@ -145,11 +207,8 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
     if (status == null || status == lead.status) return;
     if (_readOnly) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Management view is read-only. Sign in as employee to update status.'),
-        ),
-      );
+      AppFeedback.info(context,
+          'Management view is read-only. Sign in as employee to update status.');
       return;
     }
 
@@ -175,9 +234,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
         if (!mounted) return;
         setState(() => lead = previous);
         AppStore.instance.replaceLead(previous);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not update drop reason')),
-        );
+        AppFeedback.error(context, 'Could not update drop reason');
       }
       return;
     }
@@ -193,11 +250,13 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
     setState(() => lead = updated);
     AppStore.instance.replaceLead(updated);
     try {
-      await LandLeadService.updateStatus(lead.leadId, status);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Status updated to ${status.label}')),
+      await LandLeadService.updateStatus(
+        lead.leadId,
+        status,
+        previousStatus: previous,
       );
+      if (!mounted) return;
+      AppFeedback.success(context, 'Status updated to ${status.label}');
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -208,9 +267,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
         );
       });
       AppStore.instance.replaceLead(lead);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not update status: $e')),
-      );
+      AppFeedback.error(context, 'Could not update status: $e');
     }
   }
 
@@ -218,9 +275,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
     if (_readOnly) return;
     final raw = lead.contactDetails.replaceAll(RegExp(r'[^\d+]'), '');
     if (raw.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No contact number on this lead')),
-      );
+      AppFeedback.warning(context, 'No contact number on this lead');
       return;
     }
     final Uri uri;
@@ -231,9 +286,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
     }
     if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not open contact action')),
-        );
+        AppFeedback.error(context, 'Could not open contact action');
       }
     }
   }
@@ -254,6 +307,18 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
       leadLabel: lead.ownerName.trim().isNotEmpty ? lead.ownerName.trim() : null,
     );
     if (mounted) setState(() {});
+  }
+
+  Future<void> _navigateToProperty() async {
+    final ok = await MapsNavigation.navigateFromGpsString(
+      lead.gpsCoordinates,
+      label: lead.ownerName.trim().isNotEmpty
+          ? lead.ownerName.trim()
+          : 'Lead ${lead.leadId}',
+    );
+    if (!ok && mounted) {
+      AppFeedback.warning(context, 'No GPS coordinates available to navigate');
+    }
   }
 
   bool _isViewOnlyAction(String label) =>
@@ -381,6 +446,29 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
 
   @override
   Widget build(BuildContext context) {
+    final workspace = _WorkspacePanel(
+      lead: lead,
+      readOnly: _readOnly,
+      tabController: _tabController,
+      tabs: _tabs,
+      siteVisitCount: _siteVisits.length,
+      callMetrics: _callMetrics,
+      callLogs: _callLogs,
+      siteVisits: _siteVisits,
+      meetings: _meetings,
+      legalDocs: _legalDocs,
+      onLaunchContact: _launchContact,
+      onDetailAction: _handleDetailAction,
+      shouldLoadMiTab: _shouldLoadMiTab,
+      guidanceBanner: _readOnly
+          ? null
+          : EmployeeLeadGuidanceBanners(
+              insight: _workflowInsight,
+              onOpenTasks: _openViewTasks,
+              onNextActionTap: _onNextActionTap,
+            ),
+    );
+
     return FomraAppShell(
       currentRoute: '/land-lead',
       backgroundColor: context.fomraPageBg,
@@ -391,84 +479,80 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                const OfflineStatusBanner(),
                 _TopBar(
                   leadId: lead.leadId,
                   onBack: () => Navigator.pop(context),
                   onEdit: _readOnly ? null : _openEdit,
+                  onNavigate: lead.gpsCoordinates.trim().isEmpty
+                      ? null
+                      : _navigateToProperty,
                 ),
                 FomraBreadcrumbStrip(items: _breadcrumbs),
                 Expanded(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-                    child: wide
-                        ? Row(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Expanded(
-                                flex: 2,
-                                child: _ProfilePanel(
-                                  lead: lead,
-                                  displayName: _displayName,
-                                  leadAgeDays: _leadAgeDays,
-                                  taskCount: taskCountForLead(lead.leadId),
-                                  readOnly: _readOnly,
-                                  onStatusChanged: _changeStatus,
-                                  onLaunchContact: _launchContact,
-                                  onCreateTask: _openCreateTask,
-                                  onViewTasks: _openViewTasks,
-                                ),
+                    child: Stack(
+                      children: [
+                        wide
+                            ? Row(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  Expanded(
+                                    flex: 2,
+                                    child: _ProfilePanel(
+                                      lead: lead,
+                                      displayName: _displayName,
+                                      leadAgeDays: _leadAgeDays,
+                                      taskCount: taskCountForLead(lead.leadId),
+                                      readOnly: _readOnly,
+                                      onStatusChanged: _changeStatus,
+                                      onLaunchContact: _launchContact,
+                                      onCreateTask: _openCreateTask,
+                                      onViewTasks: _openViewTasks,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(flex: 3, child: workspace),
+                                ],
+                              )
+                            : ListView(
+                                children: [
+                                  _ProfilePanel(
+                                    lead: lead,
+                                    displayName: _displayName,
+                                    leadAgeDays: _leadAgeDays,
+                                    taskCount: taskCountForLead(lead.leadId),
+                                    readOnly: _readOnly,
+                                    onStatusChanged: _changeStatus,
+                                    onLaunchContact: _launchContact,
+                                    onCreateTask: _openCreateTask,
+                                    onViewTasks: _openViewTasks,
+                                  ),
+                                  const SizedBox(height: 12),
+                                  SizedBox(
+                                    height: constraints.maxHeight * 0.72,
+                                    child: workspace,
+                                  ),
+                                ],
                               ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                flex: 3,
-                                child: _WorkspacePanel(
-                                  lead: lead,
-                                  readOnly: _readOnly,
-                                  tabController: _tabController,
-                                  tabs: _tabs,
-                                  siteVisitCount: _siteVisits.length,
-                                  callMetrics: _callMetrics,
-                                  callLogs: _callLogs,
-                                  siteVisits: _siteVisits,
-                                  onLaunchContact: _launchContact,
-                                  onDetailAction: _handleDetailAction,
-                                  shouldLoadMiTab: _shouldLoadMiTab,
-                                ),
-                              ),
-                            ],
-                          )
-                        : ListView(
-                            children: [
-                              _ProfilePanel(
-                                lead: lead,
-                                displayName: _displayName,
-                                leadAgeDays: _leadAgeDays,
-                                taskCount: taskCountForLead(lead.leadId),
-                                readOnly: _readOnly,
-                                onStatusChanged: _changeStatus,
-                                onLaunchContact: _launchContact,
-                                onCreateTask: _openCreateTask,
-                                onViewTasks: _openViewTasks,
-                              ),
-                              const SizedBox(height: 12),
-                              SizedBox(
-                                height: constraints.maxHeight * 0.72,
-                                child: _WorkspacePanel(
-                                  lead: lead,
-                                  readOnly: _readOnly,
-                                  tabController: _tabController,
-                                  tabs: _tabs,
-                                  siteVisitCount: _siteVisits.length,
-                                  callMetrics: _callMetrics,
-                                  callLogs: _callLogs,
-                                  siteVisits: _siteVisits,
-                                  onLaunchContact: _launchContact,
-                                  onDetailAction: _handleDetailAction,
-                                  shouldLoadMiTab: _shouldLoadMiTab,
-                                ),
-                              ),
-                            ],
+                        if (!_readOnly)
+                          Positioned(
+                            right: 8,
+                            bottom: 8,
+                            child: EmployeeLeadQuickFab(
+                              lead: lead,
+                              onLaunchContact: _launchContact,
+                              onDetailAction: _handleDetailAction,
+                              onLeadUpdated: (updated) {
+                                AppStore.instance.replaceLead(updated);
+                                setState(() => lead = updated);
+                              },
+                              onActivityChanged: _loadActivityData,
+                            ),
                           ),
+                      ],
+                    ),
                   ),
                 ),
               ],
@@ -484,11 +568,13 @@ class _TopBar extends StatelessWidget {
   final String leadId;
   final VoidCallback onBack;
   final VoidCallback? onEdit;
+  final VoidCallback? onNavigate;
 
   const _TopBar({
     required this.leadId,
     required this.onBack,
     this.onEdit,
+    this.onNavigate,
   });
 
   @override
@@ -551,6 +637,12 @@ class _TopBar extends StatelessWidget {
               ],
             ),
           ),
+          if (onNavigate != null)
+            IconButton(
+              tooltip: 'Navigate in Google Maps',
+              onPressed: onNavigate,
+              icon: const Icon(Icons.directions_outlined),
+            ),
           if (onEdit != null)
             FilledButton.icon(
               onPressed: onEdit,
@@ -930,9 +1022,12 @@ class _WorkspacePanel extends StatelessWidget {
   final CallActivityMetrics callMetrics;
   final List<LeadCallLog> callLogs;
   final List<LandLeadSiteVisit> siteVisits;
+  final List<LandLeadMeeting> meetings;
+  final List<LandLeadLegalDocument> legalDocs;
   final Future<void> Function(String scheme) onLaunchContact;
   final ValueChanged<String> onDetailAction;
   final bool Function(int tabIndex) shouldLoadMiTab;
+  final Widget? guidanceBanner;
 
   const _WorkspacePanel({
     required this.lead,
@@ -943,9 +1038,12 @@ class _WorkspacePanel extends StatelessWidget {
     required this.callMetrics,
     required this.callLogs,
     required this.siteVisits,
+    this.meetings = const [],
+    this.legalDocs = const [],
     required this.onLaunchContact,
     required this.onDetailAction,
     required this.shouldLoadMiTab,
+    this.guidanceBanner,
   });
 
   @override
@@ -962,6 +1060,10 @@ class _WorkspacePanel extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            if (guidanceBanner != null) ...[
+              guidanceBanner!,
+              const SizedBox(height: 12),
+            ],
             if (!readOnly) ...[
               Text(
                 'QUICK ACTIONS',
@@ -1008,6 +1110,8 @@ class _WorkspacePanel extends StatelessWidget {
                   lead: lead,
                   callLogs: callLogs,
                   siteVisits: siteVisits,
+                  meetings: meetings,
+                  legalDocs: legalDocs,
                 ),
               ),
             ] else ...[
@@ -1048,6 +1152,8 @@ class _WorkspacePanel extends StatelessWidget {
                       lead: lead,
                       callLogs: callLogs,
                       siteVisits: siteVisits,
+                      meetings: meetings,
+                      legalDocs: legalDocs,
                     ),
                     _SitePhotosTab(lead: lead),
                     _LazyMarketIntelTab(
@@ -1310,16 +1416,26 @@ class _ActivityTimeline extends StatelessWidget {
   final LandLead lead;
   final List<LeadCallLog> callLogs;
   final List<LandLeadSiteVisit> siteVisits;
+  final List<LandLeadMeeting> meetings;
+  final List<LandLeadLegalDocument> legalDocs;
 
   const _ActivityTimeline({
     required this.lead,
     required this.callLogs,
     required this.siteVisits,
+    this.meetings = const [],
+    this.legalDocs = const [],
   });
 
   @override
   Widget build(BuildContext context) {
-    final events = <({DateTime at, String title, String subtitle, IconData icon})>[];
+    final events = <({
+      DateTime at,
+      String title,
+      String subtitle,
+      IconData icon,
+      String? audioUrl,
+    })>[];
 
     for (final log in callLogs) {
       final subtitleParts = [
@@ -1333,19 +1449,82 @@ class _ActivityTimeline extends StatelessWidget {
         title: '${log.direction.label} call',
         subtitle: subtitleParts.join('\n'),
         icon: log.outcome.icon,
+        audioUrl: null,
       ));
     }
 
     for (final visit in siteVisits) {
+      final approval = visit.visitType == LandLeadSiteVisitType.management
+          ? '\n${visit.approvalStatus.label}'
+          : '';
       events.add((
         at: visit.visitedAt,
         title: visit.visitType.label,
         subtitle: visit.loggedByName.isEmpty
-            ? _formatReceivedOn(visit.visitedAt)
-            : '${_formatReceivedOn(visit.visitedAt)}\n${visit.loggedByName}',
+            ? '${_formatReceivedOn(visit.visitedAt)}$approval'
+            : '${_formatReceivedOn(visit.visitedAt)}\n${visit.loggedByName}$approval',
         icon: visit.visitType == LandLeadSiteVisitType.management
             ? Icons.apartment_outlined
             : Icons.location_on_outlined,
+        audioUrl: null,
+      ));
+    }
+
+    for (final meeting in meetings) {
+      events.add((
+        at: meeting.metAt,
+        title: 'Meeting',
+        subtitle: [
+          _formatReceivedOn(meeting.metAt),
+          if (meeting.duration.isNotEmpty) '${meeting.duration} min',
+          if (meeting.notes.isNotEmpty) meeting.notes,
+          if (meeting.loggedByName.isNotEmpty) meeting.loggedByName,
+        ].join('\n'),
+        icon: Icons.groups_outlined,
+        audioUrl: null,
+      ));
+    }
+
+    for (final doc in legalDocs) {
+      events.add((
+        at: doc.verifiedAt,
+        title: 'Document — ${doc.fileName}',
+        subtitle: [
+          _formatReceivedOn(doc.verifiedAt),
+          if (doc.loggedByName.isNotEmpty) doc.loggedByName,
+        ].join('\n'),
+        icon: Icons.upload_file_outlined,
+        audioUrl: null,
+      ));
+    }
+
+    for (final url in lead.sitePhotoUrls) {
+      if (url.trim().isEmpty) continue;
+      events.add((
+        at: lead.addedOn,
+        title: 'Site photo',
+        subtitle: 'Attached to lead',
+        icon: Icons.photo_outlined,
+        audioUrl: null,
+      ));
+    }
+
+    // Parse tagged notes (voice / GPS) into timeline entries.
+    for (final line in lead.notes.split('\n')) {
+      final trimmed = line.trim();
+      if (trimmed.isEmpty) continue;
+      final isVoice = trimmed.contains('[Voice Note]');
+      final isGps = trimmed.contains('[GPS Check-in]');
+      if (!isVoice && !isGps) continue;
+      final audioUrl = isVoice
+          ? VoiceNoteService.audioUrlFromNotesLine(trimmed)
+          : null;
+      events.add((
+        at: lead.addedOn,
+        title: isVoice ? 'Voice note' : 'GPS check-in',
+        subtitle: trimmed,
+        icon: isVoice ? Icons.mic_none_rounded : Icons.my_location_rounded,
+        audioUrl: audioUrl,
       ));
     }
 
@@ -1371,9 +1550,10 @@ class _ActivityTimeline extends StatelessWidget {
     ];
 
     return ListView(
+      padding: const EdgeInsets.only(bottom: 72),
       children: [
         Text(
-          'History',
+          'Activity timeline',
           style: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w800,
@@ -1381,6 +1561,17 @@ class _ActivityTimeline extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 10),
+        if (events.isEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Text(
+              'No activity yet — use quick actions to log the first step.',
+              style: TextStyle(
+                fontSize: 12,
+                color: context.fomraTextSecondary,
+              ),
+            ),
+          ),
         for (final e in events)
           Padding(
             padding: const EdgeInsets.only(bottom: 10),
@@ -1406,6 +1597,15 @@ class _ActivityTimeline extends StatelessWidget {
                     ],
                   ),
                 ),
+                if (e.audioUrl != null && e.audioUrl!.isNotEmpty)
+                  IconButton(
+                    tooltip: 'Play voice note',
+                    icon: const Icon(Icons.play_circle_outline, size: 22),
+                    onPressed: () async {
+                      final player = AudioPlayer();
+                      await player.play(UrlSource(e.audioUrl!));
+                    },
+                  ),
               ],
             ),
           ),

@@ -4,6 +4,7 @@ import '../services/api_client.dart';
 import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/fomra_theme_context.dart';
+import 'ui/app_feedback.dart';
 
 /// Opens reset password as a compact dialog (e.g. from Settings).
 Future<void> showResetPasswordDialog(BuildContext context) {
@@ -121,24 +122,15 @@ class _ChangePasswordSectionState extends State<ChangePasswordSection> {
       await AuthService.instance.sendPasswordReset(_emailCtrl.text);
       if (!mounted) return;
       Navigator.of(context).pop();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'If that email has an account, a password reset link is on its way.',
-          ),
-          behavior: SnackBarBehavior.floating,
-        ),
+      AppFeedback.success(
+        context,
+        'If that email has an account, a password reset link is on its way.',
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            e is ApiException ? e.message : 'Could not send reset email.',
-          ),
-          backgroundColor: Theme.of(context).colorScheme.error,
-          behavior: SnackBarBehavior.floating,
-        ),
+      AppFeedback.error(
+        context,
+        e is ApiException ? e.message : 'Could not send reset email.',
       );
     } finally {
       if (mounted) setState(() => _sending = false);

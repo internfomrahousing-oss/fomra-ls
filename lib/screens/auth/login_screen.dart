@@ -6,6 +6,7 @@ import '../../theme/app_theme.dart';
 import '../../theme/fomra_input.dart';
 import '../../theme/fomra_layout.dart';
 import '../../theme/fomra_theme_context.dart';
+import '../../widgets/ui/app_feedback.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -112,23 +113,16 @@ class _LoginScreenState extends State<LoginScreen> {
                         if (!ctx.mounted) return;
                         Navigator.pop(ctx);
                         if (!mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                                'If that email has an account, a reset link is on its way.'),
-                            behavior: SnackBarBehavior.floating,
-                          ),
-                        );
+                        AppFeedback.success(context,
+                            'If that email has an account, a reset link is on its way.');
                       } catch (e) {
                         setLocal(() => sending = false);
                         if (!ctx.mounted) return;
-                        ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
-                          content: Text(e is ApiException
-                              ? e.message
-                              : 'Could not send reset email.'),
-                          backgroundColor: AppColors.error,
-                          behavior: SnackBarBehavior.floating,
-                        ));
+                        AppFeedback.error(
+                            ctx,
+                            e is ApiException
+                                ? e.message
+                                : 'Could not send reset email.');
                       }
                     },
               child: sending

@@ -25,6 +25,7 @@ import '../../widgets/patta_html_preview.dart';
 import '../../widgets/portal_home_sections.dart';
 import '../../widgets/portal_page_layout.dart';
 import '../../widgets/tngis_parcel_summary.dart';
+import '../../widgets/ui/app_feedback.dart';
 import '../../utils/tngis_parcel_lookup.dart';
 
 // â”€â”€ POI category definitions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -1288,15 +1289,12 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
         webOnlyWindowName: '_blank',
       );
       if (!opened && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not open ${source.isNotEmpty ? source : 'listing'} page.')),
-        );
+        AppFeedback.error(context,
+            'Could not open ${source.isNotEmpty ? source : 'listing'} page.');
       }
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not open the listing page.')),
-        );
+        AppFeedback.error(context, 'Could not open the listing page.');
       }
     }
   }
@@ -3505,15 +3503,11 @@ Future<void> _openPlaceOnGoogleMaps(
       webOnlyWindowName: '_blank',
     );
     if (!opened && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not open Google Maps')),
-      );
+      AppFeedback.error(context, 'Could not open Google Maps');
     }
   } catch (_) {
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not open Google Maps')),
-      );
+      AppFeedback.error(context, 'Could not open Google Maps');
     }
   }
 }

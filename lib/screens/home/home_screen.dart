@@ -17,8 +17,11 @@ import '../../services/app_store.dart';
 import '../../services/employee_service.dart';
 import '../../services/land_lead_service.dart';
 import '../../services/land_lead_site_visit_service.dart';
+import '../../services/notification_center_service.dart';
 import '../../services/notifications_service.dart';
 import '../../services/push_service.dart';
+import '../../services/role_access.dart';
+import '../../services/universal_search_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_layout.dart';
 import '../../theme/fomra_theme_context.dart';
@@ -26,7 +29,9 @@ import '../../models/app_notification.dart';
 import '../../models/land_lead_site_visit.dart';
 import '../../widgets/fomra_app_bar.dart';
 import '../../widgets/fomra_app_shell.dart';
+import '../../widgets/ui/app_feedback.dart';
 import '../../widgets/management_executive_dashboard.dart';
+import '../../widgets/offline_status_banner.dart';
 import '../../widgets/portal_home_sections.dart';
 import '../../widgets/ui/app_components.dart';
 
@@ -77,6 +82,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _loadNotifications();
     _loadPerformanceData();
     if (_isManagement) _loadPendingApprovals();
+    UniversalSearchService.warmDocumentIndex();
+    NotificationCenterService.syncAlerts().then((_) {
+      if (mounted) _loadNotifications();
+    });
     _notifChannel = NotificationsService.subscribe(
       audience: _notifAudience,
       onChange: _loadNotifications,
@@ -162,11 +171,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   // Don't surface lead notifications for leads management uploaded itself.
   bool _isManagementLeadNotification(AppNotification n) =>
-      n.type == NotificationType.lead &&
+      (n.type == NotificationType.lead ||
+          n.type == NotificationType.assignedLead) &&
       n.title.toLowerCase().contains('by management');
 
   bool _isNewLeadUploadNotification(AppNotification n) =>
-      n.type == NotificationType.lead &&
+      (n.type == NotificationType.lead ||
+          n.type == NotificationType.assignedLead) &&
       n.title.toLowerCase().contains('new lead uploaded');
 
   /// An assignment notification is only for the employees it was assigned to.
@@ -226,21 +237,36 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Color _notifTypeColor(NotificationType t) => switch (t) {
-        NotificationType.lead         => AppColors.info,
-        NotificationType.task         => AppColors.warning,
-        NotificationType.document     => AppColors.success,
-        NotificationType.alert        => AppColors.error,
+        NotificationType.lead ||
+        NotificationType.assignedLead =>
+          AppColors.info,
+        NotificationType.pendingLead => AppColors.warning,
+        NotificationType.pendingApproval => AppColors.secondary,
+        NotificationType.slaBreach ||
+        NotificationType.overdueTask ||
+        NotificationType.alert =>
+          AppColors.error,
+        NotificationType.reminder || NotificationType.siteVisit =>
+          AppColors.primary,
+        NotificationType.task => AppColors.warning,
+        NotificationType.document => AppColors.success,
         NotificationType.verification => AppColors.secondary,
-        NotificationType.siteVisit    => AppColors.primary,
       };
 
   IconData _notifTypeIcon(NotificationType t) => switch (t) {
-        NotificationType.lead         => Icons.location_on,
-        NotificationType.task         => Icons.task_alt,
-        NotificationType.document     => Icons.description,
-        NotificationType.alert        => Icons.warning_amber,
+        NotificationType.lead ||
+        NotificationType.assignedLead =>
+          Icons.person_add_alt_1_outlined,
+        NotificationType.pendingLead => Icons.hourglass_top_rounded,
+        NotificationType.pendingApproval => Icons.approval_outlined,
+        NotificationType.slaBreach => Icons.timer_off_outlined,
+        NotificationType.overdueTask => Icons.warning_amber_rounded,
+        NotificationType.reminder => Icons.notifications_active_outlined,
+        NotificationType.task => Icons.task_alt,
+        NotificationType.document => Icons.description,
+        NotificationType.alert => Icons.warning_amber,
         NotificationType.verification => Icons.verified,
-        NotificationType.siteVisit    => Icons.apartment_outlined,
+        NotificationType.siteVisit => Icons.apartment_outlined,
       };
 
   void _toggleNotifications() {
@@ -281,9 +307,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           NotificationsService.markAllRead(audience: _notifAudience)
               .catchError((_) {});
         },
+        onViewAll: () {
+          _hideNotifications();
+          Navigator.pushNamed(context, '/notifications');
+        },
         onOpen: (n) async {
           _hideNotifications();
-          if (n.type == NotificationType.siteVisit && _isManagement) {
+          if ((n.type == NotificationType.siteVisit ||
+                  n.type == NotificationType.pendingApproval) &&
+              _isManagement) {
             var visitId = n.referenceId;
             if (visitId == null && n.leadId != null) {
               visitId = await LandLeadSiteVisitService.findPendingManagementVisitId(
@@ -382,6 +414,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _approvePendingVisit(LandLeadSiteVisit visit) async {
+    if (!RoleAccess.canApprove) {
+      if (!mounted) return;
+      AppFeedback.error(context, RoleAccess.deniedMessage('approve visits'));
+      return;
+    }
     try {
       await LandLeadSiteVisitService.review(
         visitId: visit.id,
@@ -389,15 +426,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         notes: '',
       );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Management site visit approved')),
-      );
+      AppFeedback.success(context, 'Management site visit approved');
       await _loadPendingApprovals();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not approve visit: $e')),
-      );
+      AppFeedback.error(context, 'Could not approve visit: $e');
     }
   }
 
@@ -421,10 +454,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     ).then((saved) {
       if (saved is! LandLead || !mounted) return;
       AppStore.instance.addLead(saved);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Lead ${saved.leadId} saved.'),
-        backgroundColor: AppColors.success,
-      ));
+      AppFeedback.success(context, 'Lead ${saved.leadId} saved.');
     });
   }
 
@@ -492,6 +522,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           accent: AppColors.warning,
           onTap: () => _goTo('/dashboard'),
         ),
+      PortalQuickAction(
+        label: 'Business Modules',
+        icon: Icons.hub_outlined,
+        accent: AppColors.purple,
+        onTap: () => _goTo('/business-modules'),
+      ),
     ];
 
     return FomraAppShell(
@@ -537,7 +573,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         ],
       ),
       backgroundColor: context.fomraPageBg,
-      body: SingleChildScrollView(
+      body: Column(
+        children: [
+          const OfflineStatusBanner(),
+          Expanded(
+            child: SingleChildScrollView(
         padding: FomraLayout.pagePadding(context),
         child: portalHomeWidthConstraint(
           context,
@@ -652,6 +692,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             ],
           ),
         ),
+      ),
+          ),
+        ],
       ),
     );
   }
@@ -938,6 +981,7 @@ class _NotificationsDropdown extends StatelessWidget {
   final void Function(String id) onMarkRead;
   final VoidCallback onMarkAllRead;
   final void Function(AppNotification n) onOpen;
+  final VoidCallback? onViewAll;
   const _NotificationsDropdown({
     required this.link,
     required this.notifications,
@@ -945,6 +989,7 @@ class _NotificationsDropdown extends StatelessWidget {
     required this.onMarkRead,
     required this.onMarkAllRead,
     required this.onOpen,
+    this.onViewAll,
   });
 
   @override
@@ -1071,6 +1116,16 @@ class _NotificationsDropdown extends StatelessWidget {
                               },
                             ),
                     ),
+                    const Divider(height: 1),
+                    if (onViewAll != null)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(10, 4, 10, 8),
+                        child: TextButton.icon(
+                          onPressed: onViewAll,
+                          icon: const Icon(Icons.open_in_new_rounded, size: 16),
+                          label: const Text('Open Notification Center'),
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -1082,21 +1137,36 @@ class _NotificationsDropdown extends StatelessWidget {
   }
 
   Color _typeColor(NotificationType t) => switch (t) {
-        NotificationType.lead         => AppColors.info,
-        NotificationType.task         => AppColors.warning,
-        NotificationType.document     => AppColors.success,
-        NotificationType.alert        => AppColors.error,
+        NotificationType.lead ||
+        NotificationType.assignedLead =>
+          AppColors.info,
+        NotificationType.pendingLead => AppColors.warning,
+        NotificationType.pendingApproval => AppColors.secondary,
+        NotificationType.slaBreach ||
+        NotificationType.overdueTask ||
+        NotificationType.alert =>
+          AppColors.error,
+        NotificationType.reminder || NotificationType.siteVisit =>
+          AppColors.primary,
+        NotificationType.task => AppColors.warning,
+        NotificationType.document => AppColors.success,
         NotificationType.verification => AppColors.secondary,
-        NotificationType.siteVisit    => AppColors.primary,
       };
 
   IconData _typeIcon(NotificationType t) => switch (t) {
-        NotificationType.lead         => Icons.location_on,
-        NotificationType.task         => Icons.task_alt,
-        NotificationType.document     => Icons.description,
-        NotificationType.alert        => Icons.warning_amber,
+        NotificationType.lead ||
+        NotificationType.assignedLead =>
+          Icons.person_add_alt_1_outlined,
+        NotificationType.pendingLead => Icons.hourglass_top_rounded,
+        NotificationType.pendingApproval => Icons.approval_outlined,
+        NotificationType.slaBreach => Icons.timer_off_outlined,
+        NotificationType.overdueTask => Icons.warning_amber_rounded,
+        NotificationType.reminder => Icons.notifications_active_outlined,
+        NotificationType.task => Icons.task_alt,
+        NotificationType.document => Icons.description,
+        NotificationType.alert => Icons.warning_amber,
         NotificationType.verification => Icons.verified,
-        NotificationType.siteVisit    => Icons.apartment_outlined,
+        NotificationType.siteVisit => Icons.apartment_outlined,
       };
 }
 

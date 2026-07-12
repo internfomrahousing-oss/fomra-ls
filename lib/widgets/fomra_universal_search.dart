@@ -34,6 +34,9 @@ class _FomraUniversalSearchBarState extends State<FomraUniversalSearchBar> {
     super.initState();
     _focus.addListener(_onFocusChanged);
     AppStore.instance.addListener(_refreshResults);
+    UniversalSearchService.warmDocumentIndex().then((_) {
+      if (mounted) _refreshResults();
+    });
   }
 
   @override
@@ -214,6 +217,13 @@ class _FomraUniversalSearchBarState extends State<FomraUniversalSearchBar> {
         if (route != null && route.isNotEmpty) {
           Navigator.pushNamed(context, route);
         }
+      case UniversalSearchKind.document:
+        final route = hit.route;
+        if (route != null && route.isNotEmpty) {
+          Navigator.pushNamed(context, route);
+        } else {
+          Navigator.pushNamed(context, '/document-management');
+        }
       case UniversalSearchKind.contact:
         final kind = hit.contactKind;
         if (kind != null) {
@@ -228,6 +238,7 @@ class _FomraUniversalSearchBarState extends State<FomraUniversalSearchBar> {
         UniversalSearchKind.employee => Icons.badge_outlined,
         UniversalSearchKind.page => Icons.open_in_new_rounded,
         UniversalSearchKind.contact => Icons.contacts_outlined,
+        UniversalSearchKind.document => Icons.description_outlined,
       };
 
   Color _accentFor(UniversalSearchKind kind) => switch (kind) {
@@ -236,6 +247,7 @@ class _FomraUniversalSearchBarState extends State<FomraUniversalSearchBar> {
         UniversalSearchKind.employee => AppColors.secondary,
         UniversalSearchKind.page => AppColors.info,
         UniversalSearchKind.contact => AppColors.success,
+        UniversalSearchKind.document => AppColors.primary,
       };
 
   String _sectionLabel(UniversalSearchKind kind) => switch (kind) {
@@ -244,6 +256,7 @@ class _FomraUniversalSearchBarState extends State<FomraUniversalSearchBar> {
         UniversalSearchKind.employee => 'Team',
         UniversalSearchKind.page => 'Pages',
         UniversalSearchKind.contact => 'Directories',
+        UniversalSearchKind.document => 'Documents',
       };
 
   InputDecoration _headerDecoration(BuildContext context) {
@@ -256,7 +269,7 @@ class _FomraUniversalSearchBarState extends State<FomraUniversalSearchBar> {
       borderSide: BorderSide(color: borderColor),
     );
     return InputDecoration(
-      hintText: 'Search…',
+      hintText: 'Lead ID, owner, mobile, village, broker, survey, doc…',
       hintStyle: TextStyle(
         fontSize: 12,
         color: isDark

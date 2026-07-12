@@ -5,6 +5,7 @@ import '../../theme/app_theme.dart';
 import '../../theme/fomra_input.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../widgets/fomra_app_shell.dart';
+import '../../widgets/ui/app_feedback.dart';
 import '../../widgets/fomra_breadcrumb.dart';
 import '../../widgets/portal_home_sections.dart';
 import '../../widgets/portal_page_layout.dart';
@@ -48,24 +49,16 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
       }
       if (!mounted) return;
       Navigator.pop(context, profile);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(inviteError == null
-              ? 'Invitation sent to ${profile.email} to set their password.'
-              : 'Profile created, but the invite could not be sent: $inviteError'),
-          backgroundColor: inviteError == null ? null : AppColors.error,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      if (inviteError == null) {
+        AppFeedback.success(context,
+            'Invitation sent to ${profile.email} to set their password.');
+      } else {
+        AppFeedback.error(context,
+            'Profile created, but the invite could not be sent: $inviteError');
+      }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(e.toString().replaceFirst('Exception: ', '')),
-          backgroundColor: AppColors.error,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      AppFeedback.error(context, e.toString().replaceFirst('Exception: ', ''));
     } finally {
       if (mounted) setState(() => _saving = false);
     }

@@ -7,6 +7,7 @@ import '../../theme/app_theme.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../widgets/log_dialog_tabs.dart';
 import '../../widgets/separate_date_time_fields.dart';
+import '../../widgets/ui/app_feedback.dart';
 
 class CallsLogDialog extends StatefulWidget {
   final String leadId;
@@ -76,15 +77,11 @@ class _CallsLogDialogState extends State<CallsLogDialog> {
     final duration = _durationCtrl.text.trim();
     final details = _detailsCtrl.text.trim();
     if (_outcome == CallOutcome.answered && duration.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter call duration for answered calls')),
-      );
+      AppFeedback.warning(context, 'Enter call duration for answered calls');
       return;
     }
     if (_outcome == CallOutcome.answered && details.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter call details')),
-      );
+      AppFeedback.warning(context, 'Enter call details');
       return;
     }
     if (_saving) return;
@@ -100,15 +97,11 @@ class _CallsLogDialogState extends State<CallsLogDialog> {
         outcome: _outcome,
       );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Call logged')),
-      );
+      AppFeedback.success(context, 'Call logged');
       Navigator.pop(context);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not save call: $e')),
-        );
+        AppFeedback.error(context, 'Could not save call: $e');
       }
     } finally {
       if (mounted) setState(() => _saving = false);

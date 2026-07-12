@@ -4,12 +4,14 @@ import '../../services/app_store.dart';
 import '../../services/auth_service.dart';
 import '../../services/employee_service.dart';
 import '../../services/notifications_service.dart';
+import '../../services/offline_sync_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_input.dart';
 import '../../theme/fomra_layout.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../widgets/fomra_app_bar.dart';
 import '../../widgets/fomra_app_shell.dart';
+import '../../widgets/ui/app_feedback.dart';
 import '../../widgets/portal_home_sections.dart';
 import '../../widgets/portal_page_layout.dart';
 import '../../widgets/ui/app_components.dart';
@@ -213,13 +215,28 @@ Future<void> showCreateTaskSheet(
       initialTitle: title,
       initialDescription: description,
       linkModule: leadId != null ? 'land_lead:$leadId' : null,
-      onSave: (task) {
-        sharedTasks.insert(0, task);
-        notifyTaskCreated(task);
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Task "${task.title}" created')),
+      onSave: (task) async {
+        final sync = OfflineSyncService.instance;
+        if (!sync.isOnline) {
+          await sync.enqueueCreateTask(
+            title: task.title,
+            description: task.description,
+            module: task.module,
+            assignedTo: task.assignedTo,
+            dueDate: task.dueDate,
+            priority: task.priority,
           );
+        } else {
+          sharedTasks.insert(0, task);
+          notifyTaskCreated(task);
+        }
+        if (context.mounted) {
+          if (sync.isOnline) {
+            AppFeedback.success(context, 'Task "${task.title}" created');
+          } else {
+            AppFeedback.warning(context,
+                'Task "${task.title}" saved offline — will sync later');
+          }
         }
       },
     ),

@@ -8,7 +8,7 @@ class NotificationsService {
   /// Newest notifications for an audience ('management' | 'employee').
   static Future<List<AppNotification>> getAll({
     String audience = 'management',
-    int limit = 50,
+    int limit = 100,
   }) async {
     final rows = await _db
         .from('notifications')

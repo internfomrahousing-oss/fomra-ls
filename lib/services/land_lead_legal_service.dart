@@ -3,7 +3,9 @@ import 'dart:typed_data';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/land_lead_legal_document.dart';
+import 'audit_log_service.dart';
 import 'auth_service.dart';
+import 'document_index_service.dart';
 
 class LandLeadLegalService {
   static SupabaseClient get _db => Supabase.instance.client;
@@ -15,6 +17,20 @@ class LandLeadLegalService {
         .select()
         .eq('lead_id', leadId)
         .order('verified_at', ascending: false);
+    return (rows as List)
+        .map((r) => LandLeadLegalDocument.fromJson(r as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Central repository: all legal/survey documents across leads.
+  static Future<List<LandLeadLegalDocument>> getAllDocuments({
+    int limit = 2000,
+  }) async {
+    final rows = await _db
+        .from('land_lead_legal_documents')
+        .select()
+        .order('verified_at', ascending: false)
+        .limit(limit);
     return (rows as List)
         .map((r) => LandLeadLegalDocument.fromJson(r as Map<String, dynamic>))
         .toList();

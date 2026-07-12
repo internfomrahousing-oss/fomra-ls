@@ -8,6 +8,7 @@ import '../../theme/app_theme.dart';
 import '../../theme/fomra_layout.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../widgets/employee_management_ui.dart';
+import '../../widgets/ui/app_feedback.dart';
 import '../../widgets/portal_home_sections.dart';
 import '../../widgets/portal_page_layout.dart';
 import '../../widgets/ui/app_components.dart';
@@ -94,17 +95,11 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
     try {
       await EmployeeService.provisionLogin(employee.email);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('${employee.email} can now log in with fomra@2024'),
-        behavior: SnackBarBehavior.floating,
-      ));
+      AppFeedback.success(
+          context, '${employee.email} can now log in with fomra@2024');
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(e.toString().replaceFirst('Exception: ', '')),
-        backgroundColor: AppColors.error,
-        behavior: SnackBarBehavior.floating,
-      ));
+      AppFeedback.error(context, e.toString().replaceFirst('Exception: ', ''));
     }
   }
 
@@ -135,17 +130,10 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
     try {
       await EmployeeService.inviteEmployee(employee.email);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Invitation re-sent to ${employee.email}'),
-        behavior: SnackBarBehavior.floating,
-      ));
+      AppFeedback.success(context, 'Invitation re-sent to ${employee.email}');
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(e.toString().replaceFirst('Exception: ', '')),
-        backgroundColor: AppColors.error,
-        behavior: SnackBarBehavior.floating,
-      ));
+      AppFeedback.error(context, e.toString().replaceFirst('Exception: ', ''));
     }
   }
 
@@ -177,21 +165,10 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
       await EmployeeService.removeAccess(employee.id);
       AppStore.instance.removeEmployee(employee.id);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Access removed for ${employee.fullName}'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      AppFeedback.success(context, 'Access removed for ${employee.fullName}');
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(e.toString().replaceFirst('Exception: ', '')),
-          backgroundColor: AppColors.error,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      AppFeedback.error(context, e.toString().replaceFirst('Exception: ', ''));
     }
   }
 

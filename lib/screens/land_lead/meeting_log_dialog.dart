@@ -7,6 +7,7 @@ import '../../theme/app_theme.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../widgets/log_dialog_tabs.dart';
 import '../../widgets/separate_date_time_fields.dart';
+import '../../widgets/ui/app_feedback.dart';
 
 class MeetingLogDialog extends StatefulWidget {
   final String leadId;
@@ -93,9 +94,7 @@ class _MeetingLogDialogState extends State<MeetingLogDialog> {
   Future<void> _save() async {
     final duration = _durationCtrl.text.trim();
     if (duration.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter meeting duration')),
-      );
+      AppFeedback.warning(context, 'Enter meeting duration');
       return;
     }
     if (_saving) return;
@@ -110,15 +109,11 @@ class _MeetingLogDialogState extends State<MeetingLogDialog> {
       );
       if (!mounted) return;
       widget.onMeetingSaved?.call();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Meeting logged')),
-      );
+      AppFeedback.success(context, 'Meeting logged');
       Navigator.pop(context);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not save meeting: $e')),
-        );
+        AppFeedback.error(context, 'Could not save meeting: $e');
       }
     } finally {
       if (mounted) setState(() => _saving = false);

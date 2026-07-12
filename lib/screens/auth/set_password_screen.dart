@@ -5,6 +5,7 @@ import '../../services/auth_link.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../widgets/ui/app_components.dart';
+import '../../widgets/ui/app_feedback.dart';
 
 /// Landing screen for the "set your password" link in an invite email.
 ///
@@ -68,11 +69,7 @@ class _SetPasswordScreenState extends State<SetPasswordScreen> {
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     if (_pwCtrl.text.trim() != _confirmCtrl.text.trim()) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Passwords do not match.'),
-        backgroundColor: AppColors.error,
-        behavior: SnackBarBehavior.floating,
-      ));
+      AppFeedback.error(context, 'Passwords do not match.');
       return;
     }
     setState(() => _saving = true);
@@ -83,19 +80,12 @@ class _SetPasswordScreenState extends State<SetPasswordScreen> {
       // Sign out so they log in fresh with the password they just chose.
       await Supabase.instance.client.auth.signOut();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Password set. Please log in.'),
-        behavior: SnackBarBehavior.floating,
-      ));
+      AppFeedback.success(context, 'Password set. Please log in.');
       Navigator.of(context).pushNamedAndRemoveUntil('/login', (_) => false);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(
-            'Could not set password: ${e.toString().replaceFirst('Exception: ', '')}'),
-        backgroundColor: AppColors.error,
-        behavior: SnackBarBehavior.floating,
-      ));
+      AppFeedback.error(context,
+          'Could not set password: ${e.toString().replaceFirst('Exception: ', '')}');
     } finally {
       if (mounted) setState(() => _saving = false);
     }

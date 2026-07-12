@@ -48,9 +48,11 @@
 		</dict>
 	</dict>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>FomraLS needs your location to show nearby POIs, competitor projects, and auto-fill land records.</string>
+	<string>FomraLS needs live GPS to verify field locations for land records. Manual pins are not accepted.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>FomraLS needs your location to show nearby POIs, competitor projects, and auto-fill land records.</string>
+	<string>FomraLS needs live GPS to verify field locations for land records. Manual pins are not accepted.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>FomraLS needs the microphone to record voice notes on leads. Audio is stored as files and is not converted to text.</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>

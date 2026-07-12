@@ -6,6 +6,7 @@ import '../../services/legal_verification_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../widgets/ui/app_components.dart';
+import '../../widgets/ui/app_feedback.dart';
 import '../../widgets/fomra_app_bar.dart';
 import '../../widgets/fomra_app_shell.dart';
 
@@ -139,18 +140,12 @@ class _LegalVerificationScreenState extends State<LegalVerificationScreen> {
       await LegalVerificationService.save(lead.leadId, data);
       _loadedReviews[lead.leadId] = {'lead_id': lead.leadId, ...data};
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Legal review saved.'),
-          backgroundColor: AppColors.success,
-        ));
+        AppFeedback.success(context, 'Legal review saved.');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Save failed: $e'),
-          backgroundColor: AppColors.error,
-          duration: const Duration(seconds: 5),
-        ));
+        AppFeedback.error(context, 'Save failed: $e',
+            duration: const Duration(seconds: 5));
       }
     } finally {
       if (mounted) setState(() => _reviewSaving = false);

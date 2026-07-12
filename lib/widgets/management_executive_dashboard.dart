@@ -4,6 +4,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
 import '../analytics/management_bi_metrics.dart';
+import '../analytics/management_intelligence.dart';
 import '../models/app_notification.dart';
 import '../models/land_lead.dart';
 import '../services/dashboard_layout_prefs.dart';
@@ -12,6 +13,7 @@ import '../theme/app_theme.dart';
 import '../theme/fomra_theme_context.dart';
 import '../utils/lead_location_parser.dart';
 import 'management_bi_sections.dart';
+import 'management_intelligence_sections.dart';
 import 'portal_home_sections.dart';
 import 'terms_deal_selector.dart';
 import 'ui/app_components.dart';
@@ -164,6 +166,12 @@ class _ManagementExecutiveDashboardState
 
   static const _widgetTitles = {
     'pipeline': 'Pipeline Dashboard',
+    'reminders': 'Automatic Reminders',
+    'escalations': 'Automatic Escalations',
+    'approvals': 'Approval Queue',
+    'recommendations': 'AI Recommendations',
+    'predictive': 'Predictive Analytics',
+    'duplicates': 'Duplicate Detection',
     'funnel': 'Conversion Funnel',
     'ageing': 'Lead Ageing',
     'bottlenecks': 'Bottlenecks',
@@ -219,10 +227,43 @@ class _ManagementExecutiveDashboardState
     });
   }
 
-  Widget _buildWidget(String id, ManagementBiSnapshot snap, bool isDesktop) {
+  Widget _buildWidget(
+    String id,
+    ManagementBiSnapshot snap,
+    ManagementIntelligenceSnapshot intel,
+    bool isDesktop,
+  ) {
     switch (id) {
       case 'pipeline':
         return BiPipelineSection(summary: snap.pipeline);
+      case 'reminders':
+        return IntelRemindersSection(
+          items: intel.reminders,
+          onViewLead: widget.onViewLead,
+        );
+      case 'escalations':
+        return IntelEscalationsSection(
+          items: intel.escalations,
+          onViewLead: widget.onViewLead,
+        );
+      case 'approvals':
+        return IntelApprovalQueueSection(
+          items: intel.approvalQueue,
+          onViewLead: widget.onViewLead,
+        );
+      case 'recommendations':
+        return IntelSuggestionsSection(
+          suggestions: intel.bestSuggestions,
+          recommendations: intel.recommendations,
+          onViewLead: widget.onViewLead,
+        );
+      case 'predictive':
+        return IntelPredictiveSection(data: intel.predictive);
+      case 'duplicates':
+        return IntelDuplicatesSection(
+          groups: intel.duplicates,
+          onViewLead: widget.onViewLead,
+        );
       case 'funnel':
         return BiFunnelSection(rows: snap.funnel);
       case 'ageing':
@@ -286,6 +327,10 @@ class _ManagementExecutiveDashboardState
       leads: widget.leads,
       activity: _activity,
     );
+    final intel = ManagementIntelligence.build(
+      leads: widget.leads,
+      activity: _activity,
+    );
     final gap = AppSpacing.md;
     final isDesktop = MediaQuery.sizeOf(context).width >= 1024;
 
@@ -322,7 +367,7 @@ class _ManagementExecutiveDashboardState
         else
           for (var i = 0; i < _order.length; i++) ...[
             if (i > 0) SizedBox(height: gap),
-            _buildWidget(_order[i], snap, isDesktop),
+            _buildWidget(_order[i], snap, intel, isDesktop),
           ],
       ],
     );
@@ -439,7 +484,6 @@ class _DashboardCard extends StatelessWidget {
   final String? subtitle;
   final IconData? icon;
   final Color? borderColor;
-  final Color? topAccent;
 
   const _DashboardCard({
     required this.child,
@@ -447,7 +491,6 @@ class _DashboardCard extends StatelessWidget {
     this.subtitle,
     this.icon,
     this.borderColor,
-    this.topAccent,
   });
 
   @override
@@ -461,22 +504,6 @@ class _DashboardCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (topAccent != null)
-            Container(
-              height: 2.5,
-              margin: const EdgeInsets.only(bottom: AppSpacing.md),
-              decoration: BoxDecoration(
-                color: topAccent,
-                borderRadius: BorderRadius.circular(999),
-                boxShadow: [
-                  BoxShadow(
-                    color: topAccent!.withValues(alpha: 0.35),
-                    blurRadius: 6,
-                    offset: const Offset(0, 1),
-                  ),
-                ],
-              ),
-            ),
           if (title != null && icon != null) ...[
             SectionHeader(
               title: title!,
@@ -723,7 +750,6 @@ class _CompactKpiCard extends StatelessWidget {
         def.allLeads.where((l) => _isSameMonth(l.addedOn, now)).length;
 
     return _DashboardCard(
-      topAccent: def.accent,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1302,6 +1328,18 @@ class _RecentActivitiesCard extends StatelessWidget {
     }
     return switch (n.type) {
       NotificationType.lead => (Icons.location_on_outlined, AppColors.info),
+      NotificationType.assignedLead =>
+        (Icons.assignment_ind_outlined, AppColors.info),
+      NotificationType.pendingLead =>
+        (Icons.hourglass_bottom_outlined, AppColors.warning),
+      NotificationType.pendingApproval =>
+        (Icons.approval_outlined, AppColors.warning),
+      NotificationType.slaBreach =>
+        (Icons.timer_off_outlined, AppColors.error),
+      NotificationType.overdueTask =>
+        (Icons.assignment_late_outlined, AppColors.error),
+      NotificationType.reminder =>
+        (Icons.notifications_active_outlined, AppColors.info),
       NotificationType.task => (Icons.task_alt_outlined, AppColors.warning),
       NotificationType.document =>
         (Icons.description_outlined, AppColors.success),
@@ -1486,7 +1524,6 @@ class _LeaderboardRow extends StatelessWidget {
         .join();
 
     return _DashboardCard(
-      borderColor: isTop ? AppColors.accentLight.withValues(alpha: 0.6) : null,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

@@ -6,6 +6,7 @@ import '../../services/land_lead_site_visit_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../widgets/separate_date_time_fields.dart';
+import '../../widgets/ui/app_feedback.dart';
 
 class SiteVisitDialog extends StatefulWidget {
   final String leadId;
@@ -106,21 +107,16 @@ class _SiteVisitDialogState extends State<SiteVisitDialog> {
       );
       if (!mounted) return;
       widget.onVisitDone?.call();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            _isManagement && !AuthService.instance.isManagement
-                ? 'Management site visit sent for approval'
-                : _successMessage,
-          ),
-        ),
+      AppFeedback.success(
+        context,
+        _isManagement && !AuthService.instance.isManagement
+            ? 'Management site visit sent for approval'
+            : _successMessage,
       );
       Navigator.pop(context);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not save site visit: $e')),
-        );
+        AppFeedback.error(context, 'Could not save site visit: $e');
       }
     } finally {
       if (mounted) setState(() => _saving = false);

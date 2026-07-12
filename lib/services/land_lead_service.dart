@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/land_lead.dart';
 import '../models/lead_drop_reason.dart';
 import '../utils/image_compressor.dart';
+import 'audit_log_service.dart';
 import 'auth_service.dart';
 
 typedef LeadSaveProgressCallback = void Function(String message);
@@ -83,12 +84,21 @@ class LandLeadService {
       }).eq('id', leadId);
     }
 
-    return _fromRow({
+    final created = _fromRow({
       ...row,
       'site_photo_url': sitePhotoUrl,
       'site_photo_urls': sitePhotoUrls,
       'sub_division': lead.subDivision,
     });
+    await AuditLogService.log(
+      action: 'create',
+      entityType: 'lead',
+      entityId: created.leadId,
+      field: 'lead',
+      oldValue: '',
+      newValue: created.ownerName,
+    );
+    return created;
   }
 
   static Future<String> _uploadSitePhoto(
@@ -121,9 +131,21 @@ class LandLeadService {
       'created_by_role': 'management',
       'updated_at': DateTime.now().toUtc().toIso8601String(),
     }).eq('id', leadId);
+    await AuditLogService.log(
+      action: 'assign',
+      entityType: 'lead',
+      entityId: leadId,
+      field: 'created_by_name',
+      oldValue: '',
+      newValue: employeeName,
+    );
   }
 
-  static Future<void> updateStatus(String leadId, LeadStatus status) async {
+  static Future<void> updateStatus(
+    String leadId,
+    LeadStatus status, {
+    LeadStatus? previousStatus,
+  }) async {
     final payload = <String, dynamic>{
       'status': status.name,
       'updated_at': DateTime.now().toUtc().toIso8601String(),
@@ -140,6 +162,14 @@ class LandLeadService {
     if ((rows as List).isEmpty) {
       throw Exception('Lead $leadId was not updated (not found or blocked)');
     }
+    await AuditLogService.log(
+      action: 'update',
+      entityType: 'lead',
+      entityId: leadId,
+      field: 'status',
+      oldValue: previousStatus?.name ?? '',
+      newValue: status.name,
+    );
   }
 
   static Future<void> markDropped({
@@ -153,6 +183,14 @@ class LandLeadService {
       'drop_notes': notes.trim(),
       'updated_at': DateTime.now().toUtc().toIso8601String(),
     }).eq('id', leadId);
+    await AuditLogService.log(
+      action: 'update',
+      entityType: 'lead',
+      entityId: leadId,
+      field: 'status',
+      oldValue: '',
+      newValue: 'dropped:${reason.dbValue}',
+    );
   }
 
   static Future<void> updateSurveySub(
@@ -239,15 +277,32 @@ class LandLeadService {
         .select()
         .single();
 
-    return _fromRow({
+    final updated = _fromRow({
       ...row,
       'site_photo_url': sitePhotoUrl,
       'site_photo_urls': sitePhotoUrls,
     });
+    await AuditLogService.log(
+      action: 'update',
+      entityType: 'lead',
+      entityId: updated.leadId,
+      field: 'lead',
+      oldValue: '',
+      newValue: updated.ownerName,
+    );
+    return updated;
   }
 
   static Future<void> delete(String leadId) async {
     await _db.from('land_leads').delete().eq('id', leadId);
+    await AuditLogService.log(
+      action: 'delete',
+      entityType: 'lead',
+      entityId: leadId,
+      field: 'lead',
+      oldValue: leadId,
+      newValue: '',
+    );
   }
 
   static LandLead _fromRow(Map<String, dynamic> r) {

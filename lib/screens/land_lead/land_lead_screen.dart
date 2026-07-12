@@ -3,14 +3,19 @@ import '../../models/land_lead.dart';
 import '../../models/employee_profile.dart';
 import '../../services/app_store.dart';
 import '../../services/auth_service.dart';
+import '../../services/document_index_service.dart';
 import '../../services/employee_service.dart';
 import '../../services/land_lead_service.dart';
 import '../../services/notifications_service.dart';
+import '../../services/role_access.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_layout.dart';
 import '../../theme/fomra_theme_context.dart';
+import '../../utils/lead_location_parser.dart';
+import '../../utils/legal_document_catalog.dart';
 import '../../widgets/fomra_app_bar.dart';
 import '../../widgets/fomra_app_shell.dart';
+import '../../widgets/ui/app_feedback.dart';
 import '../../widgets/land_workspace_ui.dart';
 import '../../widgets/portal_home_sections.dart';
 import '../../widgets/portal_page_layout.dart';
@@ -44,6 +49,7 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
     AppStore.instance.addListener(_onStoreUpdate);
     _loadLeads();
     if (AuthService.instance.isManagement) _loadEmployees();
+    DocumentIndexService.instance.ensureLoaded();
   }
 
   bool get _isManagement => AuthService.instance.isManagement;
@@ -97,10 +103,8 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
     if (_selectedLeadIds.isEmpty) return;
     final names = _assignableNamesFor(_selectedLeadIds);
     if (names.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('No other employees to assign these lead(s) to.'),
-        behavior: SnackBarBehavior.floating,
-      ));
+      AppFeedback.info(
+          context, 'No other employees to assign these lead(s) to.');
       return;
     }
 
@@ -190,7 +194,7 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
     // One targeted notification for the assignee.
     NotificationsService.create(
       audience: 'employee',
-      type: 'lead',
+      type: 'assigned_lead',
       title: 'Leads assigned to you',
       leadId: leadIds.length == 1 ? leadIds.first : null,
       message: '${leadIds.length} lead(s) — assigned to $name',
@@ -201,10 +205,8 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
       _selectedLeadIds.clear();
     });
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('${leadIds.length} lead(s) assigned to $name'),
-        behavior: SnackBarBehavior.floating,
-      ));
+      AppFeedback.success(
+          context, '${leadIds.length} lead(s) assigned to $name');
     }
   }
 
@@ -258,7 +260,14 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
             l.ownerName.toLowerCase().contains(q) ||
             l.location.toLowerCase().contains(q) ||
             l.surveyNumber.toLowerCase().contains(q) ||
-            l.leadId.toLowerCase().contains(q);
+            l.leadId.toLowerCase().contains(q) ||
+            l.contactDetails.toLowerCase().contains(q) ||
+            l.village.toLowerCase().contains(q) ||
+            l.taluk.toLowerCase().contains(q) ||
+            l.district.toLowerCase().contains(q) ||
+            l.brokerName.toLowerCase().contains(q) ||
+            l.brokerContact.toLowerCase().contains(q) ||
+            _docNumberMatches(l.leadId, q);
         final matchLandType = _filters.landTypes.isEmpty ||
             _filters.landTypes.contains(l.landType);
         final matchSource = _filters.sources.isEmpty ||
@@ -275,6 +284,24 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
             !added.isBefore(_filters.createdFrom!);
         final matchTo = _filters.createdTo == null ||
             !added.isAfter(_filters.createdTo!);
+        final matchDistrict = _filters.district == null ||
+            l.district.trim().toLowerCase() ==
+                _filters.district!.trim().toLowerCase();
+        final matchTaluk = _filters.taluk == null ||
+            l.taluk.trim().toLowerCase() ==
+                _filters.taluk!.trim().toLowerCase();
+        final matchVillage = _filters.village == null ||
+            l.village.trim().toLowerCase() ==
+                _filters.village!.trim().toLowerCase();
+        final matchBroker = _filters.broker == null ||
+            l.brokerName.trim().toLowerCase() ==
+                _filters.broker!.trim().toLowerCase();
+        final acres = _leadAcres(l);
+        final matchAcresMin =
+            _filters.acresMin == null || acres >= _filters.acresMin!;
+        final matchAcresMax =
+            _filters.acresMax == null || acres <= _filters.acresMax!;
+        final matchPending = _matchesPending(l, _filters.pendingStatus);
         return matchStatus &&
             matchSearch &&
             matchLandType &&
@@ -282,8 +309,49 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
             matchPriority &&
             matchEmployee &&
             matchFrom &&
-            matchTo;
+            matchTo &&
+            matchDistrict &&
+            matchTaluk &&
+            matchVillage &&
+            matchBroker &&
+            matchAcresMin &&
+            matchAcresMax &&
+            matchPending;
       }).toList();
+
+  double _leadAcres(LandLead lead) {
+    final sqft = parseLandExtentSqft(lead.landExtent);
+    if (sqft == null || sqft <= 0) return 0;
+    return sqft / 43560;
+  }
+
+  bool _docNumberMatches(String leadId, String q) {
+    for (final d in DocumentIndexService.instance.documents) {
+      if (d.leadId != leadId) continue;
+      if (d.fileName.toLowerCase().contains(q)) return true;
+      final num = LegalDocumentCatalog.extractDocumentNumber(d.fileName);
+      if (num != null && num.toLowerCase().contains(q)) return true;
+    }
+    return false;
+  }
+
+  bool _matchesPending(LandLead l, String? pending) {
+    if (pending == null || pending.isEmpty) return true;
+    final age = DateTime.now().difference(l.addedOn).inDays;
+    return switch (pending) {
+      'meeting' => l.status == LeadStatus.prospectMeetingPending,
+      'negotiation' => l.status == LeadStatus.negotiation,
+      'survey' =>
+        l.status == LeadStatus.prospectMeetingCompleted &&
+            l.surveyNumber.trim().isEmpty,
+      'legal' => l.status == LeadStatus.legal,
+      'overdue' =>
+        age >= 14 &&
+            l.status != LeadStatus.signed &&
+            l.status != LeadStatus.dropped,
+      _ => true,
+    };
+  }
 
   int get _activeFilterCount => _filters.activeCount;
 
@@ -304,6 +372,13 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
       _filters.assignedEmployee = next.assignedEmployee;
       _filters.createdFrom = next.createdFrom;
       _filters.createdTo = next.createdTo;
+      _filters.district = next.district;
+      _filters.taluk = next.taluk;
+      _filters.village = next.village;
+      _filters.broker = next.broker;
+      _filters.acresMin = next.acresMin;
+      _filters.acresMax = next.acresMax;
+      _filters.pendingStatus = next.pendingStatus;
     });
   }
 
@@ -311,12 +386,12 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
   Widget build(BuildContext context) {
     final body = _buildScrollableBody();
 
-    // Employees get the "+" Add Lead FAB; management only views leads.
-    final fab = _isManagement
-        ? null
-        : LandWorkspaceSpeedDial(
+    // Employees with create access get the "+" Add Lead FAB.
+    final fab = (!_isManagement && RoleAccess.canCreate)
+        ? LandWorkspaceSpeedDial(
             onAddLead: _openAddLead,
-          );
+          )
+        : null;
 
     if (widget.isTab) {
       return Scaffold(
@@ -578,7 +653,7 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
                   ),
                   child: Dismissible(
                     key: ValueKey(lead.leadId),
-                    direction: _selectMode
+                    direction: (_selectMode || !RoleAccess.canDelete)
                         ? DismissDirection.none
                         : DismissDirection.endToStart,
                     confirmDismiss: (_) => _confirmAndDelete(lead),
@@ -606,10 +681,12 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
                           : null,
                       onScheduleMeeting: () => _openMeetingForLead(lead),
                       onViewMap: () => _openLeadsMapFor(lead),
-                      onEdit: _isManagement
+                      onEdit: (_isManagement || !RoleAccess.canEdit)
                           ? null
                           : () => _editLead(lead),
-                      onDelete: () => _confirmAndDelete(lead),
+                      onDelete: RoleAccess.canDelete
+                          ? () => _confirmAndDelete(lead)
+                          : null,
                     ),
                   ),
                 );
@@ -643,6 +720,12 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
   }
 
   Future<bool> _confirmAndDelete(LandLead lead) async {
+    if (!RoleAccess.canDelete) {
+      if (mounted) {
+        AppFeedback.error(context, RoleAccess.deniedMessage('delete leads'));
+      }
+      return false;
+    }
     final confirmed = await showDialog<bool>(
           context: context,
           builder: (_) => AlertDialog(
@@ -673,17 +756,19 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
       return true;
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Delete failed: ${_errMsg(e)}'),
-          backgroundColor: AppColors.error,
-        ));
+        AppFeedback.error(context, 'Delete failed: ${_errMsg(e)}');
       }
       return false;
     }
   }
 
   Future<void> _openAddLead() async {
-    if (_isManagement) return;
+    if (_isManagement || !RoleAccess.canCreate) {
+      if (mounted && !RoleAccess.canCreate) {
+        AppFeedback.error(context, RoleAccess.deniedMessage('create leads'));
+      }
+      return;
+    }
     final saved = await Navigator.push<LandLead>(
       context,
       MaterialPageRoute(builder: (_) => const AddLeadScreen()),
@@ -692,10 +777,7 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
 
     AppStore.instance.addLead(saved);
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Lead ${saved.leadId} saved.'),
-        backgroundColor: AppColors.success,
-      ));
+      AppFeedback.success(context, 'Lead ${saved.leadId} saved.');
     }
   }
 
@@ -723,10 +805,8 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
   Future<void> _assignSingleLead(LandLead lead) async {
     final names = _assignableNamesFor({lead.leadId});
     if (names.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('No other employees to assign this lead to.'),
-        behavior: SnackBarBehavior.floating,
-      ));
+      AppFeedback.info(
+          context, 'No other employees to assign this lead to.');
       return;
     }
 
@@ -818,7 +898,12 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
   }
 
   Future<void> _editLead(LandLead lead) async {
-    if (_isManagement) return;
+    if (_isManagement || !RoleAccess.canEdit) {
+      if (mounted && !RoleAccess.canEdit) {
+        AppFeedback.error(context, RoleAccess.deniedMessage('edit leads'));
+      }
+      return;
+    }
     final saved = await Navigator.push<LandLead>(
       context,
       MaterialPageRoute(
@@ -827,10 +912,7 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
     if (saved == null) return;
     AppStore.instance.replaceLead(saved);
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Lead ${saved.leadId} updated.'),
-        backgroundColor: AppColors.success,
-      ));
+      AppFeedback.success(context, 'Lead ${saved.leadId} updated.');
     }
   }
 
@@ -1519,10 +1601,11 @@ class _LeadHoverActions extends StatelessWidget {
             const PopupMenuItem(value: 'map', child: Text('View Map')),
             if (onEdit != null)
               const PopupMenuItem(value: 'edit', child: Text('Edit')),
-            const PopupMenuItem(
-              value: 'delete',
-              child: Text('Delete', style: TextStyle(color: AppColors.error)),
-            ),
+            if (onDelete != null)
+              const PopupMenuItem(
+                value: 'delete',
+                child: Text('Delete', style: TextStyle(color: AppColors.error)),
+              ),
           ],
         ),
       ],

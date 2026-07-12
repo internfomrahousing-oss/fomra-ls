@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 
 import '../../models/land_lead_site_visit.dart';
 import '../../services/land_lead_site_visit_service.dart';
+import '../../services/role_access.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../widgets/separate_date_time_fields.dart';
+import '../../widgets/ui/app_feedback.dart';
 
 Future<bool?> showManagementVisitReviewDialog(
   BuildContext context, {
@@ -76,6 +78,11 @@ class _ManagementVisitReviewDialogState
 
   Future<void> _submit(SiteVisitApprovalStatus status) async {
     if (_saving || _visit == null) return;
+    if (!RoleAccess.canApprove) {
+      if (!mounted) return;
+      AppFeedback.error(context, RoleAccess.deniedMessage('approve visits'));
+      return;
+    }
     setState(() => _saving = true);
     try {
       await LandLeadSiteVisitService.review(
@@ -85,20 +92,15 @@ class _ManagementVisitReviewDialogState
       );
       if (!mounted) return;
       Navigator.pop(context, true);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            status == SiteVisitApprovalStatus.approved
-                ? 'Management site visit approved'
-                : 'Management site visit rejected',
-          ),
-        ),
+      AppFeedback.success(
+        context,
+        status == SiteVisitApprovalStatus.approved
+            ? 'Management site visit approved'
+            : 'Management site visit rejected',
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not save review: $e')),
-      );
+      AppFeedback.error(context, 'Could not save review: $e');
     } finally {
       if (mounted) setState(() => _saving = false);
     }

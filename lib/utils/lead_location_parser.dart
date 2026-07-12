@@ -1,5 +1,7 @@
 import 'package:latlong2/latlong.dart';
 
+import '../models/gps_fix.dart';
+
 /// Standard display format for saved GPS coordinates.
 String formatLeadGps(double lat, double lng) =>
     '${lat.toStringAsFixed(6)}° N, ${lng.toStringAsFixed(6)}° E';
@@ -7,10 +9,14 @@ String formatLeadGps(double lat, double lng) =>
 /// Parses GPS strings from add-lead / lead records.
 ///
 /// Supports:
+/// - Verified live: `LIVE|<lat>|<lng>|<accuracy>|<iso8601>`
 /// - DMS: `13°07'08.7"N 80°16'53.0"E`
 /// - Decimal with labels: `13.119083° N, 80.281389° E`
 /// - Plain decimals: `13.119083, 80.281389`
 LatLng? parseLeadGps(String gps) {
+  final live = GpsFix.tryParse(gps);
+  if (live != null) return live.point;
+
   final trimmed = gps.trim();
   if (trimmed.isEmpty) return null;
 

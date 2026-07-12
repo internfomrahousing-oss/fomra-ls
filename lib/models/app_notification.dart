@@ -36,6 +36,12 @@ class AppNotification {
   static NotificationType _typeFromName(String? name) => switch (name) {
         'site_visit' => NotificationType.siteVisit,
         'lead' => NotificationType.lead,
+        'assigned_lead' => NotificationType.assignedLead,
+        'pending_lead' => NotificationType.pendingLead,
+        'pending_approval' => NotificationType.pendingApproval,
+        'sla_breach' => NotificationType.slaBreach,
+        'overdue_task' => NotificationType.overdueTask,
+        'reminder' => NotificationType.reminder,
         'task' => NotificationType.task,
         'document' => NotificationType.document,
         'verification' => NotificationType.verification,
@@ -43,4 +49,17 @@ class AppNotification {
       };
 }
 
-enum NotificationType { lead, task, document, alert, verification, siteVisit }
+enum NotificationType {
+  lead,
+  assignedLead,
+  pendingLead,
+  pendingApproval,
+  slaBreach,
+  overdueTask,
+  reminder,
+  task,
+  document,
+  alert,
+  verification,
+  siteVisit,
+}

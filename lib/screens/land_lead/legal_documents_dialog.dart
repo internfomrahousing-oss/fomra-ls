@@ -10,6 +10,7 @@ import '../../theme/app_theme.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../utils/image_compressor.dart';
 import '../../widgets/separate_date_time_fields.dart';
+import '../../widgets/ui/app_feedback.dart';
 
 class LegalDocumentsDialog extends StatefulWidget {
   final String leadId;
@@ -117,9 +118,7 @@ class _LegalDocumentsDialogState extends State<LegalDocumentsDialog> {
   Future<void> _uploadDocument() async {
     if (_uploading) return;
     if (_remainingSlots <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Maximum $_maxDocuments documents allowed')),
-      );
+      AppFeedback.warning(context, 'Maximum $_maxDocuments documents allowed');
       return;
     }
 
@@ -137,19 +136,14 @@ class _LegalDocumentsDialogState extends State<LegalDocumentsDialog> {
         .toList();
     if (picked.isEmpty) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not read selected file(s)')),
-        );
+        AppFeedback.error(context, 'Could not read selected file(s)');
       }
       return;
     }
     if (result.files.length > _remainingSlots && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Only $_remainingSlots more file${_remainingSlots == 1 ? '' : 's'} allowed (max $_maxDocuments)',
-          ),
-        ),
+      AppFeedback.warning(
+        context,
+        'Only $_remainingSlots more file${_remainingSlots == 1 ? '' : 's'} allowed (max $_maxDocuments)',
       );
     }
 
@@ -169,26 +163,20 @@ class _LegalDocumentsDialogState extends State<LegalDocumentsDialog> {
         uploaded++;
       }
       if (mounted && uploaded > 0) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              uploaded == 1
-                  ? 'Uploaded 1 document'
-                  : 'Uploaded $uploaded documents',
-            ),
-          ),
+        AppFeedback.success(
+          context,
+          uploaded == 1
+              ? 'Uploaded 1 document'
+              : 'Uploaded $uploaded documents',
         );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              uploaded > 0
-                  ? 'Uploaded $uploaded file(s); then failed: $e'
-                  : 'Upload failed: $e',
-            ),
-          ),
+        AppFeedback.error(
+          context,
+          uploaded > 0
+              ? 'Uploaded $uploaded file(s); then failed: $e'
+              : 'Upload failed: $e',
         );
       }
     } finally {
@@ -205,16 +193,12 @@ class _LegalDocumentsDialogState extends State<LegalDocumentsDialog> {
         _notesCtrl.text,
       );
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Reference notes saved')),
-        );
+        AppFeedback.success(context, 'Reference notes saved');
         Navigator.pop(context);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not save notes: $e')),
-        );
+        AppFeedback.error(context, 'Could not save notes: $e');
       }
     } finally {
       if (mounted) setState(() => _savingNotes = false);
@@ -226,9 +210,7 @@ class _LegalDocumentsDialogState extends State<LegalDocumentsDialog> {
     if (uri == null) return;
     if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not open document')),
-        );
+        AppFeedback.error(context, 'Could not open document');
       }
     }
   }
