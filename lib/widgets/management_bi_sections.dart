@@ -410,7 +410,7 @@ class _AgeTile extends StatelessWidget {
                   ),
                   if (overdue) ...[
                     const Spacer(),
-                    Text(
+                    const Text(
                       'OVERDUE',
                       style: TextStyle(
                         fontSize: 10,
@@ -542,7 +542,7 @@ class BiExecutiveSection extends StatelessWidget {
       title: 'Executive Performance',
       subtitle: 'Ranked by conversion — pipeline and activity depth',
       icon: Icons.emoji_events_outlined,
-      accent: const Color(0xFFF59E0B),
+      accent: AppColors.warning,
       child: rows.isEmpty
           ? Text(
               'No executive-owned leads yet.',
@@ -554,37 +554,56 @@ class BiExecutiveSection extends StatelessWidget {
                 headingRowHeight: 40,
                 dataRowMinHeight: 44,
                 dataRowMaxHeight: 56,
+                dividerThickness: 1,
+                headingRowColor:
+                    WidgetStateProperty.all(context.fomraSurfaceVar),
+                headingTextStyle:
+                    Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: context.fomraTextSecondary,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.5,
+                        ),
                 columns: const [
                   DataColumn(label: Text('#')),
-                  DataColumn(label: Text('Executive')),
-                  DataColumn(label: Text('Assigned'), numeric: true),
-                  DataColumn(label: Text('Converted'), numeric: true),
-                  DataColumn(label: Text('Pipeline ac'), numeric: true),
-                  DataColumn(label: Text('Conv %'), numeric: true),
-                  DataColumn(label: Text('Avg close d'), numeric: true),
-                  DataColumn(label: Text('Meetings'), numeric: true),
-                  DataColumn(label: Text('Visits'), numeric: true),
-                  DataColumn(label: Text('Legal'), numeric: true),
-                  DataColumn(label: Text('Agreements'), numeric: true),
+                  DataColumn(label: Text('EXECUTIVE')),
+                  DataColumn(label: Text('ASSIGNED'), numeric: true),
+                  DataColumn(label: Text('CONVERTED'), numeric: true),
+                  DataColumn(label: Text('PIPELINE AC'), numeric: true),
+                  DataColumn(label: Text('CONV %'), numeric: true),
+                  DataColumn(label: Text('AVG CLOSE D'), numeric: true),
+                  DataColumn(label: Text('MEETINGS'), numeric: true),
+                  DataColumn(label: Text('VISITS'), numeric: true),
+                  DataColumn(label: Text('LEGAL'), numeric: true),
+                  DataColumn(label: Text('AGREEMENTS'), numeric: true),
                 ],
                 rows: [
-                  for (final r in rows.take(15))
+                  for (final entry
+                      in rows.take(15).toList().asMap().entries)
                     DataRow(
+                      color: WidgetStateProperty.resolveWith((states) {
+                        if (states.contains(WidgetState.hovered)) {
+                          return AppColors.primary.withValues(alpha: 0.06);
+                        }
+                        return entry.key.isOdd
+                            ? context.fomraSurfaceVar.withValues(alpha: 0.4)
+                            : null;
+                      }),
                       cells: [
-                        DataCell(Text('${r.rank}')),
+                        DataCell(Text('${entry.value.rank}')),
                         DataCell(Text(
-                          r.name,
+                          entry.value.name,
                           style: const TextStyle(fontWeight: FontWeight.w700),
                         )),
-                        DataCell(Text('${r.assignedLeads}')),
-                        DataCell(Text('${r.convertedLeads}')),
-                        DataCell(Text(biFormatAcres(r.pipelineAcres))),
-                        DataCell(Text(biFormatPct(r.conversionPct))),
-                        DataCell(Text(r.avgClosingDays.toStringAsFixed(0))),
-                        DataCell(Text('${r.meetings}')),
-                        DataCell(Text('${r.siteVisits}')),
-                        DataCell(Text('${r.legalCount}')),
-                        DataCell(Text('${r.agreementSuccess}')),
+                        DataCell(Text('${entry.value.assignedLeads}')),
+                        DataCell(Text('${entry.value.convertedLeads}')),
+                        DataCell(Text(biFormatAcres(entry.value.pipelineAcres))),
+                        DataCell(Text(biFormatPct(entry.value.conversionPct))),
+                        DataCell(Text(
+                            entry.value.avgClosingDays.toStringAsFixed(0))),
+                        DataCell(Text('${entry.value.meetings}')),
+                        DataCell(Text('${entry.value.siteVisits}')),
+                        DataCell(Text('${entry.value.legalCount}')),
+                        DataCell(Text('${entry.value.agreementSuccess}')),
                       ],
                     ),
                 ],

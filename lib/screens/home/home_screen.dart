@@ -795,7 +795,7 @@ class _EmployeeTodayTasksSection extends StatelessWidget {
       subtitle: 'Lead follow-ups and pending work for today',
       icon: Icons.today_rounded,
       child: items.isEmpty
-          ? EmptyState(
+          ? const EmptyState(
               icon: Icons.task_alt_outlined,
               title: 'No tasks for today',
               message:
@@ -865,7 +865,7 @@ class _EmployeeTodayTasksSection extends StatelessWidget {
                           Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Icon(
+                              const Icon(
                                 Icons.notifications_active_outlined,
                                 size: 16,
                                 color: AppColors.warning,

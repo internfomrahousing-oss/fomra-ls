@@ -306,7 +306,7 @@ class _ManagementExecutiveDashboardState
   @override
   Widget build(BuildContext context) {
     if (widget.leads.isEmpty) {
-      return _DashboardCard(
+      return const _DashboardCard(
         child: Column(
           children: [
             EmptyState(
@@ -315,7 +315,7 @@ class _ManagementExecutiveDashboardState
               message:
                   'Leads added by your team will populate this executive dashboard automatically.',
             ),
-            const PortalEmptyHint(
+            PortalEmptyHint(
               hint: 'Add leads or view the leads list to get started.',
             ),
           ],
@@ -331,7 +331,7 @@ class _ManagementExecutiveDashboardState
       leads: widget.leads,
       activity: _activity,
     );
-    final gap = AppSpacing.md;
+    const gap = AppSpacing.md;
     final isDesktop = MediaQuery.sizeOf(context).width >= 1024;
 
     return Column(
@@ -490,8 +490,7 @@ class _DashboardCard extends StatelessWidget {
     this.title,
     this.subtitle,
     this.icon,
-    this.borderColor,
-  });
+  }) : borderColor = null;
 
   @override
   Widget build(BuildContext context) {
@@ -534,7 +533,7 @@ class _ExecutiveTopRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final gap = AppSpacing.md;
+    const gap = AppSpacing.md;
 
     if (!isTablet) {
       return Column(
@@ -1274,7 +1273,7 @@ class _DistrictTableRow extends StatelessWidget {
               Expanded(
                 child: Text(
                   '${row.rate.round()}%',
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
                     color: AppColors.success,
@@ -1620,7 +1619,7 @@ class _LeaderboardRow extends StatelessWidget {
                 children: [
                   Text(
                     '${(row.percent * 100).round()}%',
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w800,
                       color: AppColors.primary,

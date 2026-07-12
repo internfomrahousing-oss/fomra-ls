@@ -290,7 +290,7 @@ class _PreviousVisitTile extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(Icons.check_circle, size: 16, color: AppColors.purple),
+          const Icon(Icons.check_circle, size: 16, color: AppColors.purple),
           const SizedBox(width: 8),
           Expanded(
             child: Column(

@@ -769,11 +769,11 @@ class _AddLeadLocationSearchState extends State<AddLeadLocationSearch> {
                   fillColor: context.fomraSurfaceVar.withValues(alpha: 0.55),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: AddLeadUi.cardBorder),
+                    borderSide: const BorderSide(color: AddLeadUi.cardBorder),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: AddLeadUi.cardBorder),
+                    borderSide: const BorderSide(color: AddLeadUi.cardBorder),
                   ),
                 ),
               ),
@@ -825,7 +825,7 @@ class _AddLeadLocationSearchState extends State<AddLeadLocationSearch> {
             child: ListView.separated(
               shrinkWrap: true,
               itemCount: _results.length,
-              separatorBuilder: (_, __) => Divider(
+              separatorBuilder: (_, __) => const Divider(
                 height: 1,
                 color: AddLeadUi.cardBorder,
               ),
@@ -833,7 +833,7 @@ class _AddLeadLocationSearchState extends State<AddLeadLocationSearch> {
                 final hit = _results[i];
                 return ListTile(
                   dense: true,
-                  leading: Icon(
+                  leading: const Icon(
                     Icons.place_outlined,
                     size: 18,
                     color: AppColors.primary,

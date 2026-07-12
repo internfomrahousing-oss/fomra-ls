@@ -12,6 +12,7 @@ import '../../theme/app_theme.dart';
 import '../../theme/fomra_layout.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../utils/legal_document_catalog.dart';
+import '../../widgets/fomra_app_bar.dart';
 import '../../widgets/fomra_app_shell.dart';
 import '../../widgets/ui/app_components.dart';
 import '../../widgets/ui/app_loader.dart';
@@ -208,7 +209,7 @@ class _DocumentManagementScreenState extends State<DocumentManagementScreen> {
           const SizedBox(height: 8),
           Text(
             'Role: ${RoleAccess.currentRole.label}',
-            style: TextStyle(
+            style: const TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w600,
               color: AppColors.primary,
@@ -277,6 +278,7 @@ class _DocumentManagementScreenState extends State<DocumentManagementScreen> {
 
     return FomraAppShell(
       currentRoute: '/document-management',
+      appBar: const FomraAppBar(moduleName: 'Documents'),
       body: body,
     );
   }

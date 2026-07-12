@@ -494,7 +494,7 @@ class _TermsDealSelectorState extends State<TermsDealSelector> {
       children: [
         DropdownButtonFormField<String>(
           isExpanded: true,
-          value: _primaryTitle,
+          initialValue: _primaryTitle,
           onChanged: _selectPrimary,
           menuMaxHeight: 320,
           borderRadius: BorderRadius.circular(AddLeadUi.fieldRadius),
@@ -567,7 +567,7 @@ class _TermsDealSelectorState extends State<TermsDealSelector> {
           },
           child: showFields
               ? _DealFieldsPanel(
-                  key: ValueKey('${activeConfig!.id}_$_activeSubtype'),
+                  key: ValueKey('${activeConfig.id}_$_activeSubtype'),
                   config: activeConfig,
                   controllers: _controllers[activeConfig.id]!,
                   onFieldChanged: _emitChange,

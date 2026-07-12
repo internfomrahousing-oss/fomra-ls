@@ -3,7 +3,6 @@ import '../models/land_lead.dart';
 import '../models/land_lead_legal_document.dart';
 import '../utils/contact_directory.dart';
 import '../utils/legal_document_catalog.dart';
-import '../screens/home/contact_directory_screen.dart';
 import '../screens/task_management/task_management_screen.dart';
 import '../services/app_store.dart';
 import '../services/auth_service.dart';

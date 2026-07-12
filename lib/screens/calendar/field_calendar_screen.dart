@@ -77,7 +77,7 @@ class _FieldCalendarScreenState extends State<FieldCalendarScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       DropdownButtonFormField<FieldCalendarKind>(
-                        value: kind,
+                        initialValue: kind,
                         decoration: const InputDecoration(labelText: 'Type'),
                         items: [
                           for (final k in FieldCalendarKind.values)
@@ -93,7 +93,7 @@ class _FieldCalendarScreenState extends State<FieldCalendarScreen> {
                       ),
                       const SizedBox(height: 10),
                       DropdownButtonFormField<LandLead?>(
-                        value: selectedLead,
+                        initialValue: selectedLead,
                         decoration: const InputDecoration(labelText: 'Lead'),
                         items: [
                           const DropdownMenuItem(
@@ -169,7 +169,7 @@ class _FieldCalendarScreenState extends State<FieldCalendarScreen> {
                       ),
                       if (reminder)
                         DropdownButtonFormField<int>(
-                          value: remindMins,
+                          initialValue: remindMins,
                           decoration: const InputDecoration(
                             labelText: 'Remind before',
                           ),

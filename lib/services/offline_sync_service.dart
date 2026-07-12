@@ -381,4 +381,4 @@ class OfflineSyncService extends ChangeNotifier {
 }
 
 // Keep dart:convert import used if needed for debugging.
-final _ = jsonEncode;
+const _ = jsonEncode;

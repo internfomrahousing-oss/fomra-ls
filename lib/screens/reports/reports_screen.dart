@@ -10,6 +10,7 @@ import '../../theme/fomra_theme_context.dart';
 import '../../widgets/fomra_app_shell.dart';
 import '../../widgets/ui/app_components.dart';
 import '../../widgets/ui/app_feedback.dart';
+import '../../widgets/ui/app_table.dart';
 
 class ReportsScreen extends StatefulWidget {
   const ReportsScreen({super.key});
@@ -403,22 +404,17 @@ class _CatalogPreviewDialog extends StatelessWidget {
                         style: TextStyle(color: context.fomraTextSecondary),
                       )
                     else
-                      SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: DataTable(
-                          columns: [
-                            for (final h in section.headers)
-                              DataColumn(label: Text(h)),
-                          ],
-                          rows: [
-                            for (final row in section.rows.take(40))
-                              DataRow(
-                                cells: [
-                                  for (final c in row) DataCell(Text(c)),
-                                ],
-                              ),
-                          ],
-                        ),
+                      AppDataTable(
+                        minWidth: 520,
+                        columns: [
+                          for (final h in section.headers) AppTableColumn(h),
+                        ],
+                        rows: [
+                          for (final row in section.rows.take(40))
+                            AppTableRow(
+                              cells: [for (final c in row) Text(c)],
+                            ),
+                        ],
                       ),
                     if (section.rows.length > 40)
                       Padding(

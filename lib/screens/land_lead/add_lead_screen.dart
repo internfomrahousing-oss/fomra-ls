@@ -941,7 +941,7 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
                                   'Lng ${_verifiedGps!.longitude.toStringAsFixed(6)} · '
                                   '±${_verifiedGps!.accuracyMeters.toStringAsFixed(0)} m · '
                                   '${_verifiedGps!.timestamp.toLocal()}',
-                                  style: TextStyle(
+                                  style: const TextStyle(
                                     fontSize: 11,
                                     color: AppColors.success,
                                     fontWeight: FontWeight.w600,
@@ -1287,10 +1287,8 @@ class _Field extends StatelessWidget {
     this.maxLines = 1,
     this.maxLength,
     this.keyboardType = TextInputType.text,
-    this.light = false,
     this.readOnly = false,
-    this.onFieldSubmitted,
-  });
+  }) : light = false, onFieldSubmitted = null;
 
   @override
   Widget build(BuildContext context) {

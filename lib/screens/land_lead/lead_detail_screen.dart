@@ -495,26 +495,35 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
                     child: Stack(
                       children: [
                         wide
-                            ? Row(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  Expanded(
-                                    flex: 2,
-                                    child: _ProfilePanel(
-                                      lead: lead,
-                                      displayName: _displayName,
-                                      leadAgeDays: _leadAgeDays,
-                                      taskCount: taskCountForLead(lead.leadId),
-                                      readOnly: _readOnly,
-                                      onStatusChanged: _changeStatus,
-                                      onLaunchContact: _launchContact,
-                                      onCreateTask: _openCreateTask,
-                                      onViewTasks: _openViewTasks,
+                            ? SingleChildScrollView(
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Expanded(
+                                      flex: 2,
+                                      child: _ProfilePanel(
+                                        lead: lead,
+                                        displayName: _displayName,
+                                        leadAgeDays: _leadAgeDays,
+                                        taskCount:
+                                            taskCountForLead(lead.leadId),
+                                        readOnly: _readOnly,
+                                        onStatusChanged: _changeStatus,
+                                        onLaunchContact: _launchContact,
+                                        onCreateTask: _openCreateTask,
+                                        onViewTasks: _openViewTasks,
+                                      ),
                                     ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(flex: 3, child: workspace),
-                                ],
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      flex: 3,
+                                      child: SizedBox(
+                                        height: constraints.maxHeight,
+                                        child: workspace,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               )
                             : ListView(
                                 children: [

@@ -1005,14 +1005,14 @@ class _LeadsLoadingSkeleton extends StatelessWidget {
                     color: context.fomraBorder.withValues(alpha: 0.75),
                   ),
                 ),
-                child: Row(
+                child: const Row(
                   children: [
                     Expanded(
                       flex: 5,
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisAlignment: MainAxisAlignment.center,
-                        children: const [
+                        children: [
                           LoadingSkeleton(height: 10, width: 56, radius: 4),
                           SizedBox(height: 6),
                           LoadingSkeleton(height: 14, width: 140, radius: 4),
@@ -1021,8 +1021,8 @@ class _LeadsLoadingSkeleton extends StatelessWidget {
                         ],
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    const LoadingSkeleton(height: 22, width: 72, radius: 999),
+                    SizedBox(width: 12),
+                    LoadingSkeleton(height: 22, width: 72, radius: 999),
                   ],
                 ),
               ),
@@ -1531,7 +1531,7 @@ class _DistrictBadge extends StatelessWidget {
         label,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: TextStyle(
+        style: const TextStyle(
           fontSize: 9.5,
           fontWeight: FontWeight.w700,
           color: AppColors.info,

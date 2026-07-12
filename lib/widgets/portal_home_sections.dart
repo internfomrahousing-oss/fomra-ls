@@ -730,11 +730,11 @@ class PortalApprovalsSection extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          SectionHeader(
+          const SectionHeader(
             title: 'Approvals',
             subtitle: 'Pending management site visit requests',
             icon: Icons.verified_outlined,
-            padding: const EdgeInsets.only(bottom: AppSpacing.md),
+            padding: EdgeInsets.only(bottom: AppSpacing.md),
           ),
           if (loading)
             const Padding(
@@ -748,7 +748,7 @@ class PortalApprovalsSection extends StatelessWidget {
               ),
             )
           else if (visits.isEmpty)
-            PortalEmptyHint(
+            const PortalEmptyHint(
               hint: 'No pending approvals — new requests will appear here.',
             )
           else

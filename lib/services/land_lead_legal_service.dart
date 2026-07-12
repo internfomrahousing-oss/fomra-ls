@@ -3,9 +3,7 @@ import 'dart:typed_data';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/land_lead_legal_document.dart';
-import 'audit_log_service.dart';
 import 'auth_service.dart';
-import 'document_index_service.dart';
 
 class LandLeadLegalService {
   static SupabaseClient get _db => Supabase.instance.client;

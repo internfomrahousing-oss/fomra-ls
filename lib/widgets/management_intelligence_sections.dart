@@ -25,7 +25,7 @@ class IntelDisclaimer extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(Icons.info_outline, size: 16, color: AppColors.info),
+          const Icon(Icons.info_outline, size: 16, color: AppColors.info),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
@@ -64,7 +64,7 @@ class IntelRemindersSection extends StatelessWidget {
       accent: AppColors.warning,
       trailing: Text(
         '${items.length}',
-        style: TextStyle(
+        style: const TextStyle(
           fontWeight: FontWeight.w800,
           color: AppColors.warning,
         ),

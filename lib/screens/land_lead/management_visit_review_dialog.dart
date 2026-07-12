@@ -183,7 +183,7 @@ class _ManagementVisitReviewDialogState
               else if (_error != null)
                 Text(
                   _error!,
-                  style: TextStyle(color: AppColors.error, fontSize: 13),
+                  style: const TextStyle(color: AppColors.error, fontSize: 13),
                 )
               else if (visit != null) ...[
                 if (visit.loggedByName.isNotEmpty)

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_layout.dart';
 import '../../theme/fomra_theme_context.dart';
+import '../../widgets/fomra_app_bar.dart';
 import '../../widgets/fomra_app_shell.dart';
 import '../../widgets/ui/app_components.dart';
 
@@ -82,6 +83,7 @@ class BusinessModulesHubScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return FomraAppShell(
       currentRoute: '/business-modules',
+      appBar: const FomraAppBar(moduleName: 'Modules'),
       body: ListView(
         padding: FomraLayout.pagePadding(context),
         children: [

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../analytics/business_module_metrics.dart';
-import '../../models/land_lead.dart';
 import '../../services/app_store.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_layout.dart';

@@ -161,7 +161,7 @@ class _LandBankScreenState extends State<LandBankScreen> {
         ),
         const SizedBox(height: 8),
         DropdownButtonFormField<String?>(
-          value: _district,
+          initialValue: _district,
           decoration: InputDecoration(
             labelText: 'District',
             filled: true,
