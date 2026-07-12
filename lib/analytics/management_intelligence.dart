@@ -552,7 +552,23 @@ class ManagementIntelligence {
     );
   }
 
-  static double _successScore(LandLead lead, _ActivityIndex index) {
+  static double _successScore(LandLead lead, _ActivityIndex index) =>
+      leadSuccessScore(
+        lead,
+        hasCall: index.hasCall(lead.leadId),
+        hasMeeting: index.hasMeeting(lead.leadId),
+        hasVisit: index.hasVisit(lead.leadId),
+      );
+
+  /// AI success score (0–100) for a single lead. Public so screens (e.g. the
+  /// lead detail page) can display the same score the recommendation engine
+  /// uses. Pass whether the lead has any logged call/meeting/site-visit.
+  static double leadSuccessScore(
+    LandLead lead, {
+    required bool hasCall,
+    required bool hasMeeting,
+    required bool hasVisit,
+  }) {
     var score = switch (lead.status) {
       LeadStatus.signed => 100.0,
       LeadStatus.legal => 75.0,
@@ -561,9 +577,9 @@ class ManagementIntelligence {
       LeadStatus.prospectMeetingPending => 20.0,
       LeadStatus.dropped => 0.0,
     };
-    if (index.hasCall(lead.leadId)) score += 8;
-    if (index.hasMeeting(lead.leadId)) score += 10;
-    if (index.hasVisit(lead.leadId)) score += 12;
+    if (hasCall) score += 8;
+    if (hasMeeting) score += 10;
+    if (hasVisit) score += 12;
     if (lead.surveyNumber.trim().isNotEmpty) score += 8;
     if (lead.gpsCoordinates.trim().isNotEmpty) score += 5;
     if (lead.contactDetails.trim().isNotEmpty) score += 5;

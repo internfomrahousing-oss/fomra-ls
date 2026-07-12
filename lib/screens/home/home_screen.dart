@@ -688,6 +688,26 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         },
                       ),
               ),
+              if (!_isManagement) ...[
+                const SizedBox(height: AppSpacing.lg),
+                PortalFadeSection(
+                  index: 3,
+                  child: ManagementExecutiveDashboard(
+                    leads: _myLeads,
+                    teamRows: const [],
+                    notifications: const [],
+                    widgetIds: const ['recommendations'],
+                    onViewLead: (lead) {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => LeadDetailScreen(lead: lead),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
               const SizedBox(height: 88),
             ],
           ),

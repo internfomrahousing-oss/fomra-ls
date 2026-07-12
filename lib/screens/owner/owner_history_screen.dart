@@ -1,13 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 
-import '../../analytics/business_module_metrics.dart';
 import '../../models/land_lead.dart';
 import '../../services/app_store.dart';
-import '../../theme/app_theme.dart';
 import '../../theme/fomra_layout.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../widgets/fomra_app_shell.dart';
+import '../../widgets/lead_portfolio_breakdown.dart';
 import '../../widgets/ui/app_components.dart';
 import '../land_lead/lead_detail_screen.dart';
 
@@ -87,27 +85,9 @@ class _OwnerHistoryScreenState extends State<OwnerHistoryScreen> {
     return groups;
   }
 
-  List<String> _noteLines(LandLead lead) {
-    if (lead.notes.trim().isEmpty) return const [];
-    return lead.notes
-        .trim()
-        .split('\n')
-        .where((l) => l.trim().isNotEmpty)
-        .toList()
-        .reversed
-        .take(8)
-        .toList();
-  }
-
   @override
   Widget build(BuildContext context) {
     final groups = _groups;
-    final df = DateFormat('dd MMM yyyy');
-    final money = NumberFormat.currency(
-      locale: 'en_IN',
-      symbol: '₹',
-      decimalDigits: 0,
-    );
 
     return FomraAppShell(
       currentRoute: '/owner-history',
@@ -201,90 +181,15 @@ class _OwnerHistoryScreenState extends State<OwnerHistoryScreen> {
                       ),
                       if (expanded) ...[
                         const SizedBox(height: 14),
-                        for (final lead in g.leads) ...[
-                          const Divider(height: 20),
-                          InkWell(
-                            onTap: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => LeadDetailScreen(lead: lead),
-                              ),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Lead #${lead.leadId} · ${lead.status.label}',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  [
-                                    if (lead.village.isNotEmpty) lead.village,
-                                    df.format(lead.addedOn),
-                                    if (lead.landExtent.isNotEmpty)
-                                      lead.landExtent,
-                                  ].join(' · '),
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: context.fomraTextSecondary,
-                                  ),
-                                ),
-                                Builder(builder: (_) {
-                                  final cost =
-                                      AcquisitionCostCalculator.fromLead(lead);
-                                  if (cost.totalCost == null) {
-                                    return const SizedBox.shrink();
-                                  }
-                                  return Padding(
-                                    padding: const EdgeInsets.only(top: 6),
-                                    child: Text(
-                                      'Deal: ${money.format(cost.totalCost)}'
-                                      '${cost.costPerAcre != null ? ' · ${money.format(cost.costPerAcre)}/acre' : ''}',
-                                      style: const TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w600,
-                                        color: AppColors.primary,
-                                      ),
-                                    ),
-                                  );
-                                }),
-                                if (lead.accessDetails.trim().isNotEmpty) ...[
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    lead.accessDetails.trim(),
-                                    maxLines: 4,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: context.fomraTextSecondary,
-                                    ),
-                                  ),
-                                ],
-                                for (final note in _noteLines(lead))
-                                  Padding(
-                                    padding: const EdgeInsets.only(top: 4),
-                                    child: Row(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        const Text('• ',
-                                            style: TextStyle(fontSize: 12)),
-                                        Expanded(
-                                          child: Text(
-                                            note,
-                                            style: const TextStyle(fontSize: 12),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                              ],
+                        LeadPortfolioBreakdown(
+                          leads: g.leads,
+                          onOpenLead: (lead) => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => LeadDetailScreen(lead: lead),
                             ),
                           ),
-                        ],
+                        ),
                       ],
                     ],
                   ),

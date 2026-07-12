@@ -7,9 +7,8 @@ import '../../theme/app_theme.dart';
 import '../../theme/fomra_layout.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../widgets/fomra_app_shell.dart';
+import '../../widgets/lead_portfolio_breakdown.dart';
 import '../../widgets/ui/app_components.dart';
-import '../../models/lead_list_filter.dart';
-import '../land_lead/filtered_leads_screen.dart';
 import '../land_lead/lead_detail_screen.dart';
 
 /// Broker performance: leads, conversions, success rate.
@@ -22,6 +21,7 @@ class BrokerManagementScreen extends StatefulWidget {
 
 class _BrokerManagementScreenState extends State<BrokerManagementScreen> {
   String _query = '';
+  String? _expandedBroker;
 
   @override
   void initState() {
@@ -102,79 +102,91 @@ class _BrokerManagementScreenState extends State<BrokerManagementScreen> {
               ),
             )
           else
-            ...rows.map((r) => Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: AppCard(
-                    onTap: () {
-                      final leads = AppStore.instance.leads
-                          .where((l) =>
-                              l.brokerName.trim().toLowerCase() ==
-                              r.name.toLowerCase())
-                          .toList();
-                      if (leads.length == 1) {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => LeadDetailScreen(lead: leads.first),
-                          ),
-                        );
-                      } else {
-                        FilteredLeadsScreen.open(
-                          context,
-                          LeadListFilter.brokerLeads,
-                        );
-                      }
-                    },
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          r.name,
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w800,
-                            color: context.fomraTextPrimary,
-                          ),
-                        ),
-                        if (r.contact.isNotEmpty) ...[
-                          const SizedBox(height: 4),
-                          Text(r.contact,
+            ...rows.map((r) {
+              final expanded = _expandedBroker == r.name.toLowerCase();
+              final brokerLeads = AppStore.instance.leads
+                  .where((l) =>
+                      l.brokerName.trim().toLowerCase() == r.name.toLowerCase())
+                  .toList();
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: AppCard(
+                  onTap: () => setState(() {
+                    _expandedBroker = expanded ? null : r.name.toLowerCase();
+                  }),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              r.name,
                               style: TextStyle(
-                                  color: context.fomraTextSecondary,
-                                  fontSize: 12)),
-                        ],
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            _chip('Leads ${r.leads}'),
-                            const SizedBox(width: 8),
-                            _chip('Converted ${r.conversions}'),
-                            const SizedBox(width: 8),
-                            _chip('Active ${r.active}'),
-                            const Spacer(),
-                            Text(
-                              '${pct.format(r.successRate)}%',
-                              style: const TextStyle(
+                                fontSize: 16,
                                 fontWeight: FontWeight.w800,
-                                color: AppColors.success,
+                                color: context.fomraTextPrimary,
                               ),
                             ),
-                          ],
+                          ),
+                          Icon(
+                            expanded ? Icons.expand_less : Icons.expand_more,
+                            color: context.fomraTextSecondary,
+                          ),
+                        ],
+                      ),
+                      if (r.contact.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(r.contact,
+                            style: TextStyle(
+                                color: context.fomraTextSecondary,
+                                fontSize: 12)),
+                      ],
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          _chip('Leads ${r.leads}'),
+                          const SizedBox(width: 8),
+                          _chip('Converted ${r.conversions}'),
+                          const SizedBox(width: 8),
+                          _chip('Active ${r.active}'),
+                          const Spacer(),
+                          Text(
+                            '${pct.format(r.successRate)}%',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.success,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(6),
+                        child: LinearProgressIndicator(
+                          value: (r.successRate / 100).clamp(0.0, 1.0),
+                          minHeight: 6,
+                          backgroundColor: context.fomraBorder,
+                          color: AppColors.success,
                         ),
-                        const SizedBox(height: 8),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(6),
-                          child: LinearProgressIndicator(
-                            value: (r.successRate / 100).clamp(0.0, 1.0),
-                            minHeight: 6,
-                            backgroundColor: context.fomraBorder,
-                            color: AppColors.success,
+                      ),
+                      if (expanded) ...[
+                        const SizedBox(height: 14),
+                        LeadPortfolioBreakdown(
+                          leads: brokerLeads,
+                          onOpenLead: (lead) => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => LeadDetailScreen(lead: lead),
+                            ),
                           ),
                         ),
                       ],
-                    ),
+                    ],
                   ),
-                )),
+                ),
+              );
+            }),
         ],
       ),
     );

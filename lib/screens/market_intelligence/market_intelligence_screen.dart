@@ -142,11 +142,17 @@ class MarketIntelligenceScreen extends StatefulWidget {
   final bool embeddedInLead;
   final MarketIntelLeadSection? leadSectionOnly;
 
+  /// When false, the embedded lead section renders at its natural height with
+  /// no internal scroll view, so it can participate in a single outer page
+  /// scroll (used by the lead detail workspace).
+  final bool embeddedScrollable;
+
   const MarketIntelligenceScreen({
     super.key,
     this.lead,
     this.embeddedInLead = false,
     this.leadSectionOnly,
+    this.embeddedScrollable = true,
   });
 
   @override
@@ -1937,6 +1943,13 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
         } else {
           content = _buildMagicBricksSection();
         }
+    }
+
+    if (!widget.embeddedScrollable) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 2, bottom: 8),
+        child: content,
+      );
     }
 
     return SingleChildScrollView(

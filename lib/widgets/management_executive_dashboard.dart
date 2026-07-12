@@ -259,7 +259,6 @@ class _ManagementExecutiveDashboardState
         );
       case 'recommendations':
         return IntelSuggestionsSection(
-          suggestions: intel.bestSuggestions,
           recommendations: intel.recommendations,
           onViewLead: widget.onViewLead,
         );

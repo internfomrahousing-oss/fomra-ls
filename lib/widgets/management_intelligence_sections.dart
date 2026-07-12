@@ -514,13 +514,11 @@ class _StatBox extends StatelessWidget {
 // ── Best suggestions + AI recommendations ───────────────────────────────────
 
 class IntelSuggestionsSection extends StatelessWidget {
-  final List<IntelLeadSuggestion> suggestions;
   final List<IntelRecommendation> recommendations;
   final ValueChanged<LandLead>? onViewLead;
 
   const IntelSuggestionsSection({
     super.key,
-    required this.suggestions,
     required this.recommendations,
     this.onViewLead,
   });
@@ -549,27 +547,6 @@ class IntelSuggestionsSection extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const IntelDisclaimer(),
-          const SizedBox(height: 12),
-          Text(
-            'Best lead suggestions',
-            style: TextStyle(
-              fontWeight: FontWeight.w800,
-              color: context.fomraTextPrimary,
-            ),
-          ),
-          const SizedBox(height: 8),
-          if (suggestions.isEmpty)
-            Text('No active leads to score.',
-                style: TextStyle(color: context.fomraTextSecondary))
-          else
-            for (final s in suggestions.take(6))
-              _IntelRow(
-                title:
-                    'Lead #${s.lead.leadId} · score ${s.score.toStringAsFixed(0)}',
-                subtitle: s.reason,
-                color: const Color(0xFF8B5CF6),
-                onTap: onViewLead == null ? null : () => onViewLead!(s.lead),
-              ),
           const SizedBox(height: 12),
           _RecoBlock(
             title: 'Best next action',

@@ -2,6 +2,7 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../analytics/management_intelligence.dart';
 import '../../models/land_lead.dart';
 import '../../models/land_lead_legal_document.dart';
 import '../../models/land_lead_meeting.dart';
@@ -469,6 +470,13 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
             ),
     );
 
+    final aiScore = ManagementIntelligence.leadSuccessScore(
+      lead,
+      hasCall: _callLogs.isNotEmpty,
+      hasMeeting: _meetings.isNotEmpty,
+      hasVisit: _siteVisits.isNotEmpty,
+    ).round();
+
     return FomraAppShell(
       currentRoute: '/land-lead',
       backgroundColor: context.fomraPageBg,
@@ -507,6 +515,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
                                         leadAgeDays: _leadAgeDays,
                                         taskCount:
                                             taskCountForLead(lead.leadId),
+                                        aiScore: aiScore,
                                         readOnly: _readOnly,
                                         onStatusChanged: _changeStatus,
                                         onLaunchContact: _launchContact,
@@ -517,10 +526,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
                                     const SizedBox(width: 12),
                                     Expanded(
                                       flex: 3,
-                                      child: SizedBox(
-                                        height: constraints.maxHeight,
-                                        child: workspace,
-                                      ),
+                                      child: workspace,
                                     ),
                                   ],
                                 ),
@@ -532,6 +538,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
                                     displayName: _displayName,
                                     leadAgeDays: _leadAgeDays,
                                     taskCount: taskCountForLead(lead.leadId),
+                                    aiScore: aiScore,
                                     readOnly: _readOnly,
                                     onStatusChanged: _changeStatus,
                                     onLaunchContact: _launchContact,
@@ -539,10 +546,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
                                     onViewTasks: _openViewTasks,
                                   ),
                                   const SizedBox(height: 12),
-                                  SizedBox(
-                                    height: constraints.maxHeight * 0.72,
-                                    child: workspace,
-                                  ),
+                                  workspace,
                                 ],
                               ),
                         if (!_readOnly)
@@ -676,6 +680,7 @@ class _ProfilePanel extends StatelessWidget {
   final String displayName;
   final int leadAgeDays;
   final int taskCount;
+  final int aiScore;
   final bool readOnly;
   final ValueChanged<LeadStatus?> onStatusChanged;
   final Future<void> Function(String scheme) onLaunchContact;
@@ -687,12 +692,19 @@ class _ProfilePanel extends StatelessWidget {
     required this.displayName,
     required this.leadAgeDays,
     required this.taskCount,
+    required this.aiScore,
     this.readOnly = false,
     required this.onStatusChanged,
     required this.onLaunchContact,
     required this.onCreateTask,
     required this.onViewTasks,
   });
+
+  Color _scoreColor() {
+    if (aiScore >= 70) return AppColors.success;
+    if (aiScore >= 40) return AppColors.warning;
+    return AppColors.error;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -803,6 +815,35 @@ class _ProfilePanel extends StatelessWidget {
                               _InfoChip(
                                 label: lead.landType.label,
                                 icon: Icons.landscape_outlined,
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 5),
+                                decoration: BoxDecoration(
+                                  color:
+                                      _scoreColor().withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(999),
+                                  border: Border.all(
+                                    color:
+                                        _scoreColor().withValues(alpha: 0.4),
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.auto_awesome_outlined,
+                                        size: 13, color: _scoreColor()),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      'AI Score $aiScore',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w800,
+                                        color: _scoreColor(),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ],
                           ),
@@ -1114,14 +1155,12 @@ class _WorkspacePanel extends StatelessWidget {
             ),
             const SizedBox(height: 14),
             if (readOnly) ...[
-              Expanded(
-                child: _ActivityTimeline(
-                  lead: lead,
-                  callLogs: callLogs,
-                  siteVisits: siteVisits,
-                  meetings: meetings,
-                  legalDocs: legalDocs,
-                ),
+              _ActivityTimeline(
+                lead: lead,
+                callLogs: callLogs,
+                siteVisits: siteVisits,
+                meetings: meetings,
+                legalDocs: legalDocs,
               ),
             ] else ...[
               Container(
@@ -1153,35 +1192,45 @@ class _WorkspacePanel extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 10),
-              Expanded(
-                child: TabBarView(
-                  controller: tabController,
-                  children: [
-                    _ActivityTimeline(
-                      lead: lead,
-                      callLogs: callLogs,
-                      siteVisits: siteVisits,
-                      meetings: meetings,
-                      legalDocs: legalDocs,
-                    ),
-                    _SitePhotosTab(lead: lead),
-                    _LazyMarketIntelTab(
-                      active: shouldLoadMiTab(2),
-                      lead: lead,
-                      section: MarketIntelLeadSection.infrastructure,
-                    ),
-                    _LazyMarketIntelTab(
-                      active: shouldLoadMiTab(3),
-                      lead: lead,
-                      section: MarketIntelLeadSection.landRecords,
-                    ),
-                    _LazyMarketIntelTab(
-                      active: shouldLoadMiTab(4),
-                      lead: lead,
-                      section: MarketIntelLeadSection.competitorProjects,
-                    ),
-                  ],
-                ),
+              // Render only the active tab at its natural height so the whole
+              // page shares a single scroll (no inner tab scroll view).
+              AnimatedBuilder(
+                animation: tabController,
+                builder: (context, _) {
+                  switch (tabController.index) {
+                    case 0:
+                      return _ActivityTimeline(
+                        lead: lead,
+                        callLogs: callLogs,
+                        siteVisits: siteVisits,
+                        meetings: meetings,
+                        legalDocs: legalDocs,
+                      );
+                    case 1:
+                      return _SitePhotosTab(lead: lead);
+                    case 2:
+                      return _LazyMarketIntelTab(
+                        active: shouldLoadMiTab(2),
+                        lead: lead,
+                        section: MarketIntelLeadSection.infrastructure,
+                        scrollable: false,
+                      );
+                    case 3:
+                      return _LazyMarketIntelTab(
+                        active: shouldLoadMiTab(3),
+                        lead: lead,
+                        section: MarketIntelLeadSection.landRecords,
+                        scrollable: false,
+                      );
+                    default:
+                      return _LazyMarketIntelTab(
+                        active: shouldLoadMiTab(4),
+                        lead: lead,
+                        section: MarketIntelLeadSection.competitorProjects,
+                        scrollable: false,
+                      );
+                  }
+                },
               ),
             ],
           ],
@@ -1558,8 +1607,8 @@ class _ActivityTimeline extends StatelessWidget {
       ),
     ];
 
-    return ListView(
-      padding: const EdgeInsets.only(bottom: 72),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
           'Activity timeline',
@@ -1796,19 +1845,17 @@ class _SitePhotosTab extends StatelessWidget {
     }
     return Align(
       alignment: Alignment.topLeft,
-      child: SingleChildScrollView(
-        child: Wrap(
-          spacing: 10,
-          runSpacing: 10,
-          children: [
-            for (var i = 0; i < urls.length; i++)
-              _SitePhotoThumbnail(
-                url: urls[i],
-                size: _thumbSize,
-                onTap: () => _showSitePhotoLightbox(context, urls[i]),
-              ),
-          ],
-        ),
+      child: Wrap(
+        spacing: 10,
+        runSpacing: 10,
+        children: [
+          for (var i = 0; i < urls.length; i++)
+            _SitePhotoThumbnail(
+              url: urls[i],
+              size: _thumbSize,
+              onTap: () => _showSitePhotoLightbox(context, urls[i]),
+            ),
+        ],
       ),
     );
   }
@@ -2053,11 +2100,13 @@ class _LazyMarketIntelTab extends StatelessWidget {
   final bool active;
   final LandLead lead;
   final MarketIntelLeadSection section;
+  final bool scrollable;
 
   const _LazyMarketIntelTab({
     required this.active,
     required this.lead,
     required this.section,
+    this.scrollable = true,
   });
 
   @override
@@ -2079,6 +2128,7 @@ class _LazyMarketIntelTab extends StatelessWidget {
       lead: lead,
       embeddedInLead: true,
       leadSectionOnly: section,
+      embeddedScrollable: scrollable,
     );
   }
 }

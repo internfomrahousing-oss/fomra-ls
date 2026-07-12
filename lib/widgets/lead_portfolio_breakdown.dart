@@ -1,0 +1,218 @@
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+
+import '../models/land_lead.dart';
+import '../theme/app_theme.dart';
+import '../theme/fomra_theme_context.dart';
+import '../utils/lead_location_parser.dart';
+
+/// Acres for a lead parsed from its land extent (0 when unparseable).
+double leadPortfolioAcres(LandLead lead) {
+  final sqft = parseLandExtentSqft(lead.landExtent);
+  if (sqft == null || sqft <= 0) return 0;
+  return sqft / 43560;
+}
+
+/// Portfolio breakdown for an owner or broker: summary cards + a full table of
+/// every linked lead. Pure presentation — no business logic or data mutation.
+class LeadPortfolioBreakdown extends StatelessWidget {
+  final List<LandLead> leads;
+  final ValueChanged<LandLead> onOpenLead;
+
+  const LeadPortfolioBreakdown({
+    super.key,
+    required this.leads,
+    required this.onOpenLead,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final sorted = [...leads]..sort((a, b) => b.addedOn.compareTo(a.addedOn));
+    final total = sorted.length;
+    final totalAcres =
+        sorted.fold<double>(0, (s, l) => s + leadPortfolioAcres(l));
+    final active = sorted.where((l) => l.status.isActive).length;
+    final closed = sorted.where((l) => l.status.isAcquired).length;
+    final dropped = sorted.where((l) => l.status.isDropped).length;
+    final df = DateFormat('dd MMM yyyy');
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: [
+            _SummaryCard(
+              label: 'Total Properties',
+              value: '$total',
+              icon: Icons.home_work_outlined,
+              color: AppColors.primary,
+            ),
+            _SummaryCard(
+              label: 'Total Acres',
+              value: totalAcres.toStringAsFixed(2),
+              icon: Icons.crop_square_outlined,
+              color: AppColors.info,
+            ),
+            _SummaryCard(
+              label: 'Active Leads',
+              value: '$active',
+              icon: Icons.trending_up_rounded,
+              color: AppColors.warning,
+            ),
+            _SummaryCard(
+              label: 'Closed Leads',
+              value: '$closed',
+              icon: Icons.verified_outlined,
+              color: AppColors.success,
+            ),
+            _SummaryCard(
+              label: 'Dropped Leads',
+              value: '$dropped',
+              icon: Icons.cancel_outlined,
+              color: AppColors.error,
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: DataTable(
+            headingRowHeight: 42,
+            dataRowMinHeight: 40,
+            dataRowMaxHeight: 52,
+            columnSpacing: 22,
+            headingTextStyle: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              color: context.fomraTextSecondary,
+            ),
+            dataTextStyle: TextStyle(
+              fontSize: 12.5,
+              color: context.fomraTextPrimary,
+            ),
+            columns: const [
+              DataColumn(label: Text('Lead ID')),
+              DataColumn(label: Text('Property')),
+              DataColumn(label: Text('Village')),
+              DataColumn(label: Text('Survey No.')),
+              DataColumn(label: Text('Acres')),
+              DataColumn(label: Text('Current Stage')),
+              DataColumn(label: Text('Assigned Executive')),
+              DataColumn(label: Text('Last Activity')),
+              DataColumn(label: Text('Status')),
+            ],
+            rows: [
+              for (final l in sorted)
+                DataRow(
+                  cells: [
+                    DataCell(
+                      InkWell(
+                        onTap: () => onOpenLead(l),
+                        child: Text(
+                          '#${l.leadId}',
+                          style: const TextStyle(
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.w800,
+                            decoration: TextDecoration.underline,
+                          ),
+                        ),
+                      ),
+                    ),
+                    DataCell(Text(_value(
+                        l.location.isNotEmpty ? l.location : l.village))),
+                    DataCell(Text(_value(l.village))),
+                    DataCell(Text(_value(l.surveyNumber))),
+                    DataCell(Text(leadPortfolioAcres(l).toStringAsFixed(2))),
+                    DataCell(Text(l.status.label)),
+                    DataCell(Text(_value(l.createdByName))),
+                    DataCell(Text(df.format(l.addedOn))),
+                    DataCell(_StatusPill(status: l.status)),
+                  ],
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  static String _value(String raw) => raw.trim().isEmpty ? '—' : raw.trim();
+}
+
+class _SummaryCard extends StatelessWidget {
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color color;
+
+  const _SummaryCard({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 150,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 18, color: color),
+          const SizedBox(height: 8),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w800,
+              color: color,
+            ),
+          ),
+          Text(
+            label,
+            style: TextStyle(fontSize: 11, color: context.fomraTextSecondary),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatusPill extends StatelessWidget {
+  final LeadStatus status;
+
+  const _StatusPill({required this.status});
+
+  @override
+  Widget build(BuildContext context) {
+    final (label, color) = status.isAcquired
+        ? ('Closed', AppColors.success)
+        : status.isDropped
+            ? ('Dropped', AppColors.error)
+            : ('Active', AppColors.warning);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w800,
+          color: color,
+        ),
+      ),
+    );
+  }
+}

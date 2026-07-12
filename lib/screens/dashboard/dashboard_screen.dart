@@ -9,6 +9,7 @@ import '../../theme/fomra_theme_context.dart';
 import '../../widgets/fomra_app_bar.dart';
 import '../../widgets/fomra_app_shell.dart';
 import '../../widgets/management_executive_dashboard.dart';
+import '../../widgets/portal_home_sections.dart';
 import '../../widgets/ui/app_components.dart';
 import '../land_lead/lead_detail_screen.dart';
 
@@ -322,16 +323,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 const SizedBox(height: 16),
                 ManagementExecutiveDashboard(
                   leads: AppStore.instance.leads,
-                  teamRows: const [],
+                  teamRows:
+                      buildPortalTeamPerformance(AppStore.instance.leads),
                   notifications: const [],
                   widgetIds: const [
-                    'reminders',
-                    'escalations',
-                    'approvals',
-                    'predictive',
-                    'duplicates',
-                    'heatmap',
-                    'dealTerms',
+                    'funnel',
+                    'bottlenecks',
+                    'sla',
+                    'executives',
+                    'district',
                   ],
                   onViewLead: (lead) {
                     Navigator.push(
