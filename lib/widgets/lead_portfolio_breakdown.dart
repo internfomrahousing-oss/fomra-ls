@@ -120,8 +120,16 @@ class LeadPortfolioBreakdown extends StatelessWidget {
                         ),
                       ),
                     ),
-                    DataCell(Text(_value(
-                        l.location.isNotEmpty ? l.location : l.village))),
+                    DataCell(
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 200),
+                        child: Text(
+                          _propertyLabel(l),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ),
                     DataCell(Text(_value(l.village))),
                     DataCell(Text(_value(l.surveyNumber))),
                     DataCell(Text(leadPortfolioAcres(l).toStringAsFixed(2))),
@@ -139,6 +147,20 @@ class LeadPortfolioBreakdown extends StatelessWidget {
   }
 
   static String _value(String raw) => raw.trim().isEmpty ? '—' : raw.trim();
+
+  /// A meaningful property identifier so every lead row is recognisable even
+  /// when the free-text location is blank.
+  static String _propertyLabel(LandLead l) {
+    if (l.location.trim().isNotEmpty) return l.location.trim();
+    final parts = <String>[
+      if (l.surveyNumber.trim().isNotEmpty) 'Survey ${l.surveyNumber.trim()}',
+      if (l.village.trim().isNotEmpty) l.village.trim(),
+    ];
+    if (parts.isNotEmpty) return parts.join(' · ');
+    if (l.taluk.trim().isNotEmpty) return l.taluk.trim();
+    if (l.district.trim().isNotEmpty) return l.district.trim();
+    return 'Lead #${l.leadId}';
+  }
 }
 
 class _SummaryCard extends StatelessWidget {

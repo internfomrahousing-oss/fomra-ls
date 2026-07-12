@@ -6,7 +6,9 @@ import '../../services/app_store.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_layout.dart';
 import '../../theme/fomra_theme_context.dart';
+import '../../widgets/fomra_app_bar.dart';
 import '../../widgets/fomra_app_shell.dart';
+import '../../widgets/fomra_breadcrumb.dart';
 import '../../widgets/ui/app_components.dart';
 import '../land_lead/lead_detail_screen.dart';
 
@@ -73,6 +75,10 @@ class _CostCalculatorScreenState extends State<CostCalculatorScreen> {
 
     return FomraAppShell(
       currentRoute: '/cost-calculator',
+      appBar: FomraAppBar(
+        moduleName: 'Cost Calculator',
+        breadcrumbs: FomraBreadcrumbs.fromModules('Cost Calculator'),
+      ),
       body: ListView(
         padding: FomraLayout.pagePadding(context),
         children: [

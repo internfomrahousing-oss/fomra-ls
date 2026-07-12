@@ -114,7 +114,7 @@ class BusinessModulesHubScreen extends StatelessWidget {
                 crossAxisCount: cols,
                 mainAxisSpacing: 12,
                 crossAxisSpacing: 12,
-                childAspectRatio: cols == 1 ? 2.8 : 1.55,
+                childAspectRatio: cols == 1 ? 5.0 : 3.6,
                 children: [
                   for (final m in modules)
                     AppCard(

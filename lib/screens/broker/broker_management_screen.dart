@@ -6,7 +6,9 @@ import '../../services/app_store.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_layout.dart';
 import '../../theme/fomra_theme_context.dart';
+import '../../widgets/fomra_app_bar.dart';
 import '../../widgets/fomra_app_shell.dart';
+import '../../widgets/fomra_breadcrumb.dart';
 import '../../widgets/lead_portfolio_breakdown.dart';
 import '../../widgets/ui/app_components.dart';
 import '../land_lead/lead_detail_screen.dart';
@@ -52,6 +54,10 @@ class _BrokerManagementScreenState extends State<BrokerManagementScreen> {
 
     return FomraAppShell(
       currentRoute: '/broker-management',
+      appBar: FomraAppBar(
+        moduleName: 'Broker Management',
+        breadcrumbs: FomraBreadcrumbs.fromModules('Broker Management'),
+      ),
       body: ListView(
         padding: FomraLayout.pagePadding(context),
         children: [

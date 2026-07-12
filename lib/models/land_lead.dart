@@ -218,7 +218,7 @@ extension LeadStatusColor on LeadStatus {
         LeadStatus.legal => const Color(0xFF7C3AED),
         LeadStatus.signed => const Color(0xFF16A34A),
         LeadStatus.dropped => const Color(0xFFDC2626),
-        LeadStatus.prospectMeetingPending => const Color(0xFF2563EB),
+        LeadStatus.prospectMeetingPending => const Color(0xFFDB2777),
         LeadStatus.prospectMeetingCompleted => const Color(0xFF0891B2),
       };
 }

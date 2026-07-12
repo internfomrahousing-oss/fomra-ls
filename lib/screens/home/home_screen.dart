@@ -667,6 +667,21 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               );
                             },
                           );
+                          final reco = ManagementExecutiveDashboard(
+                            leads: _myLeads,
+                            teamRows: const [],
+                            notifications: const [],
+                            widgetIds: const ['recommendations'],
+                            onViewLead: (lead) {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      LeadDetailScreen(lead: lead),
+                                ),
+                              );
+                            },
+                          );
                           if (!sideBySide) {
                             return Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -674,13 +689,25 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                 performance,
                                 const SizedBox(height: AppSpacing.lg),
                                 todayTasks,
+                                const SizedBox(height: AppSpacing.lg),
+                                reco,
                               ],
                             );
                           }
                           return Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Expanded(child: performance),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    performance,
+                                    const SizedBox(height: AppSpacing.lg),
+                                    reco,
+                                  ],
+                                ),
+                              ),
                               const SizedBox(width: AppSpacing.lg),
                               Expanded(child: todayTasks),
                             ],
@@ -688,26 +715,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         },
                       ),
               ),
-              if (!_isManagement) ...[
-                const SizedBox(height: AppSpacing.lg),
-                PortalFadeSection(
-                  index: 3,
-                  child: ManagementExecutiveDashboard(
-                    leads: _myLeads,
-                    teamRows: const [],
-                    notifications: const [],
-                    widgetIds: const ['recommendations'],
-                    onViewLead: (lead) {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => LeadDetailScreen(lead: lead),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
               const SizedBox(height: 88),
             ],
           ),

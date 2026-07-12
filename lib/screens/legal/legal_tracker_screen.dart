@@ -8,7 +8,9 @@ import '../../theme/app_theme.dart';
 import '../../theme/fomra_layout.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../utils/legal_document_catalog.dart';
+import '../../widgets/fomra_app_bar.dart';
 import '../../widgets/fomra_app_shell.dart';
+import '../../widgets/fomra_breadcrumb.dart';
 import '../../widgets/ui/app_components.dart';
 import '../../widgets/ui/app_loader.dart';
 import '../land_lead/lead_detail_screen.dart';
@@ -117,6 +119,10 @@ class _LegalTrackerScreenState extends State<LegalTrackerScreen> {
 
     return FomraAppShell(
       currentRoute: '/legal-tracker',
+      appBar: FomraAppBar(
+        moduleName: 'Legal Tracker',
+        breadcrumbs: FomraBreadcrumbs.fromModules('Legal Tracker'),
+      ),
       body: RefreshIndicator(
         onRefresh: _load,
         child: ListView(

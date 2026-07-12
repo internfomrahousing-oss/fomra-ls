@@ -4,7 +4,9 @@ import '../../models/land_lead.dart';
 import '../../services/app_store.dart';
 import '../../theme/fomra_layout.dart';
 import '../../theme/fomra_theme_context.dart';
+import '../../widgets/fomra_app_bar.dart';
 import '../../widgets/fomra_app_shell.dart';
+import '../../widgets/fomra_breadcrumb.dart';
 import '../../widgets/lead_portfolio_breakdown.dart';
 import '../../widgets/ui/app_components.dart';
 import '../land_lead/lead_detail_screen.dart';
@@ -91,6 +93,10 @@ class _OwnerHistoryScreenState extends State<OwnerHistoryScreen> {
 
     return FomraAppShell(
       currentRoute: '/owner-history',
+      appBar: FomraAppBar(
+        moduleName: 'Owner History',
+        breadcrumbs: FomraBreadcrumbs.fromModules('Owner History'),
+      ),
       body: ListView(
         padding: FomraLayout.pagePadding(context),
         children: [

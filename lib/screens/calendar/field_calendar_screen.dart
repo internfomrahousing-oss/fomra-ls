@@ -8,7 +8,9 @@ import '../../theme/app_theme.dart';
 import '../../theme/fomra_layout.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../widgets/ui/app_feedback.dart';
+import '../../widgets/fomra_app_bar.dart';
 import '../../widgets/fomra_app_shell.dart';
+import '../../widgets/fomra_breadcrumb.dart';
 import '../../widgets/ui/app_components.dart';
 import '../../widgets/ui/app_loader.dart';
 import '../land_lead/lead_detail_screen.dart';
@@ -246,6 +248,10 @@ class _FieldCalendarScreenState extends State<FieldCalendarScreen> {
 
     return FomraAppShell(
       currentRoute: '/field-calendar',
+      appBar: FomraAppBar(
+        moduleName: 'Field Calendar',
+        breadcrumbs: FomraBreadcrumbs.fromModules('Field Calendar'),
+      ),
       body: RefreshIndicator(
         onRefresh: _load,
         child: ListView(
