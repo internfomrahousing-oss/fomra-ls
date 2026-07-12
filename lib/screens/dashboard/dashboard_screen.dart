@@ -8,6 +8,7 @@ import '../../theme/fomra_layout.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../widgets/fomra_app_bar.dart';
 import '../../widgets/fomra_app_shell.dart';
+import '../../widgets/management_executive_dashboard.dart';
 import '../../widgets/ui/app_components.dart';
 import '../land_lead/lead_detail_screen.dart';
 
@@ -317,6 +318,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 _KpiGrid(
                   kpis: kpis,
                   onTap: _openKpiLeads,
+                ),
+                const SizedBox(height: 16),
+                ManagementExecutiveDashboard(
+                  leads: AppStore.instance.leads,
+                  teamRows: const [],
+                  notifications: const [],
+                  widgetIds: const [
+                    'reminders',
+                    'escalations',
+                    'approvals',
+                    'predictive',
+                    'duplicates',
+                    'heatmap',
+                    'dealTerms',
+                  ],
+                  onViewLead: (lead) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => LeadDetailScreen(lead: lead),
+                      ),
+                    );
+                  },
                 ),
               ],
             ),

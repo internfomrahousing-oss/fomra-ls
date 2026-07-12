@@ -144,12 +144,18 @@ class ManagementExecutiveDashboard extends StatefulWidget {
   final List<AppNotification> notifications;
   final ValueChanged<LandLead>? onViewLead;
 
+  /// When provided, renders exactly these widgets in this order as a fixed
+  /// (non-customizable) layout — no toolbar or executive KPI strip. Used to
+  /// surface a specific subset of BI widgets on another screen (e.g. Dashboard).
+  final List<String>? widgetIds;
+
   const ManagementExecutiveDashboard({
     super.key,
     required this.leads,
     required this.teamRows,
     required this.notifications,
     this.onViewLead,
+    this.widgetIds,
   });
 
   @override
@@ -333,6 +339,21 @@ class _ManagementExecutiveDashboardState
     );
     const gap = AppSpacing.md;
     final isDesktop = MediaQuery.sizeOf(context).width >= 1024;
+
+    // Fixed subset layout (e.g. widgets relocated to the Dashboard screen):
+    // no toolbar, no KPI strip, no customize — just the requested widgets.
+    final fixed = widget.widgetIds;
+    if (fixed != null) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (var i = 0; i < fixed.length; i++) ...[
+            if (i > 0) SizedBox(height: gap),
+            _buildWidget(fixed[i], snap, intel, isDesktop),
+          ],
+        ],
+      );
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,

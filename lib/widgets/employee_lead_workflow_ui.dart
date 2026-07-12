@@ -3,19 +3,14 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../models/land_lead.dart';
-import '../services/gps_verification_service.dart';
 import '../services/land_lead_legal_service.dart';
-import '../services/land_lead_service.dart';
-import '../services/offline_sync_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/fomra_theme_context.dart';
 import 'ui/app_feedback.dart';
 import '../utils/employee_lead_next_action.dart';
 import '../utils/image_compressor.dart';
-import 'voice_note_recorder_dialog.dart';
 
 String _fmtDate(DateTime d) => DateFormat('d MMM yyyy').format(d.toLocal());
 
@@ -431,112 +426,6 @@ class _EmployeeLeadQuickFabState extends State<EmployeeLeadQuickFab>
     await _captureDocument(kind);
   }
 
-  Future<void> _uploadSitePhoto() async {
-    final picker = ImagePicker();
-    final source = await showModalBottomSheet<ImageSource>(
-      context: context,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.photo_camera_outlined),
-              title: const Text('Take photo'),
-              onTap: () => Navigator.pop(ctx, ImageSource.camera),
-            ),
-            ListTile(
-              leading: const Icon(Icons.photo_library_outlined),
-              title: const Text('Choose from gallery'),
-              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
-            ),
-          ],
-        ),
-      ),
-    );
-    if (source == null || !mounted) return;
-    final file = await picker.pickImage(source: source, imageQuality: 90);
-    if (file == null || !mounted) return;
-
-    final raw = await file.readAsBytes();
-    final compressed =
-        await ImageCompressor.compressTo250Kb(Uint8List.fromList(raw));
-    if (widget.lead.sitePhotoUrls.length >= 4) {
-      if (!mounted) return;
-      AppFeedback.warning(context, 'Maximum 4 site photos allowed');
-      return;
-    }
-
-    final sync = OfflineSyncService.instance;
-    if (!sync.isOnline) {
-      await sync.enqueuePhoto(
-        leadId: widget.lead.leadId,
-        bytes: compressed,
-      );
-      if (!mounted) return;
-      AppFeedback.warning(
-          context, 'Photo queued offline — will sync when online');
-      widget.onActivityChanged?.call();
-      return;
-    }
-
-    final updated = await LandLeadService.update(
-      widget.lead,
-      sitePhotoBytes: [compressed],
-    );
-    widget.onLeadUpdated?.call(updated);
-    if (!mounted) return;
-    AppFeedback.success(context, 'Site photo uploaded');
-    widget.onActivityChanged?.call();
-  }
-
-  Future<void> _voiceNote() async {
-    final ok = await showVoiceNoteRecorderDialog(
-      context,
-      leadId: widget.lead.leadId,
-    );
-    if (ok == true && mounted) {
-      widget.onActivityChanged?.call();
-      AppFeedback.success(context, 'Voice note saved');
-    }
-  }
-
-  Future<void> _gpsCheckIn() async {
-    try {
-      final fix = await GpsVerificationService.captureLive();
-      final stamp = DateFormat('d MMM yyyy, HH:mm').format(DateTime.now());
-      final line =
-          '[$stamp] [GPS Check-in] ${fix.displayCoords} · '
-          '±${fix.accuracyMeters.toStringAsFixed(0)} m · live';
-      final existing = widget.lead.notes.trim();
-      final notes = existing.isEmpty ? line : '$existing\n$line';
-      final withGps = widget.lead.copyWith(
-        notes: notes,
-        gpsCoordinates: fix.toStorage(),
-      );
-
-      final sync = OfflineSyncService.instance;
-      if (!sync.isOnline) {
-        await sync.enqueueUpdateLead(lead: withGps);
-        widget.onLeadUpdated?.call(withGps);
-      } else {
-        final saved = await LandLeadService.update(withGps);
-        widget.onLeadUpdated?.call(saved);
-      }
-
-      final maps = Uri.parse(
-        'https://www.google.com/maps/search/?api=1&query=${fix.latitude},${fix.longitude}',
-      );
-      await launchUrl(maps, mode: LaunchMode.externalApplication);
-
-      if (!mounted) return;
-      AppFeedback.success(context, 'Checked in · ${fix.summaryLabel}');
-      widget.onActivityChanged?.call();
-    } on GpsVerificationException catch (e) {
-      if (!mounted) return;
-      AppFeedback.error(context, e.message);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final actions = <({IconData icon, String label, Color color, VoidCallback onTap})>[
@@ -555,18 +444,6 @@ class _EmployeeLeadQuickFabState extends State<EmployeeLeadQuickFab>
         }),
       ),
       (
-        icon: Icons.mic_none_rounded,
-        label: 'Voice Note',
-        color: AppColors.secondary,
-        onTap: () => _run(_voiceNote),
-      ),
-      (
-        icon: Icons.photo_camera_outlined,
-        label: 'Upload Photo',
-        color: AppColors.warning,
-        onTap: () => _run(_uploadSitePhoto),
-      ),
-      (
         icon: Icons.upload_file_outlined,
         label: 'Upload Document',
         color: AppColors.info,
@@ -577,12 +454,6 @@ class _EmployeeLeadQuickFabState extends State<EmployeeLeadQuickFab>
         label: 'WhatsApp',
         color: const Color(0xFF25D366),
         onTap: () => _run(() => widget.onLaunchContact('https://wa.me')),
-      ),
-      (
-        icon: Icons.my_location_rounded,
-        label: 'GPS Check-in',
-        color: AppColors.error,
-        onTap: () => _run(_gpsCheckIn),
       ),
     ];
 

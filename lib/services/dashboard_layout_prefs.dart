@@ -6,20 +6,13 @@ class DashboardLayoutPrefs {
 
   static const defaultOrder = [
     'pipeline',
-    'reminders',
-    'escalations',
-    'approvals',
     'recommendations',
-    'predictive',
-    'duplicates',
     'funnel',
     'ageing',
     'bottlenecks',
     'sla',
     'executives',
-    'heatmap',
     'district',
-    'dealTerms',
     'activities',
   ];
 
