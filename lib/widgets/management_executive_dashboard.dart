@@ -3,11 +3,15 @@ import 'dart:math' as math;
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
+import '../analytics/management_bi_metrics.dart';
 import '../models/app_notification.dart';
 import '../models/land_lead.dart';
+import '../services/dashboard_layout_prefs.dart';
+import '../services/management_bi_activity_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/fomra_theme_context.dart';
 import '../utils/lead_location_parser.dart';
+import 'management_bi_sections.dart';
 import 'portal_home_sections.dart';
 import 'terms_deal_selector.dart';
 import 'ui/app_components.dart';
@@ -132,7 +136,7 @@ int _starRating(double conversion) {
 
 // ── Main widget ─────────────────────────────────────────────────────────────
 
-class ManagementExecutiveDashboard extends StatelessWidget {
+class ManagementExecutiveDashboard extends StatefulWidget {
   final List<LandLead> leads;
   final List<PortalTeamPerf> teamRows;
   final List<AppNotification> notifications;
@@ -147,8 +151,120 @@ class ManagementExecutiveDashboard extends StatelessWidget {
   });
 
   @override
+  State<ManagementExecutiveDashboard> createState() =>
+      _ManagementExecutiveDashboardState();
+}
+
+class _ManagementExecutiveDashboardState
+    extends State<ManagementExecutiveDashboard> {
+  ManagementBiActivityBundle _activity = ManagementBiActivityBundle.empty;
+  List<String> _order = List.of(DashboardLayoutPrefs.defaultOrder);
+  bool _loadingActivity = true;
+  bool _customizing = false;
+
+  static const _widgetTitles = {
+    'pipeline': 'Pipeline Dashboard',
+    'funnel': 'Conversion Funnel',
+    'ageing': 'Lead Ageing',
+    'bottlenecks': 'Bottlenecks',
+    'sla': 'SLA Dashboard',
+    'executives': 'Executive Performance',
+    'heatmap': 'Activity Heat Map',
+    'district': 'District Performance',
+    'dealTerms': 'Deal Terms',
+    'activities': 'Recent Activities',
+  };
+
+  @override
+  void initState() {
+    super.initState();
+    _bootstrap();
+  }
+
+  @override
+  void didUpdateWidget(covariant ManagementExecutiveDashboard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.leads.length != widget.leads.length) {
+      // Refresh activity when lead set changes materially.
+      _loadActivity();
+    }
+  }
+
+  Future<void> _bootstrap() async {
+    final order = await DashboardLayoutPrefs.loadOrder();
+    if (mounted) setState(() => _order = order);
+    await _loadActivity();
+  }
+
+  Future<void> _loadActivity() async {
+    setState(() => _loadingActivity = true);
+    final bundle = await ManagementBiActivityService.loadAll();
+    if (!mounted) return;
+    setState(() {
+      _activity = bundle;
+      _loadingActivity = false;
+    });
+  }
+
+  Future<void> _persistOrder() async {
+    await DashboardLayoutPrefs.saveOrder(_order);
+  }
+
+  Future<void> _resetOrder() async {
+    await DashboardLayoutPrefs.reset();
+    if (!mounted) return;
+    setState(() {
+      _order = List.of(DashboardLayoutPrefs.defaultOrder);
+      _customizing = false;
+    });
+  }
+
+  Widget _buildWidget(String id, ManagementBiSnapshot snap, bool isDesktop) {
+    switch (id) {
+      case 'pipeline':
+        return BiPipelineSection(summary: snap.pipeline);
+      case 'funnel':
+        return BiFunnelSection(rows: snap.funnel);
+      case 'ageing':
+        return BiAgeingSection(
+          rows: snap.ageing,
+          onViewLead: widget.onViewLead,
+        );
+      case 'bottlenecks':
+        return BiBottleneckSection(rows: snap.bottlenecks);
+      case 'sla':
+        return BiSlaSection(
+          summary: snap.sla,
+          onViewLead: widget.onViewLead,
+        );
+      case 'executives':
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            BiExecutiveSection(rows: snap.executives),
+            const SizedBox(height: AppSpacing.md),
+            _EmployeeLeaderboardCard(
+              teamRows: widget.teamRows,
+              leads: widget.leads,
+            ),
+          ],
+        );
+      case 'heatmap':
+        return BiHeatmapSection(rows: snap.heatmap);
+      case 'district':
+        return _DistrictPerformanceCard(leads: widget.leads);
+      case 'dealTerms':
+        return _DealTermsDonutCard(leads: widget.leads);
+      case 'activities':
+        return _RecentActivitiesCard(notifications: widget.notifications);
+      default:
+        return const SizedBox.shrink();
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    if (leads.isEmpty) {
+    if (widget.leads.isEmpty) {
       return _DashboardCard(
         child: Column(
           children: [
@@ -166,50 +282,151 @@ class ManagementExecutiveDashboard extends StatelessWidget {
       );
     }
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final w = constraints.maxWidth;
-        final isDesktop = w >= 1024;
-        final isTablet = w >= 640;
-        final gap = AppSpacing.md;
+    final snap = ManagementBiMetrics.build(
+      leads: widget.leads,
+      activity: _activity,
+    );
+    final gap = AppSpacing.md;
+    final isDesktop = MediaQuery.sizeOf(context).width >= 1024;
 
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _ExecutiveTopRow(
-              leads: leads,
-              isDesktop: isDesktop,
-              isTablet: isTablet,
-            ),
-            SizedBox(height: gap),
-            if (isDesktop)
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    flex: 7,
-                    child: _DistrictPerformanceCard(leads: leads),
-                  ),
-                  SizedBox(width: gap),
-                  Expanded(
-                    flex: 5,
-                    child: _RecentActivitiesCard(notifications: notifications),
-                  ),
-                ],
-              )
-            else ...[
-              _DistrictPerformanceCard(leads: leads),
-              SizedBox(height: gap),
-              _RecentActivitiesCard(notifications: notifications),
-            ],
-            SizedBox(height: gap),
-            _EmployeeLeaderboardCard(
-              teamRows: teamRows,
-              leads: leads,
-            ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _BiToolbar(
+          loading: _loadingActivity,
+          customizing: _customizing,
+          onToggleCustomize: () => setState(() => _customizing = !_customizing),
+          onRefresh: _loadActivity,
+          onReset: _resetOrder,
+        ),
+        SizedBox(height: gap),
+        // Keep classic KPI strip as a fixed executive snapshot.
+        _ExecutiveTopRow(
+          leads: widget.leads,
+          isDesktop: isDesktop,
+          isTablet: MediaQuery.sizeOf(context).width >= 640,
+        ),
+        SizedBox(height: gap),
+        if (_customizing)
+          _CustomizeOrderList(
+            order: _order,
+            titles: _widgetTitles,
+            onReorderItem: (oldIndex, newIndex) {
+              setState(() {
+                final item = _order.removeAt(oldIndex);
+                _order.insert(newIndex, item);
+              });
+              _persistOrder();
+            },
+          )
+        else
+          for (var i = 0; i < _order.length; i++) ...[
+            if (i > 0) SizedBox(height: gap),
+            _buildWidget(_order[i], snap, isDesktop),
           ],
-        );
-      },
+      ],
+    );
+  }
+}
+
+class _BiToolbar extends StatelessWidget {
+  final bool loading;
+  final bool customizing;
+  final VoidCallback onToggleCustomize;
+  final VoidCallback onRefresh;
+  final VoidCallback onReset;
+
+  const _BiToolbar({
+    required this.loading,
+    required this.customizing,
+    required this.onToggleCustomize,
+    required this.onRefresh,
+    required this.onReset,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Text(
+          'Business Intelligence',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w800,
+            color: context.fomraTextPrimary,
+          ),
+        ),
+        if (loading) ...[
+          const SizedBox(width: 10),
+          const SizedBox(
+            width: 14,
+            height: 14,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        ],
+        const Spacer(),
+        if (customizing)
+          TextButton(
+            onPressed: onReset,
+            child: const Text('Reset layout'),
+          ),
+        IconButton(
+          tooltip: 'Refresh activity data',
+          onPressed: loading ? null : onRefresh,
+          icon: const Icon(Icons.refresh_rounded, size: 20),
+        ),
+        FilledButton.tonalIcon(
+          onPressed: onToggleCustomize,
+          icon: Icon(
+            customizing ? Icons.check_rounded : Icons.dashboard_customize_outlined,
+            size: 18,
+          ),
+          label: Text(customizing ? 'Done' : 'Customize'),
+        ),
+      ],
+    );
+  }
+}
+
+class _CustomizeOrderList extends StatelessWidget {
+  final List<String> order;
+  final Map<String, String> titles;
+  final void Function(int oldIndex, int newIndex) onReorderItem;
+
+  const _CustomizeOrderList({
+    required this.order,
+    required this.titles,
+    required this.onReorderItem,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      radius: _kCardRadius,
+      interactive: false,
+      child: ReorderableListView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        itemCount: order.length,
+        onReorderItem: onReorderItem,
+        buildDefaultDragHandles: false,
+        itemBuilder: (context, index) {
+          final id = order[index];
+          return ListTile(
+            key: ValueKey(id),
+            leading: ReorderableDragStartListener(
+              index: index,
+              child: Icon(Icons.drag_indicator, color: context.fomraTextSecondary),
+            ),
+            title: Text(
+              titles[id] ?? id,
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+            subtitle: Text('Widget ${index + 1} of ${order.length}'),
+          );
+        },
+      ),
     );
   }
 }
