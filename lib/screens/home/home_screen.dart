@@ -9,8 +9,6 @@ import '../land_lead/lead_detail_screen.dart';
 import '../land_lead/leads_map_screen.dart';
 import '../land_lead/management_visit_review_dialog.dart';
 import '../task_management/task_management_screen.dart';
-import '../../utils/contact_directory.dart';
-import 'contact_directory_screen.dart';
 import '../settings/change_password_screen.dart';
 import '../../services/auth_service.dart';
 import '../../services/app_store.dart';
@@ -501,19 +499,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         label: 'Owner details',
         icon: Icons.person_outline,
         accent: AppColors.success,
-        onTap: () => ContactDirectoryScreen.open(
-          context,
-          kind: ContactDirectoryKind.owner,
-        ),
+        onTap: () => _goTo('/owner-history'),
       ),
       PortalQuickAction(
         label: 'Broker details',
         icon: Icons.handshake_outlined,
         accent: AppColors.secondary,
-        onTap: () => ContactDirectoryScreen.open(
-          context,
-          kind: ContactDirectoryKind.broker,
-        ),
+        onTap: () => _goTo('/broker-management'),
       ),
       if (_isManagement)
         PortalQuickAction(

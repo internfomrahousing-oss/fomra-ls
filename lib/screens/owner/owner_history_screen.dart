@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../../models/land_lead.dart';
 import '../../services/app_store.dart';
+import '../../theme/app_theme.dart';
 import '../../theme/fomra_layout.dart';
 import '../../theme/fomra_theme_context.dart';
+import '../../widgets/contact_call_whatsapp.dart';
 import '../../widgets/fomra_app_bar.dart';
 import '../../widgets/fomra_app_shell.dart';
 import '../../widgets/fomra_breadcrumb.dart';
@@ -158,6 +160,10 @@ class _OwnerHistoryScreenState extends State<OwnerHistoryScreen> {
                                 color: context.fomraTextPrimary,
                               ),
                             ),
+                          ),
+                          ContactCallWhatsApp(
+                            contact: g.contact,
+                            accent: AppColors.success,
                           ),
                           Icon(
                             expanded

@@ -6,6 +6,7 @@ import '../../services/app_store.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_layout.dart';
 import '../../theme/fomra_theme_context.dart';
+import '../../widgets/contact_call_whatsapp.dart';
 import '../../widgets/fomra_app_bar.dart';
 import '../../widgets/fomra_app_shell.dart';
 import '../../widgets/fomra_breadcrumb.dart';
@@ -134,6 +135,10 @@ class _BrokerManagementScreenState extends State<BrokerManagementScreen> {
                                 color: context.fomraTextPrimary,
                               ),
                             ),
+                          ),
+                          ContactCallWhatsApp(
+                            contact: r.contact,
+                            accent: AppColors.secondary,
                           ),
                           Icon(
                             expanded ? Icons.expand_less : Icons.expand_more,
