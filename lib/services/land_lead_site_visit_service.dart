@@ -1,6 +1,8 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/land_lead_site_visit.dart';
+import 'app_store.dart';
+import 'audit_log_service.dart';
 import 'auth_service.dart';
 import 'notifications_service.dart';
 
@@ -133,6 +135,29 @@ class LandLeadSiteVisitService {
 
     final visit = LandLeadSiteVisit.fromJson(row);
     final approved = status == SiteVisitApprovalStatus.approved;
+
+    ({String owner, String broker, String executive}) ctx =
+        (owner: '', broker: '', executive: '');
+    for (final l in AppStore.instance.leads) {
+      if (l.leadId == visit.leadId) {
+        ctx = (owner: l.ownerName, broker: l.brokerName, executive: l.createdByName);
+        break;
+      }
+    }
+    AuditLogService.log(
+      action: approved ? 'approve' : 'reject',
+      entityType: 'site_visit',
+      entityId: visit.id,
+      field: 'approval_status',
+      oldValue: 'pending',
+      newValue: status.dbValue,
+      module: 'Site Visits',
+      leadId: visit.leadId,
+      ownerName: ctx.owner,
+      brokerName: ctx.broker,
+      executiveName: ctx.executive,
+    ).catchError((_) {});
+
     NotificationsService.create(
       audience: 'employee',
       type: 'site_visit',

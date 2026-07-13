@@ -34,7 +34,7 @@ class FomraBottomNav extends StatelessWidget {
         '/dashboard',
         Icons.bar_chart_outlined,
         Icons.bar_chart_rounded,
-        'Dashboard',
+        'Analytics',
       ));
     }
     return items;

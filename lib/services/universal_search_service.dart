@@ -142,19 +142,6 @@ abstract final class UniversalSearchService {
         keywords: ['patta', 'chitta', 'fmb', 'ec', 'sale deed', 'repository'],
       ),
       const _NavEntry(
-        label: 'Business Modules',
-        route: '/business-modules',
-        keywords: [
-          'broker',
-          'land bank',
-          'legal',
-          'survey',
-          'owner history',
-          'cost',
-          'calendar',
-        ],
-      ),
-      const _NavEntry(
         label: 'Broker Management',
         route: '/broker-management',
         keywords: ['broker', 'performance', 'conversion', 'success rate'],
@@ -193,9 +180,9 @@ abstract final class UniversalSearchService {
     if (isManagement) {
       entries.addAll(const [
         _NavEntry(
-          label: 'Dashboard',
+          label: 'Analytics',
           route: '/dashboard',
-          keywords: ['analytics', 'stats', 'kpi'],
+          keywords: ['dashboard', 'analytics', 'stats', 'kpi'],
         ),
         _NavEntry(
           label: 'Reports',

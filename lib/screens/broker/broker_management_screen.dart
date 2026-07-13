@@ -57,7 +57,7 @@ class _BrokerManagementScreenState extends State<BrokerManagementScreen> {
       currentRoute: '/broker-management',
       appBar: FomraAppBar(
         moduleName: 'Broker Management',
-        breadcrumbs: FomraBreadcrumbs.fromModules('Broker Management'),
+        breadcrumbs: FomraBreadcrumbs.module('Broker Management'),
       ),
       body: ListView(
         padding: FomraLayout.pagePadding(context),

@@ -3,6 +3,7 @@ import '../models/land_lead_site_visit.dart';
 import '../models/lead_call_log.dart';
 import '../models/land_lead_meeting.dart';
 import '../services/management_bi_activity_service.dart';
+import 'ai_lead_score.dart';
 import 'management_bi_metrics.dart';
 
 // ── Reminder / escalation types ─────────────────────────────────────────────
@@ -552,41 +553,17 @@ class ManagementIntelligence {
     );
   }
 
+  /// AI Lead Score (0–100) for a single lead, using the same weighted model
+  /// (Lead Progress, Land Quality, Owner Engagement, Documentation, Follow-up
+  /// Health, Risk Factors) as [AiLeadScore.compute] — screens that need the
+  /// full breakdown (e.g. the lead detail page) should call that directly.
   static double _successScore(LandLead lead, _ActivityIndex index) =>
-      leadSuccessScore(
-        lead,
-        hasCall: index.hasCall(lead.leadId),
-        hasMeeting: index.hasMeeting(lead.leadId),
-        hasVisit: index.hasVisit(lead.leadId),
-      );
-
-  /// AI success score (0–100) for a single lead. Public so screens (e.g. the
-  /// lead detail page) can display the same score the recommendation engine
-  /// uses. Pass whether the lead has any logged call/meeting/site-visit.
-  static double leadSuccessScore(
-    LandLead lead, {
-    required bool hasCall,
-    required bool hasMeeting,
-    required bool hasVisit,
-  }) {
-    var score = switch (lead.status) {
-      LeadStatus.signed => 100.0,
-      LeadStatus.legal => 75.0,
-      LeadStatus.negotiation => 55.0,
-      LeadStatus.prospectMeetingCompleted => 40.0,
-      LeadStatus.prospectMeetingPending => 20.0,
-      LeadStatus.dropped => 0.0,
-    };
-    if (hasCall) score += 8;
-    if (hasMeeting) score += 10;
-    if (hasVisit) score += 12;
-    if (lead.surveyNumber.trim().isNotEmpty) score += 8;
-    if (lead.gpsCoordinates.trim().isNotEmpty) score += 5;
-    if (lead.contactDetails.trim().isNotEmpty) score += 5;
-    if (biLeadAcres(lead) >= 1) score += 6;
-    if (lead.status == LeadStatus.dropped) score = 0;
-    return score.clamp(0, 100);
-  }
+      AiLeadScore.compute(
+        lead: lead,
+        callLogs: index.callsByLead[lead.leadId] ?? const [],
+        meetings: index.meetingsByLead[lead.leadId] ?? const [],
+        siteVisits: index.visitsByLead[lead.leadId] ?? const [],
+      ).score.toDouble();
 
   static List<IntelLeadSuggestion> _bestSuggestions(
     List<LandLead> leads,

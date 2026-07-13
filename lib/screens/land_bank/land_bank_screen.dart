@@ -98,7 +98,7 @@ class _LandBankScreenState extends State<LandBankScreen> {
       currentRoute: '/land-bank',
       appBar: FomraAppBar(
         moduleName: 'Land Bank',
-        breadcrumbs: FomraBreadcrumbs.fromModules('Land Bank'),
+        breadcrumbs: FomraBreadcrumbs.module('Land Bank'),
       ),
       body: LayoutBuilder(
         builder: (context, constraints) {

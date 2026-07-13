@@ -97,7 +97,7 @@ class _OwnerHistoryScreenState extends State<OwnerHistoryScreen> {
       currentRoute: '/owner-history',
       appBar: FomraAppBar(
         moduleName: 'Owner History',
-        breadcrumbs: FomraBreadcrumbs.fromModules('Owner History'),
+        breadcrumbs: FomraBreadcrumbs.module('Owner History'),
       ),
       body: ListView(
         padding: FomraLayout.pagePadding(context),

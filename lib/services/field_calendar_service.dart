@@ -1,6 +1,6 @@
-import 'dart:convert';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
-import 'package:shared_preferences/shared_preferences.dart';
+import 'auth_service.dart';
 
 enum FieldCalendarKind { siteVisit, meeting, survey }
 
@@ -10,6 +10,11 @@ extension FieldCalendarKindX on FieldCalendarKind {
         FieldCalendarKind.meeting => 'Meeting',
         FieldCalendarKind.survey => 'Survey',
       };
+
+  String get dbValue => name;
+
+  static FieldCalendarKind fromDb(String? raw) => FieldCalendarKind.values
+      .firstWhere((k) => k.name == raw, orElse: () => FieldCalendarKind.meeting);
 }
 
 class FieldCalendarEvent {
@@ -21,6 +26,7 @@ class FieldCalendarEvent {
   final String notes;
   final bool reminderEnabled;
   final int remindMinutesBefore;
+  final String createdByName;
   bool completed;
 
   FieldCalendarEvent({
@@ -32,12 +38,22 @@ class FieldCalendarEvent {
     this.notes = '',
     this.reminderEnabled = true,
     this.remindMinutesBefore = 60,
+    this.createdByName = '',
     this.completed = false,
   });
 
   DateTime get remindAt =>
       scheduledAt.subtract(Duration(minutes: remindMinutesBefore));
 
+  /// True once the reminder time has arrived and it hasn't been actioned yet.
+  /// Deliberately has no upper-bound cutoff — a reminder stays due (and keeps
+  /// surfacing in the Notification Center) until it's completed, so it can't
+  /// be silently missed just because nobody opened the app in time.
+  bool get isDue =>
+      reminderEnabled && !completed && DateTime.now().isAfter(remindAt);
+
+  /// Near-term highlight for the calendar UI (due within the next 2 hours of
+  /// the scheduled time, or already started).
   bool get isDueSoon {
     final now = DateTime.now();
     return reminderEnabled &&
@@ -46,57 +62,35 @@ class FieldCalendarEvent {
         now.isBefore(scheduledAt.add(const Duration(hours: 2)));
   }
 
-  Map<String, dynamic> toJson() => {
-        'id': id,
-        'kind': kind.name,
-        'lead_id': leadId,
-        'title': title,
-        'scheduled_at': scheduledAt.toIso8601String(),
-        'notes': notes,
-        'reminder_enabled': reminderEnabled,
-        'remind_minutes': remindMinutesBefore,
-        'completed': completed,
-      };
-
   factory FieldCalendarEvent.fromJson(Map<String, dynamic> j) =>
       FieldCalendarEvent(
         id: j['id'] as String,
-        kind: FieldCalendarKind.values.firstWhere(
-          (k) => k.name == j['kind'],
-          orElse: () => FieldCalendarKind.meeting,
-        ),
+        kind: FieldCalendarKindX.fromDb(j['kind'] as String?),
         leadId: j['lead_id'] as String? ?? '',
         title: j['title'] as String? ?? '',
-        scheduledAt: DateTime.tryParse(j['scheduled_at'] as String? ?? '') ??
-            DateTime.now(),
+        scheduledAt: DateTime.parse(j['scheduled_at'] as String).toLocal(),
         notes: j['notes'] as String? ?? '',
         reminderEnabled: j['reminder_enabled'] as bool? ?? true,
         remindMinutesBefore: j['remind_minutes'] as int? ?? 60,
+        createdByName: j['created_by_name'] as String? ?? '',
         completed: j['completed'] as bool? ?? false,
       );
 }
 
-/// Local calendar for site visits, meetings, and survey dates + reminders.
+/// Field Calendar events (site visits, meetings, survey dates) with
+/// reminders — backed by Supabase so events and their reminders are visible
+/// across every device/session, not just the one that created them.
 class FieldCalendarService {
-  static const _key = 'fomra_field_calendar_v1';
+  static SupabaseClient get _db => Supabase.instance.client;
 
   static Future<List<FieldCalendarEvent>> getAll() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getStringList(_key) ?? [];
-    final list = raw
-        .map((s) =>
-            FieldCalendarEvent.fromJson(jsonDecode(s) as Map<String, dynamic>))
-        .toList()
-      ..sort((a, b) => a.scheduledAt.compareTo(b.scheduledAt));
-    return list;
-  }
-
-  static Future<void> _save(List<FieldCalendarEvent> events) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList(
-      _key,
-      events.map((e) => jsonEncode(e.toJson())).toList(),
-    );
+    final rows = await _db
+        .from('field_calendar_events')
+        .select()
+        .order('scheduled_at', ascending: true);
+    return (rows as List)
+        .map((r) => FieldCalendarEvent.fromJson(r as Map<String, dynamic>))
+        .toList();
   }
 
   static Future<FieldCalendarEvent> add({
@@ -108,38 +102,37 @@ class FieldCalendarService {
     bool reminderEnabled = true,
     int remindMinutesBefore = 60,
   }) async {
-    final event = FieldCalendarEvent(
-      id: 'cal_${DateTime.now().microsecondsSinceEpoch}',
-      kind: kind,
-      leadId: leadId,
-      title: title,
-      scheduledAt: scheduledAt,
-      notes: notes,
-      reminderEnabled: reminderEnabled,
-      remindMinutesBefore: remindMinutesBefore,
-    );
-    final all = await getAll();
-    all.add(event);
-    await _save(all);
-    return event;
+    final createdByName = AuthService.instance.currentUser?.fullName ?? '';
+    final row = await _db
+        .from('field_calendar_events')
+        .insert({
+          'kind': kind.dbValue,
+          'lead_id': leadId,
+          'title': title,
+          'scheduled_at': scheduledAt.toUtc().toIso8601String(),
+          'notes': notes,
+          'reminder_enabled': reminderEnabled,
+          'remind_minutes': remindMinutesBefore,
+          if (createdByName.isNotEmpty) 'created_by_name': createdByName,
+        })
+        .select()
+        .single();
+    return FieldCalendarEvent.fromJson(row);
   }
 
   static Future<void> markCompleted(String id, {bool completed = true}) async {
-    final all = await getAll();
-    for (final e in all) {
-      if (e.id == id) e.completed = completed;
-    }
-    await _save(all);
+    await _db
+        .from('field_calendar_events')
+        .update({'completed': completed}).eq('id', id);
   }
 
   static Future<void> remove(String id) async {
-    final all = await getAll();
-    all.removeWhere((e) => e.id == id);
-    await _save(all);
+    await _db.from('field_calendar_events').delete().eq('id', id);
   }
 
+  /// Reminders that are due and not yet completed, across all devices/users.
   static Future<List<FieldCalendarEvent>> dueReminders() async {
     final all = await getAll();
-    return all.where((e) => e.isDueSoon).toList();
+    return all.where((e) => e.isDue).toList();
   }
 }

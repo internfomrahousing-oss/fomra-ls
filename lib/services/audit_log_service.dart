@@ -16,6 +16,11 @@ class AuditLogEntry {
   final String field;
   final String oldValue;
   final String newValue;
+  final String module;
+  final String leadId;
+  final String ownerName;
+  final String brokerName;
+  final String executiveName;
   final DateTime timestamp;
 
   const AuditLogEntry({
@@ -28,6 +33,11 @@ class AuditLogEntry {
     required this.field,
     required this.oldValue,
     required this.newValue,
+    this.module = '',
+    this.leadId = '',
+    this.ownerName = '',
+    this.brokerName = '',
+    this.executiveName = '',
     required this.timestamp,
   });
 
@@ -41,6 +51,11 @@ class AuditLogEntry {
         'field': field,
         'old_value': oldValue,
         'new_value': newValue,
+        'module': module,
+        'lead_id': leadId,
+        'owner_name': ownerName,
+        'broker_name': brokerName,
+        'executive_name': executiveName,
         'timestamp': timestamp.toIso8601String(),
       };
 
@@ -54,6 +69,11 @@ class AuditLogEntry {
         field: j['field'] as String? ?? '',
         oldValue: j['old_value'] as String? ?? '',
         newValue: j['new_value'] as String? ?? '',
+        module: j['module'] as String? ?? '',
+        leadId: j['lead_id'] as String? ?? '',
+        ownerName: j['owner_name'] as String? ?? '',
+        brokerName: j['broker_name'] as String? ?? '',
+        executiveName: j['executive_name'] as String? ?? '',
         timestamp: DateTime.tryParse(j['timestamp'] as String? ?? '') ??
             DateTime.now(),
       );
@@ -71,6 +91,11 @@ class AuditLogService {
     String field = '',
     String oldValue = '',
     String newValue = '',
+    String module = '',
+    String leadId = '',
+    String ownerName = '',
+    String brokerName = '',
+    String executiveName = '',
   }) async {
     final user = AuthService.instance.currentUser;
     final entry = AuditLogEntry(
@@ -83,6 +108,11 @@ class AuditLogService {
       field: field,
       oldValue: oldValue,
       newValue: newValue,
+      module: module.isEmpty ? entityType : module,
+      leadId: leadId.isEmpty && entityType == 'lead' ? entityId : leadId,
+      ownerName: ownerName,
+      brokerName: brokerName,
+      executiveName: executiveName,
       timestamp: DateTime.now().toUtc(),
     );
 

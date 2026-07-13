@@ -298,6 +298,7 @@ class _DocumentManagementScreenState extends State<DocumentManagementScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           AppCard(
+            padding: const EdgeInsets.all(12),
             onTap: () => setState(() {
               if (expanded) {
                 _expandedLeads.remove(leadId);
@@ -360,7 +361,7 @@ class _DocumentManagementScreenState extends State<DocumentManagementScreen> {
             ),
           ),
           if (expanded) ...[
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             Padding(
               padding: const EdgeInsets.only(left: 12),
               child: Column(

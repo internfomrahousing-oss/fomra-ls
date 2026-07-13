@@ -52,13 +52,6 @@ class FomraBreadcrumbs {
         FomraBreadcrumbItem.current(pageLabel),
       ];
 
-  /// Business-module sub-screens opened from the Modules hub.
-  static List<FomraBreadcrumbItem> fromModules(String pageLabel) => [
-        const FomraBreadcrumbItem.home(),
-        const FomraBreadcrumbItem.route('Modules', '/business-modules'),
-        FomraBreadcrumbItem.current(pageLabel),
-      ];
-
   /// Filtered lead list opened from home or workspace summaries.
   static List<FomraBreadcrumbItem> fromWorkspaceFilter(String pageLabel) => [
         const FomraBreadcrumbItem.home(),

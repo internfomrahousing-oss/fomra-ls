@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../services/auth_service.dart';
+import '../../services/role_access.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_layout.dart';
 import '../../theme/fomra_theme_context.dart';
@@ -9,6 +10,7 @@ import '../../widgets/fomra_app_shell.dart';
 import '../../widgets/fomra_breadcrumb.dart';
 import '../../widgets/change_password_section.dart';
 import '../../widgets/portal_page_layout.dart';
+import '../audit/audit_trail_screen.dart';
 import '../employee_management/employee_management_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -17,6 +19,7 @@ class SettingsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isManagement = AuthService.instance.isManagement;
+    final canViewAudit = isManagement && RoleAccess.canViewAudit;
 
     return FomraAppShell(
       currentRoute: '/settings',
@@ -64,6 +67,18 @@ class SettingsScreen extends StatelessWidget {
                     context,
                     MaterialPageRoute(
                       builder: (_) => const _UserManagementPage(),
+                    ),
+                  ),
+                ),
+              if (canViewAudit)
+                _SettingsTile(
+                  icon: Icons.history_edu_outlined,
+                  label: 'Audit Trail',
+                  accent: AppColors.info,
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const AuditTrailScreen(),
                     ),
                   ),
                 ),

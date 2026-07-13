@@ -121,7 +121,7 @@ class _LegalTrackerScreenState extends State<LegalTrackerScreen> {
       currentRoute: '/legal-tracker',
       appBar: FomraAppBar(
         moduleName: 'Legal Tracker',
-        breadcrumbs: FomraBreadcrumbs.fromModules('Legal Tracker'),
+        breadcrumbs: FomraBreadcrumbs.module('Legal Tracker'),
       ),
       body: RefreshIndicator(
         onRefresh: _load,

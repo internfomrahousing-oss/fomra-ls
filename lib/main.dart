@@ -22,7 +22,6 @@ import 'screens/notifications/notification_center_screen.dart';
 import 'screens/task_management/task_management_screen.dart';
 import 'screens/settings/change_password_screen.dart';
 import 'screens/settings/settings_screen.dart';
-import 'screens/business/business_modules_hub_screen.dart';
 import 'screens/broker/broker_management_screen.dart';
 import 'screens/land_bank/land_bank_screen.dart';
 import 'screens/legal/legal_tracker_screen.dart';
@@ -73,7 +72,6 @@ class FomraLSApp extends StatelessWidget {
           '/task-management':     (_) => const LandWorkspaceScreen(initialTab: 0),
           '/market-intelligence': (_) => const HomeScreen(),
           '/legal-verification':  (_) => const LegalVerificationScreen(),
-          '/business-modules':    (_) => const BusinessModulesHubScreen(),
           '/broker-management':   (_) => const BrokerManagementScreen(),
           '/land-bank':           (_) => const LandBankScreen(),
           '/legal-tracker':       (_) => const LegalTrackerScreen(),

@@ -23,7 +23,7 @@ const _baseMenuItems = [
 ];
 
 const _dashboardMenuItem = _MenuItem(
-    'Dashboard', Icons.dashboard_outlined, '/dashboard', Color(0xFF818CF8));
+    'Analytics', Icons.dashboard_outlined, '/dashboard', Color(0xFF818CF8));
 
 const _managementMenuItem = _MenuItem('Employee Management',
     Icons.groups_outlined, '/employee-management', Color(0xFFA78BFA));

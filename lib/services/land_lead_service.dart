@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/land_lead.dart';
 import '../models/lead_drop_reason.dart';
 import '../utils/image_compressor.dart';
+import 'app_store.dart';
 import 'audit_log_service.dart';
 import 'auth_service.dart';
 
@@ -12,6 +13,19 @@ typedef LeadSaveProgressCallback = void Function(String message);
 class LandLeadService {
   static SupabaseClient get _db => Supabase.instance.client;
   static const _photoBucket = 'land-lead-photos';
+
+  /// Best-effort owner/broker/executive lookup from the in-memory lead cache,
+  /// used to enrich audit entries for actions that only have a `leadId`.
+  static ({String owner, String broker, String executive}) _auditContextFor(
+    String leadId,
+  ) {
+    for (final l in AppStore.instance.leads) {
+      if (l.leadId == leadId) {
+        return (owner: l.ownerName, broker: l.brokerName, executive: l.createdByName);
+      }
+    }
+    return (owner: '', broker: '', executive: '');
+  }
 
   static Future<List<LandLead>> getAll() async {
     final rows = await _db
@@ -97,6 +111,11 @@ class LandLeadService {
       field: 'lead',
       oldValue: '',
       newValue: created.ownerName,
+      module: 'Lead',
+      leadId: created.leadId,
+      ownerName: created.ownerName,
+      brokerName: created.brokerName,
+      executiveName: created.createdByName,
     );
     return created;
   }
@@ -131,6 +150,7 @@ class LandLeadService {
       'created_by_role': 'management',
       'updated_at': DateTime.now().toUtc().toIso8601String(),
     }).eq('id', leadId);
+    final ctx = _auditContextFor(leadId);
     await AuditLogService.log(
       action: 'assign',
       entityType: 'lead',
@@ -138,6 +158,11 @@ class LandLeadService {
       field: 'created_by_name',
       oldValue: '',
       newValue: employeeName,
+      module: 'Lead',
+      leadId: leadId,
+      ownerName: ctx.owner,
+      brokerName: ctx.broker,
+      executiveName: employeeName,
     );
   }
 
@@ -180,6 +205,7 @@ class LandLeadService {
     if (rows.isEmpty) {
       throw Exception('Lead $leadId was not updated (not found or blocked)');
     }
+    final ctx = _auditContextFor(leadId);
     await AuditLogService.log(
       action: 'update',
       entityType: 'lead',
@@ -187,6 +213,11 @@ class LandLeadService {
       field: 'status',
       oldValue: previousStatus?.name ?? '',
       newValue: status.name,
+      module: 'Lead',
+      leadId: leadId,
+      ownerName: ctx.owner,
+      brokerName: ctx.broker,
+      executiveName: ctx.executive,
     );
   }
 
@@ -201,6 +232,7 @@ class LandLeadService {
       'drop_notes': notes.trim(),
       'updated_at': DateTime.now().toUtc().toIso8601String(),
     }).eq('id', leadId);
+    final ctx = _auditContextFor(leadId);
     await AuditLogService.log(
       action: 'update',
       entityType: 'lead',
@@ -208,6 +240,11 @@ class LandLeadService {
       field: 'status',
       oldValue: '',
       newValue: 'dropped:${reason.dbValue}',
+      module: 'Lead',
+      leadId: leadId,
+      ownerName: ctx.owner,
+      brokerName: ctx.broker,
+      executiveName: ctx.executive,
     );
   }
 
@@ -307,11 +344,17 @@ class LandLeadService {
       field: 'lead',
       oldValue: '',
       newValue: updated.ownerName,
+      module: 'Lead',
+      leadId: updated.leadId,
+      ownerName: updated.ownerName,
+      brokerName: updated.brokerName,
+      executiveName: updated.createdByName,
     );
     return updated;
   }
 
   static Future<void> delete(String leadId) async {
+    final ctx = _auditContextFor(leadId);
     await _db.from('land_leads').delete().eq('id', leadId);
     await AuditLogService.log(
       action: 'delete',
@@ -320,6 +363,11 @@ class LandLeadService {
       field: 'lead',
       oldValue: leadId,
       newValue: '',
+      module: 'Lead',
+      leadId: leadId,
+      ownerName: ctx.owner,
+      brokerName: ctx.broker,
+      executiveName: ctx.executive,
     );
   }
 

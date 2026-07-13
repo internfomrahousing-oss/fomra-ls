@@ -3,6 +3,8 @@ import 'dart:typed_data';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/land_lead_legal_document.dart';
+import 'app_store.dart';
+import 'audit_log_service.dart';
 import 'auth_service.dart';
 
 class LandLeadLegalService {
@@ -88,7 +90,29 @@ class LandLeadLegalService {
         .select()
         .single();
 
-    return LandLeadLegalDocument.fromJson(row);
+    final doc = LandLeadLegalDocument.fromJson(row);
+    ({String owner, String broker, String executive}) ctx =
+        (owner: '', broker: '', executive: '');
+    for (final l in AppStore.instance.leads) {
+      if (l.leadId == leadId) {
+        ctx = (owner: l.ownerName, broker: l.brokerName, executive: l.createdByName);
+        break;
+      }
+    }
+    await AuditLogService.log(
+      action: 'upload',
+      entityType: 'document',
+      entityId: doc.id,
+      field: 'file_name',
+      oldValue: '',
+      newValue: fileName,
+      module: 'Documents',
+      leadId: leadId,
+      ownerName: ctx.owner,
+      brokerName: ctx.broker,
+      executiveName: ctx.executive,
+    );
+    return doc;
   }
 
   static String _contentTypeFor(String fileName) {

@@ -52,7 +52,7 @@ class FomraSideNav extends StatefulWidget {
         '/dashboard',
         Icons.bar_chart_outlined,
         Icons.bar_chart_rounded,
-        'Dashboard',
+        'Analytics',
       ));
       items.add(const FomraSideNavItem(
         '/reports',
@@ -66,30 +66,12 @@ class FomraSideNav extends StatefulWidget {
         Icons.folder_rounded,
         'Documents',
       ));
-      items.add(const FomraSideNavItem(
-        '/audit-trail',
-        Icons.history_edu_outlined,
-        Icons.history_edu_rounded,
-        'Audit',
-      ));
-      items.add(const FomraSideNavItem(
-        '/business-modules',
-        Icons.hub_outlined,
-        Icons.hub_rounded,
-        'Modules',
-      ));
     } else {
       items.add(const FomraSideNavItem(
         '/document-management',
         Icons.folder_outlined,
         Icons.folder_rounded,
         'Documents',
-      ));
-      items.add(const FomraSideNavItem(
-        '/business-modules',
-        Icons.hub_outlined,
-        Icons.hub_rounded,
-        'Modules',
       ));
     }
     return items;
@@ -125,19 +107,6 @@ class _FomraSideNavState extends State<FomraSideNav> {
     if (item.route == '/land-lead' &&
         widget.currentRoute == '/task-management') {
       return true;
-    }
-    if (item.route == '/business-modules') {
-      const moduleRoutes = {
-        '/broker-management',
-        '/land-bank',
-        '/legal-tracker',
-        '/legal-verification',
-        '/survey-tracker',
-        '/owner-history',
-        '/cost-calculator',
-        '/field-calendar',
-      };
-      return moduleRoutes.contains(widget.currentRoute);
     }
     return false;
   }

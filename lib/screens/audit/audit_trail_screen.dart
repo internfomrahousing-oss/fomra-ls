@@ -22,8 +22,24 @@ class AuditTrailScreen extends StatefulWidget {
 class _AuditTrailScreenState extends State<AuditTrailScreen> {
   bool _loading = true;
   String? _error;
-  String _query = '';
   List<AuditLogEntry> _entries = const [];
+
+  final _searchController = TextEditingController();
+  String _query = '';
+  DateTimeRange? _dateRange;
+  String? _user;
+  String? _module;
+  String? _action;
+  String? _leadId;
+  String? _owner;
+  String? _broker;
+  String? _executive;
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -44,7 +60,7 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
       _error = null;
     });
     try {
-      final rows = await AuditLogService.getAll(limit: 400);
+      final rows = await AuditLogService.getAll(limit: 1000);
       if (!mounted) return;
       setState(() {
         _entries = rows;
@@ -59,23 +75,91 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
     }
   }
 
+  bool get _hasActiveFilters =>
+      _query.trim().isNotEmpty ||
+      _dateRange != null ||
+      _user != null ||
+      _module != null ||
+      _action != null ||
+      _leadId != null ||
+      _owner != null ||
+      _broker != null ||
+      _executive != null;
+
+  void _clearFilters() {
+    _searchController.clear();
+    setState(() {
+      _query = '';
+      _dateRange = null;
+      _user = null;
+      _module = null;
+      _action = null;
+      _leadId = null;
+      _owner = null;
+      _broker = null;
+      _executive = null;
+    });
+  }
+
+  List<String> _distinct(String Function(AuditLogEntry e) pick) {
+    final values = _entries.map(pick).where((v) => v.trim().isNotEmpty).toSet().toList()
+      ..sort();
+    return values;
+  }
+
   List<AuditLogEntry> get _filtered {
     final q = _query.trim().toLowerCase();
-    if (q.isEmpty) return _entries;
     return _entries.where((e) {
-      return e.userName.toLowerCase().contains(q) ||
-          e.action.toLowerCase().contains(q) ||
-          e.entityType.toLowerCase().contains(q) ||
-          e.entityId.toLowerCase().contains(q) ||
-          e.field.toLowerCase().contains(q) ||
-          e.oldValue.toLowerCase().contains(q) ||
-          e.newValue.toLowerCase().contains(q);
+      if (_dateRange != null) {
+        final t = e.timestamp.toLocal();
+        final start = _dateRange!.start;
+        final end = _dateRange!.end.add(const Duration(
+            hours: 23, minutes: 59, seconds: 59));
+        if (t.isBefore(start) || t.isAfter(end)) return false;
+      }
+      if (_user != null && e.userName != _user) return false;
+      if (_module != null && e.module != _module) return false;
+      if (_action != null && e.action != _action) return false;
+      if (_leadId != null && e.leadId != _leadId) return false;
+      if (_owner != null && e.ownerName != _owner) return false;
+      if (_broker != null && e.brokerName != _broker) return false;
+      if (_executive != null && e.executiveName != _executive) return false;
+      if (q.isNotEmpty) {
+        final haystack = [
+          e.userName,
+          e.action,
+          e.entityType,
+          e.entityId,
+          e.field,
+          e.oldValue,
+          e.newValue,
+          e.module,
+          e.leadId,
+          e.ownerName,
+          e.brokerName,
+          e.executiveName,
+        ].join(' ').toLowerCase();
+        if (!haystack.contains(q)) return false;
+      }
+      return true;
     }).toList();
+  }
+
+  Future<void> _pickDateRange() async {
+    final now = DateTime.now();
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(now.year - 3),
+      lastDate: DateTime(now.year + 1),
+      initialDateRange: _dateRange,
+    );
+    if (picked != null) setState(() => _dateRange = picked);
   }
 
   @override
   Widget build(BuildContext context) {
     final pad = FomraLayout.pagePadding(context);
+    final filtered = _filtered;
     final body = RefreshIndicator(
       onRefresh: _load,
       child: ListView(
@@ -96,9 +180,10 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
           ),
           const SizedBox(height: 16),
           TextField(
+            controller: _searchController,
             onChanged: (v) => setState(() => _query = v),
             decoration: InputDecoration(
-              hintText: 'Filter by user, field, or value',
+              hintText: 'Search by keyword — user, field, value, lead…',
               prefixIcon: const Icon(Icons.search_rounded),
               filled: true,
               fillColor: context.fomraSurfaceVar,
@@ -108,7 +193,69 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
               ),
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              _dateRangeChip(context),
+              _filterDropdown(
+                label: 'User',
+                value: _user,
+                options: _distinct((e) => e.userName),
+                onChanged: (v) => setState(() => _user = v),
+              ),
+              _filterDropdown(
+                label: 'Module',
+                value: _module,
+                options: _distinct((e) => e.module),
+                onChanged: (v) => setState(() => _module = v),
+              ),
+              _filterDropdown(
+                label: 'Action Type',
+                value: _action,
+                options: _distinct((e) => e.action),
+                onChanged: (v) => setState(() => _action = v),
+              ),
+              _filterDropdown(
+                label: 'Lead ID',
+                value: _leadId,
+                options: _distinct((e) => e.leadId),
+                onChanged: (v) => setState(() => _leadId = v),
+              ),
+              _filterDropdown(
+                label: 'Owner',
+                value: _owner,
+                options: _distinct((e) => e.ownerName),
+                onChanged: (v) => setState(() => _owner = v),
+              ),
+              _filterDropdown(
+                label: 'Broker',
+                value: _broker,
+                options: _distinct((e) => e.brokerName),
+                onChanged: (v) => setState(() => _broker = v),
+              ),
+              _filterDropdown(
+                label: 'Executive',
+                value: _executive,
+                options: _distinct((e) => e.executiveName),
+                onChanged: (v) => setState(() => _executive = v),
+              ),
+              if (_hasActiveFilters)
+                TextButton.icon(
+                  onPressed: _clearFilters,
+                  icon: const Icon(Icons.filter_alt_off_outlined, size: 16),
+                  label: const Text('Clear filters'),
+                ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            '${filtered.length} of ${_entries.length} entries',
+            style: TextStyle(fontSize: 12, color: context.fomraTextSecondary),
+          ),
+          const SizedBox(height: 12),
           if (_loading)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 48),
@@ -120,15 +267,18 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
               message: _error,
               icon: Icons.error_outline_rounded,
             )
-          else if (_filtered.isEmpty)
-            const EmptyState(
-              title: 'No audit entries yet',
-              message:
-                  'Changes to leads and documents will appear here.',
+          else if (filtered.isEmpty)
+            EmptyState(
+              title: _hasActiveFilters
+                  ? 'No entries match these filters'
+                  : 'No audit entries yet',
+              message: _hasActiveFilters
+                  ? 'Try widening the date range or clearing a filter.'
+                  : 'Changes to leads and documents will appear here.',
               icon: Icons.history_edu_outlined,
             )
           else
-            ..._filtered.map(_entryTile),
+            ...filtered.map(_entryTile),
         ],
       ),
     );
@@ -137,6 +287,57 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
       currentRoute: '/audit-trail',
       appBar: const FomraAppBar(moduleName: 'Audit'),
       body: body,
+    );
+  }
+
+  Widget _dateRangeChip(BuildContext context) {
+    final label = _dateRange == null
+        ? 'Date Range'
+        : '${DateFormat('d MMM').format(_dateRange!.start)} – ${DateFormat('d MMM yyyy').format(_dateRange!.end)}';
+    return InputChip(
+      avatar: const Icon(Icons.date_range_outlined, size: 16),
+      label: Text(label),
+      onPressed: _pickDateRange,
+      onDeleted: _dateRange == null
+          ? null
+          : () => setState(() => _dateRange = null),
+    );
+  }
+
+  Widget _filterDropdown({
+    required String label,
+    required String? value,
+    required List<String> options,
+    required ValueChanged<String?> onChanged,
+  }) {
+    return SizedBox(
+      width: 160,
+      child: DropdownButtonFormField<String>(
+        key: ValueKey('audit-filter-$label-$value'),
+        initialValue: value,
+        isExpanded: true,
+        decoration: InputDecoration(
+          labelText: label,
+          isDense: true,
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          filled: true,
+          fillColor: context.fomraSurfaceVar,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide.none,
+          ),
+        ),
+        items: [
+          DropdownMenuItem(value: null, child: Text('All $label')),
+          for (final o in options)
+            DropdownMenuItem(
+              value: o,
+              child: Text(o, overflow: TextOverflow.ellipsis),
+            ),
+        ],
+        onChanged: onChanged,
+      ),
     );
   }
 
@@ -182,19 +383,19 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
               ],
             ),
             const SizedBox(height: 8),
-            Text(
-              'User: ${e.userName}',
-              style: TextStyle(
-                fontSize: 12,
-                color: context.fomraTextSecondary,
-              ),
-            ),
-            Text(
-              'Timestamp: $stamp',
-              style: TextStyle(
-                fontSize: 12,
-                color: context.fomraTextSecondary,
-              ),
+            Wrap(
+              spacing: 12,
+              runSpacing: 4,
+              children: [
+                _metaText('User', e.userName),
+                _metaText('Timestamp', stamp),
+                if (e.module.isNotEmpty) _metaText('Module', e.module),
+                if (e.leadId.isNotEmpty) _metaText('Lead', e.leadId),
+                if (e.ownerName.isNotEmpty) _metaText('Owner', e.ownerName),
+                if (e.brokerName.isNotEmpty) _metaText('Broker', e.brokerName),
+                if (e.executiveName.isNotEmpty)
+                  _metaText('Executive', e.executiveName),
+              ],
             ),
             if (e.field.isNotEmpty) ...[
               const SizedBox(height: 6),
@@ -216,6 +417,14 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
       ),
     );
   }
+
+  Widget _metaText(String label, String value) => Text(
+        '$label: $value',
+        style: TextStyle(
+          fontSize: 12,
+          color: context.fomraTextSecondary,
+        ),
+      );
 
   Widget _valueRow(String label, String value) {
     return Row(

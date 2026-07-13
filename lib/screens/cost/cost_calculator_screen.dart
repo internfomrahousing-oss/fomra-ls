@@ -77,7 +77,7 @@ class _CostCalculatorScreenState extends State<CostCalculatorScreen> {
       currentRoute: '/cost-calculator',
       appBar: FomraAppBar(
         moduleName: 'Cost Calculator',
-        breadcrumbs: FomraBreadcrumbs.fromModules('Cost Calculator'),
+        breadcrumbs: FomraBreadcrumbs.module('Cost Calculator'),
       ),
       body: ListView(
         padding: FomraLayout.pagePadding(context),

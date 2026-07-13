@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../models/land_lead.dart';
 import '../../services/app_store.dart';
 import '../../services/field_calendar_service.dart';
+import '../../services/notification_center_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_layout.dart';
 import '../../theme/fomra_theme_context.dart';
@@ -230,6 +233,7 @@ class _FieldCalendarScreenState extends State<FieldCalendarScreen> {
       remindMinutesBefore: remindMins,
     );
     await _load();
+    unawaited(NotificationCenterService.syncAlerts(force: true));
     if (mounted) {
       AppFeedback.success(
         context,
@@ -251,7 +255,7 @@ class _FieldCalendarScreenState extends State<FieldCalendarScreen> {
       currentRoute: '/field-calendar',
       appBar: FomraAppBar(
         moduleName: 'Field Calendar',
-        breadcrumbs: FomraBreadcrumbs.fromModules('Field Calendar'),
+        breadcrumbs: FomraBreadcrumbs.module('Field Calendar'),
       ),
       body: RefreshIndicator(
         onRefresh: _load,

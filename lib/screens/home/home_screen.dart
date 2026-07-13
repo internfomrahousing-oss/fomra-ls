@@ -59,6 +59,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   List<LandLeadSiteVisit> _pendingApprovals = [];
   bool _loadingApprovals = false;
+  Timer? _reminderSyncTimer;
 
   String get _notifAudience =>
       AuthService.instance.isManagement ? 'management' : 'employee';
@@ -88,6 +89,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       audience: _notifAudience,
       onChange: _loadNotifications,
     );
+    // Keep Field Calendar (and other) reminders flowing into the Notification
+    // Center while the app stays open, not just on screen load.
+    _reminderSyncTimer = Timer.periodic(const Duration(minutes: 5), (_) {
+      NotificationCenterService.syncAlerts().then((_) {
+        if (mounted) _loadNotifications();
+      });
+    });
   }
 
   /// Make sure leads are loaded so both the management leaderboard and an
@@ -127,6 +135,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     AppStore.instance.removeListener(_onStoreUpdate);
+    _reminderSyncTimer?.cancel();
     _notifChannel?.unsubscribe();
     _notifOverlay?.remove();
     _notifOverlay = null;
@@ -509,16 +518,22 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       ),
       if (_isManagement)
         PortalQuickAction(
-          label: 'View Dashboard',
+          label: 'View Analytics',
           icon: Icons.assessment_outlined,
           accent: AppColors.warning,
           onTap: () => _goTo('/dashboard'),
         ),
       PortalQuickAction(
-        label: 'Business Modules',
-        icon: Icons.hub_outlined,
+        label: 'Land Bank',
+        icon: Icons.map_outlined,
         accent: AppColors.purple,
-        onTap: () => _goTo('/business-modules'),
+        onTap: () => _goTo('/land-bank'),
+      ),
+      PortalQuickAction(
+        label: 'Field Calendar',
+        icon: Icons.calendar_month_outlined,
+        accent: AppColors.accent,
+        onTap: () => _goTo('/field-calendar'),
       ),
     ];
 

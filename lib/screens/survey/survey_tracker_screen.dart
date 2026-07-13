@@ -155,7 +155,7 @@ class _SurveyTrackerScreenState extends State<SurveyTrackerScreen> {
       currentRoute: '/survey-tracker',
       appBar: FomraAppBar(
         moduleName: 'Survey Tracker',
-        breadcrumbs: FomraBreadcrumbs.fromModules('Survey Tracker'),
+        breadcrumbs: FomraBreadcrumbs.module('Survey Tracker'),
       ),
       body: RefreshIndicator(
         onRefresh: _load,

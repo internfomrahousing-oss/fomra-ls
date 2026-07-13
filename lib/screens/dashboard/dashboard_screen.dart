@@ -249,7 +249,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     return FomraAppShell(
       currentRoute: '/dashboard',
-      appBar: const FomraAppBar(moduleName: 'Dashboard'),
+      appBar: const FomraAppBar(moduleName: 'Analytics'),
       backgroundColor: context.fomraPageBg,
       body: SingleChildScrollView(
         padding: FomraLayout.pagePadding(context),
@@ -260,7 +260,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SectionHeader(
-                  title: 'Dashboard Overview',
+                  title: 'Analytics Overview',
                   subtitle:
                       'Monitor the health of your lead acquisition pipeline and business performance in real time.',
                   icon: Icons.analytics_outlined,
