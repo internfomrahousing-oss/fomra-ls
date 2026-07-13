@@ -461,7 +461,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     ).then((saved) {
       if (saved is! LandLead || !mounted) return;
       AppStore.instance.addLead(saved);
-      AppFeedback.success(context, 'Lead ${saved.leadId} saved.');
+      AppFeedback.success(context, 'Site ${saved.leadId} saved.');
     });
   }
 
@@ -485,14 +485,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final quickActions = [
       if (_isManagement)
         PortalQuickAction(
-          label: 'View Leads',
+          label: 'View Sites',
           icon: Icons.list_alt_outlined,
           accent: AppColors.primary,
           onTap: () => _goTo('/land-lead'),
         )
       else
         PortalQuickAction(
-          label: 'Add Leads',
+          label: 'Add Sites',
           icon: Icons.add_location_alt_outlined,
           accent: AppColors.primary,
           onTap: _openAddLead,
@@ -515,25 +515,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         icon: Icons.handshake_outlined,
         accent: AppColors.secondary,
         onTap: () => _goTo('/broker-management'),
-      ),
-      if (_isManagement)
-        PortalQuickAction(
-          label: 'View Analytics',
-          icon: Icons.assessment_outlined,
-          accent: AppColors.warning,
-          onTap: () => _goTo('/dashboard'),
-        ),
-      PortalQuickAction(
-        label: 'Land Bank',
-        icon: Icons.map_outlined,
-        accent: AppColors.purple,
-        onTap: () => _goTo('/land-bank'),
-      ),
-      PortalQuickAction(
-        label: 'Field Calendar',
-        icon: Icons.calendar_month_outlined,
-        accent: AppColors.accent,
-        onTap: () => _goTo('/field-calendar'),
       ),
     ];
 
@@ -641,6 +622,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         leads: leads,
                         teamRows: teamRows,
                         notifications: _notifications,
+                        widgetIds: const [
+                          'pipeline',
+                          'leaderboard',
+                          'bottlenecks',
+                          'district',
+                          'ageing',
+                        ],
                         onViewLead: (lead) {
                           Navigator.push(
                             context,
@@ -656,7 +644,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           final performance = PortalSectionCard(
                             title: 'My performance',
                             subtitle:
-                                'Your lead contribution this period',
+                                'Your site contribution this period',
                             icon: Icons.groups_rounded,
                             child: _EmployeePerformanceCard(
                               count: _myLeadCount,
@@ -674,21 +662,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               );
                             },
                           );
-                          final reco = ManagementExecutiveDashboard(
-                            leads: _myLeads,
-                            teamRows: const [],
-                            notifications: const [],
-                            widgetIds: const ['recommendations'],
-                            onViewLead: (lead) {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) =>
-                                      LeadDetailScreen(lead: lead),
-                                ),
-                              );
-                            },
-                          );
                           if (!sideBySide) {
                             return Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -696,25 +669,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                 performance,
                                 const SizedBox(height: AppSpacing.lg),
                                 todayTasks,
-                                const SizedBox(height: AppSpacing.lg),
-                                reco,
                               ],
                             );
                           }
                           return Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.stretch,
-                                  children: [
-                                    performance,
-                                    const SizedBox(height: AppSpacing.lg),
-                                    reco,
-                                  ],
-                                ),
-                              ),
+                              Expanded(child: performance),
                               const SizedBox(width: AppSpacing.lg),
                               Expanded(child: todayTasks),
                             ],
@@ -766,7 +727,7 @@ class _EmployeePerformanceCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Leads added',
+                  'Sites added',
                   style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
@@ -808,7 +769,7 @@ class _EmployeeTodayTasksSection extends StatelessWidget {
 
   String _leadLabel(LandLead lead) {
     if (lead.ownerName.trim().isNotEmpty) return lead.ownerName.trim();
-    return 'Lead #${lead.leadId}';
+    return 'Site #${lead.leadId}';
   }
 
   String _formatDue(DateTime due) {
@@ -826,7 +787,7 @@ class _EmployeeTodayTasksSection extends StatelessWidget {
 
     return PortalSectionCard(
       title: "Today's tasks",
-      subtitle: 'Lead follow-ups and pending work for today',
+      subtitle: 'Site follow-ups and pending work for today',
       icon: Icons.today_rounded,
       child: items.isEmpty
           ? const EmptyState(
@@ -879,7 +840,7 @@ class _EmployeeTodayTasksSection extends StatelessWidget {
                                   ),
                                   const SizedBox(height: 2),
                                   Text(
-                                    'Lead #${item.lead.leadId} · ${item.lead.status.shortLabel}',
+                                    'Site #${item.lead.leadId} · ${item.lead.status.shortLabel}',
                                     style: TextStyle(
                                       fontSize: 11,
                                       color: context.fomraTextSecondary,

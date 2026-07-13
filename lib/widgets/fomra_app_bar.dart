@@ -2,12 +2,16 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
+import '../screens/settings/change_password_screen.dart';
+import '../services/auth_service.dart';
 import '../theme/fomra_layout.dart';
 import '../theme/app_theme.dart';
 import '../theme/fomra_theme_context.dart';
 import 'fomra_breadcrumb.dart';
 import 'fomra_theme_toggle.dart';
 import 'fomra_universal_search.dart';
+import 'portal_home_sections.dart';
+import 'ui/app_components.dart';
 
 class FomraAppBar extends StatelessWidget implements PreferredSizeWidget {
   final String? moduleName;
@@ -197,6 +201,10 @@ class FomraAppBar extends StatelessWidget implements PreferredSizeWidget {
           ),
         ...?actions,
         const FomraThemeToggle(),
+        const Padding(
+          padding: EdgeInsets.only(left: 2, right: 6),
+          child: FomraHeaderProfile(),
+        ),
       ],
       bottom: _buildBottom(),
     );
@@ -210,4 +218,79 @@ class FomraAppBar extends StatelessWidget implements PreferredSizeWidget {
   Size get preferredSize => Size.fromHeight(
         kToolbarHeight + (_buildBottom()?.preferredSize.height ?? 0),
       );
+}
+
+/// Profile avatar shown in the app header on every screen — tap opens the
+/// same change-password / sign-out menu the sidebar used to host.
+class FomraHeaderProfile extends StatelessWidget {
+  const FomraHeaderProfile({super.key});
+
+  String get _profileName {
+    if (AuthService.instance.isManagement) return 'Management';
+    try {
+      return AuthService.instance.currentUser?.fullName ?? 'User';
+    } catch (_) {
+      // Supabase may not be initialized yet (e.g. widget tests) — the
+      // avatar still needs to render something sensible.
+      return 'User';
+    }
+  }
+
+  String get _profileRole =>
+      AuthService.instance.isManagement ? 'Administrator' : 'Employee';
+
+  Future<void> _open(BuildContext context, TapDownDetails details) async {
+    final name = _profileName;
+    final initial = name.trim().isNotEmpty ? name.trim()[0].toUpperCase() : 'U';
+    final action = await showPortalProfileMenu(
+      context: context,
+      anchor: details.globalPosition,
+      name: name,
+      role: _profileRole,
+      initial: initial,
+    );
+    if (!context.mounted) return;
+    if (action == 'change_password') {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const ChangePasswordScreen()),
+      );
+    } else if (action == 'sign_out') {
+      final confirmed = await confirmSignOut(context);
+      if (!confirmed || !context.mounted) return;
+      AuthService.instance.logout();
+      Navigator.pushNamedAndRemoveUntil(context, '/login', (_) => false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = context.isDarkMode;
+    final name = _profileName;
+    final initial = name.trim().isNotEmpty ? name.trim()[0].toUpperCase() : '?';
+
+    return Tooltip(
+      message: name,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          onTapDown: (details) => _open(context, details),
+          child: CircleAvatar(
+            radius: 15,
+            backgroundColor: isDark
+                ? Colors.white.withValues(alpha: 0.12)
+                : Colors.white.withValues(alpha: 0.22),
+            child: Text(
+              initial,
+              style: TextStyle(
+                color: isDark ? AppColors.darkTextPrimary : Colors.white,
+                fontWeight: FontWeight.w800,
+                fontSize: 12.5,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }

@@ -4,7 +4,6 @@ import '../theme/fomra_layout.dart';
 import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/fomra_theme_context.dart';
-import 'ui/app_components.dart';
 
 class _MenuItem {
   final String title;
@@ -22,9 +21,6 @@ const _baseMenuItems = [
       '/market-intelligence', Color(0xFF22D3EE)),
 ];
 
-const _dashboardMenuItem = _MenuItem(
-    'Analytics', Icons.dashboard_outlined, '/dashboard', Color(0xFF818CF8));
-
 const _managementMenuItem = _MenuItem('Employee Management',
     Icons.groups_outlined, '/employee-management', Color(0xFFA78BFA));
 
@@ -39,7 +35,6 @@ class AppDrawer extends StatelessWidget {
       _baseMenuItems[0],
       if (AuthService.instance.isManagement) _managementMenuItem,
       _baseMenuItems[1],
-      if (AuthService.instance.isManagement) _dashboardMenuItem,
     ];
 
     return Drawer(
@@ -59,7 +54,6 @@ class AppDrawer extends StatelessWidget {
               },
             ),
           ),
-          _DrawerFooter(),
         ],
       ),
     );
@@ -225,79 +219,3 @@ class _DrawerTile extends StatelessWidget {
   }
 }
 
-class _DrawerFooter extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    final user = AuthService.instance.currentUser;
-    final name = user?.fullName ?? 'User';
-    final email = user?.email ?? '';
-    final initial = name.trim().isNotEmpty ? name.trim()[0].toUpperCase() : '?';
-    final isDark = context.isDarkMode;
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        border: Border(top: BorderSide(color: context.fomraBorder, width: 1)),
-      ),
-      child: Row(
-        children: [
-          CircleAvatar(
-            radius: 18,
-            backgroundColor: isDark
-                ? AppColors.secondary.withValues(alpha: 0.28)
-                : AppColors.accent,
-            child: Text(
-              initial,
-              style: TextStyle(
-                color: isDark ? const Color(0xFFC4B5FD) : Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  name,
-                  style: TextStyle(
-                    color: isDark ? context.fomraTextPrimary : Colors.white,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                Text(
-                  email,
-                  style: TextStyle(
-                    color: isDark ? context.fomraTextSecondary : const Color(0xFF90A4AE),
-                    fontSize: 11,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
-          ),
-          IconButton(
-            icon: Icon(Icons.logout,
-                color: isDark ? context.fomraTextSecondary : const Color(0xFF90A4AE),
-                size: 20),
-            tooltip: 'Sign Out',
-            onPressed: () async {
-              final confirmed = await confirmSignOut(context);
-              if (!confirmed || !context.mounted) return;
-              Navigator.pop(context);
-              AuthService.instance.logout();
-              Navigator.pushNamedAndRemoveUntil(
-                  context, '/login', (_) => false);
-            },
-          ),
-        ],
-      ),
-    );
-  }
-}

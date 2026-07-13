@@ -393,8 +393,8 @@ class BiAgeingSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BiSectionCard(
-      title: 'Lead Ageing',
-      subtitle: 'Open deals by age — 15+ days highlighted as overdue',
+      title: 'Site Ageing',
+      subtitle: 'Open deals by age — 90+ days highlighted as overdue',
       icon: Icons.hourglass_bottom_rounded,
       accent: AppColors.warning,
       child: LayoutBuilder(

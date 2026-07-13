@@ -8,7 +8,6 @@ import '../screens/home/home_screen.dart';
 import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/fomra_theme_context.dart';
-import 'ui/app_components.dart';
 
 class FomraSideNavItem {
   final String route;
@@ -49,29 +48,10 @@ class FomraSideNav extends StatefulWidget {
     ];
     if (AuthService.instance.isManagement) {
       items.add(const FomraSideNavItem(
-        '/dashboard',
-        Icons.bar_chart_outlined,
-        Icons.bar_chart_rounded,
-        'Analytics',
-      ));
-      items.add(const FomraSideNavItem(
         '/reports',
         Icons.summarize_outlined,
         Icons.summarize_rounded,
         'Reports',
-      ));
-      items.add(const FomraSideNavItem(
-        '/document-management',
-        Icons.folder_outlined,
-        Icons.folder_rounded,
-        'Documents',
-      ));
-    } else {
-      items.add(const FomraSideNavItem(
-        '/document-management',
-        Icons.folder_outlined,
-        Icons.folder_rounded,
-        'Documents',
       ));
     }
     return items;
@@ -130,21 +110,9 @@ class _FomraSideNavState extends State<FomraSideNav> {
     Navigator.pushNamed(context, item.route);
   }
 
-  Future<void> _signOut(BuildContext context) async {
-    final confirmed = await confirmSignOut(context);
-    if (!confirmed || !context.mounted) return;
-    AuthService.instance.logout();
-    Navigator.pushNamedAndRemoveUntil(context, '/login', (_) => false);
-  }
-
   @override
   Widget build(BuildContext context) {
     final items = FomraSideNav.itemsForUser();
-    final user = AuthService.instance.currentUser;
-    final name = user?.fullName ?? 'User';
-    final initial =
-        name.trim().isNotEmpty ? name.trim()[0].toUpperCase() : '?';
-
     final isDark = context.isDarkMode;
 
     return MouseRegion(
@@ -211,31 +179,20 @@ class _FomraSideNavState extends State<FomraSideNav> {
                     : _SideNavTokens.collapsedHorizontalPad,
                 _SideNavTokens.verticalPad,
               ),
-              child: Column(
-                children: [
-                  _NavTile(
-                    item: const FomraSideNavItem(
-                      '/settings',
-                      Icons.settings_outlined,
-                      Icons.settings_rounded,
-                      'Settings',
-                    ),
-                    expanded: _expanded,
-                    active: widget.currentRoute == '/settings',
-                    onTap: () {
-                      if (widget.currentRoute != '/settings') {
-                        Navigator.pushNamed(context, '/settings');
-                      }
-                    },
-                  ),
-                  const SizedBox(height: _SideNavTokens.navItemGap),
-                  _FooterUser(
-                    expanded: _expanded,
-                    initial: initial,
-                    name: name,
-                    onSignOut: () => _signOut(context),
-                  ),
-                ],
+              child: _NavTile(
+                item: const FomraSideNavItem(
+                  '/settings',
+                  Icons.settings_outlined,
+                  Icons.settings_rounded,
+                  'Settings',
+                ),
+                expanded: _expanded,
+                active: widget.currentRoute == '/settings',
+                onTap: () {
+                  if (widget.currentRoute != '/settings') {
+                    Navigator.pushNamed(context, '/settings');
+                  }
+                },
               ),
             ),
           ],
@@ -496,123 +453,3 @@ class _NavIconButton extends StatelessWidget {
   }
 }
 
-class _FooterUser extends StatefulWidget {
-  final bool expanded;
-  final String initial;
-  final String name;
-  final VoidCallback onSignOut;
-
-  const _FooterUser({
-    required this.expanded,
-    required this.initial,
-    required this.name,
-    required this.onSignOut,
-  });
-
-  @override
-  State<_FooterUser> createState() => _FooterUserState();
-}
-
-class _FooterUserState extends State<_FooterUser> {
-  bool _hovered = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = context.isDarkMode;
-    final avatar = Container(
-      width: 36,
-      height: 36,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: isDark
-            ? AppColors.primary.withValues(alpha: 0.16)
-            : Colors.white.withValues(alpha: 0.18),
-        border: Border.all(
-          color: isDark
-              ? AppColors.primary.withValues(alpha: 0.35)
-              : Colors.white.withValues(alpha: 0.32),
-        ),
-      ),
-      alignment: Alignment.center,
-      child: Text(
-        widget.initial,
-        style: const TextStyle(
-          color: Colors.white,
-          fontWeight: FontWeight.w800,
-          fontSize: 14,
-        ),
-      ),
-    );
-
-    final profileCard = ClipRRect(
-      borderRadius: BorderRadius.circular(16),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-        child: AnimatedContainer(
-          duration: _SideNavTokens.animDuration,
-          curve: _SideNavTokens.animCurve,
-          padding: EdgeInsets.symmetric(
-            horizontal: widget.expanded ? 12 : 8,
-            vertical: 10,
-          ),
-          decoration: BoxDecoration(
-            color: isDark
-                ? Colors.white.withValues(alpha: _hovered ? 0.08 : 0.05)
-                : Colors.white.withValues(alpha: _hovered ? 0.2 : 0.14),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: isDark
-                  ? AppColors.darkBorder.withValues(alpha: _hovered ? 0.9 : 0.6)
-                  : Colors.white.withValues(alpha: _hovered ? 0.36 : 0.24),
-            ),
-          ),
-          child: widget.expanded
-              ? Row(
-                  children: [
-                    avatar,
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        widget.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      tooltip: 'Sign out',
-                      onPressed: widget.onSignOut,
-                      icon: Icon(
-                        Icons.logout_rounded,
-                        size: 18,
-                        color: Colors.white.withValues(alpha: 0.88),
-                      ),
-                      visualDensity: VisualDensity.compact,
-                      padding: EdgeInsets.zero,
-                      constraints:
-                          const BoxConstraints(minWidth: 32, minHeight: 32),
-                    ),
-                  ],
-                )
-              : Center(child: avatar),
-        ),
-      ),
-    );
-
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
-      child: widget.expanded
-          ? profileCard
-          : Tooltip(
-              message: widget.name,
-              waitDuration: const Duration(milliseconds: 400),
-              child: profileCard,
-            ),
-    );
-  }
-}

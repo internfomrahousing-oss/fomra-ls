@@ -461,22 +461,6 @@ class _EmployeeLeadQuickFabState extends State<EmployeeLeadQuickFab>
         color: const Color(0xFF25D366),
         onTap: () => _run(() => widget.onLaunchContact('https://wa.me')),
       ),
-      (
-        icon: Icons.map_outlined,
-        label: 'Land Bank',
-        color: AppColors.purple,
-        onTap: () => _run(() async {
-          Navigator.pushNamed(context, '/land-bank');
-        }),
-      ),
-      (
-        icon: Icons.calendar_month_outlined,
-        label: 'Field Calendar',
-        color: AppColors.accent,
-        onTap: () => _run(() async {
-          Navigator.pushNamed(context, '/field-calendar');
-        }),
-      ),
     ];
 
     return Column(

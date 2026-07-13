@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../analytics/management_bi_metrics.dart';
 import '../models/land_lead.dart';
 import '../theme/app_theme.dart';
 import '../theme/fomra_theme_context.dart';
@@ -19,10 +20,20 @@ class LeadPortfolioBreakdown extends StatelessWidget {
   final List<LandLead> leads;
   final ValueChanged<LandLead> onOpenLead;
 
+  /// When set, the "Dropped Leads" summary card is replaced with a
+  /// "Meetings Conducted" card showing this count instead.
+  final int? meetingsConducted;
+
+  /// When true, the table's last column shows a Lead Age bucket
+  /// (0-30/31-60/61-90/90+ days) instead of the Active/Closed/Dropped status.
+  final bool useLeadAgeColumn;
+
   const LeadPortfolioBreakdown({
     super.key,
     required this.leads,
     required this.onOpenLead,
+    this.meetingsConducted,
+    this.useLeadAgeColumn = false,
   });
 
   @override
@@ -67,12 +78,20 @@ class LeadPortfolioBreakdown extends StatelessWidget {
               icon: Icons.verified_outlined,
               color: AppColors.success,
             ),
-            _SummaryCard(
-              label: 'Dropped Leads',
-              value: '$dropped',
-              icon: Icons.cancel_outlined,
-              color: AppColors.error,
-            ),
+            if (meetingsConducted != null)
+              _SummaryCard(
+                label: 'Meetings Conducted',
+                value: '$meetingsConducted',
+                icon: Icons.groups_outlined,
+                color: AppColors.secondary,
+              )
+            else
+              _SummaryCard(
+                label: 'Dropped Leads',
+                value: '$dropped',
+                icon: Icons.cancel_outlined,
+                color: AppColors.error,
+              ),
           ],
         ),
         const SizedBox(height: 14),
@@ -92,16 +111,16 @@ class LeadPortfolioBreakdown extends StatelessWidget {
               fontSize: 12.5,
               color: context.fomraTextPrimary,
             ),
-            columns: const [
-              DataColumn(label: Text('Lead ID')),
-              DataColumn(label: Text('Property')),
-              DataColumn(label: Text('Village')),
-              DataColumn(label: Text('Survey No.')),
-              DataColumn(label: Text('Acres')),
-              DataColumn(label: Text('Current Stage')),
-              DataColumn(label: Text('Assigned Executive')),
-              DataColumn(label: Text('Last Activity')),
-              DataColumn(label: Text('Status')),
+            columns: [
+              const DataColumn(label: Text('Lead ID')),
+              const DataColumn(label: Text('Property')),
+              const DataColumn(label: Text('Village')),
+              const DataColumn(label: Text('Survey No.')),
+              const DataColumn(label: Text('Acres')),
+              const DataColumn(label: Text('Current Stage')),
+              const DataColumn(label: Text('Assigned Executive')),
+              const DataColumn(label: Text('Last Activity')),
+              DataColumn(label: Text(useLeadAgeColumn ? 'Lead Age' : 'Status')),
             ],
             rows: [
               for (final l in sorted)
@@ -136,7 +155,9 @@ class LeadPortfolioBreakdown extends StatelessWidget {
                     DataCell(Text(l.status.label)),
                     DataCell(Text(_value(l.createdByName))),
                     DataCell(Text(df.format(l.addedOn))),
-                    DataCell(_StatusPill(status: l.status)),
+                    DataCell(useLeadAgeColumn
+                        ? _LeadAgePill(lead: l)
+                        : _StatusPill(status: l.status)),
                   ],
                 ),
             ],
@@ -229,6 +250,33 @@ class _StatusPill extends StatelessWidget {
       ),
       child: Text(
         label,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w800,
+          color: color,
+        ),
+      ),
+    );
+  }
+}
+
+class _LeadAgePill extends StatelessWidget {
+  final LandLead lead;
+
+  const _LeadAgePill({required this.lead});
+
+  @override
+  Widget build(BuildContext context) {
+    final bucket = BiAgeBucketX.forAgeDays(biLeadAgeDays(lead));
+    final color = bucket.isOverdue ? AppColors.error : AppColors.warning;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        bucket.label,
         style: TextStyle(
           fontSize: 11,
           fontWeight: FontWeight.w800,

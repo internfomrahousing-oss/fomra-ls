@@ -218,11 +218,20 @@ class _FomraUniversalSearchBarState extends State<FomraUniversalSearchBar> {
           Navigator.pushNamed(context, route);
         }
       case UniversalSearchKind.document:
-        final route = hit.route;
-        if (route != null && route.isNotEmpty) {
-          Navigator.pushNamed(context, route);
-        } else {
-          Navigator.pushNamed(context, '/document-management');
+        final doc = hit.document;
+        if (doc == null) return;
+        LandLead? lead;
+        for (final l in AppStore.instance.leads) {
+          if (l.leadId == doc.leadId) {
+            lead = l;
+            break;
+          }
+        }
+        if (lead != null) {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => LeadDetailScreen(lead: lead!)),
+          );
         }
       case UniversalSearchKind.contact:
         final kind = hit.contactKind;

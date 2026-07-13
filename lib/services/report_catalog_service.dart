@@ -8,16 +8,47 @@ import 'package:pdf/widgets.dart' as pw;
 import '../analytics/management_bi_metrics.dart';
 import '../models/employee_profile.dart';
 import '../models/land_lead.dart';
+import '../models/land_lead_legal_document.dart';
 import '../models/land_lead_site_visit.dart';
 import '../utils/contact_directory.dart';
 import 'csv_saver_stub.dart'
     if (dart.library.html) 'csv_saver_web.dart'
     if (dart.library.io) 'csv_saver_io.dart';
+import 'land_lead_legal_service.dart';
 import 'management_bi_activity_service.dart';
 import 'pdf_saver_stub.dart'
     if (dart.library.html) 'pdf_saver_web.dart'
     if (dart.library.io) 'pdf_saver_io.dart';
-import 'report_service.dart';
+
+enum ReportFormat { pdf, excel }
+
+class ReportPreviewSection {
+  final String title;
+  final List<String> headers;
+  final List<List<String>> rows;
+  final String emptyMessage;
+
+  const ReportPreviewSection({
+    required this.title,
+    required this.headers,
+    required this.rows,
+    this.emptyMessage = 'No data.',
+  });
+
+  int get count => rows.length;
+}
+
+class ReportPreviewData {
+  final DateTime generatedAt;
+  final List<({String label, String value})> summary;
+  final List<ReportPreviewSection> sections;
+
+  const ReportPreviewData({
+    required this.generatedAt,
+    required this.summary,
+    required this.sections,
+  });
+}
 
 /// One-click report catalog covering all product report types.
 enum ReportKind {
@@ -25,45 +56,60 @@ enum ReportKind {
   weekly,
   monthly,
   employee,
+  district,
   village,
   broker,
   owner,
   conversion,
-  leadAgeing,
+  siteAgeing,
   pendingApproval,
-  survey,
   siteVisit,
+  survey,
+  legal,
+  document,
+  acquisitionSummary,
+  pipeline,
 }
 
 extension ReportKindX on ReportKind {
   String get label => switch (this) {
-        ReportKind.daily => 'Daily Reports',
-        ReportKind.weekly => 'Weekly Reports',
-        ReportKind.monthly => 'Monthly Reports',
-        ReportKind.employee => 'Employee Reports',
-        ReportKind.village => 'Village Reports',
-        ReportKind.broker => 'Broker Reports',
-        ReportKind.owner => 'Owner Reports',
-        ReportKind.conversion => 'Conversion Reports',
-        ReportKind.leadAgeing => 'Lead Ageing Reports',
-        ReportKind.pendingApproval => 'Pending Approval Reports',
-        ReportKind.survey => 'Survey Reports',
-        ReportKind.siteVisit => 'Site Visit Reports',
+        ReportKind.daily => 'Daily Report',
+        ReportKind.weekly => 'Weekly Report',
+        ReportKind.monthly => 'Monthly Report',
+        ReportKind.employee => 'Employee Report',
+        ReportKind.district => 'District Report',
+        ReportKind.village => 'Village Report',
+        ReportKind.broker => 'Broker Report',
+        ReportKind.owner => 'Owner Report',
+        ReportKind.conversion => 'Conversion Report',
+        ReportKind.siteAgeing => 'Site Ageing Report',
+        ReportKind.pendingApproval => 'Pending Approval Report',
+        ReportKind.siteVisit => 'Site Visit Report',
+        ReportKind.survey => 'Survey Report',
+        ReportKind.legal => 'Legal Report',
+        ReportKind.document => 'Document Report',
+        ReportKind.acquisitionSummary => 'Acquisition Summary',
+        ReportKind.pipeline => 'Pipeline Report',
       };
 
   String get description => switch (this) {
-        ReportKind.daily => 'Leads added today',
+        ReportKind.daily => 'Sites added today',
         ReportKind.weekly => 'Activity across the current week',
         ReportKind.monthly => 'Month-to-date pipeline snapshot',
         ReportKind.employee => 'Performance by executive',
-        ReportKind.village => 'Leads grouped by village',
-        ReportKind.broker => 'Broker directory and linked leads',
-        ReportKind.owner => 'Owner directory and linked leads',
+        ReportKind.district => 'Sites grouped by district',
+        ReportKind.village => 'Sites grouped by village',
+        ReportKind.broker => 'Broker directory and linked sites',
+        ReportKind.owner => 'Owner directory and linked sites',
         ReportKind.conversion => 'Acquisition and conversion rates',
-        ReportKind.leadAgeing => 'Age buckets across the pipeline',
+        ReportKind.siteAgeing => 'Age buckets across the pipeline',
         ReportKind.pendingApproval => 'Visits awaiting management approval',
-        ReportKind.survey => 'Survey numbers and pending surveys',
         ReportKind.siteVisit => 'All logged site visits',
+        ReportKind.survey => 'Survey numbers and pending surveys',
+        ReportKind.legal => 'Legal verification and document progress',
+        ReportKind.document => 'Uploaded legal document inventory',
+        ReportKind.acquisitionSummary => 'Fleet-wide acquisition snapshot',
+        ReportKind.pipeline => 'Current pipeline by stage',
       };
 
   String get fileStem => switch (this) {
@@ -71,14 +117,19 @@ extension ReportKindX on ReportKind {
         ReportKind.weekly => 'Weekly',
         ReportKind.monthly => 'Monthly',
         ReportKind.employee => 'Employee',
+        ReportKind.district => 'District',
         ReportKind.village => 'Village',
         ReportKind.broker => 'Broker',
         ReportKind.owner => 'Owner',
         ReportKind.conversion => 'Conversion',
-        ReportKind.leadAgeing => 'Lead_Ageing',
+        ReportKind.siteAgeing => 'Site_Ageing',
         ReportKind.pendingApproval => 'Pending_Approvals',
-        ReportKind.survey => 'Survey',
         ReportKind.siteVisit => 'Site_Visits',
+        ReportKind.survey => 'Survey',
+        ReportKind.legal => 'Legal',
+        ReportKind.document => 'Documents',
+        ReportKind.acquisitionSummary => 'Acquisition_Summary',
+        ReportKind.pipeline => 'Pipeline',
       };
 }
 
@@ -125,7 +176,8 @@ class ReportCatalogService {
     await savePdf(bytes, fileName);
   }
 
-  /// Builds a preview, loading site-visit activity when the report needs it.
+  /// Builds a preview, loading site-visit activity / legal documents when
+  /// the report needs them.
   static Future<ReportPreviewData> buildLivePreview({
     required ReportKind kind,
     required List<LandLead> leads,
@@ -134,12 +186,14 @@ class ReportCatalogService {
     bool capForPdf = true,
   }) async {
     final activity = await _loadActivityIfNeeded(kind);
+    final legalDocs = await _loadLegalDocsIfNeeded(kind);
     return buildPreview(
       kind: kind,
       leads: leads,
       employees: employees,
       employeeName: employeeName,
       siteVisits: activity.siteVisits,
+      legalDocs: legalDocs,
       capForPdf: capForPdf,
     );
   }
@@ -149,10 +203,21 @@ class ReportCatalogService {
   ) async {
     if (kind == ReportKind.siteVisit ||
         kind == ReportKind.pendingApproval ||
-        kind == ReportKind.leadAgeing) {
+        kind == ReportKind.siteAgeing) {
       return ManagementBiActivityService.loadAll();
     }
     return ManagementBiActivityBundle.empty;
+  }
+
+  static Future<List<LandLeadLegalDocument>> _loadLegalDocsIfNeeded(
+    ReportKind kind,
+  ) async {
+    if (kind != ReportKind.legal && kind != ReportKind.document) return const [];
+    try {
+      return await LandLeadLegalService.getAllDocuments();
+    } catch (_) {
+      return const [];
+    }
   }
 
   static ReportPreviewData buildPreview({
@@ -161,6 +226,7 @@ class ReportCatalogService {
     List<EmployeeProfile> employees = const [],
     String? employeeName,
     List<LandLeadSiteVisit> siteVisits = const [],
+    List<LandLeadLegalDocument> legalDocs = const [],
     bool capForPdf = true,
   }) {
     final scoped = _periodFilter(leads, kind);
@@ -172,18 +238,23 @@ class ReportCatalogService {
         _periodLeadsPreview(kind, scoped, cap: cap),
       ReportKind.employee =>
         _employeePreview(scoped, employees, employeeName, cap: cap),
+      ReportKind.district => _districtPreview(scoped, cap: cap),
       ReportKind.village => _villagePreview(scoped, cap: cap),
       ReportKind.broker =>
         _directoryPreview(scoped, ContactDirectoryKind.broker, cap: cap),
       ReportKind.owner =>
         _directoryPreview(scoped, ContactDirectoryKind.owner, cap: cap),
       ReportKind.conversion => _conversionPreview(scoped),
-      ReportKind.leadAgeing => _ageingPreview(scoped, cap: cap),
+      ReportKind.siteAgeing => _ageingPreview(scoped, cap: cap),
       ReportKind.pendingApproval =>
         _pendingApprovalPreview(scoped, siteVisits, cap: cap),
-      ReportKind.survey => _surveyPreview(scoped, cap: cap),
       ReportKind.siteVisit =>
         _siteVisitPreview(scoped, siteVisits, cap: cap),
+      ReportKind.survey => _surveyPreview(scoped, cap: cap),
+      ReportKind.legal => _legalPreview(scoped, legalDocs, cap: cap),
+      ReportKind.document => _documentPreview(scoped, legalDocs, cap: cap),
+      ReportKind.acquisitionSummary => _acquisitionSummaryPreview(scoped),
+      ReportKind.pipeline => _pipelinePreview(scoped, cap: cap),
     };
   }
 
@@ -302,6 +373,47 @@ class ReportCatalogService {
           ],
           rows: _maybeCap(rows, cap),
           emptyMessage: 'No employee activity.',
+        ),
+      ],
+    );
+  }
+
+  static ReportPreviewData _districtPreview(
+    List<LandLead> leads, {
+    required bool cap,
+  }) {
+    final map = <String, List<LandLead>>{};
+    for (final l in leads) {
+      final d =
+          l.district.trim().isEmpty ? '(Unspecified)' : l.district.trim();
+      (map[d] ??= []).add(l);
+    }
+    final rows = map.entries.map((e) {
+      final acquired = e.value.where((l) => l.status.isAcquired).length;
+      final villages = e.value.map((l) => l.village.trim()).where((v) => v.isNotEmpty).toSet();
+      final acres = e.value.fold<double>(0, (s, l) => s + biLeadAcres(l));
+      return [
+        e.key,
+        '${villages.length}',
+        '${e.value.length}',
+        '$acquired',
+        acres.toStringAsFixed(1),
+      ];
+    }).toList()
+      ..sort((a, b) => int.parse(b[2]).compareTo(int.parse(a[2])));
+
+    return ReportPreviewData(
+      generatedAt: DateTime.now(),
+      summary: [
+        (label: 'Districts', value: '${rows.length}'),
+        (label: 'Sites', value: '${leads.length}'),
+      ],
+      sections: [
+        ReportPreviewSection(
+          title: 'District Report',
+          headers: const ['District', 'Villages', 'Sites', 'Acquired', 'Acres'],
+          rows: _maybeCap(rows, cap),
+          emptyMessage: 'No district data.',
         ),
       ],
     );
@@ -440,30 +552,16 @@ class ReportCatalogService {
     required bool cap,
   }) {
     final now = DateTime.now();
-    final buckets = <String, List<LandLead>>{
-      '0–7 days': [],
-      '8–14 days': [],
-      '15–30 days': [],
-      '31–60 days': [],
-      '60+ days': [],
+    final buckets = <BiAgeBucket, List<LandLead>>{
+      for (final b in BiAgeBucket.values) b: <LandLead>[],
     };
     for (final l in leads.where((l) => l.status.isActive)) {
       final age = biLeadAgeDays(l, now);
-      if (age <= 7) {
-        buckets['0–7 days']!.add(l);
-      } else if (age <= 14) {
-        buckets['8–14 days']!.add(l);
-      } else if (age <= 30) {
-        buckets['15–30 days']!.add(l);
-      } else if (age <= 60) {
-        buckets['31–60 days']!.add(l);
-      } else {
-        buckets['60+ days']!.add(l);
-      }
+      buckets[BiAgeBucketX.forAgeDays(age)]!.add(l);
     }
-    final summaryRows = buckets.entries
-        .map((e) => [e.key, '${e.value.length}'])
-        .toList();
+    final summaryRows = [
+      for (final b in BiAgeBucket.values) [b.label, '${buckets[b]!.length}'],
+    ];
     final detail = buckets.values.expand((list) => list).toList();
     final detailRows = detail
         .map(
@@ -480,8 +578,11 @@ class ReportCatalogService {
     return ReportPreviewData(
       generatedAt: DateTime.now(),
       summary: [
-        (label: 'Active leads', value: '${detail.length}'),
-        (label: '60+ days', value: '${buckets['60+ days']!.length}'),
+        (label: 'Active sites', value: '${detail.length}'),
+        (
+          label: BiAgeBucket.d90plus.label,
+          value: '${buckets[BiAgeBucket.d90plus]!.length}'
+        ),
       ],
       sections: [
         ReportPreviewSection(
@@ -490,16 +591,16 @@ class ReportCatalogService {
           rows: summaryRows,
         ),
         ReportPreviewSection(
-          title: 'Active Leads by Age',
+          title: 'Active Sites by Age',
           headers: const [
-            'Lead ID',
+            'Site ID',
             'Owner',
             'Status',
             'Age (days)',
             'Executive',
           ],
           rows: _maybeCap(detailRows, cap),
-          emptyMessage: 'No active leads.',
+          emptyMessage: 'No active sites.',
         ),
       ],
     );
@@ -635,6 +736,181 @@ class ReportCatalogService {
           ],
           rows: _maybeCap(rows, cap),
           emptyMessage: 'No site visits logged.',
+        ),
+      ],
+    );
+  }
+
+  static ReportPreviewData _legalPreview(
+    List<LandLead> leads,
+    List<LandLeadLegalDocument> legalDocs, {
+    required bool cap,
+  }) {
+    final docsByLead = <String, List<LandLeadLegalDocument>>{};
+    for (final d in legalDocs) {
+      (docsByLead[d.leadId] ??= []).add(d);
+    }
+    final relevant = leads
+        .where((l) =>
+            l.status == LeadStatus.negotiation ||
+            l.status == LeadStatus.legal ||
+            l.status == LeadStatus.signed)
+        .toList();
+    final rows = relevant.map((l) {
+      final docs = docsByLead[l.leadId] ?? const [];
+      return [
+        l.leadId,
+        l.ownerName.trim().isEmpty ? '-' : l.ownerName,
+        l.status.label,
+        l.surveyNumber.trim().isEmpty ? 'Missing' : 'On file',
+        '${docs.length}',
+      ];
+    }).toList();
+    final withDocs = relevant.where((l) => (docsByLead[l.leadId] ?? const []).isNotEmpty).length;
+
+    return ReportPreviewData(
+      generatedAt: DateTime.now(),
+      summary: [
+        (label: 'In legal pipeline', value: '${relevant.length}'),
+        (label: 'With documents', value: '$withDocs'),
+      ],
+      sections: [
+        ReportPreviewSection(
+          title: 'Legal Report',
+          headers: const [
+            'Site ID',
+            'Owner',
+            'Stage',
+            'Survey Number',
+            'Documents Uploaded',
+          ],
+          rows: _maybeCap(rows, cap),
+          emptyMessage: 'No sites in the legal pipeline.',
+        ),
+      ],
+    );
+  }
+
+  static ReportPreviewData _documentPreview(
+    List<LandLead> leads,
+    List<LandLeadLegalDocument> legalDocs, {
+    required bool cap,
+  }) {
+    final leadIds = leads.map((l) => l.leadId).toSet();
+    final scoped = legalDocs.where((d) => leadIds.contains(d.leadId)).toList()
+      ..sort((a, b) => b.verifiedAt.compareTo(a.verifiedAt));
+    final rows = scoped
+        .map((d) => [
+              d.leadId,
+              d.fileName,
+              _date.format(d.verifiedAt),
+              d.loggedByName.isEmpty ? '-' : d.loggedByName,
+            ])
+        .toList();
+
+    return ReportPreviewData(
+      generatedAt: DateTime.now(),
+      summary: [
+        (label: 'Documents', value: '${scoped.length}'),
+        (
+          label: 'Sites covered',
+          value: '${scoped.map((d) => d.leadId).toSet().length}'
+        ),
+      ],
+      sections: [
+        ReportPreviewSection(
+          title: 'Document Report',
+          headers: const ['Site ID', 'File Name', 'Verified', 'Uploaded By'],
+          rows: _maybeCap(rows, cap),
+          emptyMessage: 'No documents uploaded.',
+        ),
+      ],
+    );
+  }
+
+  static ReportPreviewData _acquisitionSummaryPreview(List<LandLead> leads) {
+    final total = leads.length;
+    final signed = leads.where((l) => l.status == LeadStatus.signed).toList();
+    final active = leads.where((l) => l.status.isActive).toList();
+    final dropped = leads.where((l) => l.status.isDropped).toList();
+    final totalAcres = leads.fold<double>(0, (s, l) => s + biLeadAcres(l));
+    final signedAcres = signed.fold<double>(0, (s, l) => s + biLeadAcres(l));
+
+    final stageRows = [
+      for (final status in leadStatusPipelineOrder)
+        [
+          status.label,
+          '${leads.where((l) => l.status == status).length}',
+          leads
+              .where((l) => l.status == status)
+              .fold<double>(0, (s, l) => s + biLeadAcres(l))
+              .toStringAsFixed(1),
+        ],
+    ];
+
+    return ReportPreviewData(
+      generatedAt: DateTime.now(),
+      summary: [
+        (label: 'Total sites', value: '$total'),
+        (label: 'Total acres', value: totalAcres.toStringAsFixed(1)),
+        (label: 'Signed', value: '${signed.length}'),
+        (label: 'Signed acres', value: signedAcres.toStringAsFixed(1)),
+        (label: 'Active', value: '${active.length}'),
+        (label: 'Dropped', value: '${dropped.length}'),
+      ],
+      sections: [
+        ReportPreviewSection(
+          title: 'Acquisition Summary',
+          headers: const ['Stage', 'Sites', 'Acres'],
+          rows: stageRows,
+          emptyMessage: 'No acquisition data.',
+        ),
+      ],
+    );
+  }
+
+  static ReportPreviewData _pipelinePreview(
+    List<LandLead> leads, {
+    required bool cap,
+  }) {
+    final now = DateTime.now();
+    final active = leads.where((l) => l.status.isActive).toList()
+      ..sort((a, b) => leadStatusPipelineOrder
+          .indexOf(a.status)
+          .compareTo(leadStatusPipelineOrder.indexOf(b.status)));
+    final rows = active
+        .map((l) => [
+              l.leadId,
+              l.ownerName.trim().isEmpty ? '-' : l.ownerName,
+              l.status.label,
+              biLeadAcres(l).toStringAsFixed(1),
+              '${biLeadAgeDays(l, now)}',
+              l.createdByName.trim().isEmpty ? '-' : l.createdByName,
+            ])
+        .toList();
+
+    return ReportPreviewData(
+      generatedAt: DateTime.now(),
+      summary: [
+        (label: 'In pipeline', value: '${active.length}'),
+        (
+          label: 'Pipeline acres',
+          value: active.fold<double>(0, (s, l) => s + biLeadAcres(l)).toStringAsFixed(1)
+        ),
+      ],
+      sections: [
+        ReportPreviewSection(
+          title: 'Pipeline Report',
+          headers: const [
+            'Site ID',
+            'Owner',
+            'Stage',
+            'Acres',
+            'Age (days)',
+            'Executive',
+          ],
+          rows: _maybeCap(rows, cap),
+          emptyMessage: 'No sites in the pipeline.',
         ),
       ],
     );

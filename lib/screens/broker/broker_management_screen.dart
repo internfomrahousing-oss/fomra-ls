@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../analytics/business_module_metrics.dart';
+import '../../models/land_lead.dart';
+import '../../models/land_lead_meeting.dart';
 import '../../services/app_store.dart';
+import '../../services/land_lead_meeting_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_layout.dart';
 import '../../theme/fomra_theme_context.dart';
@@ -53,6 +56,13 @@ class _BrokerManagementScreenState extends State<BrokerManagementScreen> {
     final rate = totalLeads == 0 ? 0.0 : (totalConv / totalLeads) * 100;
     final pct = NumberFormat('0.0');
 
+    final ranked = rows.where((r) => r.leads > 0).toList()
+      ..sort((a, b) {
+        final byRate = b.successRate.compareTo(a.successRate);
+        return byRate != 0 ? byRate : b.conversions.compareTo(a.conversions);
+      });
+    final topBroker = ranked.isEmpty ? null : ranked.first;
+
     return FomraAppShell(
       currentRoute: '/broker-management',
       appBar: FomraAppBar(
@@ -84,6 +94,7 @@ class _BrokerManagementScreenState extends State<BrokerManagementScreen> {
               _kpi('Leads', '$totalLeads', AppColors.info),
               _kpi('Conversions', '$totalConv', AppColors.success),
               _kpi('Success rate', '${pct.format(rate)}%', AppColors.warning),
+              if (topBroker != null) _topBrokerKpi(context, topBroker, pct),
             ],
           ),
           const SizedBox(height: 16),
@@ -183,15 +194,7 @@ class _BrokerManagementScreenState extends State<BrokerManagementScreen> {
                       ),
                       if (expanded) ...[
                         const SizedBox(height: 14),
-                        LeadPortfolioBreakdown(
-                          leads: brokerLeads,
-                          onOpenLead: (lead) => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => LeadDetailScreen(lead: lead),
-                            ),
-                          ),
-                        ),
+                        _BrokerPortfolioSection(leads: brokerLeads),
                       ],
                     ],
                   ),
@@ -226,6 +229,57 @@ class _BrokerManagementScreenState extends State<BrokerManagementScreen> {
     );
   }
 
+  Widget _topBrokerKpi(
+    BuildContext context,
+    BrokerPerformanceRow broker,
+    NumberFormat pct,
+  ) {
+    return Container(
+      width: 220,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.secondary.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.secondary.withValues(alpha: 0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.emoji_events_outlined,
+                  size: 16, color: AppColors.secondary),
+              const SizedBox(width: 6),
+              Text(
+                'Top Performing Broker',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: context.fomraTextSecondary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            broker.name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+              color: AppColors.secondary,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            '${pct.format(broker.successRate)}% success · ${broker.conversions} sites closed',
+            style: TextStyle(fontSize: 11, color: context.fomraTextSecondary),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _chip(String text) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
@@ -234,4 +288,63 @@ class _BrokerManagementScreenState extends State<BrokerManagementScreen> {
         ),
         child: Text(text, style: const TextStyle(fontSize: 11)),
       );
+}
+
+/// Loads the meetings-conducted count for a broker's leads, then renders the
+/// shared portfolio breakdown with a Lead Age column instead of Status.
+class _BrokerPortfolioSection extends StatefulWidget {
+  final List<LandLead> leads;
+
+  const _BrokerPortfolioSection({required this.leads});
+
+  @override
+  State<_BrokerPortfolioSection> createState() =>
+      _BrokerPortfolioSectionState();
+}
+
+class _BrokerPortfolioSectionState extends State<_BrokerPortfolioSection> {
+  bool _loading = true;
+  int _meetingsConducted = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant _BrokerPortfolioSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.leads != widget.leads) _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final lists = await Future.wait<List<LandLeadMeeting>>(
+        widget.leads.map((l) => LandLeadMeetingService.getForLead(l.leadId)),
+      );
+      final total = lists.fold<int>(0, (s, meetings) => s + meetings.length);
+      if (!mounted) return;
+      setState(() {
+        _meetingsConducted = total;
+        _loading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LeadPortfolioBreakdown(
+      leads: widget.leads,
+      meetingsConducted: _loading ? null : _meetingsConducted,
+      useLeadAgeColumn: true,
+      onOpenLead: (lead) => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => LeadDetailScreen(lead: lead)),
+      ),
+    );
+  }
 }

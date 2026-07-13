@@ -3,11 +3,21 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
 
+import '../../analytics/ai_lead_score.dart';
 import '../../config/maptiler_tiles.dart';
 import '../../models/land_lead.dart';
+import '../../models/land_lead_legal_document.dart';
+import '../../models/land_lead_meeting.dart';
+import '../../models/land_lead_site_visit.dart';
+import '../../models/lead_call_log.dart';
+import '../../services/land_lead_legal_service.dart';
+import '../../services/land_lead_meeting_service.dart';
+import '../../services/land_lead_site_visit_service.dart';
+import '../../services/lead_call_log_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../utils/lead_location_parser.dart';
+import '../../utils/maps_navigation.dart';
 import '../../widgets/fomra_app_shell.dart';
 import '../../widgets/fomra_breadcrumb.dart';
 import '../../widgets/lead_portfolio_breakdown.dart';
@@ -37,27 +47,18 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
   // ── Filters ────────────────────────────────────────────────────────────────
   final Set<LeadStatus> _stages = {};
   String? _executive;
-  String? _district;
-  String? _village;
-  String? _owner;
   String? _broker;
   DateTimeRange? _dateRange;
 
   bool get _hasActiveFilters =>
       _stages.isNotEmpty ||
       _executive != null ||
-      _district != null ||
-      _village != null ||
-      _owner != null ||
       _broker != null ||
       _dateRange != null;
 
   void _clearFilters() {
     _stages.clear();
     _executive = null;
-    _district = null;
-    _village = null;
-    _owner = null;
     _broker = null;
     _dateRange = null;
   }
@@ -78,9 +79,6 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
       if (_executive != null && l.createdByName.trim() != _executive) {
         return false;
       }
-      if (_district != null && l.district.trim() != _district) return false;
-      if (_village != null && l.village.trim() != _village) return false;
-      if (_owner != null && l.ownerName.trim() != _owner) return false;
       if (_broker != null && l.brokerName.trim() != _broker) return false;
       if (_dateRange != null) {
         final d = DateTime(l.addedOn.year, l.addedOn.month, l.addedOn.day);
@@ -119,7 +117,7 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
       appBar: FomraSubPageAppBar(
         title: 'Project Map',
         subtitle:
-            '${filtered.length} lead${filtered.length == 1 ? '' : 's'} · ${totalAcres.toStringAsFixed(2)} acres',
+            '${filtered.length} site${filtered.length == 1 ? '' : 's'} · ${totalAcres.toStringAsFixed(2)} acres',
         breadcrumbs: FomraBreadcrumbs.fromWorkspace('Project Map'),
       ),
       body: allPlotted.isEmpty
@@ -145,10 +143,6 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
                   children: [
                     _compactFilterBar(context, filtered.length, totalAcres),
                     Expanded(child: map),
-                    SizedBox(
-                      height: 220,
-                      child: _matchingList(context, filtered),
-                    ),
                   ],
                 );
               },
@@ -187,7 +181,7 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
                   width: 44,
                   height: 52,
                   child: GestureDetector(
-                    onTap: () => _openLead(context, p.lead),
+                    onTap: () => _openPropertyPopup(context, p.lead),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -241,7 +235,7 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 child: Text(
-                  '$missingGps matching lead${missingGps == 1 ? '' : 's'} '
+                  '$missingGps matching site${missingGps == 1 ? '' : 's'} '
                   'without GPS — not shown on the map.',
                   style: TextStyle(
                     fontSize: 11,
@@ -312,26 +306,6 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
               padding: const EdgeInsets.all(16),
               children: [
                 _filterControls(context, (fn) => setState(fn)),
-                const Divider(height: 28),
-                Text(
-                  'Matching properties',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
-                    color: context.fomraTextSecondary,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                if (filtered.isEmpty)
-                  Text(
-                    'No leads match the current filters.',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: context.fomraTextSecondary,
-                    ),
-                  )
-                else
-                  for (final l in filtered) _leadListTile(context, l),
               ],
             ),
           ),
@@ -421,111 +395,6 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
     );
   }
 
-  Widget _matchingList(BuildContext context, List<LandLead> filtered) {
-    return Material(
-      color: context.fomraSurface,
-      elevation: 2,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
-            child: Text(
-              'Matching properties (${filtered.length})',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w800,
-                color: context.fomraTextSecondary,
-              ),
-            ),
-          ),
-          Expanded(
-            child: filtered.isEmpty
-                ? Center(
-                    child: Text(
-                      'No leads match the current filters.',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: context.fomraTextSecondary,
-                      ),
-                    ),
-                  )
-                : ListView(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    children: [
-                      for (final l in filtered) _leadListTile(context, l),
-                    ],
-                  ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _leadListTile(BuildContext context, LandLead lead) {
-    final hasGps = parseLeadGps(lead.gpsCoordinates) != null;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: InkWell(
-        onTap: () => _openLead(context, lead),
-        borderRadius: BorderRadius.circular(10),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          decoration: BoxDecoration(
-            color: context.fomraSurfaceVar.withValues(alpha: 0.5),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: context.fomraBorder),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 10,
-                height: 10,
-                decoration: BoxDecoration(
-                  color: lead.status.color,
-                  shape: BoxShape.circle,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Lead #${lead.leadId} · ${lead.status.label}',
-                      style: TextStyle(
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w700,
-                        color: context.fomraTextPrimary,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      [
-                        if (lead.village.isNotEmpty) lead.village,
-                        if (lead.createdByName.isNotEmpty) lead.createdByName,
-                        '${leadPortfolioAcres(lead).toStringAsFixed(2)} ac',
-                      ].join(' · '),
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: context.fomraTextSecondary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (!hasGps)
-                Icon(Icons.location_off_outlined,
-                    size: 15, color: context.fomraTextTertiary),
-              Icon(Icons.chevron_right_rounded,
-                  size: 18, color: context.fomraTextTertiary),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   // ── Filter controls (shared by side panel + bottom sheet) ──────────────────
   Widget _filterControls(
     BuildContext context,
@@ -538,7 +407,7 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
         Row(
           children: [
             Text(
-              'Lead Stage',
+              'Site Stage',
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w800,
@@ -578,12 +447,6 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
         const SizedBox(height: 14),
         _dropdown(context, 'Assigned Executive', _executive,
             _distinct((l) => l.createdByName), (v) => apply(() => _executive = v)),
-        _dropdown(context, 'District', _district,
-            _distinct((l) => l.district), (v) => apply(() => _district = v)),
-        _dropdown(context, 'Village', _village, _distinct((l) => l.village),
-            (v) => apply(() => _village = v)),
-        _dropdown(context, 'Owner', _owner, _distinct((l) => l.ownerName),
-            (v) => apply(() => _owner = v)),
         _dropdown(context, 'Broker', _broker, _distinct((l) => l.brokerName),
             (v) => apply(() => _broker = v)),
         const SizedBox(height: 4),
@@ -645,7 +508,7 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
   Widget _totalsRow(BuildContext context, int matchCount, double totalAcres) {
     return Row(
       children: [
-        _totalPill(context, '$matchCount', 'Leads', AppColors.primary),
+        _totalPill(context, '$matchCount', 'Sites', AppColors.primary),
         const SizedBox(width: 10),
         _totalPill(context, totalAcres.toStringAsFixed(2), 'Acres',
             AppColors.info),
@@ -702,7 +565,7 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
                 size: 56, color: AppColors.primary.withValues(alpha: 0.35)),
             const SizedBox(height: 16),
             Text(
-              'No leads with GPS coordinates',
+              'No sites with GPS coordinates',
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
@@ -711,7 +574,7 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Add GPS when creating leads (tap the map in Add Lead) '
+              'Add GPS when creating sites (tap the map in Add Site) '
               'so they appear here as pinned locations.',
               textAlign: TextAlign.center,
               style: TextStyle(
@@ -772,6 +635,279 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => LeadDetailScreen(lead: lead)),
+    );
+  }
+
+  void _openPropertyPopup(BuildContext context, LandLead lead) {
+    showDialog<void>(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.35),
+      builder: (_) => _PropertyPopup(
+        lead: lead,
+        allLeads: widget.leads,
+        onOpenSite: () => _openLead(context, lead),
+      ),
+    );
+  }
+}
+
+String _siteName(LandLead l) {
+  if (l.location.trim().isNotEmpty) return l.location.trim();
+  final parts = <String>[
+    if (l.surveyNumber.trim().isNotEmpty) 'Survey ${l.surveyNumber.trim()}',
+    if (l.village.trim().isNotEmpty) l.village.trim(),
+  ];
+  if (parts.isNotEmpty) return parts.join(' · ');
+  if (l.taluk.trim().isNotEmpty) return l.taluk.trim();
+  if (l.district.trim().isNotEmpty) return l.district.trim();
+  return 'Site #${l.leadId}';
+}
+
+/// Pin-tap popup: site identity, stage, ownership, AI score, and quick
+/// actions (open the full site, or launch Google Maps navigation).
+class _PropertyPopup extends StatefulWidget {
+  final LandLead lead;
+  final List<LandLead> allLeads;
+  final VoidCallback onOpenSite;
+
+  const _PropertyPopup({
+    required this.lead,
+    required this.allLeads,
+    required this.onOpenSite,
+  });
+
+  @override
+  State<_PropertyPopup> createState() => _PropertyPopupState();
+}
+
+class _PropertyPopupState extends State<_PropertyPopup> {
+  bool _loading = true;
+  AiLeadScoreResult? _score;
+  DateTime? _lastActivity;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final leadId = widget.lead.leadId;
+    try {
+      final results = await Future.wait([
+        LeadCallLogService.getForLead(leadId),
+        LandLeadMeetingService.getForLead(leadId),
+        LandLeadSiteVisitService.getAllForLead(leadId),
+        LandLeadLegalService.getDocuments(leadId),
+      ]);
+      final callLogs = results[0] as List<LeadCallLog>;
+      final meetings = results[1] as List<LandLeadMeeting>;
+      final siteVisits = results[2] as List<LandLeadSiteVisit>;
+      final legalDocs = results[3] as List<LandLeadLegalDocument>;
+
+      var last = widget.lead.addedOn;
+      for (final c in callLogs) {
+        if (c.calledAt.isAfter(last)) last = c.calledAt;
+      }
+      for (final m in meetings) {
+        if (m.metAt.isAfter(last)) last = m.metAt;
+      }
+      for (final v in siteVisits) {
+        if (v.visitedAt.isAfter(last)) last = v.visitedAt;
+      }
+
+      final score = AiLeadScore.compute(
+        lead: widget.lead,
+        callLogs: callLogs,
+        meetings: meetings,
+        siteVisits: siteVisits,
+        legalDocs: legalDocs,
+        allLeads: widget.allLeads,
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _score = score;
+        _lastActivity = last;
+        _loading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+    }
+  }
+
+  Color _scoreColor(AiScoreBand band) => switch (band) {
+        AiScoreBand.excellent => AppColors.success,
+        AiScoreBand.good => AppColors.info,
+        AiScoreBand.moderate => AppColors.warning,
+        AiScoreBand.needsAttention => const Color(0xFFF97316),
+        AiScoreBand.highRisk => AppColors.error,
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    final lead = widget.lead;
+    final acres = leadPortfolioAcres(lead);
+
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      backgroundColor: context.fomraSurface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 420),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      _siteName(lead),
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w800,
+                        color: context.fomraTextPrimary,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close_rounded),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 2),
+              Text(
+                'Site #${lead.leadId}',
+                style: TextStyle(fontSize: 12, color: context.fomraTextSecondary),
+              ),
+              const SizedBox(height: 14),
+              _row('Village', lead.village.trim().isEmpty ? '—' : lead.village),
+              _row('Acres', acres.toStringAsFixed(2)),
+              _row('Current Stage', lead.status.label),
+              _row('Assigned Executive',
+                  lead.createdByName.trim().isEmpty ? '—' : lead.createdByName),
+              _row('Owner', lead.ownerName.trim().isEmpty ? '—' : lead.ownerName),
+              _row('Broker', lead.brokerName.trim().isEmpty ? '—' : lead.brokerName),
+              _row(
+                'Last Activity',
+                _loading
+                    ? 'Loading…'
+                    : _lastActivity == null
+                        ? '—'
+                        : DateFormat('dd MMM yyyy').format(_lastActivity!),
+              ),
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  Text(
+                    'AI Score',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: context.fomraTextSecondary,
+                    ),
+                  ),
+                  const Spacer(),
+                  if (_loading)
+                    const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  else if (_score != null)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color:
+                            _scoreColor(_score!.band).withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(
+                          color: _scoreColor(_score!.band)
+                              .withValues(alpha: 0.4),
+                        ),
+                      ),
+                      child: Text(
+                        '${_score!.score} · ${_score!.band.label}',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          color: _scoreColor(_score!.band),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        widget.onOpenSite();
+                      },
+                      icon: const Icon(Icons.open_in_new_rounded, size: 16),
+                      label: const Text('Open Site'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: lead.gpsCoordinates.trim().isEmpty
+                          ? null
+                          : () => MapsNavigation.navigateFromGpsString(
+                                lead.gpsCoordinates,
+                                label: _siteName(lead),
+                              ),
+                      icon: const Icon(Icons.directions_rounded, size: 16),
+                      label: const Text('Navigate'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _row(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 130,
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: context.fomraTextSecondary,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: context.fomraTextPrimary,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

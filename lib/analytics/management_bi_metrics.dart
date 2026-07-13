@@ -50,17 +50,27 @@ extension BiFunnelStageX on BiFunnelStage {
       };
 }
 
-enum BiAgeBucket { d0to3, d4to7, d8to15, d15plus }
+enum BiAgeBucket { d0to30, d31to60, d61to90, d90plus }
 
 extension BiAgeBucketX on BiAgeBucket {
   String get label => switch (this) {
-        BiAgeBucket.d0to3 => '0–3 Days',
-        BiAgeBucket.d4to7 => '4–7 Days',
-        BiAgeBucket.d8to15 => '8–15 Days',
-        BiAgeBucket.d15plus => '15+ Days',
+        BiAgeBucket.d0to30 => '0–30 Days',
+        BiAgeBucket.d31to60 => '31–60 Days',
+        BiAgeBucket.d61to90 => '61–90 Days',
+        BiAgeBucket.d90plus => '90+ Days',
       };
 
-  bool get isOverdue => this == BiAgeBucket.d15plus;
+  bool get isOverdue => this == BiAgeBucket.d90plus;
+
+  /// Bucket for a lead's age in days — shared by the Lead Ageing dashboard
+  /// widget and any UI showing a per-lead age bucket (e.g. Broker Management).
+  static BiAgeBucket forAgeDays(int age) => age <= 30
+      ? BiAgeBucket.d0to30
+      : age <= 60
+          ? BiAgeBucket.d31to60
+          : age <= 90
+              ? BiAgeBucket.d61to90
+              : BiAgeBucket.d90plus;
 }
 
 enum BiHeatLevel { active, moderate, idle }
@@ -469,21 +479,14 @@ class ManagementBiMetrics {
         .where((l) => l.status != LeadStatus.signed && l.status != LeadStatus.dropped)
         .toList();
     final map = {
-      BiAgeBucket.d0to3: <LandLead>[],
-      BiAgeBucket.d4to7: <LandLead>[],
-      BiAgeBucket.d8to15: <LandLead>[],
-      BiAgeBucket.d15plus: <LandLead>[],
+      BiAgeBucket.d0to30: <LandLead>[],
+      BiAgeBucket.d31to60: <LandLead>[],
+      BiAgeBucket.d61to90: <LandLead>[],
+      BiAgeBucket.d90plus: <LandLead>[],
     };
     for (final l in active) {
       final age = biLeadAgeDays(l, now);
-      final bucket = age <= 3
-          ? BiAgeBucket.d0to3
-          : age <= 7
-              ? BiAgeBucket.d4to7
-              : age <= 15
-                  ? BiAgeBucket.d8to15
-                  : BiAgeBucket.d15plus;
-      map[bucket]!.add(l);
+      map[BiAgeBucketX.forAgeDays(age)]!.add(l);
     }
     return [
       for (final b in BiAgeBucket.values)

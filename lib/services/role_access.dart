@@ -43,8 +43,6 @@ abstract final class RoleAccess {
       currentRole == AppAccessRole.admin ||
       currentRole == AppAccessRole.manager;
 
-  static bool get canViewAllDocuments => true;
-
   static String deniedMessage(String action) =>
       'Your role (${currentRole.label}) cannot $action.';
 }

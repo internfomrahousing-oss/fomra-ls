@@ -207,7 +207,7 @@ class PortalWelcomeHeader extends StatelessWidget {
               final stacked = constraints.maxWidth < 640;
               final tiles = [
                 PortalSummaryTile(
-                  label: 'Total leads',
+                  label: 'Total sites',
                   value: totalLeads,
                   icon: Icons.location_on_outlined,
                   accent: AppColors.primary,
@@ -216,7 +216,7 @@ class PortalWelcomeHeader extends StatelessWidget {
                       : () => onSummaryTap!(LeadListFilter.totalLeads),
                 ),
                 PortalSummaryTile(
-                  label: 'Active leads',
+                  label: 'Active sites',
                   value: activeLeads,
                   icon: Icons.trending_up_rounded,
                   accent: AppColors.success,
@@ -225,7 +225,7 @@ class PortalWelcomeHeader extends StatelessWidget {
                       : () => onSummaryTap!(LeadListFilter.activeLeads),
                 ),
                 PortalSummaryTile(
-                  label: 'Broker leads',
+                  label: 'Broker sites',
                   value: brokerLeads,
                   icon: Icons.handshake_outlined,
                   accent: AppColors.warning,
@@ -1341,8 +1341,8 @@ class _PerformanceSummaryRow extends StatelessWidget {
       spacing: 8,
       runSpacing: 8,
       children: [
-        _TinyStat(label: 'Total Leads', value: '$totalLeads'),
-        _TinyStat(label: 'Active Leads', value: '$activeLeads'),
+        _TinyStat(label: 'Total Sites', value: '$totalLeads'),
+        _TinyStat(label: 'Active Sites', value: '$activeLeads'),
         _TinyStat(label: 'Closed Deals', value: '$closedDeals'),
         _TinyStat(label: 'Conversion Rate', value: '$conversionRate%'),
       ],

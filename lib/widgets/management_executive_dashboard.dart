@@ -206,12 +206,12 @@ class _ManagementExecutiveDashboardState
     'predictive': 'Predictive Analytics',
     'duplicates': 'Duplicate Detection',
     'funnel': 'Conversion Funnel',
-    'ageing': 'Lead Ageing',
+    'ageing': 'Site Ageing',
     'bottlenecks': 'Bottlenecks',
     'sla': 'SLA Dashboard',
     'executives': 'Executive Performance',
     'executivesTable': 'Executive Performance',
-    'leaderboard': 'Employee Leaderboard',
+    'leaderboard': 'Employee Performance',
     'heatmap': 'Activity Heat Map',
     'district': 'District Performance',
     'dealTerms': 'Deal Terms',
@@ -1591,7 +1591,7 @@ class _EmployeeLeaderboardCard extends StatelessWidget {
     final top = teamRows.take(10).toList();
 
     return _DashboardCard(
-      title: 'Employee Leaderboard',
+      title: 'Employee Performance',
       subtitle: 'Top performers by conversion',
       icon: Icons.emoji_events_outlined,
       child: top.isEmpty

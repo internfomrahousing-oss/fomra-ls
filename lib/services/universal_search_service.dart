@@ -137,19 +137,9 @@ abstract final class UniversalSearchService {
         keywords: ['alerts', 'bell', 'unread', 'sla', 'approvals'],
       ),
       const _NavEntry(
-        label: 'Documents',
-        route: '/document-management',
-        keywords: ['patta', 'chitta', 'fmb', 'ec', 'sale deed', 'repository'],
-      ),
-      const _NavEntry(
         label: 'Broker Management',
         route: '/broker-management',
         keywords: ['broker', 'performance', 'conversion', 'success rate'],
-      ),
-      const _NavEntry(
-        label: 'Land Bank',
-        route: '/land-bank',
-        keywords: ['gis', 'inventory', 'map', 'parcels'],
       ),
       const _NavEntry(
         label: 'Legal Tracker',
@@ -171,19 +161,9 @@ abstract final class UniversalSearchService {
         route: '/cost-calculator',
         keywords: ['cost', 'acre', 'acquisition', 'price'],
       ),
-      const _NavEntry(
-        label: 'Field Calendar',
-        route: '/field-calendar',
-        keywords: ['calendar', 'site visit', 'meeting', 'reminder'],
-      ),
     ];
     if (isManagement) {
       entries.addAll(const [
-        _NavEntry(
-          label: 'Analytics',
-          route: '/dashboard',
-          keywords: ['dashboard', 'analytics', 'stats', 'kpi'],
-        ),
         _NavEntry(
           label: 'Reports',
           route: '/reports',
@@ -260,7 +240,6 @@ abstract final class UniversalSearchService {
           if (num != null) 'Doc #$num',
         ].join(' · '),
         document: doc,
-        route: '/document-management',
       ));
       if (hits.length >= _maxResults) return hits;
     }
