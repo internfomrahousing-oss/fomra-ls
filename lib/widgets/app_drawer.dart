@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../theme/fomra_layout.dart';
 import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/fomra_theme_context.dart';
@@ -68,18 +70,23 @@ class _DrawerHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = context.isDarkMode;
+    final titleSize = FomraLayout.responsiveClamp(
+      context,
+      min: 20,
+      max: 22,
+    );
 
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       child: GestureDetector(
-      onTap: () {
-        Navigator.pop(context);
-        Navigator.of(context).pushNamedAndRemoveUntil('/home', (_) => false);
-      },
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.fromLTRB(20, 56, 20, 20),
-        decoration: BoxDecoration(
+        onTap: () {
+          Navigator.pop(context);
+          Navigator.of(context).pushNamedAndRemoveUntil('/home', (_) => false);
+        },
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.fromLTRB(20, 56, 20, 20),
+          decoration: BoxDecoration(
           gradient: isDark
               ? const LinearGradient(
                   colors: [
@@ -95,65 +102,65 @@ class _DrawerHeader extends StatelessWidget {
           border: isDark
               ? Border(bottom: BorderSide(color: context.fomraBorder))
               : null,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 52,
-              height: 52,
-              decoration: BoxDecoration(
-                gradient: isDark
-                    ? LinearGradient(
-                        colors: [
-                          AppColors.primaryLight.withValues(alpha: 0.35),
-                          AppColors.secondary.withValues(alpha: 0.28),
-                        ],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      )
-                    : null,
-                color: isDark ? null : AppColors.accent,
-                borderRadius: BorderRadius.circular(16),
-                border: isDark
-                    ? Border.all(
-                        color: AppColors.primaryLight.withValues(alpha: 0.4))
-                    : null,
-                boxShadow: isDark
-                    ? [
-                        BoxShadow(
-                          color: AppColors.primaryLight.withValues(alpha: 0.2),
-                          blurRadius: 12,
-                          offset: const Offset(0, 4),
-                        ),
-                      ]
-                    : null,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  gradient: isDark
+                      ? LinearGradient(
+                          colors: [
+                            AppColors.primaryLight.withValues(alpha: 0.35),
+                            AppColors.secondary.withValues(alpha: 0.28),
+                          ],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        )
+                      : null,
+                  color: isDark ? null : AppColors.accent,
+                  borderRadius: BorderRadius.circular(16),
+                  border: isDark
+                      ? Border.all(
+                          color: AppColors.primaryLight.withValues(alpha: 0.4))
+                      : null,
+                  boxShadow: isDark
+                      ? [
+                          BoxShadow(
+                            color: AppColors.primaryLight.withValues(alpha: 0.2),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
+                          ),
+                        ]
+                      : null,
+                ),
+                child: Icon(Icons.domain,
+                    color: isDark ? AppColors.primaryLight : Colors.white,
+                    size: 28),
               ),
-              child: Icon(Icons.domain,
-                  color: isDark ? AppColors.primaryLight : Colors.white,
-                  size: 28),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'FomraLS',
-              style: TextStyle(
-                color: isDark ? context.fomraTextPrimary : Colors.white,
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 1,
+              const SizedBox(height: 12),
+              Text(
+                'FomraLS',
+                style: TextStyle(
+                  color: isDark ? context.fomraTextPrimary : Colors.white,
+                  fontSize: titleSize,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1,
+                ),
               ),
-            ),
-            Text(
-              'Fomra Housing',
-              style: TextStyle(
-                color: isDark ? context.fomraTextSecondary : const Color(0xFFB0BEC5),
-                fontSize: 13,
+              Text(
+                'Fomra Housing',
+                style: TextStyle(
+                  color: isDark ? context.fomraTextSecondary : const Color(0xFFB0BEC5),
+                  fontSize: 13,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
-    ),
     );
   }
 }

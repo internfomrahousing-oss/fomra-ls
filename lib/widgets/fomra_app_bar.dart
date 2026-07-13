@@ -1,6 +1,8 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+
+import '../theme/fomra_layout.dart';
 import '../theme/app_theme.dart';
 import '../theme/fomra_theme_context.dart';
 import 'fomra_breadcrumb.dart';
@@ -74,9 +76,27 @@ class FomraAppBar extends StatelessWidget implements PreferredSizeWidget {
     return Container(decoration: BoxDecoration(gradient: context.fomraHeroGradient));
   }
 
+  void _openMobileSearch(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.4),
+      builder: (ctx) => Dialog(
+        alignment: Alignment.topCenter,
+        insetPadding: const EdgeInsets.fromLTRB(12, 70, 12, 12),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        child: const SizedBox(
+          height: 52,
+          child: FomraUniversalSearchBar(),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = context.isDarkMode;
+    final compact = MediaQuery.sizeOf(context).width < 720;
     final fg = isDark ? AppColors.darkTextPrimary : Colors.white;
     final fgMuted = isDark
         ? AppColors.darkTextSecondary
@@ -89,13 +109,13 @@ class FomraAppBar extends StatelessWidget implements PreferredSizeWidget {
         : Colors.white.withValues(alpha: 0.22);
 
     return AppBar(
-      automaticallyImplyLeading: false,
       flexibleSpace: _headerBackground(context),
       backgroundColor: Colors.transparent,
       surfaceTintColor: Colors.transparent,
       elevation: 0,
       scrolledUnderElevation: 0,
-      titleSpacing: 16,
+      automaticallyImplyLeading: compact,
+      titleSpacing: compact ? 10 : 16,
       title: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -123,7 +143,11 @@ class FomraAppBar extends StatelessWidget implements PreferredSizeWidget {
                     style: TextStyle(
                       color: fg,
                       fontWeight: FontWeight.w800,
-                      fontSize: 18,
+                      fontSize: FomraLayout.responsiveClamp(
+                        context,
+                        min: 16,
+                        max: 18,
+                      ),
                       letterSpacing: 0.1,
                     ),
                   ),
@@ -131,7 +155,7 @@ class FomraAppBar extends StatelessWidget implements PreferredSizeWidget {
               ),
             ),
           ),
-          if (moduleName != null) ...[
+          if (moduleName != null && !compact) ...[
             const SizedBox(width: 8),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -143,7 +167,11 @@ class FomraAppBar extends StatelessWidget implements PreferredSizeWidget {
               child: Text(
                 moduleName!,
                 style: TextStyle(
-                  fontSize: 12,
+                  fontSize: FomraLayout.responsiveClamp(
+                    context,
+                    min: 11,
+                    max: 12,
+                  ),
                   fontWeight: FontWeight.w600,
                   color: fgMuted,
                 ),
@@ -153,15 +181,20 @@ class FomraAppBar extends StatelessWidget implements PreferredSizeWidget {
         ],
       ),
       actions: [
-        if (showUniversalSearch) ...[
+        if (showUniversalSearch && !compact)
           Padding(
             padding: const EdgeInsets.only(right: 4),
             child: SizedBox(
               width: MediaQuery.sizeOf(context).width >= 900 ? 280 : 220,
               child: const FomraUniversalSearchBar(),
             ),
+          )
+        else if (showUniversalSearch && compact)
+          IconButton(
+            tooltip: 'Search',
+            icon: Icon(Icons.search_rounded, color: fg),
+            onPressed: () => _openMobileSearch(context),
           ),
-        ],
         ...?actions,
         const FomraThemeToggle(),
       ],

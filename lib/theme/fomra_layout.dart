@@ -11,6 +11,8 @@ class FomraLayout {
   static const double maxContentWidth = 1140;
   static const double tabletBreakpoint = 640;
   static const double desktopBreakpoint = 960;
+  static const double mobileViewportMin = 320;
+  static const double desktopViewportMax = 1440;
 
   static bool isTablet(BuildContext context) =>
       MediaQuery.sizeOf(context).width >= tabletBreakpoint;
@@ -27,6 +29,23 @@ class FomraLayout {
       return const EdgeInsets.symmetric(horizontal: 22, vertical: 16);
     }
     return const EdgeInsets.symmetric(horizontal: 16, vertical: 12);
+  }
+
+  /// Linear clamp that behaves like CSS clamp() across viewport widths.
+  static double responsiveClamp(
+    BuildContext context, {
+    required double min,
+    required double max,
+    double minViewport = mobileViewportMin,
+    double maxViewport = desktopViewportMax,
+  }) {
+    final width = MediaQuery.sizeOf(context).width;
+    if (width <= minViewport) return min;
+    if (width >= maxViewport) return max;
+
+    final t = ((width - minViewport) / (maxViewport - minViewport))
+        .clamp(0.0, 1.0);
+    return min + ((max - min) * t);
   }
 
   /// Centers content on wide screens. Set [fillHeight] for scroll views inside
