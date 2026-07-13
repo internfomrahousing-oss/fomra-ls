@@ -10,8 +10,11 @@ enum LeadListFilter {
   siteVisit,
   managementSiteVisit,
   meeting,
+  prospect,
+  negotiation,
   legal,
   signed,
+  dropped,
 }
 
 bool leadHasSiteVisitProgress(LandLead lead) =>
@@ -30,8 +33,11 @@ extension LeadListFilterX on LeadListFilter {
         LeadListFilter.siteVisit => 'Site visit',
         LeadListFilter.managementSiteVisit => 'Management site visit',
         LeadListFilter.meeting => 'Meeting',
+        LeadListFilter.prospect => 'Prospect',
+        LeadListFilter.negotiation => 'Negotiation',
         LeadListFilter.legal => 'Legal',
         LeadListFilter.signed => 'Signed',
+        LeadListFilter.dropped => 'Dropped',
       };
 
   String get subtitle => switch (this) {
@@ -44,8 +50,11 @@ extension LeadListFilterX on LeadListFilter {
         LeadListFilter.managementSiteVisit =>
           'Management-assigned leads with site visit progress',
         LeadListFilter.meeting => 'Prospect meeting stage',
+        LeadListFilter.prospect => 'Prospect pipeline leads',
+        LeadListFilter.negotiation => 'Negotiation stage leads',
         LeadListFilter.legal => 'Leads in legal review',
         LeadListFilter.signed => 'Signed leads',
+        LeadListFilter.dropped => 'Dropped leads',
       };
 
   bool matches(LandLead lead) => switch (this) {
@@ -59,8 +68,11 @@ extension LeadListFilterX on LeadListFilter {
           lead.createdByRole == 'management' &&
               leadHasSiteVisitProgress(lead),
         LeadListFilter.meeting => lead.status.isProspect,
+        LeadListFilter.prospect => lead.status.isProspect,
+        LeadListFilter.negotiation => lead.status == LeadStatus.negotiation,
         LeadListFilter.legal => lead.status == LeadStatus.legal,
         LeadListFilter.signed => lead.status == LeadStatus.signed,
+        LeadListFilter.dropped => lead.status == LeadStatus.dropped,
       };
 
   static LeadListFilter? forActionLabel(String label) => switch (label) {
@@ -69,8 +81,11 @@ extension LeadListFilterX on LeadListFilter {
         'Site visit' => LeadListFilter.siteVisit,
         'Management site visit' => LeadListFilter.managementSiteVisit,
         'Meeting' => LeadListFilter.meeting,
+        'Prospect' => LeadListFilter.prospect,
+        'Negotiation' => LeadListFilter.negotiation,
         'Legal' => LeadListFilter.legal,
         'Signed' => LeadListFilter.signed,
+        'Dropped' => LeadListFilter.dropped,
         _ => null,
       };
 }

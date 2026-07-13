@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../models/land_lead.dart';
+import '../../models/lead_list_filter.dart';
 import '../../models/employee_profile.dart';
 import '../../services/app_store.dart';
 import '../../services/auth_service.dart';
@@ -15,12 +16,14 @@ import '../../utils/lead_location_parser.dart';
 import '../../utils/legal_document_catalog.dart';
 import '../../widgets/fomra_app_bar.dart';
 import '../../widgets/fomra_app_shell.dart';
+import '../../widgets/fomra_breadcrumb.dart';
 import '../../widgets/ui/app_feedback.dart';
 import '../../widgets/land_workspace_ui.dart';
 import '../../widgets/portal_home_sections.dart';
 import '../../widgets/portal_page_layout.dart';
 import '../../widgets/ui/app_components.dart';
 import 'add_lead_screen.dart';
+import 'filtered_leads_screen.dart';
 import 'lead_detail_screen.dart';
 import 'leads_map_screen.dart';
 import 'meeting_log_dialog.dart';
@@ -96,6 +99,27 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
         _selectedLeadIds.add(lead.leadId);
       }
     });
+  }
+
+  LeadListFilter? _summaryFilterFor(LeadStatus? status) {
+    return switch (status) {
+      LeadStatus.negotiation => LeadListFilter.negotiation,
+      LeadStatus.legal => LeadListFilter.legal,
+      LeadStatus.signed => LeadListFilter.signed,
+      LeadStatus.dropped => LeadListFilter.dropped,
+      null => LeadListFilter.prospect,
+      _ => null,
+    };
+  }
+
+  void _openSummaryFilter(LeadStatus? status, String title) {
+    final filter = _summaryFilterFor(status);
+    if (filter == null) return;
+    FilteredLeadsScreen.open(
+      context,
+      filter,
+      breadcrumbs: FomraBreadcrumbs.fromWorkspaceFilter(title),
+    );
   }
 
   /// Ask which employee to assign the selected leads to, confirm, then assign.
@@ -587,7 +611,12 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(child: _LeadSummary(leads: _leads)),
+                  Expanded(
+                    child: _LeadSummary(
+                      leads: _leads,
+                      onTapStatus: _openSummaryFilter,
+                    ),
+                  ),
                   if (_isManagement && !_selectMode) ...[
                     const SizedBox(width: 12),
                     Padding(
@@ -1038,7 +1067,12 @@ class _LeadsLoadingSkeleton extends StatelessWidget {
 
 class _LeadSummary extends StatelessWidget {
   final List<LandLead> leads;
-  const _LeadSummary({required this.leads});
+  final void Function(LeadStatus? status, String title) onTapStatus;
+
+  const _LeadSummary({
+    required this.leads,
+    required this.onTapStatus,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1068,6 +1102,7 @@ class _LeadSummary extends StatelessWidget {
             value: count,
             icon: icon,
             accent: status?.color ?? const Color(0xFF2563EB),
+            onTap: () => onTapStatus(status, status?.label ?? 'Prospect'),
           );
         },
       ),
