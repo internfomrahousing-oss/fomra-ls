@@ -107,6 +107,8 @@ process.env.PATH = `${flutterBin}${path.delimiter}${process.env.PATH}`;
 process.env.CI = 'true';
 process.env.FLUTTER_SUPPRESS_ANALYTICS = 'true';
 
+run(`git config --global --add safe.directory "${flutterDir}"`);
+
 run('flutter pub get');
 run('flutter build web --release');
 
