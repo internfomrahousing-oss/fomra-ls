@@ -80,7 +80,6 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
     'Site Photos',
     'Infrastructure',
     'Land Records',
-    'Competitor Projects',
     'Documents',
   ];
 
@@ -1385,13 +1384,6 @@ class _WorkspacePanel extends StatelessWidget {
                         active: shouldLoadMiTab(3),
                         lead: lead,
                         section: MarketIntelLeadSection.landRecords,
-                        scrollable: false,
-                      );
-                    case 4:
-                      return _LazyMarketIntelTab(
-                        active: shouldLoadMiTab(4),
-                        lead: lead,
-                        section: MarketIntelLeadSection.competitorProjects,
                         scrollable: false,
                       );
                     default:

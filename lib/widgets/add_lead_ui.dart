@@ -268,6 +268,7 @@ class AddLeadSectionCard extends StatefulWidget {
   final String title;
   final String? subtitle;
   final IconData? icon;
+  final Widget? trailing;
   final Widget child;
   final bool compact;
 
@@ -277,6 +278,7 @@ class AddLeadSectionCard extends StatefulWidget {
     required this.title,
     this.subtitle,
     this.icon,
+    this.trailing,
     required this.child,
     this.compact = false,
   });
@@ -317,6 +319,7 @@ class _AddLeadSectionCardState extends State<AddLeadSectionCard> {
               title: widget.title,
               subtitle: widget.subtitle,
               icon: widget.icon,
+              trailing: widget.trailing,
             ),
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 14),
@@ -335,12 +338,14 @@ class _SectionHeader extends StatelessWidget {
   final String title;
   final String? subtitle;
   final IconData? icon;
+  final Widget? trailing;
 
   const _SectionHeader({
     required this.number,
     required this.title,
     this.subtitle,
     this.icon,
+    this.trailing,
   });
 
   @override
@@ -403,8 +408,43 @@ class _SectionHeader extends StatelessWidget {
             ),
             child: Icon(icon, size: 18, color: AppColors.primary),
           ),
+        if (trailing != null) ...[
+          const SizedBox(width: 8),
+          trailing!,
+        ],
       ],
     );
+  }
+}
+
+/// Small pill shown in a section header's trailing slot, e.g. to indicate a
+/// value will be generated automatically rather than entered by the user.
+class AddLeadHeaderTag extends StatelessWidget {
+  final String label;
+  final String? tooltip;
+
+  const AddLeadHeaderTag({super.key, required this.label, this.tooltip});
+
+  @override
+  Widget build(BuildContext context) {
+    final pill = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          color: AppColors.primary,
+        ),
+      ),
+    );
+    if (tooltip == null) return pill;
+    return Tooltip(message: tooltip!, child: pill);
   }
 }
 

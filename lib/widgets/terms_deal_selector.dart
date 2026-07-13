@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../theme/app_theme.dart';
 import '../theme/fomra_theme_context.dart';
 import 'add_lead_ui.dart';
 
 // ── Configurable deal type definitions ─────────────────────────────────────────
+
+enum DealFieldType { text, dropdown }
 
 class DealFieldConfig {
   final String id;
@@ -14,6 +15,8 @@ class DealFieldConfig {
   final IconData icon;
   final TextInputType keyboardType;
   final int maxLines;
+  final DealFieldType type;
+  final List<String> options;
 
   const DealFieldConfig({
     required this.id,
@@ -22,6 +25,8 @@ class DealFieldConfig {
     required this.icon,
     this.keyboardType = TextInputType.text,
     this.maxLines = 1,
+    this.type = DealFieldType.text,
+    this.options = const [],
   });
 }
 
@@ -30,7 +35,6 @@ class DealTypeConfig {
   final String title;
   final String description;
   final IconData icon;
-  final List<String> subtypes;
   final List<DealFieldConfig> fields;
 
   const DealTypeConfig({
@@ -38,60 +42,25 @@ class DealTypeConfig {
     required this.title,
     required this.description,
     required this.icon,
-    required this.subtypes,
     required this.fields,
   });
 }
 
-/// Static registry — extend here to add future deal types.
+/// Static registry — extend here to add future deal types. Each Term shows
+/// only its own fields; there is no subtype selection.
 const kDealTypeConfigs = <DealTypeConfig>[
   DealTypeConfig(
     id: 'outright_purchase',
     title: 'Outright Purchase',
     description: 'Direct land acquisition with defined payment structure',
     icon: Icons.currency_rupee_rounded,
-    subtypes: [
-      'Full Cash Purchase',
-      'Advance + Balance',
-      'Installment Purchase',
-      'Agreement to Sell',
-      'Registered Sale Deed',
-      'GPA Purchase',
-    ],
     fields: [
       DealFieldConfig(
-        id: 'total_land_cost',
-        label: 'Total Land Cost',
+        id: 'rate_per_acre',
+        label: 'Rate per Acre',
         hint: 'e.g. ₹50,00,000',
         icon: Icons.payments_outlined,
         keyboardType: TextInputType.number,
-      ),
-      DealFieldConfig(
-        id: 'advance_amount',
-        label: 'Advance Amount',
-        hint: 'e.g. ₹10,00,000',
-        icon: Icons.account_balance_wallet_outlined,
-        keyboardType: TextInputType.number,
-      ),
-      DealFieldConfig(
-        id: 'balance_amount',
-        label: 'Balance Amount',
-        hint: 'e.g. ₹40,00,000',
-        icon: Icons.balance_outlined,
-        keyboardType: TextInputType.number,
-      ),
-      DealFieldConfig(
-        id: 'registration_date',
-        label: 'Registration Date',
-        hint: 'e.g. 15 Aug 2026',
-        icon: Icons.event_outlined,
-      ),
-      DealFieldConfig(
-        id: 'payment_schedule',
-        label: 'Payment Schedule',
-        hint: 'Milestones or installment plan',
-        icon: Icons.calendar_month_outlined,
-        maxLines: 2,
       ),
     ],
   ),
@@ -100,40 +69,27 @@ const kDealTypeConfigs = <DealTypeConfig>[
     title: 'Joint Venture',
     description: 'Partnership-based development with shared returns',
     icon: Icons.handshake_rounded,
-    subtypes: [
-      'Revenue Sharing',
-      'Built-up Area Sharing',
-      'Profit Sharing',
-      'Hybrid JV',
-      'Development Agreement',
-      'Development Rights Agreement',
-    ],
     fields: [
       DealFieldConfig(
-        id: 'owner_share',
-        label: 'Owner Share %',
-        hint: 'e.g. 40',
+        id: 'advance_amount',
+        label: 'Advance Amount',
+        hint: 'e.g. ₹10,00,000',
+        icon: Icons.account_balance_wallet_outlined,
+        keyboardType: TextInputType.number,
+      ),
+      DealFieldConfig(
+        id: 'advance_type',
+        label: 'Advance Type',
+        hint: 'Select advance type',
+        icon: Icons.swap_horiz_rounded,
+        type: DealFieldType.dropdown,
+        options: ['Free Money', 'Refundable'],
+      ),
+      DealFieldConfig(
+        id: 'sharing_ratio',
+        label: 'Sharing Ratio',
+        hint: 'e.g. 50:50',
         icon: Icons.pie_chart_outline_rounded,
-        keyboardType: TextInputType.number,
-      ),
-      DealFieldConfig(
-        id: 'developer_share',
-        label: 'Developer Share %',
-        hint: 'e.g. 60',
-        icon: Icons.engineering_outlined,
-        keyboardType: TextInputType.number,
-      ),
-      DealFieldConfig(
-        id: 'revenue_sharing_ratio',
-        label: 'Revenue Sharing Ratio',
-        hint: 'e.g. 50:50 or 40:60',
-        icon: Icons.trending_up_rounded,
-      ),
-      DealFieldConfig(
-        id: 'project_duration',
-        label: 'Project Duration',
-        hint: 'e.g. 24 months',
-        icon: Icons.timelapse_rounded,
       ),
     ],
   ),
@@ -142,31 +98,30 @@ const kDealTypeConfigs = <DealTypeConfig>[
     title: 'Marketing',
     description: 'Sales and marketing engagement for the land parcel',
     icon: Icons.campaign_rounded,
-    subtypes: [
-      'Exclusive Marketing',
-      'Non-Exclusive Marketing',
-      'Sole Selling Agency',
-      'Brokerage Agreement',
-      'Channel Partner Agreement',
-      'Sales Management',
-    ],
     fields: [
       DealFieldConfig(
-        id: 'commission_pct',
-        label: 'Commission %',
-        hint: 'e.g. 2.5',
-        icon: Icons.percent_rounded,
-        keyboardType: TextInputType.numberWithOptions(decimal: true),
+        id: 'number_of_plots',
+        label: 'Number of Plots',
+        hint: 'e.g. 24',
+        icon: Icons.grid_view_rounded,
+        keyboardType: TextInputType.number,
       ),
       DealFieldConfig(
-        id: 'exclusivity',
-        label: 'Exclusivity',
-        hint: 'Exclusive / Non-exclusive terms',
-        icon: Icons.verified_user_outlined,
+        id: 'total_saleable_area',
+        label: 'Total Saleable Area',
+        hint: 'e.g. 12,000 sq ft',
+        icon: Icons.straighten_rounded,
       ),
       DealFieldConfig(
-        id: 'marketing_period',
-        label: 'Marketing Period',
+        id: 'advance_amount',
+        label: 'Advance Amount',
+        hint: 'e.g. ₹5,00,000',
+        icon: Icons.account_balance_wallet_outlined,
+        keyboardType: TextInputType.number,
+      ),
+      DealFieldConfig(
+        id: 'time_period',
+        label: 'Time Period',
         hint: 'e.g. 6 months',
         icon: Icons.date_range_outlined,
       ),
@@ -177,40 +132,26 @@ const kDealTypeConfigs = <DealTypeConfig>[
     title: 'Deferred Payment',
     description: 'Structured payment plan over time',
     icon: Icons.schedule_rounded,
-    subtypes: [
-      'EMI Based',
-      'Milestone Payment',
-      'Construction Linked Payment',
-      'Balloon Payment',
-      'Revenue Linked Payment',
-      'Post Registration Payment',
-    ],
     fields: [
       DealFieldConfig(
-        id: 'advance',
-        label: 'Advance',
+        id: 'advance_amount',
+        label: 'Advance Amount',
         hint: 'e.g. ₹5,00,000',
         icon: Icons.savings_outlined,
         keyboardType: TextInputType.number,
       ),
       DealFieldConfig(
-        id: 'installments',
-        label: 'Installments',
-        hint: 'e.g. 12 monthly EMIs',
-        icon: Icons.repeat_rounded,
+        id: 'time_period',
+        label: 'Time Period',
+        hint: 'e.g. 12 months',
+        icon: Icons.timelapse_rounded,
       ),
       DealFieldConfig(
-        id: 'interest_rate',
-        label: 'Interest Rate',
-        hint: 'e.g. 8.5% p.a.',
-        icon: Icons.show_chart_rounded,
-      ),
-      DealFieldConfig(
-        id: 'due_dates',
-        label: 'Due Dates',
-        hint: 'Payment due schedule',
-        icon: Icons.event_note_outlined,
-        maxLines: 2,
+        id: 'rate_per_acre',
+        label: 'Rate per Acre',
+        hint: 'e.g. ₹50,00,000',
+        icon: Icons.payments_outlined,
+        keyboardType: TextInputType.number,
       ),
     ],
   ),
@@ -219,16 +160,6 @@ const kDealTypeConfigs = <DealTypeConfig>[
     title: 'Others',
     description: 'Custom or specialized agreement types',
     icon: Icons.more_horiz_rounded,
-    subtypes: [
-      'Lease Agreement',
-      'Land Exchange',
-      'Development Rights Purchase',
-      'Collaboration Agreement',
-      'Power of Attorney',
-      'Government Acquisition',
-      'Land Pooling',
-      'Custom Agreement',
-    ],
     fields: [
       DealFieldConfig(
         id: 'agreement_name',
@@ -261,11 +192,10 @@ const kDealTypeConfigs = <DealTypeConfig>[
   ),
 ];
 
-const _kAccordionMotion = Duration(milliseconds: 280);
 const _kFieldMotion = Duration(milliseconds: 260);
-const _kCardRadius = 18.0;
 
-/// Maps legacy single-value terms to current primary deal titles.
+/// Maps legacy primary/subtype terms saved before this redesign to current
+/// deal titles, so older records still resolve to a known Term.
 const _kLegacyPrimaryMap = <String, String>{
   'Outrate': 'Outright Purchase',
   'Outright Purchase': 'Outright Purchase',
@@ -286,17 +216,12 @@ DealTypeConfig? dealConfigByTitle(String title) {
 
 String serializeTermsDeal({
   required String? primaryTitle,
-  required String? subtype,
   required Map<String, Map<String, String>> fieldValuesByDeal,
 }) {
   if (primaryTitle == null || primaryTitle.isEmpty) return '';
 
   final buf = StringBuffer();
-  if (subtype != null && subtype.isNotEmpty) {
-    buf.writeln('$primaryTitle | $subtype');
-  } else {
-    buf.writeln(primaryTitle);
-  }
+  buf.writeln(primaryTitle);
 
   final config = dealConfigByTitle(primaryTitle);
   if (config != null) {
@@ -312,38 +237,36 @@ String serializeTermsDeal({
   return buf.toString().trim();
 }
 
-({String? primary, String? subtype, Map<String, Map<String, String>> fields})
-    parseTermsDeal(String? raw) {
+({String? primary, Map<String, Map<String, String>> fields}) parseTermsDeal(
+    String? raw) {
   final fieldValues = <String, Map<String, String>>{};
   for (final c in kDealTypeConfigs) {
     fieldValues[c.id] = {};
   }
 
   if (raw == null || raw.trim().isEmpty) {
-    return (primary: null, subtype: null, fields: fieldValues);
+    return (primary: null, fields: fieldValues);
   }
 
   final lines = raw.split('\n').map((l) => l.trim()).where((l) => l.isNotEmpty);
   final lineList = lines.toList();
   if (lineList.isEmpty) {
-    return (primary: null, subtype: null, fields: fieldValues);
+    return (primary: null, fields: fieldValues);
   }
 
   String? primary;
-  String? subtype;
 
+  // Legacy records may have stored "Title | Subtype" or "Title > Subtype" on
+  // the first line — the subtype half is discarded, only the Term survives.
   final first = lineList.first;
   if (first.contains('|')) {
-    final parts = first.split('|').map((s) => s.trim()).toList();
-    primary = _kLegacyPrimaryMap[parts[0]] ?? parts[0];
-    if (parts.length > 1) subtype = parts[1];
+    primary = first.split('|').first.trim();
   } else if (first.contains(' > ')) {
-    final parts = first.split(' > ').map((s) => s.trim()).toList();
-    primary = _kLegacyPrimaryMap[parts[0]] ?? parts[0];
-    if (parts.length > 1) subtype = parts[1];
+    primary = first.split(' > ').first.trim();
   } else {
-    primary = _kLegacyPrimaryMap[first] ?? first;
+    primary = first;
   }
+  primary = _kLegacyPrimaryMap[primary] ?? primary;
 
   final config = dealConfigByTitle(primary);
   if (config != null) {
@@ -361,7 +284,7 @@ String serializeTermsDeal({
     }
   }
 
-  return (primary: primary, subtype: subtype, fields: fieldValues);
+  return (primary: primary, fields: fieldValues);
 }
 
 // ── Widget ────────────────────────────────────────────────────────────────────
@@ -383,7 +306,6 @@ class TermsDealSelector extends StatefulWidget {
 
 class _TermsDealSelectorState extends State<TermsDealSelector> {
   String? _primaryTitle;
-  final Map<String, String?> _subtypesByDeal = {};
   final Map<String, Map<String, TextEditingController>> _controllers = {};
 
   @override
@@ -407,7 +329,6 @@ class _TermsDealSelectorState extends State<TermsDealSelector> {
         for (final field in config.fields)
           field.id: TextEditingController(),
       };
-      _subtypesByDeal[config.id] = null;
     }
   }
 
@@ -420,9 +341,6 @@ class _TermsDealSelectorState extends State<TermsDealSelector> {
       for (final field in config.fields) {
         _controllers[config.id]![field.id]!.text = values[field.id] ?? '';
       }
-      _subtypesByDeal[config.id] = config.title == parsed.primary
-          ? parsed.subtype
-          : _subtypesByDeal[config.id];
     }
   }
 
@@ -438,7 +356,6 @@ class _TermsDealSelectorState extends State<TermsDealSelector> {
 
   String _serialize() => serializeTermsDeal(
         primaryTitle: _primaryTitle,
-        subtype: _activeSubtype,
         fieldValuesByDeal: {
           for (final config in kDealTypeConfigs)
             config.id: {
@@ -453,38 +370,14 @@ class _TermsDealSelectorState extends State<TermsDealSelector> {
   DealTypeConfig? get _activeConfig =>
       _primaryTitle == null ? null : dealConfigByTitle(_primaryTitle!);
 
-  String? get _activeSubtype {
-    final config = _activeConfig;
-    if (config == null) return null;
-    return _subtypesByDeal[config.id];
-  }
-
   void _selectPrimary(String? title) {
-    setState(() {
-      _primaryTitle = title;
-      if (title != null) {
-        final config = dealConfigByTitle(title);
-        if (config != null) {
-          _subtypesByDeal[config.id] = null;
-        }
-      }
-    });
-    _emitChange();
-  }
-
-  void _selectSubtype(DealTypeConfig config, String subtype) {
-    setState(() {
-      _primaryTitle = config.title;
-      _subtypesByDeal[config.id] = subtype;
-    });
+    setState(() => _primaryTitle = title);
     _emitChange();
   }
 
   @override
   Widget build(BuildContext context) {
     final activeConfig = _activeConfig;
-    final showFields =
-        activeConfig != null && (_activeSubtype ?? '').isNotEmpty;
     final iconColor = Theme.of(context).brightness == Brightness.dark
         ? AppColors.primaryLight
         : AppColors.primary;
@@ -500,8 +393,8 @@ class _TermsDealSelectorState extends State<TermsDealSelector> {
           borderRadius: BorderRadius.circular(AddLeadUi.fieldRadius),
           decoration: addLeadInputDecoration(
             context,
-            label: 'Deal Type',
-            hint: 'Select deal type',
+            label: 'Term',
+            hint: 'Select term',
             icon: Icons.handshake_outlined,
           ),
           items: kDealTypeConfigs
@@ -517,38 +410,6 @@ class _TermsDealSelectorState extends State<TermsDealSelector> {
               )
               .toList(),
         ),
-        if (activeConfig != null) ...[
-          const SizedBox(height: 16),
-          Text(
-            'Subtype',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: context.fomraTextSecondary,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            activeConfig.description,
-            style: TextStyle(
-              fontSize: 11,
-              color: context.fomraTextSecondary,
-            ),
-          ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final subtype in activeConfig.subtypes)
-                _SubtypeChip(
-                  label: subtype,
-                  selected: _activeSubtype == subtype,
-                  onTap: () => _selectSubtype(activeConfig, subtype),
-                ),
-            ],
-          ),
-        ],
         AnimatedSwitcher(
           duration: _kFieldMotion,
           switchInCurve: Curves.easeOutCubic,
@@ -565,9 +426,9 @@ class _TermsDealSelectorState extends State<TermsDealSelector> {
               child: SlideTransition(position: slide, child: child),
             );
           },
-          child: showFields
+          child: activeConfig != null
               ? _DealFieldsPanel(
-                  key: ValueKey('${activeConfig.id}_$_activeSubtype'),
+                  key: ValueKey(activeConfig.id),
                   config: activeConfig,
                   controllers: _controllers[activeConfig.id]!,
                   onFieldChanged: _emitChange,
@@ -575,304 +436,6 @@ class _TermsDealSelectorState extends State<TermsDealSelector> {
               : const SizedBox.shrink(key: ValueKey('no_fields')),
         ),
       ],
-    );
-  }
-}
-
-// ── Accordion card ────────────────────────────────────────────────────────────
-
-class _DealAccordionCard extends StatefulWidget {
-  final DealTypeConfig config;
-  final bool isSelected;
-  final bool isExpanded;
-  final String? selectedSubtype;
-  final VoidCallback onHeaderTap;
-  final ValueChanged<String> onSubtypeSelected;
-
-  const _DealAccordionCard({
-    required this.config,
-    required this.isSelected,
-    required this.isExpanded,
-    required this.selectedSubtype,
-    required this.onHeaderTap,
-    required this.onSubtypeSelected,
-  });
-
-  @override
-  State<_DealAccordionCard> createState() => _DealAccordionCardState();
-}
-
-class _DealAccordionCardState extends State<_DealAccordionCard> {
-  bool _hovered = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final selected = widget.isSelected;
-    final expanded = widget.isExpanded;
-
-    final borderColor = selected
-        ? AppColors.primary
-        : _hovered
-            ? AppColors.primary.withValues(alpha: 0.35)
-            : AddLeadUi.cardBorder;
-
-    final bg = selected
-        ? AppColors.primary.withValues(alpha: isDark ? 0.14 : 0.06)
-        : _hovered
-            ? (isDark ? context.fomraSurfaceVar : const Color(0xFFF8FAFC))
-            : (isDark ? context.fomraSurface : Colors.white);
-
-    return Focus(
-      onKeyEvent: (node, event) {
-        if (event is KeyDownEvent &&
-            (event.logicalKey == LogicalKeyboardKey.enter ||
-                event.logicalKey == LogicalKeyboardKey.space)) {
-          widget.onHeaderTap();
-          return KeyEventResult.handled;
-        }
-        return KeyEventResult.ignored;
-      },
-      child: MouseRegion(
-        onEnter: (_) => setState(() => _hovered = true),
-        onExit: (_) => setState(() => _hovered = false),
-        cursor: SystemMouseCursors.click,
-        child: AnimatedContainer(
-          duration: _kAccordionMotion,
-          curve: Curves.easeInOut,
-          decoration: BoxDecoration(
-            color: bg,
-            borderRadius: BorderRadius.circular(_kCardRadius),
-            border: Border.all(
-              color: borderColor,
-              width: selected ? 1.5 : 1,
-            ),
-            boxShadow: AddLeadUi.cardShadow(_hovered || selected),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: widget.onHeaderTap,
-                  borderRadius: BorderRadius.vertical(
-                    top: const Radius.circular(_kCardRadius),
-                    bottom: Radius.circular(expanded ? 0 : _kCardRadius),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            color: (selected
-                                    ? AppColors.primary
-                                    : AppColors.primary.withValues(alpha: 0.85))
-                                .withValues(alpha: selected ? 0.15 : 0.1),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          alignment: Alignment.center,
-                          child: Icon(
-                            widget.config.icon,
-                            size: 22,
-                            color: selected
-                                ? AppColors.primary
-                                : context.fomraTextSecondary,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                widget.config.title,
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w700,
-                                  color: selected
-                                      ? AppColors.primary
-                                      : context.fomraTextPrimary,
-                                ),
-                              ),
-                              const SizedBox(height: 3),
-                              Text(
-                                widget.config.description,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  height: 1.35,
-                                  color: context.fomraTextSecondary,
-                                ),
-                              ),
-                              if (selected &&
-                                  (widget.selectedSubtype ?? '').isNotEmpty) ...[
-                                const SizedBox(height: 6),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 3,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.primary
-                                        .withValues(alpha: 0.1),
-                                    borderRadius: BorderRadius.circular(6),
-                                  ),
-                                  child: Text(
-                                    widget.selectedSubtype!,
-                                    style: const TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w600,
-                                      color: AppColors.primary,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        AnimatedRotation(
-                          turns: expanded ? 0.5 : 0,
-                          duration: _kAccordionMotion,
-                          curve: Curves.easeInOut,
-                          child: Icon(
-                            Icons.keyboard_arrow_down_rounded,
-                            color: selected
-                                ? AppColors.primary
-                                : context.fomraTextSecondary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              AnimatedCrossFade(
-                duration: _kAccordionMotion,
-                sizeCurve: Curves.easeInOut,
-                firstCurve: Curves.easeInOut,
-                secondCurve: Curves.easeInOut,
-                crossFadeState: expanded
-                    ? CrossFadeState.showSecond
-                    : CrossFadeState.showFirst,
-                firstChild: const SizedBox.shrink(),
-                secondChild: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Divider(
-                        height: 1,
-                        color: AddLeadUi.cardBorder.withValues(alpha: 0.8),
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        'Select subtype',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: context.fomraTextSecondary,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          for (final subtype in widget.config.subtypes)
-                            _SubtypeChip(
-                              label: subtype,
-                              selected: selected &&
-                                  widget.selectedSubtype == subtype,
-                              onTap: () => widget.onSubtypeSelected(subtype),
-                            ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SubtypeChip extends StatefulWidget {
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _SubtypeChip({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  State<_SubtypeChip> createState() => _SubtypeChipState();
-}
-
-class _SubtypeChipState extends State<_SubtypeChip> {
-  bool _hovered = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final selected = widget.selected;
-    final bg = selected
-        ? AppColors.primary.withValues(alpha: 0.12)
-        : _hovered
-            ? const Color(0xFFF1F5F9)
-            : Colors.transparent;
-
-    return Focus(
-      onKeyEvent: (node, event) {
-        if (event is KeyDownEvent &&
-            (event.logicalKey == LogicalKeyboardKey.enter ||
-                event.logicalKey == LogicalKeyboardKey.space)) {
-          widget.onTap();
-          return KeyEventResult.handled;
-        }
-        return KeyEventResult.ignored;
-      },
-      child: MouseRegion(
-        onEnter: (_) => setState(() => _hovered = true),
-        onExit: (_) => setState(() => _hovered = false),
-        cursor: SystemMouseCursors.click,
-        child: GestureDetector(
-          onTap: widget.onTap,
-          child: AnimatedContainer(
-            duration: _kAccordionMotion,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: bg,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color: selected
-                    ? AppColors.primary
-                    : AddLeadUi.cardBorder.withValues(
-                        alpha: _hovered ? 0.9 : 0.7,
-                      ),
-                width: selected ? 1.5 : 1,
-              ),
-            ),
-            child: Text(
-              widget.label,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                color: selected ? AppColors.primary : context.fomraTextPrimary,
-              ),
-            ),
-          ),
-        ),
-      ),
     );
   }
 }
@@ -897,7 +460,7 @@ class _DealFieldsPanel extends StatelessWidget {
     final fields = config.fields;
 
     return Padding(
-      padding: const EdgeInsets.only(top: 24),
+      padding: const EdgeInsets.only(top: 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -982,6 +545,41 @@ class _DealField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (field.type == DealFieldType.dropdown) {
+      final iconColor = Theme.of(context).brightness == Brightness.dark
+          ? AppColors.primaryLight
+          : AppColors.primary;
+      final currentValue = controller.text.isEmpty ? null : controller.text;
+      return DropdownButtonFormField<String>(
+        isExpanded: true,
+        initialValue:
+            field.options.contains(currentValue) ? currentValue : null,
+        borderRadius: BorderRadius.circular(AddLeadUi.fieldRadius),
+        decoration: addLeadInputDecoration(
+          context,
+          label: field.label,
+          hint: field.hint,
+          icon: field.icon,
+        ),
+        items: field.options
+            .map(
+              (o) => DropdownMenuItem(
+                value: o,
+                child: addLeadDropdownRow(
+                  icon: field.icon,
+                  label: o,
+                  iconColor: iconColor,
+                ),
+              ),
+            )
+            .toList(),
+        onChanged: (v) {
+          controller.text = v ?? '';
+          onChanged();
+        },
+      );
+    }
+
     return TextFormField(
       controller: controller,
       maxLines: field.maxLines,

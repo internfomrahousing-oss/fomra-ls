@@ -50,36 +50,35 @@ class LandLeadService {
     var sitePhotoUrls = List<String>.from(lead.sitePhotoUrls);
     var sitePhotoUrl = lead.sitePhotoUrl;
 
-    final row = await _db
-        .from('land_leads')
-        .insert({
-          'id': leadId,
-          'input_source': lead.inputSource.name,
-          'location': lead.location,
-          'gps_coordinates': lead.gpsCoordinates,
-          'village': lead.village,
-          'taluk': lead.taluk,
-          'district': lead.district,
-          'pincode': lead.pincode,
-          'survey_number': lead.surveyNumber,
-          'sub_division': lead.subDivision,
-          'land_extent': lead.landExtent,
-          'owner_name': lead.ownerName,
-          'contact_details': lead.contactDetails,
-          'broker_name': lead.brokerName,
-          'broker_contact': lead.brokerContact,
-          'land_type': lead.landType.name,
-          'road_width': lead.roadWidth,
-          'access_details': lead.accessDetails,
-          'notes': lead.notes,
-          'status': lead.status.name,
-          'added_on': lead.addedOn.toUtc().toIso8601String(),
-          if (userId != null) 'created_by': userId,
-          if (createdByName.isNotEmpty) 'created_by_name': createdByName,
-          'created_by_role': createdByRole,
-        })
-        .select()
-        .single();
+    final row = await _insertLandLead(
+      {
+        'id': leadId,
+        'input_source': lead.inputSource.name,
+        'location': lead.location,
+        'gps_coordinates': lead.gpsCoordinates,
+        'village': lead.village,
+        'taluk': lead.taluk,
+        'district': lead.district,
+        'pincode': lead.pincode,
+        'survey_number': lead.surveyNumber,
+        'sub_division': lead.subDivision,
+        'land_extent': lead.landExtent,
+        'owner_name': lead.ownerName,
+        'contact_details': lead.contactDetails,
+        'broker_name': lead.brokerName,
+        'broker_contact': lead.brokerContact,
+        'land_type': lead.landType.name,
+        'road_width': lead.roadWidth,
+        'access_details': lead.accessDetails,
+        'notes': lead.notes,
+        'status': lead.status.name,
+        'added_on': lead.addedOn.toUtc().toIso8601String(),
+        if (userId != null) 'created_by': userId,
+        if (createdByName.isNotEmpty) 'created_by_name': createdByName,
+        'created_by_role': createdByRole,
+      },
+      lead.additionalOwners,
+    );
 
     final photos = sitePhotoBytes.where((b) => b.isNotEmpty).take(4).toList();
     if (photos.isNotEmpty) {
@@ -118,6 +117,63 @@ class LandLeadService {
       executiveName: created.createdByName,
     );
     return created;
+  }
+
+  /// Inserts a lead row, including `additional_owners` when the column
+  /// exists. Falls back to inserting without it on databases that haven't
+  /// had `supabase/land_lead_additional_owners.sql` applied yet.
+  static Future<Map<String, dynamic>> _insertLandLead(
+    Map<String, dynamic> base,
+    List<OwnerContact> additionalOwners,
+  ) async {
+    try {
+      return await _db
+          .from('land_leads')
+          .insert({
+            ...base,
+            'additional_owners':
+                additionalOwners.map((o) => o.toJson()).toList(),
+          })
+          .select()
+          .single();
+    } on PostgrestException catch (e) {
+      if (e.code == 'PGRST204' && e.message.contains('additional_owners')) {
+        return await _db.from('land_leads').insert(base).select().single();
+      }
+      rethrow;
+    }
+  }
+
+  /// Updates a lead row, including `additional_owners` when the column
+  /// exists. Falls back to updating without it on databases that haven't
+  /// had `supabase/land_lead_additional_owners.sql` applied yet.
+  static Future<Map<String, dynamic>> _updateLandLead(
+    String leadId,
+    Map<String, dynamic> base,
+    List<OwnerContact> additionalOwners,
+  ) async {
+    try {
+      return await _db
+          .from('land_leads')
+          .update({
+            ...base,
+            'additional_owners':
+                additionalOwners.map((o) => o.toJson()).toList(),
+          })
+          .eq('id', leadId)
+          .select()
+          .single();
+    } on PostgrestException catch (e) {
+      if (e.code == 'PGRST204' && e.message.contains('additional_owners')) {
+        return await _db
+            .from('land_leads')
+            .update(base)
+            .eq('id', leadId)
+            .select()
+            .single();
+      }
+      rethrow;
+    }
   }
 
   static Future<String> _uploadSitePhoto(
@@ -302,35 +358,34 @@ class LandLeadService {
       onProgress?.call('Finalizing lead…');
     }
 
-    final row = await _db
-        .from('land_leads')
-        .update({
-          'input_source': lead.inputSource.name,
-          'location': lead.location,
-          'gps_coordinates': lead.gpsCoordinates,
-          'village': lead.village,
-          'taluk': lead.taluk,
-          'district': lead.district,
-          'pincode': lead.pincode,
-          'survey_number': lead.surveyNumber,
-          'sub_division': lead.subDivision,
-          'land_extent': lead.landExtent,
-          'owner_name': lead.ownerName,
-          'contact_details': lead.contactDetails,
-          'broker_name': lead.brokerName,
-          'broker_contact': lead.brokerContact,
-          'land_type': lead.landType.name,
-          'road_width': lead.roadWidth,
-          'access_details': lead.accessDetails,
-          'notes': lead.notes,
-          'status': lead.status.name,
-          'site_photo_url': sitePhotoUrl,
-          'site_photo_urls': sitePhotoUrls,
-          'updated_at': DateTime.now().toUtc().toIso8601String(),
-        })
-        .eq('id', lead.leadId)
-        .select()
-        .single();
+    final row = await _updateLandLead(
+      lead.leadId,
+      {
+        'input_source': lead.inputSource.name,
+        'location': lead.location,
+        'gps_coordinates': lead.gpsCoordinates,
+        'village': lead.village,
+        'taluk': lead.taluk,
+        'district': lead.district,
+        'pincode': lead.pincode,
+        'survey_number': lead.surveyNumber,
+        'sub_division': lead.subDivision,
+        'land_extent': lead.landExtent,
+        'owner_name': lead.ownerName,
+        'contact_details': lead.contactDetails,
+        'broker_name': lead.brokerName,
+        'broker_contact': lead.brokerContact,
+        'land_type': lead.landType.name,
+        'road_width': lead.roadWidth,
+        'access_details': lead.accessDetails,
+        'notes': lead.notes,
+        'status': lead.status.name,
+        'site_photo_url': sitePhotoUrl,
+        'site_photo_urls': sitePhotoUrls,
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      },
+      lead.additionalOwners,
+    );
 
     final updated = _fromRow({
       ...row,
@@ -382,6 +437,14 @@ class LandLeadService {
       photoUrls = [single];
     }
 
+    final additionalOwnersRaw = r['additional_owners'];
+    final additionalOwners = additionalOwnersRaw is List
+        ? additionalOwnersRaw
+            .whereType<Map>()
+            .map((m) => OwnerContact.fromJson(Map<String, dynamic>.from(m)))
+            .toList()
+        : <OwnerContact>[];
+
     return LandLead(
       leadId: r['id'] as String,
       inputSource: InputSource.values.firstWhere(
@@ -399,6 +462,7 @@ class LandLeadService {
       landExtent: r['land_extent'] as String? ?? '',
       ownerName: r['owner_name'] as String,
       contactDetails: r['contact_details'] as String? ?? '',
+      additionalOwners: additionalOwners,
       brokerName: r['broker_name'] as String? ?? '',
       brokerContact: r['broker_contact'] as String? ?? '',
       landType: LandType.values.firstWhere(

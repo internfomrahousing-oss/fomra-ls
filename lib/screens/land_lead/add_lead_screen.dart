@@ -30,6 +30,55 @@ enum _LocationMode { live }
 
 const _kMaxSitePhotos = 4;
 
+enum MeasurementUnit { acre, ground, cent, sqft }
+
+extension MeasurementUnitLabel on MeasurementUnit {
+  String get label => switch (this) {
+        MeasurementUnit.acre => 'Acre',
+        MeasurementUnit.ground => 'Ground',
+        MeasurementUnit.cent => 'Cent',
+        MeasurementUnit.sqft => 'Sq. Ft.',
+      };
+}
+
+/// Best-effort split of a legacy free-text land extent (e.g. "2.5 acres")
+/// into a numeric value and one of the known [MeasurementUnit]s, so existing
+/// records still populate sensibly in the Measurement Value / Unit fields.
+(String, MeasurementUnit?) _parseLandExtent(String raw) {
+  final text = raw.trim();
+  if (text.isEmpty) return ('', null);
+  final match = RegExp(r'([\d.]+)').firstMatch(text);
+  final value = match?.group(1) ?? text;
+  final lower = text.toLowerCase();
+  MeasurementUnit? unit;
+  if (lower.contains('acre')) {
+    unit = MeasurementUnit.acre;
+  } else if (lower.contains('ground')) {
+    unit = MeasurementUnit.ground;
+  } else if (lower.contains('cent')) {
+    unit = MeasurementUnit.cent;
+  } else if (lower.contains('sq')) {
+    unit = MeasurementUnit.sqft;
+  }
+  return (value, unit);
+}
+
+/// Holds the controllers for one owner's name/contact in the dynamic
+/// Owner Contact Details section.
+class _OwnerEntry {
+  final TextEditingController nameCtrl;
+  final TextEditingController contactCtrl;
+
+  _OwnerEntry({String name = '', String contact = ''})
+      : nameCtrl = TextEditingController(text: name),
+        contactCtrl = TextEditingController(text: contact);
+
+  void dispose() {
+    nameCtrl.dispose();
+    contactCtrl.dispose();
+  }
+}
+
 class AddLeadScreen extends StatefulWidget {
   final LandLead? existingLead;
 
@@ -55,12 +104,14 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
   final _districtCtrl   = TextEditingController();
   final _surveyCtrl     = TextEditingController();
   final _subDivCtrl     = TextEditingController();
-  final _extentCtrl     = TextEditingController();
-  final _ownerCtrl      = TextEditingController();
-  final _contactCtrl    = TextEditingController();
+  final _extentValueCtrl = TextEditingController();
+  MeasurementUnit? _extentUnit;
   final _pincodeCtrl    = TextEditingController();
   final _roadWidthCtrl  = TextEditingController();
   LandType _landType = LandType.agricultural;
+
+  static const _kMaxOwners = 4;
+  final List<_OwnerEntry> _owners = [_OwnerEntry()];
 
   _LocationMode _locationMode = _LocationMode.live;
   GpsFix? _verifiedGps;
@@ -105,6 +156,19 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
     });
   }
 
+  void _addOwner() {
+    if (_owners.length >= _kMaxOwners) return;
+    setState(() => _owners.add(_OwnerEntry()));
+  }
+
+  void _removeOwner(int index) {
+    if (_owners.length <= 1) return;
+    setState(() {
+      final removed = _owners.removeAt(index);
+      removed.dispose();
+    });
+  }
+
   bool get _isBrokerSource => _inputSource == InputSource.broker;
 
   bool get _isEdit => widget.existingLead != null;
@@ -137,9 +201,14 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
     _pincodeCtrl.text = existing.pincode;
     _surveyCtrl.text = existing.surveyNumber;
     _subDivCtrl.text = existing.subDivision;
-    _extentCtrl.text = existing.landExtent;
-    _ownerCtrl.text = existing.ownerName;
-    _contactCtrl.text = existing.contactDetails;
+    final parsedExtent = _parseLandExtent(existing.landExtent);
+    _extentValueCtrl.text = parsedExtent.$1;
+    _extentUnit = parsedExtent.$2;
+    _owners[0].nameCtrl.text = existing.ownerName;
+    _owners[0].contactCtrl.text = existing.contactDetails;
+    for (final extra in existing.additionalOwners.take(_kMaxOwners - 1)) {
+      _owners.add(_OwnerEntry(name: extra.name, contact: extra.contact));
+    }
     _roadWidthCtrl.text = existing.roadWidth;
     _landType = existing.landType;
     if (existing.accessDetails.isNotEmpty) {
@@ -165,11 +234,14 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
     _scrollController.dispose();
     for (final c in [
       _locationCtrl, _gpsCtrl, _villageCtrl, _talukCtrl, _districtCtrl,
-      _pincodeCtrl, _surveyCtrl, _subDivCtrl, _extentCtrl, _ownerCtrl,
-      _contactCtrl, _brokerNameCtrl,       _brokerContactCtrl, _roadWidthCtrl,
+      _pincodeCtrl, _surveyCtrl, _subDivCtrl, _extentValueCtrl,
+      _brokerNameCtrl, _brokerContactCtrl, _roadWidthCtrl,
       _notesCtrl,
     ]) {
       c.dispose();
+    }
+    for (final o in _owners) {
+      o.dispose();
     }
     _mapController.dispose();
     super.dispose();
@@ -201,7 +273,8 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
     _pincodeCtrl.clear();
     _surveyCtrl.clear();
     _subDivCtrl.clear();
-    _extentCtrl.clear();
+    _extentValueCtrl.clear();
+    _extentUnit = null;
   }
 
   void _setCtrlIfNonEmpty(TextEditingController ctrl, String? value) {
@@ -220,13 +293,20 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
     if (village != null && village.isNotEmpty) {
       _locationCtrl.text = village;
     }
-    _setCtrlIfNonEmpty(_extentCtrl, parcel.landExtentDisplay);
+    final extent = parcel.landExtentDisplay?.trim();
+    if (extent != null && extent.isNotEmpty) {
+      final parsed = _parseLandExtent(extent);
+      if (parsed.$1.isNotEmpty) {
+        _extentValueCtrl.text = parsed.$1;
+        _extentUnit = parsed.$2 ?? _extentUnit;
+      }
+    }
   }
 
   bool get _needsTngisBackfill =>
       _surveyCtrl.text.trim().isEmpty ||
       _villageCtrl.text.trim().isEmpty ||
-      _extentCtrl.text.trim().isEmpty;
+      _extentValueCtrl.text.trim().isEmpty;
 
   Future<void> _maybeAutoFetchTngisForExistingLead() async {
     if (!_isEdit || _pinnedPoint == null || !_needsTngisBackfill) return;
@@ -628,8 +708,8 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
         return true;
       case 1:
         return _locationCtrl.text.trim().isNotEmpty &&
-            _surveyCtrl.text.trim().isNotEmpty &&
-            _extentCtrl.text.trim().isNotEmpty;
+            _extentValueCtrl.text.trim().isNotEmpty &&
+            _extentUnit != null;
       case 2:
         return (_termsType ?? '').isNotEmpty;
       case 3:
@@ -704,6 +784,20 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
     final gpsStorage = liveFix?.toStorage() ?? existing!.gpsCoordinates.trim();
 
     final combinedNotes = _notesCtrl.text.trim();
+    final extentValue = _extentValueCtrl.text.trim();
+    final landExtent = extentValue.isEmpty
+        ? ''
+        : (_extentUnit == null ? extentValue : '$extentValue ${_extentUnit!.label}');
+    final additionalOwners = _owners
+        .skip(1)
+        .where((o) =>
+            o.nameCtrl.text.trim().isNotEmpty ||
+            o.contactCtrl.text.trim().isNotEmpty)
+        .map((o) => OwnerContact(
+              name: o.nameCtrl.text.trim(),
+              contact: o.contactCtrl.text.trim(),
+            ))
+        .toList();
     final lead = LandLead(
       leadId: existing?.leadId ?? '',
       inputSource: _inputSource!,
@@ -715,9 +809,10 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
       pincode: _pincodeCtrl.text.trim(),
       surveyNumber: _surveyCtrl.text.trim(),
       subDivision: _subDivCtrl.text.trim(),
-      landExtent: _extentCtrl.text.trim(),
-      ownerName: _ownerCtrl.text.trim(),
-      contactDetails: _contactCtrl.text.trim(),
+      landExtent: landExtent,
+      ownerName: _owners[0].nameCtrl.text.trim(),
+      contactDetails: _owners[0].contactCtrl.text.trim(),
+      additionalOwners: additionalOwners,
       brokerName: _isBrokerSource ? _brokerNameCtrl.text.trim() : '',
       brokerContact: _isBrokerSource ? _brokerContactCtrl.text.trim() : '',
       landType: _landType,
@@ -911,14 +1006,14 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
                           title: 'Data Captured',
                           subtitle: 'Pre-survey land details',
                           icon: Icons.map_outlined,
+                          trailing: const AddLeadHeaderTag(
+                            label: 'Lead ID',
+                            tooltip:
+                                'Generated automatically after the site is created',
+                          ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              const _ReadOnlyField(
-                                label: 'Lead ID',
-                                value: 'Auto-generated (1, 2, 3 …)',
-                              ),
-                              const SizedBox(height: AddLeadUi.fieldGap),
                               Text(
                                 'Live GPS only — map pins and typed coordinates are rejected.',
                                 style: TextStyle(
@@ -1030,9 +1125,8 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
                                 _Field(
                                   ctrl: _surveyCtrl,
                                   label: 'Survey Number',
-                                  hint: 'e.g. 42/3A',
+                                  hint: 'e.g. 42/3A  (optional)',
                                   icon: Icons.tag_outlined,
-                                  required: true,
                                 ),
                                 _Field(
                                   ctrl: _subDivCtrl,
@@ -1045,45 +1139,41 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
                               addLeadFormRow(
                                 context,
                                 _Field(
-                                  ctrl: _extentCtrl,
-                                  label: 'Land Extent',
-                                  hint: 'e.g. 2.5 acres / 50 cents',
+                                  ctrl: _extentValueCtrl,
+                                  label: 'Measurement Value',
+                                  hint: 'e.g. 2.5',
                                   icon: Icons.straighten_rounded,
+                                  keyboardType: const TextInputType
+                                      .numberWithOptions(decimal: true),
                                   required: true,
                                 ),
-                                _Field(
-                                  ctrl: _ownerCtrl,
-                                  label: 'Owner Name',
-                                  hint: 'Full name of the land owner',
-                                  icon: Icons.person_outline_rounded,
+                                _MeasurementUnitDropdown(
+                                  value: _extentUnit,
+                                  onChanged: (v) =>
+                                      setState(() => _extentUnit = v),
                                 ),
                               ),
-                              const SizedBox(height: AddLeadUi.fieldGap),
+                              const SizedBox(height: AddLeadUi.sectionGap),
+                              _OwnerContactSection(
+                                owners: _owners,
+                                maxOwners: _kMaxOwners,
+                                onAdd: _addOwner,
+                                onRemove: _removeOwner,
+                              ),
+                              const SizedBox(height: AddLeadUi.sectionGap),
                               addLeadFormRow(
                                 context,
-                                _Field(
-                                  ctrl: _contactCtrl,
-                                  label: 'Contact Details',
-                                  hint: '10-digit mobile number',
-                                  icon: Icons.phone_outlined,
-                                  keyboardType: TextInputType.phone,
-                                  inputFormatters: [
-                                    FilteringTextInputFormatter.digitsOnly,
-                                    LengthLimitingTextInputFormatter(10),
-                                  ],
-                                ),
                                 _LandTypeDropdown(
                                   value: _landType,
                                   onChanged: (v) =>
                                       setState(() => _landType = v!),
                                 ),
-                              ),
-                              const SizedBox(height: AddLeadUi.fieldGap),
-                              _Field(
-                                ctrl: _roadWidthCtrl,
-                                label: 'Road Width',
-                                hint: 'e.g. 30 ft / 9 m',
-                                icon: Icons.open_in_full_rounded,
+                                _Field(
+                                  ctrl: _roadWidthCtrl,
+                                  label: 'Road Width',
+                                  hint: 'e.g. 30 ft / 9 m',
+                                  icon: Icons.open_in_full_rounded,
+                                ),
                               ),
                             ],
                           ),
@@ -1095,7 +1185,7 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
                         AddLeadSectionCard(
                           number: '3',
                           title: 'Terms',
-                          subtitle: 'Select deal type, then subtype and details',
+                          subtitle: 'Select a term to see its relevant details',
                           icon: Icons.handshake_outlined,
                           compact: true,
                           child: TermsDealSelector(
@@ -1212,57 +1302,6 @@ class _InputSourceDropdown extends StatelessWidget {
             ),
           )
           .toList(),
-    );
-  }
-}
-
-// ── Read-only field ─────────────────────────────────────────────────────────
-
-class _ReadOnlyField extends StatelessWidget {
-  final String label;
-  final String value;
-  const _ReadOnlyField({required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: AddLeadUi.fieldHeight,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(AddLeadUi.fieldRadius),
-        border: Border.all(color: AddLeadUi.cardBorder),
-      ),
-      child: Row(
-        children: [
-          addLeadFieldIcon(Icons.tag_outlined, color: AppColors.textSecondary),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  label,
-                  style: const TextStyle(
-                    fontSize: 10,
-                    color: AppColors.textSecondary,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                Text(
-                  value,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: context.fomraTextSecondary,
-                    fontStyle: FontStyle.italic,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -1389,6 +1428,201 @@ class _LandTypeDropdown extends StatelessWidget {
             ),
           )
           .toList(),
+    );
+  }
+}
+
+// ── Measurement Unit Dropdown ───────────────────────────────────────────────
+
+class _MeasurementUnitDropdown extends StatelessWidget {
+  final MeasurementUnit? value;
+  final ValueChanged<MeasurementUnit?> onChanged;
+
+  const _MeasurementUnitDropdown({required this.value, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    final iconColor = Theme.of(context).brightness == Brightness.dark
+        ? AppColors.primaryLight
+        : AppColors.primary;
+
+    return DropdownButtonFormField<MeasurementUnit>(
+      isExpanded: true,
+      initialValue: value,
+      onChanged: onChanged,
+      menuMaxHeight: 260,
+      borderRadius: BorderRadius.circular(AddLeadUi.fieldRadius),
+      decoration: addLeadInputDecoration(
+        context,
+        label: 'Measurement Unit',
+        hint: 'Select unit',
+        icon: Icons.square_foot_rounded,
+        required: true,
+      ),
+      validator: (v) => v == null ? 'Measurement Unit is required' : null,
+      items: MeasurementUnit.values
+          .map(
+            (u) => DropdownMenuItem(
+              value: u,
+              child: addLeadDropdownRow(
+                icon: Icons.square_foot_rounded,
+                label: u.label,
+                iconColor: iconColor,
+              ),
+            ),
+          )
+          .toList(),
+      selectedItemBuilder: (ctx) => MeasurementUnit.values
+          .map(
+            (u) => Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                u.label,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 14),
+              ),
+            ),
+          )
+          .toList(),
+    );
+  }
+}
+
+// ── Owner Contact Details (dynamic, up to 4 owners) ─────────────────────────
+
+class _OwnerContactSection extends StatelessWidget {
+  final List<_OwnerEntry> owners;
+  final int maxOwners;
+  final VoidCallback onAdd;
+  final ValueChanged<int> onRemove;
+
+  const _OwnerContactSection({
+    required this.owners,
+    required this.maxOwners,
+    required this.onAdd,
+    required this.onRemove,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Owner Contact Details',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: context.fomraTextPrimary,
+                ),
+              ),
+            ),
+            if (owners.length < maxOwners)
+              TextButton.icon(
+                onPressed: onAdd,
+                icon: const Icon(Icons.add_circle_outline_rounded, size: 18),
+                label: const Text('Add Owner'),
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.primary,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        for (var i = 0; i < owners.length; i++) ...[
+          if (i > 0) const SizedBox(height: AddLeadUi.fieldGap),
+          _OwnerFields(
+            index: i,
+            entry: owners[i],
+            onRemove: owners.length > 1 ? () => onRemove(i) : null,
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _OwnerFields extends StatelessWidget {
+  final int index;
+  final _OwnerEntry entry;
+  final VoidCallback? onRemove;
+
+  const _OwnerFields({
+    required this.index,
+    required this.entry,
+    this.onRemove,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final fields = addLeadFormRow(
+      context,
+      _Field(
+        ctrl: entry.nameCtrl,
+        label: index == 0 ? 'Owner Name' : 'Owner ${index + 1} Name',
+        hint: 'Full name of the land owner',
+        icon: Icons.person_outline_rounded,
+      ),
+      _Field(
+        ctrl: entry.contactCtrl,
+        label: index == 0 ? 'Contact Number' : 'Owner ${index + 1} Contact',
+        hint: '10-digit mobile number',
+        icon: Icons.phone_outlined,
+        keyboardType: TextInputType.phone,
+        inputFormatters: [
+          FilteringTextInputFormatter.digitsOnly,
+          LengthLimitingTextInputFormatter(10),
+        ],
+      ),
+    );
+
+    if (onRemove == null) return fields;
+
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: isDark ? context.fomraSurfaceVar : const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(AddLeadUi.fieldRadius),
+        border: Border.all(color: AddLeadUi.cardBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Owner ${index + 1}',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: context.fomraTextSecondary,
+                  ),
+                ),
+              ),
+              InkWell(
+                onTap: onRemove,
+                borderRadius: BorderRadius.circular(20),
+                child: const Padding(
+                  padding: EdgeInsets.all(4),
+                  child: Icon(
+                    Icons.close_rounded,
+                    size: 18,
+                    color: AppColors.error,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          fields,
+        ],
+      ),
     );
   }
 }

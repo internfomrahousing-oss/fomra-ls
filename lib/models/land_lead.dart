@@ -30,6 +30,22 @@ LeadStatus parseLeadStatus(String? raw) {
   };
 }
 
+/// Extra owner (beyond the primary owner captured in [LandLead.ownerName] /
+/// [LandLead.contactDetails]) for sites with multiple land owners.
+class OwnerContact {
+  final String name;
+  final String contact;
+
+  const OwnerContact({required this.name, required this.contact});
+
+  Map<String, dynamic> toJson() => {'name': name, 'contact': contact};
+
+  factory OwnerContact.fromJson(Map<String, dynamic> json) => OwnerContact(
+        name: json['name']?.toString() ?? '',
+        contact: json['contact']?.toString() ?? '',
+      );
+}
+
 class LandLead {
   final String leadId;
   final InputSource inputSource;
@@ -44,6 +60,7 @@ class LandLead {
   final String landExtent;
   final String ownerName;
   final String contactDetails;
+  final List<OwnerContact> additionalOwners;
   final String brokerName;
   final String brokerContact;
   final LandType landType;
@@ -75,6 +92,7 @@ class LandLead {
     required this.landExtent,
     required this.ownerName,
     required this.contactDetails,
+    this.additionalOwners = const [],
     this.brokerName = '',
     this.brokerContact = '',
     required this.landType,
@@ -108,6 +126,7 @@ class LandLead {
     String? landExtent,
     String? ownerName,
     String? contactDetails,
+    List<OwnerContact>? additionalOwners,
     String? brokerName,
     String? brokerContact,
     LandType? landType,
@@ -136,6 +155,7 @@ class LandLead {
         landExtent: landExtent ?? this.landExtent,
         ownerName: ownerName ?? this.ownerName,
         contactDetails: contactDetails ?? this.contactDetails,
+        additionalOwners: additionalOwners ?? this.additionalOwners,
         brokerName: brokerName ?? this.brokerName,
         brokerContact: brokerContact ?? this.brokerContact,
         landType: landType ?? this.landType,
