@@ -7,6 +7,7 @@ import '../analytics/management_bi_metrics.dart';
 import '../analytics/management_intelligence.dart';
 import '../models/app_notification.dart';
 import '../models/land_lead.dart';
+import '../screens/land_lead/filtered_leads_screen.dart';
 import '../services/dashboard_layout_prefs.dart';
 import '../services/management_bi_activity_service.dart';
 import '../theme/app_theme.dart';
@@ -104,6 +105,26 @@ Map<String, int> _dealTermsDistribution(List<LandLead> leads) {
     counts[cat] = (counts[cat] ?? 0) + 1;
   }
   return counts;
+}
+
+List<LandLead> _leadsWithDealTerm(List<LandLead> leads, String category) => leads
+    .where((l) => _dealCategory(parseTermsDeal(l.accessDetails).primary) ==
+        category)
+    .toList();
+
+/// Open a full-screen list of the leads behind a dashboard box / chart slice.
+void _openLeadsList(
+  BuildContext context,
+  String title,
+  String subtitle,
+  List<LandLead> leads,
+) {
+  FilteredLeadsScreen.openList(
+    context,
+    title: title,
+    subtitle: subtitle,
+    leads: leads,
+  );
 }
 
 ({int signed, int negotiation, int legal, int total, double acres})
@@ -249,7 +270,10 @@ class _ManagementExecutiveDashboardState
   ) {
     switch (id) {
       case 'pipeline':
-        return BiPipelineSection(summary: snap.pipeline);
+        return BiPipelineSection(
+          summary: snap.pipeline,
+          leads: widget.leads,
+        );
       case 'reminders':
         return IntelRemindersSection(
           items: intel.reminders,
@@ -654,10 +678,21 @@ class _HeroKpiStrip extends StatelessWidget {
       return Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          _SignedLeadsRing(percent: signedPct, count: signed.length),
+          _SignedLeadsRing(
+            percent: signedPct,
+            count: signed.length,
+            onTap: () =>
+                _openLeadsList(context, 'Signed Leads', 'Signed leads', signed),
+          ),
           const SizedBox(width: AppSpacing.md),
           for (var i = 0; i < kpiDefs.length; i++) ...[
-            Expanded(child: _CompactKpiCard(def: kpiDefs[i])),
+            Expanded(
+              child: _CompactKpiCard(
+                def: kpiDefs[i],
+                onTap: () => _openLeadsList(context, kpiDefs[i].label,
+                    kpiDefs[i].label, kpiDefs[i].filterLeads),
+              ),
+            ),
             if (i < kpiDefs.length - 1) const SizedBox(width: AppSpacing.md),
           ],
         ],
@@ -669,11 +704,20 @@ class _HeroKpiStrip extends StatelessWidget {
       runSpacing: AppSpacing.md,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        _SignedLeadsRing(percent: signedPct, count: signed.length),
+        _SignedLeadsRing(
+          percent: signedPct,
+          count: signed.length,
+          onTap: () =>
+              _openLeadsList(context, 'Signed Leads', 'Signed leads', signed),
+        ),
         for (final def in kpiDefs)
           SizedBox(
             width: isDesktop ? 220 : isTablet ? 240 : double.infinity,
-            child: _CompactKpiCard(def: def),
+            child: _CompactKpiCard(
+              def: def,
+              onTap: () => _openLeadsList(
+                  context, def.label, def.label, def.filterLeads),
+            ),
           ),
       ],
     );
@@ -683,8 +727,13 @@ class _HeroKpiStrip extends StatelessWidget {
 class _SignedLeadsRing extends StatelessWidget {
   final double percent;
   final int count;
+  final VoidCallback? onTap;
 
-  const _SignedLeadsRing({required this.percent, required this.count});
+  const _SignedLeadsRing({
+    required this.percent,
+    required this.count,
+    this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -693,7 +742,10 @@ class _SignedLeadsRing extends StatelessWidget {
       duration: AppMotion.slow,
       curve: AppMotion.curve,
       builder: (context, animatedPct, _) {
-        return SizedBox(
+        return GestureDetector(
+          onTap: onTap,
+          behavior: HitTestBehavior.opaque,
+          child: SizedBox(
           width: 132,
           height: 132,
           child: Stack(
@@ -743,6 +795,7 @@ class _SignedLeadsRing extends StatelessWidget {
               ),
             ],
           ),
+        ),
         );
       },
     );
@@ -771,8 +824,9 @@ class _CompactKpiDef {
 
 class _CompactKpiCard extends StatelessWidget {
   final _CompactKpiDef def;
+  final VoidCallback? onTap;
 
-  const _CompactKpiCard({required this.def});
+  const _CompactKpiCard({required this.def, this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -783,7 +837,10 @@ class _CompactKpiCard extends StatelessWidget {
     final period =
         def.allLeads.where((l) => _isSameMonth(l.addedOn, now)).length;
 
-    return _DashboardCard(
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: _DashboardCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -835,6 +892,7 @@ class _CompactKpiCard extends StatelessWidget {
             ],
           ),
         ],
+      ),
       ),
     );
   }
@@ -908,6 +966,10 @@ class _DealTermsDonutCardState extends State<_DealTermsDonutCard> {
     final dist = _dealTermsDistribution(widget.leads);
     final total = dist.values.fold<int>(0, (a, b) => a + b);
     final sections = <PieChartSectionData>[];
+    // Maps each rendered pie section back to its category index, so touches
+    // (which report the section index) highlight/open the right category even
+    // when zero-count categories are skipped.
+    final sectionCats = <int>[];
 
     final chartSize = widget.inline ? 120.0 : 180.0;
     final pieRadius = widget.inline ? 36.0 : 46.0;
@@ -920,6 +982,7 @@ class _DealTermsDonutCardState extends State<_DealTermsDonutCard> {
       if (count == 0 && total > 0) continue;
       final pct = total == 0 ? 0.0 : (count / total) * 100;
       final touched = i == _touchedIndex;
+      sectionCats.add(i);
       sections.add(
         PieChartSectionData(
           value: count == 0 ? 1 : count.toDouble(),
@@ -954,12 +1017,20 @@ class _DealTermsDonutCardState extends State<_DealTermsDonutCard> {
         final cat = _kDealCategories[i];
         final count = dist[cat] ?? 0;
         final pct = total == 0 ? 0 : ((count / total) * 100).round();
-        return _LegendChip(
-          color: _colors[i % _colors.length],
-          label: cat,
-          value: '$pct%',
-          selected: i == _touchedIndex,
-          compact: widget.inline,
+        return GestureDetector(
+          onTap: () => _openLeadsList(
+            context,
+            cat,
+            'Leads with "$cat" deal terms',
+            _leadsWithDealTerm(widget.leads, cat),
+          ),
+          child: _LegendChip(
+            color: _colors[i % _colors.length],
+            label: cat,
+            value: '$pct%',
+            selected: i == _touchedIndex,
+            compact: widget.inline,
+          ),
         );
       }),
     );
@@ -974,14 +1045,19 @@ class _DealTermsDonutCardState extends State<_DealTermsDonutCard> {
           sections: sections,
           pieTouchData: PieTouchData(
             touchCallback: (event, response) {
-              setState(() {
-                if (response?.touchedSection == null) {
-                  _touchedIndex = -1;
-                } else {
-                  _touchedIndex =
-                      response!.touchedSection!.touchedSectionIndex;
-                }
-              });
+              final idx = response?.touchedSection?.touchedSectionIndex ?? -1;
+              final catIndex =
+                  (idx >= 0 && idx < sectionCats.length) ? sectionCats[idx] : -1;
+              setState(() => _touchedIndex = catIndex);
+              if (event is FlTapUpEvent && catIndex >= 0) {
+                final cat = _kDealCategories[catIndex];
+                _openLeadsList(
+                  context,
+                  cat,
+                  'Leads with "$cat" deal terms',
+                  _leadsWithDealTerm(widget.leads, cat),
+                );
+              }
             },
           ),
         ),

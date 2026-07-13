@@ -338,9 +338,15 @@ class _ReportExportCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               TextButton(
                 onPressed: enabled ? onPreview : null,
+                style: TextButton.styleFrom(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  minimumSize: const Size(0, 40),
+                ),
                 child: const Text('Preview'),
               ),
               const Spacer(),

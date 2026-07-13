@@ -181,8 +181,7 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
             ),
             MarkerLayer(
               markers: plotted.map((p) {
-                // All lead pins render red for a single, consistent map colour.
-                const color = AppColors.error;
+                final color = p.lead.status.color;
                 return Marker(
                   point: p.point,
                   width: 44,
@@ -220,7 +219,7 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
                             ),
                           ),
                         ),
-                        const Icon(Icons.location_on, color: color, size: 36),
+                        Icon(Icons.location_on, color: color, size: 36),
                       ],
                     ),
                   ),

@@ -125,8 +125,8 @@ class _SettingsTileState extends State<_SettingsTile> {
             boxShadow: _hovered ? context.fomraCardShadow : null,
           ),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Container(
                 width: compact ? 32 : 38,
@@ -141,21 +141,23 @@ class _SettingsTileState extends State<_SettingsTile> {
                   size: compact ? 17 : 20,
                 ),
               ),
+              SizedBox(height: compact ? 8 : 12),
               Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
                     widget.label,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: compact ? 11.5 : 13,
                       fontWeight: FontWeight.w700,
                       color: context.fomraTextPrimary,
                     ),
                   ),
-                  const SizedBox(height: 1),
+                  const SizedBox(height: 2),
                   Icon(
                     Icons.arrow_forward_rounded,
                     size: compact ? 12 : 14,

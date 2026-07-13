@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../analytics/management_bi_metrics.dart';
 import '../models/land_lead.dart';
+import '../screens/land_lead/filtered_leads_screen.dart';
 import '../theme/app_theme.dart';
 import '../theme/fomra_theme_context.dart';
 import 'ui/app_components.dart';
@@ -96,22 +97,63 @@ String biFormatPct(double pct) => '${pct.round()}%';
 
 class BiPipelineSection extends StatelessWidget {
   final BiPipelineSummary summary;
+  final List<LandLead> leads;
 
-  const BiPipelineSection({super.key, required this.summary});
+  const BiPipelineSection({
+    super.key,
+    required this.summary,
+    this.leads = const [],
+  });
+
+  void _open(
+    BuildContext context,
+    String title,
+    String subtitle,
+    List<LandLead> subset,
+  ) {
+    FilteredLeadsScreen.openList(
+      context,
+      title: title,
+      subtitle: subtitle,
+      leads: subset,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
+    final active = leads.where((l) => l.status.isActive).toList();
+    final signed =
+        leads.where((l) => l.status == LeadStatus.signed).toList();
+    final tappable = leads.isNotEmpty;
+
     final tiles = [
       _PipeTile('Total Leads', '${summary.totalLeads}', Icons.hub_outlined,
-          AppColors.primary),
+          AppColors.primary,
+          onTap: tappable
+              ? () => _open(context, 'Total Leads', 'Every lead', leads)
+              : null),
       _PipeTile('Total Acres', biFormatAcres(summary.totalAcres),
-          Icons.landscape_outlined, AppColors.success),
+          Icons.landscape_outlined, AppColors.success,
+          onTap: tappable
+              ? () => _open(context, 'Total Acres', 'All leads', leads)
+              : null),
       _PipeTile('Pipeline Acres', biFormatAcres(summary.pipelineAcres),
-          Icons.stacked_bar_chart_rounded, AppColors.info),
+          Icons.stacked_bar_chart_rounded, AppColors.info,
+          onTap: tappable
+              ? () => _open(
+                  context, 'Pipeline Acres', 'Active pipeline leads', active)
+              : null),
       _PipeTile('Active Deals', '${summary.activeDeals}',
-          Icons.trending_up_rounded, AppColors.warning),
+          Icons.trending_up_rounded, AppColors.warning,
+          onTap: tappable
+              ? () =>
+                  _open(context, 'Active Deals', 'Active pipeline leads', active)
+              : null),
       _PipeTile('Closed Deals', '${summary.closedDeals}',
-          Icons.verified_outlined, const Color(0xFF10B981)),
+          Icons.verified_outlined, const Color(0xFF10B981),
+          onTap: tappable
+              ? () => _open(context, 'Closed Deals', 'Signed leads', signed)
+              : null),
     ];
 
     return BiSectionCard(
@@ -153,12 +195,17 @@ class _PipeTile extends StatelessWidget {
   final String value;
   final IconData icon;
   final Color accent;
+  final VoidCallback? onTap;
 
-  const _PipeTile(this.label, this.value, this.icon, this.accent);
+  const _PipeTile(this.label, this.value, this.icon, this.accent,
+      {this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: context.fomraSurfaceVar.withValues(alpha: 0.55),
@@ -198,6 +245,7 @@ class _PipeTile extends StatelessWidget {
             ),
           ),
         ],
+      ),
       ),
     );
   }

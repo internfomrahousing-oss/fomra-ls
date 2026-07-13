@@ -12,12 +12,18 @@ import '../../widgets/ui/app_components.dart';
 import 'lead_detail_screen.dart';
 
 class FilteredLeadsScreen extends StatefulWidget {
-  final LeadListFilter filter;
+  final LeadListFilter? filter;
+  final List<LandLead>? presetLeads;
+  final String? presetTitle;
+  final String? presetSubtitle;
   final List<FomraBreadcrumbItem> breadcrumbs;
 
   const FilteredLeadsScreen({
     super.key,
-    required this.filter,
+    this.filter,
+    this.presetLeads,
+    this.presetTitle,
+    this.presetSubtitle,
     required this.breadcrumbs,
   });
 
@@ -33,6 +39,29 @@ class FilteredLeadsScreen extends StatefulWidget {
           filter: filter,
           breadcrumbs:
               breadcrumbs ?? FomraBreadcrumbs.fromWorkspaceFilter(filter.title),
+        ),
+      ),
+    );
+  }
+
+  /// Open with an explicit set of leads (e.g. a dashboard box or donut slice)
+  /// that doesn't map to a [LeadListFilter].
+  static void openList(
+    BuildContext context, {
+    required String title,
+    required String subtitle,
+    required List<LandLead> leads,
+    List<FomraBreadcrumbItem>? breadcrumbs,
+  }) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => FilteredLeadsScreen(
+          presetLeads: List<LandLead>.from(leads),
+          presetTitle: title,
+          presetSubtitle: subtitle,
+          breadcrumbs:
+              breadcrumbs ?? FomraBreadcrumbs.fromWorkspaceFilter(title),
         ),
       ),
     );
@@ -60,12 +89,17 @@ class _FilteredLeadsScreenState extends State<FilteredLeadsScreen> {
   @override
   Widget build(BuildContext context) {
     final filter = widget.filter;
-    final leads = filterLeads(AppStore.instance.leads, filter);
+    final title = widget.presetTitle ?? filter?.title ?? 'Leads';
+    final subtitle = widget.presetSubtitle ?? filter?.subtitle ?? '';
+    final leads = widget.presetLeads ??
+        (filter != null
+            ? filterLeads(AppStore.instance.leads, filter)
+            : const <LandLead>[]);
 
     return FomraAppShell(
       currentRoute: '/land-lead',
       appBar: FomraAppBar(
-        moduleName: filter.title,
+        moduleName: title,
         breadcrumbs: widget.breadcrumbs,
       ),
       backgroundColor: context.fomraPageBg,
@@ -75,9 +109,9 @@ class _FilteredLeadsScreenState extends State<FilteredLeadsScreen> {
           Padding(
             padding: FomraLayout.pagePadding(context),
             child: SectionHeader(
-              title: filter.title,
+              title: title,
               subtitle:
-                  '${leads.length} lead${leads.length == 1 ? '' : 's'} · ${filter.subtitle}',
+                  '${leads.length} lead${leads.length == 1 ? '' : 's'}${subtitle.isEmpty ? '' : ' · $subtitle'}',
               icon: Icons.list_alt_rounded,
             ),
           ),
@@ -107,7 +141,7 @@ class _FilteredLeadsScreenState extends State<FilteredLeadsScreen> {
                               lead: lead,
                               breadcrumbs:
                                   FomraBreadcrumbs.fromFilteredLeadDetail(
-                                filterLabel: filter.title,
+                                filterLabel: title,
                                 leadId: lead.leadId,
                               ),
                             ),
