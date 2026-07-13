@@ -43,32 +43,11 @@ class BusinessModulesHubScreen extends StatelessWidget {
       route: '/land-bank',
     ),
     _ModuleTile(
-      title: 'Legal Tracker',
-      subtitle: 'EC, verification, approvals',
-      icon: Icons.gavel_outlined,
-      color: AppColors.purple,
-      route: '/legal-tracker',
-    ),
-    _ModuleTile(
-      title: 'Survey Tracker',
-      subtitle: 'Schedule, completion, pending',
-      icon: Icons.architecture_outlined,
-      color: AppColors.warning,
-      route: '/survey-tracker',
-    ),
-    _ModuleTile(
       title: 'Owner History',
       subtitle: 'Historical negotiations',
       icon: Icons.history_outlined,
       color: AppColors.success,
       route: '/owner-history',
-    ),
-    _ModuleTile(
-      title: 'Cost Calculator',
-      subtitle: 'Cost per acre & acquisition cost',
-      icon: Icons.calculate_outlined,
-      color: AppColors.primary,
-      route: '/cost-calculator',
     ),
     _ModuleTile(
       title: 'Field Calendar',
@@ -97,7 +76,7 @@ class BusinessModulesHubScreen extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            'Broker, land bank, legal, survey, owners, costs, and calendar.',
+            'Broker, land bank, owners, and calendar.',
             style: TextStyle(fontSize: 13, color: context.fomraTextSecondary),
           ),
           const SizedBox(height: 20),

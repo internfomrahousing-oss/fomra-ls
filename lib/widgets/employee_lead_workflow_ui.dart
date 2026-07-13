@@ -1,7 +1,7 @@
 import 'dart:typed_data';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
 import '../models/land_lead.dart';
@@ -349,50 +349,56 @@ class _EmployeeLeadQuickFabState extends State<EmployeeLeadQuickFab>
   }
 
   Future<void> _captureDocument(LegalDocCaptureKind kind) async {
-    final picker = ImagePicker();
-    final source = await showModalBottomSheet<ImageSource>(
-      context: context,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.photo_camera_outlined),
-              title: Text('Camera — ${kind.label}'),
-              onTap: () => Navigator.pop(ctx, ImageSource.camera),
-            ),
-            ListTile(
-              leading: const Icon(Icons.photo_library_outlined),
-              title: Text('Gallery — ${kind.label}'),
-              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
-            ),
-          ],
-        ),
-      ),
+    // Open the OS file chooser directly. On web the picker must be triggered
+    // as close to the user gesture as possible, so we avoid an intermediate
+    // Camera/Gallery sheet here (that extra hop stops the dialog opening).
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['pdf', 'png', 'jpg', 'jpeg', 'doc', 'docx'],
+      withData: true,
     );
-    if (source == null || !mounted) return;
+    if (result == null || result.files.isEmpty || !mounted) return;
 
-    final file = await picker.pickImage(
-      source: source,
-      imageQuality: 92,
-      maxWidth: 2400,
-    );
-    if (file == null || !mounted) return;
+    final file = result.files.first;
+    final bytes = file.bytes;
+    if (bytes == null) {
+      AppFeedback.error(context, 'Could not read the selected file');
+      return;
+    }
 
-    final raw = await file.readAsBytes();
-    final compressed = await ImageCompressor.compressTo1Mb(Uint8List.fromList(raw));
-    final name = kind.filePrefix(
-      file.name.toLowerCase().endsWith('.jpg') ||
-              file.name.toLowerCase().endsWith('.jpeg')
-          ? file.name
-          : '${kind.label.toLowerCase()}.jpg',
-    );
+    final lowerName = file.name.toLowerCase();
+    final isImage = lowerName.endsWith('.jpg') ||
+        lowerName.endsWith('.jpeg') ||
+        lowerName.endsWith('.png');
 
-    await LandLeadLegalService.uploadDocument(
-      leadId: widget.lead.leadId,
-      bytes: compressed,
-      fileName: name,
-    );
+    Uint8List uploadBytes = bytes;
+    String fileName = file.name;
+    if (isImage) {
+      uploadBytes = await ImageCompressor.compressTo1Mb(bytes);
+      final dot = fileName.lastIndexOf('.');
+      fileName = '${dot > 0 ? fileName.substring(0, dot) : fileName}.jpg';
+    } else if (bytes.length > ImageCompressor.maxBytes1Mb) {
+      AppFeedback.error(
+        context,
+        '${kind.label} exceeds 1 MB. Use a smaller file or a JPG/PNG image.',
+      );
+      return;
+    }
+
+    final name = kind.filePrefix(fileName);
+
+    try {
+      await LandLeadLegalService.uploadDocument(
+        leadId: widget.lead.leadId,
+        bytes: uploadBytes,
+        fileName: name,
+      );
+    } catch (e) {
+      if (mounted) {
+        AppFeedback.error(context, '${kind.label} upload failed: $e');
+      }
+      return;
+    }
     if (!mounted) return;
     AppFeedback.success(context, '${kind.label} uploaded');
     widget.onActivityChanged?.call();

@@ -694,21 +694,34 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
     }
     if (!_formKey.currentState!.validate()) return;
 
+    final existing = widget.existingLead;
+    final gpsText = _gpsCtrl.text.trim();
+    final liveFix = _verifiedGps ?? GpsFix.tryParse(gpsText);
+
+    // On edit, keep the lead's existing GPS when it hasn't been re-captured.
+    // Older leads may not be stored in LIVE| format, so we don't force a fresh
+    // live fix just to save an edit — we only require live GPS for new leads or
+    // when the coordinates have actually changed.
+    final keepingExistingGps = _isEdit &&
+        existing != null &&
+        existing.gpsCoordinates.trim().isNotEmpty &&
+        gpsText == existing.gpsCoordinates.trim();
+
     // Require a live GPS fix (reject manual pins / typed coords).
-    final liveFix = _verifiedGps ?? GpsFix.tryParse(_gpsCtrl.text.trim());
-    if (liveFix == null || !liveFix.isLive) {
+    if (!keepingExistingGps && (liveFix == null || !liveFix.isLive)) {
       AppFeedback.error(context,
           'Capture live GPS before saving. Manual pins are not allowed.');
       return;
     }
 
+    final gpsStorage = liveFix?.toStorage() ?? existing!.gpsCoordinates.trim();
+
     final combinedNotes = _notesCtrl.text.trim();
-    final existing = widget.existingLead;
     final lead = LandLead(
       leadId: existing?.leadId ?? '',
       inputSource: _inputSource!,
       location: _locationCtrl.text.trim(),
-      gpsCoordinates: liveFix.toStorage(),
+      gpsCoordinates: gpsStorage,
       village: _villageCtrl.text.trim(),
       taluk: _talukCtrl.text.trim(),
       district: _districtCtrl.text.trim(),

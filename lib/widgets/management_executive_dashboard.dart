@@ -106,7 +106,8 @@ Map<String, int> _dealTermsDistribution(List<LandLead> leads) {
   return counts;
 }
 
-({int signed, int total, double acres}) _employeeMetrics(
+({int signed, int negotiation, int legal, int total, double acres})
+    _employeeMetrics(
   String name,
   List<LandLead> leads,
 ) {
@@ -115,11 +116,16 @@ Map<String, int> _dealTermsDistribution(List<LandLead> leads) {
           l.createdByName.trim().toLowerCase() == name.trim().toLowerCase())
       .toList();
   final signed = mine.where((l) => l.status == LeadStatus.signed).length;
+  final negotiation =
+      mine.where((l) => l.status == LeadStatus.negotiation).length;
+  final legal = mine.where((l) => l.status == LeadStatus.legal).length;
   final acres = mine
       .where((l) => l.status == LeadStatus.signed)
       .fold<double>(0, (sum, l) => sum + _leadAcres(l));
   return (
     signed: signed,
+    negotiation: negotiation,
+    legal: legal,
     total: mine.length,
     acres: acres,
   );
@@ -183,6 +189,7 @@ class _ManagementExecutiveDashboardState
     'bottlenecks': 'Bottlenecks',
     'sla': 'SLA Dashboard',
     'executives': 'Executive Performance',
+    'executivesTable': 'Executive Performance',
     'heatmap': 'Activity Heat Map',
     'district': 'District Performance',
     'dealTerms': 'Deal Terms',
@@ -295,6 +302,8 @@ class _ManagementExecutiveDashboardState
             ),
           ],
         );
+      case 'executivesTable':
+        return BiExecutiveSection(rows: snap.executives);
       case 'heatmap':
         return BiHeatmapSection(rows: snap.heatmap);
       case 'district':
@@ -1695,9 +1704,65 @@ class _LeaderboardRow extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 8),
-          TweenAnimationBuilder<double>(
-            tween: Tween(begin: 0, end: row.percent.clamp(0.0, 1.0)),
+          const SizedBox(height: 10),
+          _StatusProgressLine(
+            label: 'Signed',
+            count: metrics.signed,
+            total: metrics.total,
+            color: AppColors.success,
+          ),
+          const SizedBox(height: 6),
+          _StatusProgressLine(
+            label: 'Negotiation',
+            count: metrics.negotiation,
+            total: metrics.total,
+            color: AppColors.primary,
+          ),
+          const SizedBox(height: 6),
+          _StatusProgressLine(
+            label: 'Legal',
+            count: metrics.legal,
+            total: metrics.total,
+            color: AppColors.warning,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatusProgressLine extends StatelessWidget {
+  final String label;
+  final int count;
+  final int total;
+  final Color color;
+
+  const _StatusProgressLine({
+    required this.label,
+    required this.count,
+    required this.total,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final value = total == 0 ? 0.0 : (count / total).clamp(0.0, 1.0);
+    return Row(
+      children: [
+        SizedBox(
+          width: 78,
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: context.fomraTextSecondary,
+            ),
+          ),
+        ),
+        Expanded(
+          child: TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0, end: value),
             duration: AppMotion.slow,
             curve: AppMotion.curve,
             builder: (_, v, __) => ClipRRect(
@@ -1706,12 +1771,25 @@ class _LeaderboardRow extends StatelessWidget {
                 value: v,
                 minHeight: 6,
                 backgroundColor: context.fomraSurfaceVar,
-                color: isTop ? AppColors.accentLight : AppColors.primary,
+                color: color,
               ),
             ),
           ),
-        ],
-      ),
+        ),
+        const SizedBox(width: 8),
+        SizedBox(
+          width: 20,
+          child: Text(
+            '$count',
+            textAlign: TextAlign.end,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: context.fomraTextPrimary,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
