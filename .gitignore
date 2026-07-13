@@ -39,8 +39,8 @@ migrate_working_dir/
 .flutter-plugins-dependencies
 .pub-cache/
 .pub/
-/build/*
-!/build/web
+/build/
+/.flutter-sdk/
 /coverage/
 
 # Symbolication related
