@@ -31,7 +31,6 @@ class _DocumentManagementScreenState extends State<DocumentManagementScreen> {
   bool _loading = true;
   String? _error;
   String _query = '';
-  LegalDocCategory? _category;
   List<LandLeadLegalDocument> _docs = const [];
   final Set<String> _expandedLeads = {};
 
@@ -76,12 +75,7 @@ class _DocumentManagementScreenState extends State<DocumentManagementScreen> {
   }
 
   List<LandLeadLegalDocument> get _filtered {
-    var list = _docs;
-    if (_category != null) {
-      list = list
-          .where((d) => LegalDocumentCatalog.classify(d.fileName) == _category)
-          .toList();
-    }
+    final list = _docs;
     final q = _query.trim().toLowerCase();
     if (q.isEmpty) return list;
     return list.where((d) {
@@ -98,9 +92,25 @@ class _DocumentManagementScreenState extends State<DocumentManagementScreen> {
   }
 
   Future<void> _preview(LandLeadLegalDocument doc) async {
-    final uri = Uri.tryParse(doc.fileUrl);
+    final lower = doc.fileName.toLowerCase();
+    final isOffice = lower.endsWith('.doc') ||
+        lower.endsWith('.docx') ||
+        lower.endsWith('.xls') ||
+        lower.endsWith('.xlsx') ||
+        lower.endsWith('.ppt') ||
+        lower.endsWith('.pptx');
+    // Office files can't render inline in a browser, so route them through the
+    // Microsoft Office web viewer. PDFs/images open directly in a new tab.
+    final target = isOffice
+        ? 'https://view.officeapps.live.com/op/view.aspx?src=${Uri.encodeComponent(doc.fileUrl)}'
+        : doc.fileUrl;
+    final uri = Uri.tryParse(target);
     if (uri == null) return;
-    await launchUrl(uri, mode: LaunchMode.externalApplication);
+    await launchUrl(
+      uri,
+      mode: LaunchMode.platformDefault,
+      webOnlyWindowName: '_blank',
+    );
   }
 
   Future<void> _download(LandLeadLegalDocument doc) async {
@@ -230,29 +240,6 @@ class _DocumentManagementScreenState extends State<DocumentManagementScreen> {
               ),
             ),
           ),
-          const SizedBox(height: 12),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                _chip(
-                  label: 'All',
-                  selected: _category == null,
-                  onTap: () => setState(() => _category = null),
-                ),
-                ...LegalDocumentCatalog.managedCategories.map(
-                  (c) => Padding(
-                    padding: const EdgeInsets.only(left: 8),
-                    child: _chip(
-                      label: c.label,
-                      selected: _category == c,
-                      onTap: () => setState(() => _category = c),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
           const SizedBox(height: 16),
           if (_loading)
             Padding(
@@ -281,20 +268,6 @@ class _DocumentManagementScreenState extends State<DocumentManagementScreen> {
       currentRoute: '/document-management',
       appBar: const FomraAppBar(moduleName: 'Documents'),
       body: body,
-    );
-  }
-
-  Widget _chip({
-    required String label,
-    required bool selected,
-    required VoidCallback onTap,
-  }) {
-    return FilterChip(
-      label: Text(label),
-      selected: selected,
-      onSelected: (_) => onTap(),
-      selectedColor: AppColors.primary.withValues(alpha: 0.18),
-      checkmarkColor: AppColors.primary,
     );
   }
 
@@ -409,8 +382,9 @@ class _DocumentManagementScreenState extends State<DocumentManagementScreen> {
     final num = LegalDocumentCatalog.extractDocumentNumber(doc.fileName);
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.only(bottom: 8),
       child: AppCard(
+        padding: const EdgeInsets.all(12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -418,15 +392,15 @@ class _DocumentManagementScreenState extends State<DocumentManagementScreen> {
               children: [
                 Container(
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   decoration: BoxDecoration(
                     color: AppColors.primary.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
                     cat.label,
                     style: const TextStyle(
-                      fontSize: 11,
+                      fontSize: 10,
                       fontWeight: FontWeight.w700,
                       color: AppColors.primary,
                     ),
@@ -436,70 +410,75 @@ class _DocumentManagementScreenState extends State<DocumentManagementScreen> {
                 Text(
                   stamp,
                   style: TextStyle(
-                    fontSize: 11,
+                    fontSize: 10,
                     color: context.fomraTextSecondary,
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 6),
             Text(
               doc.fileName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                fontSize: 15,
+                fontSize: 13,
                 fontWeight: FontWeight.w700,
                 color: context.fomraTextPrimary,
               ),
             ),
-            const SizedBox(height: 4),
-            Text(
-              [
-                'Lead #${doc.leadId}',
-                if (lead != null && lead.ownerName.isNotEmpty) lead.ownerName,
-                if (num != null) 'Doc #$num',
-                if (doc.loggedByName.isNotEmpty) doc.loggedByName,
-              ].join(' · '),
-              style: TextStyle(
-                fontSize: 12,
-                color: context.fomraTextSecondary,
+            if (num != null || doc.loggedByName.isNotEmpty) ...[
+              const SizedBox(height: 2),
+              Text(
+                [
+                  if (num != null) 'Doc #$num',
+                  if (doc.loggedByName.isNotEmpty) doc.loggedByName,
+                ].join(' · '),
+                style: TextStyle(
+                  fontSize: 11,
+                  color: context.fomraTextSecondary,
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
+            ],
+            const SizedBox(height: 8),
             Wrap(
-              spacing: 8,
-              runSpacing: 8,
+              spacing: 6,
+              runSpacing: 6,
               children: [
-                OutlinedButton.icon(
-                  onPressed: () => _preview(doc),
-                  icon: const Icon(Icons.visibility_outlined, size: 18),
-                  label: const Text('Preview'),
-                ),
-                OutlinedButton.icon(
-                  onPressed: () => _download(doc),
-                  icon: const Icon(Icons.download_outlined, size: 18),
-                  label: const Text('Download'),
-                ),
-                OutlinedButton.icon(
-                  onPressed: () => _showVersions(doc),
-                  icon: const Icon(Icons.history_rounded, size: 18),
-                  label: const Text('Versions'),
-                ),
+                _docAction(Icons.visibility_outlined, 'Preview',
+                    () => _preview(doc)),
+                _docAction(Icons.download_outlined, 'Download',
+                    () => _download(doc)),
+                _docAction(Icons.history_rounded, 'Versions',
+                    () => _showVersions(doc)),
                 if (lead != null)
-                  TextButton(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => LeadDetailScreen(lead: lead),
-                        ),
-                      );
-                    },
-                    child: const Text('Open lead'),
-                  ),
+                  _docAction(Icons.open_in_new_rounded, 'Open lead', () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => LeadDetailScreen(lead: lead),
+                      ),
+                    );
+                  }),
               ],
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _docAction(IconData icon, String label, VoidCallback onTap) {
+    return OutlinedButton.icon(
+      onPressed: onTap,
+      icon: Icon(icon, size: 15),
+      label: Text(label),
+      style: OutlinedButton.styleFrom(
+        visualDensity: VisualDensity.compact,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        minimumSize: const Size(0, 32),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
       ),
     );
   }

@@ -948,23 +948,6 @@ class _ProfilePanel extends StatelessWidget {
                     ),
                     const SizedBox(height: 10),
                     _LeadDetailsList(lead: lead, leadAgeDays: leadAgeDays),
-                    if (!readOnly && lead.contactDetails.isNotEmpty) ...[
-                      const SizedBox(height: 14),
-                      SizedBox(
-                        width: double.infinity,
-                        child: OutlinedButton.icon(
-                          onPressed: () => onLaunchContact('tel'),
-                          icon: const Icon(Icons.phone_outlined, size: 18),
-                          label: const Text('View contact details'),
-                          style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
                   ],
                 ),
               ),

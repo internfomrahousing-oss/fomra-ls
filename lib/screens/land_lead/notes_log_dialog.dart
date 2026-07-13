@@ -6,6 +6,7 @@ import '../../theme/app_theme.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../widgets/log_dialog_tabs.dart';
 import '../../widgets/ui/app_feedback.dart';
+import '../../widgets/ui/dialog_error_banner.dart';
 
 class NotesLogDialog extends StatefulWidget {
   final LandLead lead;
@@ -27,6 +28,7 @@ class _NotesLogDialogState extends State<NotesLogDialog> {
   int _tabIndex = 0;
   final _noteCtrl = TextEditingController();
   bool _saving = false;
+  String? _formError;
   late List<String> _previousNotes;
   late String _existingNotes;
 
@@ -70,12 +72,15 @@ class _NotesLogDialogState extends State<NotesLogDialog> {
   Future<void> _save() async {
     final text = _noteCtrl.text.trim();
     if (text.isEmpty) {
-      AppFeedback.warning(context, 'Type a note before saving');
+      setState(() => _formError = 'Type a note before saving');
       return;
     }
     if (_saving) return;
 
-    setState(() => _saving = true);
+    setState(() {
+      _formError = null;
+      _saving = true;
+    });
     final stamp = DateTime.now().toLocal();
     final entry =
         '[${stamp.day}/${stamp.month}/${stamp.year} ${stamp.hour}:${stamp.minute.toString().padLeft(2, '0')}] $text';
@@ -92,7 +97,7 @@ class _NotesLogDialogState extends State<NotesLogDialog> {
       Navigator.pop(context);
     } catch (e) {
       if (mounted) {
-        AppFeedback.error(context, 'Could not save note: $e');
+        setState(() => _formError = 'Could not save note: $e');
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -190,6 +195,7 @@ class _NotesLogDialogState extends State<NotesLogDialog> {
               ),
               if (!widget.readOnly && _tabIndex == 0) ...[
                 const SizedBox(height: 14),
+                DialogErrorBanner(message: _formError),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [

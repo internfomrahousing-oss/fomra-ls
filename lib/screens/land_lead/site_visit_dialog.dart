@@ -7,6 +7,7 @@ import '../../theme/app_theme.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../widgets/separate_date_time_fields.dart';
 import '../../widgets/ui/app_feedback.dart';
+import '../../widgets/ui/dialog_error_banner.dart';
 
 class SiteVisitDialog extends StatefulWidget {
   final String leadId;
@@ -36,6 +37,7 @@ class SiteVisitDialog extends StatefulWidget {
 class _SiteVisitDialogState extends State<SiteVisitDialog> {
   late DateTime _visitedAt = DateTime.now();
   bool _saving = false;
+  String? _formError;
   bool _loading = true;
   List<LandLeadSiteVisit> _visits = [];
 
@@ -98,9 +100,12 @@ class _SiteVisitDialogState extends State<SiteVisitDialog> {
   Future<void> _markDone() async {
     if (_saving) return;
 
-    setState(() => _saving = true);
+    setState(() {
+      _formError = null;
+      _saving = true;
+    });
     try {
-      final visit = await LandLeadSiteVisitService.markDone(
+      await LandLeadSiteVisitService.markDone(
         leadId: widget.leadId,
         visitedAt: _visitedAt,
         visitType: widget.visitType,
@@ -116,7 +121,7 @@ class _SiteVisitDialogState extends State<SiteVisitDialog> {
       Navigator.pop(context);
     } catch (e) {
       if (mounted) {
-        AppFeedback.error(context, 'Could not save site visit: $e');
+        setState(() => _formError = 'Could not save site visit: $e');
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -233,6 +238,7 @@ class _SiteVisitDialogState extends State<SiteVisitDialog> {
                 ),
               ),
               const SizedBox(height: 14),
+              DialogErrorBanner(message: _formError),
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [

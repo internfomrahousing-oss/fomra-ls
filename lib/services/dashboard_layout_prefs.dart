@@ -2,10 +2,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 /// Persisted widget order for the management BI dashboard.
 class DashboardLayoutPrefs {
-  static const _key = 'mgmt_bi_widget_order_v2';
+  static const _key = 'mgmt_bi_widget_order_v3';
 
   static const defaultOrder = [
     'pipeline',
+    'executivesTable',
     'recommendations',
     'ageing',
     'activities',
@@ -13,8 +14,7 @@ class DashboardLayoutPrefs {
 
   static Future<List<String>> loadOrder() async {
     final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getStringList(_key) ??
-        prefs.getStringList('mgmt_bi_widget_order_v1');
+    final raw = prefs.getStringList(_key);
     if (raw == null || raw.isEmpty) return List.of(defaultOrder);
     final known = defaultOrder.toSet();
     final cleaned = raw.where(known.contains).toList();

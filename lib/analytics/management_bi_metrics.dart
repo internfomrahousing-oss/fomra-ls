@@ -372,7 +372,6 @@ class ManagementBiMetrics {
         if (deal.isNotEmpty) return BiFunnelStage.agreement;
         return BiFunnelStage.legal;
       case LeadStatus.negotiation:
-        if (lead.surveyNumber.trim().isNotEmpty) return BiFunnelStage.survey;
         return BiFunnelStage.negotiation;
       case LeadStatus.prospectMeetingCompleted:
         if (index.hasVisit(lead.leadId)) return BiFunnelStage.siteVisit;
@@ -403,7 +402,6 @@ class ManagementBiMetrics {
       BiFunnelStage.meeting,
       BiFunnelStage.siteVisit,
       BiFunnelStage.negotiation,
-      BiFunnelStage.survey,
       BiFunnelStage.legal,
       BiFunnelStage.agreement,
       BiFunnelStage.closed,
@@ -509,12 +507,6 @@ class ManagementBiMetrics {
       return sum / list.length;
     }
 
-    final surveyPending = leads
-        .where((l) =>
-            l.status == LeadStatus.negotiation &&
-            l.surveyNumber.trim().isEmpty)
-        .toList();
-
     final legalPending =
         leads.where((l) => l.status == LeadStatus.legal).toList();
 
@@ -535,13 +527,6 @@ class ManagementBiMetrics {
         .toList();
 
     return [
-      BiBottleneckRow(
-        id: 'survey',
-        label: 'Survey Pending',
-        count: surveyPending.length,
-        avgPendingDays: avgDays(surveyPending),
-        leads: surveyPending,
-      ),
       BiBottleneckRow(
         id: 'legal',
         label: 'Legal Pending',

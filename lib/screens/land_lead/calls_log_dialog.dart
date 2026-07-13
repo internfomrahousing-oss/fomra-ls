@@ -8,6 +8,7 @@ import '../../theme/fomra_theme_context.dart';
 import '../../widgets/log_dialog_tabs.dart';
 import '../../widgets/separate_date_time_fields.dart';
 import '../../widgets/ui/app_feedback.dart';
+import '../../widgets/ui/dialog_error_banner.dart';
 
 class CallsLogDialog extends StatefulWidget {
   final String leadId;
@@ -34,6 +35,7 @@ class _CallsLogDialogState extends State<CallsLogDialog> {
   final _detailsCtrl = TextEditingController();
   bool _saving = false;
   bool _loading = true;
+  String? _formError;
   List<LeadCallLog> _logs = [];
 
   @override
@@ -77,18 +79,21 @@ class _CallsLogDialogState extends State<CallsLogDialog> {
     final duration = _durationCtrl.text.trim();
     final details = _detailsCtrl.text.trim();
     if (_outcome == CallOutcome.answered && duration.isEmpty) {
-      AppFeedback.warning(context, 'Enter call duration for answered calls');
+      setState(() => _formError = 'Enter call duration for answered calls');
       return;
     }
     if (_outcome == CallOutcome.answered && details.isEmpty) {
-      AppFeedback.warning(context, 'Enter call details');
+      setState(() => _formError = 'Enter call details');
       return;
     }
     if (_saving) return;
 
-    setState(() => _saving = true);
+    setState(() {
+      _formError = null;
+      _saving = true;
+    });
     try {
-      final log = await LeadCallLogService.create(
+      await LeadCallLogService.create(
         leadId: widget.leadId,
         calledAt: _calledAt,
         duration: duration,
@@ -101,7 +106,7 @@ class _CallsLogDialogState extends State<CallsLogDialog> {
       Navigator.pop(context);
     } catch (e) {
       if (mounted) {
-        AppFeedback.error(context, 'Could not save call: $e');
+        setState(() => _formError = 'Could not save call: $e');
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -203,6 +208,7 @@ class _CallsLogDialogState extends State<CallsLogDialog> {
               ),
               if (!widget.readOnly && _tabIndex == 0) ...[
                 const SizedBox(height: 14),
+                DialogErrorBanner(message: _formError),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [

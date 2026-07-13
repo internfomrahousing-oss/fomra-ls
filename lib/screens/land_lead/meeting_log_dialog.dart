@@ -8,6 +8,7 @@ import '../../theme/fomra_theme_context.dart';
 import '../../widgets/log_dialog_tabs.dart';
 import '../../widgets/separate_date_time_fields.dart';
 import '../../widgets/ui/app_feedback.dart';
+import '../../widgets/ui/dialog_error_banner.dart';
 
 class MeetingLogDialog extends StatefulWidget {
   final String leadId;
@@ -33,6 +34,7 @@ class _MeetingLogDialogState extends State<MeetingLogDialog> {
   final _durationCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
   bool _saving = false;
+  String? _formError;
   bool _loading = true;
   List<LandLeadMeeting> _meetings = [];
 
@@ -94,14 +96,17 @@ class _MeetingLogDialogState extends State<MeetingLogDialog> {
   Future<void> _save() async {
     final duration = _durationCtrl.text.trim();
     if (duration.isEmpty) {
-      AppFeedback.warning(context, 'Enter meeting duration');
+      setState(() => _formError = 'Enter meeting duration');
       return;
     }
     if (_saving) return;
 
-    setState(() => _saving = true);
+    setState(() {
+      _formError = null;
+      _saving = true;
+    });
     try {
-      final meeting = await LandLeadMeetingService.create(
+      await LandLeadMeetingService.create(
         leadId: widget.leadId,
         metAt: _metAt,
         duration: duration,
@@ -113,7 +118,7 @@ class _MeetingLogDialogState extends State<MeetingLogDialog> {
       Navigator.pop(context);
     } catch (e) {
       if (mounted) {
-        AppFeedback.error(context, 'Could not save meeting: $e');
+        setState(() => _formError = 'Could not save meeting: $e');
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -215,6 +220,7 @@ class _MeetingLogDialogState extends State<MeetingLogDialog> {
               ),
               if (!widget.readOnly && _tabIndex == 0) ...[
                 const SizedBox(height: 14),
+                DialogErrorBanner(message: _formError),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [

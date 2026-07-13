@@ -83,10 +83,11 @@ class _FieldCalendarScreenState extends State<FieldCalendarScreen> {
                         decoration: const InputDecoration(labelText: 'Type'),
                         items: [
                           for (final k in FieldCalendarKind.values)
-                            DropdownMenuItem(
-                              value: k,
-                              child: Text(k.label),
-                            ),
+                            if (k != FieldCalendarKind.survey)
+                              DropdownMenuItem(
+                                value: k,
+                                child: Text(k.label),
+                              ),
                         ],
                         onChanged: (v) {
                           if (v == null) return;
@@ -333,14 +334,15 @@ class _FieldCalendarScreenState extends State<FieldCalendarScreen> {
                     ),
                   ),
                   for (final k in FieldCalendarKind.values)
-                    Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: ChoiceChip(
-                        label: Text(k.label),
-                        selected: _kindFilter == k,
-                        onSelected: (_) => setState(() => _kindFilter = k),
+                    if (k != FieldCalendarKind.survey)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: ChoiceChip(
+                          label: Text(k.label),
+                          selected: _kindFilter == k,
+                          onSelected: (_) => setState(() => _kindFilter = k),
+                        ),
                       ),
-                    ),
                 ],
               ),
             ),

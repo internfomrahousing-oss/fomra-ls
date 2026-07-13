@@ -455,12 +455,6 @@ class _EmployeeLeadQuickFabState extends State<EmployeeLeadQuickFab>
         color: AppColors.info,
         onTap: () => _run(_showDocCaptureSheet),
       ),
-      (
-        icon: Icons.chat_outlined,
-        label: 'WhatsApp',
-        color: const Color(0xFF25D366),
-        onTap: () => _run(() => widget.onLaunchContact('https://wa.me')),
-      ),
     ];
 
     return Column(
