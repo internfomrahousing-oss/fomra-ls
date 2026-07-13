@@ -557,14 +557,10 @@ class ReportCatalogService {
   }) {
     final withSurvey =
         leads.where((l) => l.surveyNumber.trim().isNotEmpty).toList();
-    final pending = leads
-        .where((l) => l.status.isActive && l.surveyNumber.trim().isEmpty)
-        .toList();
     return ReportPreviewData(
       generatedAt: DateTime.now(),
       summary: [
         (label: 'With survey #', value: '${withSurvey.length}'),
-        (label: 'Survey pending', value: '${pending.length}'),
       ],
       sections: [
         ReportPreviewSection(
@@ -591,12 +587,6 @@ class ReportCatalogService {
             cap,
           ),
           emptyMessage: 'No surveyed leads.',
-        ),
-        ReportPreviewSection(
-          title: 'Survey Pending',
-          headers: _leadHeaders(),
-          rows: _maybeCap(_leadRows(pending), cap),
-          emptyMessage: 'No pending surveys.',
         ),
       ],
     );

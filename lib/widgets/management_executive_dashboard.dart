@@ -190,6 +190,7 @@ class _ManagementExecutiveDashboardState
     'sla': 'SLA Dashboard',
     'executives': 'Executive Performance',
     'executivesTable': 'Executive Performance',
+    'leaderboard': 'Employee Leaderboard',
     'heatmap': 'Activity Heat Map',
     'district': 'District Performance',
     'dealTerms': 'Deal Terms',
@@ -304,6 +305,11 @@ class _ManagementExecutiveDashboardState
         );
       case 'executivesTable':
         return BiExecutiveSection(rows: snap.executives);
+      case 'leaderboard':
+        return _EmployeeLeaderboardCard(
+          teamRows: widget.teamRows,
+          leads: widget.leads,
+        );
       case 'heatmap':
         return BiHeatmapSection(rows: snap.heatmap);
       case 'district':

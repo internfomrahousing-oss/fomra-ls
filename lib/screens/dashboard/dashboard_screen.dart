@@ -330,7 +330,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     'funnel',
                     'bottlenecks',
                     'sla',
-                    'executives',
+                    'leaderboard',
                     'district',
                   ],
                   onViewLead: (lead) {

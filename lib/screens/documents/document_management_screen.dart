@@ -33,6 +33,7 @@ class _DocumentManagementScreenState extends State<DocumentManagementScreen> {
   String _query = '';
   LegalDocCategory? _category;
   List<LandLeadLegalDocument> _docs = const [];
+  final Set<String> _expandedLeads = {};
 
   @override
   void initState() {
@@ -271,7 +272,7 @@ class _DocumentManagementScreenState extends State<DocumentManagementScreen> {
               icon: Icons.folder_open_outlined,
             )
           else
-            ..._filtered.map(_docTile),
+            ..._buildLeadGroups(),
         ],
       ),
     );
@@ -294,6 +295,109 @@ class _DocumentManagementScreenState extends State<DocumentManagementScreen> {
       onSelected: (_) => onTap(),
       selectedColor: AppColors.primary.withValues(alpha: 0.18),
       checkmarkColor: AppColors.primary,
+    );
+  }
+
+  /// Group the filtered documents by lead so the page shows a lead number
+  /// first; tapping a lead expands to reveal all its documents (Patta, Chitta…).
+  List<Widget> _buildLeadGroups() {
+    final byLead = <String, List<LandLeadLegalDocument>>{};
+    for (final d in _filtered) {
+      (byLead[d.leadId] ??= []).add(d);
+    }
+    final leadIds = byLead.keys.toList()..sort((a, b) => a.compareTo(b));
+    return [for (final id in leadIds) _leadGroupCard(id, byLead[id]!)];
+  }
+
+  Widget _leadGroupCard(String leadId, List<LandLeadLegalDocument> docs) {
+    final expanded = _expandedLeads.contains(leadId);
+    final lead = _leadFor(leadId);
+    final cats = <String>[
+      for (final label in {
+        for (final d in docs) LegalDocumentCatalog.classify(d.fileName).label,
+      })
+        label,
+    ];
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          AppCard(
+            onTap: () => setState(() {
+              if (expanded) {
+                _expandedLeads.remove(leadId);
+              } else {
+                _expandedLeads.add(leadId);
+              }
+            }),
+            child: Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(
+                    Icons.folder_outlined,
+                    size: 20,
+                    color: AppColors.primary,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Lead #$leadId',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                          color: context.fomraTextPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        [
+                          if (lead != null && lead.ownerName.isNotEmpty)
+                            lead.ownerName,
+                          '${docs.length} document${docs.length == 1 ? '' : 's'}',
+                          if (cats.isNotEmpty) cats.join(', '),
+                        ].join(' · '),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: context.fomraTextSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(
+                  expanded ? Icons.expand_less : Icons.expand_more,
+                  color: context.fomraTextSecondary,
+                ),
+              ],
+            ),
+          ),
+          if (expanded) ...[
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.only(left: 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [for (final d in docs) _docTile(d)],
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 

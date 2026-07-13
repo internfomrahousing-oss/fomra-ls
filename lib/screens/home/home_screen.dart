@@ -606,24 +606,26 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 ),
               ),
               const SizedBox(height: AppSpacing.lg),
-              PortalFadeSection(
-                index: 2,
-                child: ManagementExecutiveDashboard(
-                  leads: leads,
-                  teamRows: teamRows,
-                  notifications: const [],
-                  widgetIds: const ['executivesTable'],
-                  onViewLead: (lead) {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => LeadDetailScreen(lead: lead),
-                      ),
-                    );
-                  },
+              if (_isManagement) ...[
+                PortalFadeSection(
+                  index: 2,
+                  child: ManagementExecutiveDashboard(
+                    leads: leads,
+                    teamRows: teamRows,
+                    notifications: const [],
+                    widgetIds: const ['executivesTable'],
+                    onViewLead: (lead) {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => LeadDetailScreen(lead: lead),
+                        ),
+                      );
+                    },
+                  ),
                 ),
-              ),
-              const SizedBox(height: AppSpacing.lg),
+                const SizedBox(height: AppSpacing.lg),
+              ],
               if (_isManagement)
                 PortalFadeSection(
                   index: 2,

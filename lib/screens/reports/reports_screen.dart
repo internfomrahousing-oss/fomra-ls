@@ -7,7 +7,9 @@ import '../../services/role_access.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_layout.dart';
 import '../../theme/fomra_theme_context.dart';
+import '../../widgets/fomra_app_bar.dart';
 import '../../widgets/fomra_app_shell.dart';
+import '../../widgets/fomra_breadcrumb.dart';
 import '../../widgets/ui/app_components.dart';
 import '../../widgets/ui/app_feedback.dart';
 import '../../widgets/ui/app_table.dart';
@@ -138,6 +140,10 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
     return FomraAppShell(
       currentRoute: '/reports',
+      appBar: FomraAppBar(
+        moduleName: 'Reports',
+        breadcrumbs: FomraBreadcrumbs.module('Reports'),
+      ),
       body: ListView(
         padding: pad,
         children: [

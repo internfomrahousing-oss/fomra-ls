@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
@@ -1077,9 +1078,13 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
                                 _Field(
                                   ctrl: _contactCtrl,
                                   label: 'Contact Details',
-                                  hint: 'Phone / Email',
+                                  hint: '10-digit mobile number',
                                   icon: Icons.phone_outlined,
                                   keyboardType: TextInputType.phone,
+                                  inputFormatters: [
+                                    FilteringTextInputFormatter.digitsOnly,
+                                    LengthLimitingTextInputFormatter(10),
+                                  ],
                                 ),
                                 _LandTypeDropdown(
                                   value: _landType,
@@ -1287,6 +1292,7 @@ class _Field extends StatelessWidget {
   final int maxLines;
   final int? maxLength;
   final TextInputType keyboardType;
+  final List<TextInputFormatter>? inputFormatters;
   final bool light;
   final bool readOnly;
   final ValueChanged<String>? onFieldSubmitted;
@@ -1300,6 +1306,7 @@ class _Field extends StatelessWidget {
     this.maxLines = 1,
     this.maxLength,
     this.keyboardType = TextInputType.text,
+    this.inputFormatters,
     this.readOnly = false,
   }) : light = false, onFieldSubmitted = null;
 
@@ -1319,6 +1326,7 @@ class _Field extends StatelessWidget {
       maxLines: maxLines,
       maxLength: maxLength,
       keyboardType: keyboardType,
+      inputFormatters: inputFormatters,
       readOnly: readOnly,
       onFieldSubmitted: onFieldSubmitted,
       style: TextStyle(
