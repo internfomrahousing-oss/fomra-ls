@@ -93,7 +93,7 @@ class _FilteredLeadsScreenState extends State<FilteredLeadsScreen> {
     final subtitle = widget.presetSubtitle ?? filter?.subtitle ?? '';
     final leads = widget.presetLeads ??
         (filter != null
-            ? filterLeads(AppStore.instance.leads, filter)
+            ? filterLeads(AppStore.instance.visibleLeads, filter)
             : const <LandLead>[]);
 
     return FomraAppShell(

@@ -59,7 +59,7 @@ class _CostCalculatorScreenState extends State<CostCalculatorScreen> {
     final money = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
     final acresFmt = NumberFormat('#,##0.##');
     final q = _query.trim().toLowerCase();
-    final leadRows = AppStore.instance.leads
+    final leadRows = AppStore.instance.visibleLeads
         .map((l) => (l, AcquisitionCostCalculator.fromLead(l)))
         .where((e) {
           if (e.$2.totalCost == null && e.$2.acres <= 0) return false;

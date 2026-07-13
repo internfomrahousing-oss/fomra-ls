@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import '../models/employee_profile.dart';
 import '../models/land_lead.dart';
+import 'auth_service.dart';
 
 class AppStore extends ChangeNotifier {
   static final AppStore instance = AppStore._();
@@ -8,6 +9,21 @@ class AppStore extends ChangeNotifier {
 
   final List<LandLead> leads = [];
   final List<EmployeeProfile> employees = [];
+
+  /// Role-scoped leads: Management sees every site; an Executive only sees
+  /// the sites (leads) assigned to / created by them. Every screen that
+  /// lists sites, owners, brokers, tasks, activities, documents, reports,
+  /// or map markers should read from this instead of [leads] directly so
+  /// access control is enforced consistently across the whole app.
+  List<LandLead> get visibleLeads {
+    if (AuthService.instance.isManagement) return leads;
+    final me =
+        (AuthService.instance.currentUser?.fullName ?? '').trim().toLowerCase();
+    if (me.isEmpty) return leads;
+    return leads
+        .where((l) => l.createdByName.trim().toLowerCase() == me)
+        .toList();
+  }
 
   void addLead(LandLead lead) {
     leads.insert(0, lead);

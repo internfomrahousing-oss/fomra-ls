@@ -66,7 +66,7 @@ class _ContactDirectoryScreenState extends State<ContactDirectoryScreen> {
 
   List<ContactDirectoryEntry> get _entries {
     final all =
-        buildContactDirectoryEntries(AppStore.instance.leads, widget.kind);
+        buildContactDirectoryEntries(AppStore.instance.visibleLeads, widget.kind);
     if (_query.isEmpty) return all;
     final q = _query.toLowerCase();
     return all

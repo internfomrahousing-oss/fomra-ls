@@ -11,6 +11,7 @@ import '../../models/lead_call_log.dart';
 import '../../models/lead_drop_reason.dart';
 import '../../services/app_store.dart';
 import '../../services/auth_service.dart';
+import '../../services/role_access.dart';
 import '../../services/land_lead_legal_service.dart';
 import '../../services/land_lead_meeting_service.dart';
 import '../../services/land_lead_service.dart';
@@ -187,11 +188,16 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
 
   bool get _readOnly => AuthService.instance.isManagement;
 
+  /// Management can create/edit/manage site (lead) details directly, even
+  /// though the rest of the workspace (calls, status, activities) stays
+  /// read-only for them.
+  bool get _canEditSite => RoleAccess.canEdit;
+
   CallActivityMetrics get _callMetrics =>
       CallActivityMetrics.fromLogs(_callLogs);
 
   Future<void> _openEdit() async {
-    if (_readOnly) return;
+    if (!_canEditSite) return;
     final saved = await Navigator.push<LandLead>(
       context,
       MaterialPageRoute(builder: (_) => AddLeadScreen(existingLead: lead)),
@@ -496,7 +502,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
                 _TopBar(
                   leadId: lead.leadId,
                   onBack: () => Navigator.pop(context),
-                  onEdit: _readOnly ? null : _openEdit,
+                  onEdit: _canEditSite ? _openEdit : null,
                   onNavigate: lead.gpsCoordinates.trim().isEmpty
                       ? null
                       : _navigateToProperty,
@@ -1631,7 +1637,33 @@ class _ActivitySummaryRow extends StatelessWidget {
   }
 }
 
-class _ActivityTimeline extends StatelessWidget {
+enum _ActivityFilter {
+  all,
+  calls,
+  siteVisits,
+  managementSiteVisits,
+  meetings,
+  documents,
+  notes,
+  legal,
+  survey,
+}
+
+extension on _ActivityFilter {
+  String get label => switch (this) {
+        _ActivityFilter.all => 'All',
+        _ActivityFilter.calls => 'Calls',
+        _ActivityFilter.siteVisits => 'Site Visits',
+        _ActivityFilter.managementSiteVisits => 'Management Site Visits',
+        _ActivityFilter.meetings => 'Meetings',
+        _ActivityFilter.documents => 'Documents',
+        _ActivityFilter.notes => 'Notes',
+        _ActivityFilter.legal => 'Legal',
+        _ActivityFilter.survey => 'Survey',
+      };
+}
+
+class _ActivityTimeline extends StatefulWidget {
   final LandLead lead;
   final List<LeadCallLog> callLogs;
   final List<LandLeadSiteVisit> siteVisits;
@@ -1647,13 +1679,27 @@ class _ActivityTimeline extends StatelessWidget {
   });
 
   @override
+  State<_ActivityTimeline> createState() => _ActivityTimelineState();
+}
+
+class _ActivityTimelineState extends State<_ActivityTimeline> {
+  _ActivityFilter _filter = _ActivityFilter.all;
+
+  @override
   Widget build(BuildContext context) {
+    final lead = widget.lead;
+    final callLogs = widget.callLogs;
+    final siteVisits = widget.siteVisits;
+    final meetings = widget.meetings;
+    final legalDocs = widget.legalDocs;
+
     final events = <({
       DateTime at,
       String title,
       String subtitle,
       IconData icon,
       String? audioUrl,
+      _ActivityFilter category,
     })>[];
 
     for (final log in callLogs) {
@@ -1669,23 +1715,27 @@ class _ActivityTimeline extends StatelessWidget {
         subtitle: subtitleParts.join('\n'),
         icon: log.outcome.icon,
         audioUrl: null,
+        category: _ActivityFilter.calls,
       ));
     }
 
     for (final visit in siteVisits) {
-      final approval = visit.visitType == LandLeadSiteVisitType.management
-          ? '\n${visit.approvalStatus.label}'
-          : '';
+      final isManagementVisit =
+          visit.visitType == LandLeadSiteVisitType.management;
+      final approval = isManagementVisit ? '\n${visit.approvalStatus.label}' : '';
       events.add((
         at: visit.visitedAt,
         title: visit.visitType.label,
         subtitle: visit.loggedByName.isEmpty
             ? '${_formatReceivedOn(visit.visitedAt)}$approval'
             : '${_formatReceivedOn(visit.visitedAt)}\n${visit.loggedByName}$approval',
-        icon: visit.visitType == LandLeadSiteVisitType.management
+        icon: isManagementVisit
             ? Icons.apartment_outlined
             : Icons.location_on_outlined,
         audioUrl: null,
+        category: isManagementVisit
+            ? _ActivityFilter.managementSiteVisits
+            : _ActivityFilter.siteVisits,
       ));
     }
 
@@ -1701,6 +1751,7 @@ class _ActivityTimeline extends StatelessWidget {
         ].join('\n'),
         icon: Icons.groups_outlined,
         audioUrl: null,
+        category: _ActivityFilter.meetings,
       ));
     }
 
@@ -1714,6 +1765,7 @@ class _ActivityTimeline extends StatelessWidget {
         ].join('\n'),
         icon: Icons.upload_file_outlined,
         audioUrl: null,
+        category: _ActivityFilter.legal,
       ));
     }
 
@@ -1725,6 +1777,7 @@ class _ActivityTimeline extends StatelessWidget {
         subtitle: 'Attached to lead',
         icon: Icons.photo_outlined,
         audioUrl: null,
+        category: _ActivityFilter.documents,
       ));
     }
 
@@ -1734,20 +1787,28 @@ class _ActivityTimeline extends StatelessWidget {
       if (trimmed.isEmpty) continue;
       final isVoice = trimmed.contains('[Voice Note]');
       final isGps = trimmed.contains('[GPS Check-in]');
-      if (!isVoice && !isGps) continue;
       final audioUrl = isVoice
           ? VoiceNoteService.audioUrlFromNotesLine(trimmed)
           : null;
       events.add((
         at: lead.addedOn,
-        title: isVoice ? 'Voice note' : 'GPS check-in',
+        title: isVoice
+            ? 'Voice note'
+            : (isGps ? 'GPS check-in' : 'Note'),
         subtitle: trimmed,
-        icon: isVoice ? Icons.mic_none_rounded : Icons.my_location_rounded,
+        icon: isVoice
+            ? Icons.mic_none_rounded
+            : (isGps ? Icons.my_location_rounded : Icons.notes_outlined),
         audioUrl: audioUrl,
+        category: _ActivityFilter.notes,
       ));
     }
 
     events.sort((a, b) => b.at.compareTo(a.at));
+
+    final filtered = _filter == _ActivityFilter.all
+        ? events
+        : events.where((e) => e.category == _filter).toList();
 
     final staticEvents = <({String title, String subtitle, IconData icon})>[
       (
@@ -1780,18 +1841,25 @@ class _ActivityTimeline extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 10),
-        if (events.isEmpty)
+        _ActivityFilterBar(
+          selected: _filter,
+          onSelected: (f) => setState(() => _filter = f),
+        ),
+        const SizedBox(height: 10),
+        if (filtered.isEmpty)
           Padding(
             padding: const EdgeInsets.only(bottom: 12),
             child: Text(
-              'No activity yet — use quick actions to log the first step.',
+              events.isEmpty
+                  ? 'No activity yet — use quick actions to log the first step.'
+                  : 'No ${_filter.label.toLowerCase()} activity yet.',
               style: TextStyle(
                 fontSize: 12,
                 color: context.fomraTextSecondary,
               ),
             ),
           ),
-        for (final e in events)
+        for (final e in filtered)
           Padding(
             padding: const EdgeInsets.only(bottom: 10),
             child: Row(
@@ -1828,35 +1896,81 @@ class _ActivityTimeline extends StatelessWidget {
               ],
             ),
           ),
-        for (final e in staticEvents)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(e.icon, size: 18, color: AppColors.purple),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(e.title,
-                          style: const TextStyle(fontWeight: FontWeight.w700)),
-                      const SizedBox(height: 2),
-                      Text(
-                        e.subtitle,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: context.fomraTextSecondary,
+        if (_filter == _ActivityFilter.all)
+          for (final e in staticEvents)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(e.icon, size: 18, color: AppColors.purple),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(e.title,
+                            style: const TextStyle(fontWeight: FontWeight.w700)),
+                        const SizedBox(height: 2),
+                        Text(
+                          e.subtitle,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: context.fomraTextSecondary,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
       ],
+    );
+  }
+}
+
+class _ActivityFilterBar extends StatelessWidget {
+  final _ActivityFilter selected;
+  final ValueChanged<_ActivityFilter> onSelected;
+
+  const _ActivityFilterBar({
+    required this.selected,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 34,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: _ActivityFilter.values.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (context, i) {
+          final f = _ActivityFilter.values[i];
+          final isSelected = f == selected;
+          return ChoiceChip(
+            label: Text(f.label),
+            selected: isSelected,
+            onSelected: (_) => onSelected(f),
+            showCheckmark: false,
+            labelStyle: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: isSelected ? Colors.white : context.fomraTextSecondary,
+            ),
+            backgroundColor: context.fomraSurfaceVar.withValues(alpha: 0.7),
+            selectedColor: AppColors.purple,
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(999),
+              side: BorderSide.none,
+            ),
+          );
+        },
+      ),
     );
   }
 }
@@ -1874,11 +1988,32 @@ class _LeadDetailsList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final rows = <(String, String)>[
+    final ownerRows = <(String, String)>[
       ('Owner', _value(lead.ownerName)),
       ('Contact', _value(lead.contactDetails)),
       ('Input Source', lead.inputSource.label),
+      if (lead.createdByName.isNotEmpty)
+        (lead.ownershipLabel, lead.createdByName),
+    ];
+
+    final locationRows = <(String, String)>[
+      ('Location', _value(lead.location)),
+      ('Village', _value(lead.village)),
+      ('Taluk', _value(lead.taluk)),
+      ('District', _value(lead.district)),
+      ('Pincode', _value(lead.pincode)),
+    ];
+
+    final landRows = <(String, String)>[
       ('Land Type', lead.landType.label),
+      ('Survey No.', _value(lead.surveyNumber)),
+      ('Sub Division', _value(lead.subDivision)),
+      ('Land Extent', _value(lead.landExtent)),
+      if (lead.roadWidth.isNotEmpty) ('Road Width', lead.roadWidth),
+      if (lead.accessDetails.isNotEmpty) ('Terms', lead.accessDetails),
+    ];
+
+    final statusRows = <(String, String)>[
       ('Status', lead.status.label),
       if (lead.status == LeadStatus.dropped &&
           lead.dropReason.trim().isNotEmpty)
@@ -1889,44 +2024,69 @@ class _LeadDetailsList extends StatelessWidget {
       if (lead.status == LeadStatus.dropped &&
           lead.dropNotes.trim().isNotEmpty)
         ('Drop notes', lead.dropNotes.trim()),
-      ('Location', _value(lead.location)),
-      ('Village', _value(lead.village)),
-      ('Taluk', _value(lead.taluk)),
-      ('District', _value(lead.district)),
-      ('Pincode', _value(lead.pincode)),
-      ('GPS', _value(lead.gpsCoordinates)),
-      ('Survey No.', _value(lead.surveyNumber)),
-      ('Sub Division', _value(lead.subDivision)),
-      ('Land Extent', _value(lead.landExtent)),
-      if (lead.roadWidth.isNotEmpty) ('Road Width', lead.roadWidth),
-      if (lead.accessDetails.isNotEmpty) ('Terms', lead.accessDetails),
       ('Received On', _formatReceivedOn(lead.addedOn)),
       ('Lead Age', '$leadAgeDays days'),
       ("Lead's Current Date & Time", _formatReceivedOn(DateTime.now())),
-      if (lead.createdByName.isNotEmpty)
-        (lead.ownershipLabel, lead.createdByName),
     ];
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final useTwoColumns = constraints.maxWidth >= 360;
-        if (!useTwoColumns) {
-          return _LeadDetailsColumn(rows: rows);
-        }
-        final split = (rows.length / 2).ceil();
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: _LeadDetailsColumn(rows: rows.sublist(0, split)),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: _LeadDetailsColumn(rows: rows.sublist(split)),
-            ),
-          ],
-        );
-      },
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _LeadDetailsGroup(title: 'Owner & Contact', rows: ownerRows),
+        const SizedBox(height: 18),
+        _LeadDetailsGroup(title: 'Location', rows: locationRows),
+        const SizedBox(height: 18),
+        _LeadDetailsGroup(title: 'Land Details', rows: landRows),
+        const SizedBox(height: 18),
+        _LeadDetailsGroup(title: 'Status & Timeline', rows: statusRows),
+      ],
+    );
+  }
+}
+
+class _LeadDetailsGroup extends StatelessWidget {
+  final String title;
+  final List<(String, String)> rows;
+
+  const _LeadDetailsGroup({required this.title, required this.rows});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0.3,
+            color: context.fomraTextSecondary,
+          ),
+        ),
+        const SizedBox(height: 10),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final useTwoColumns = constraints.maxWidth >= 360;
+            if (!useTwoColumns) {
+              return _LeadDetailsColumn(rows: rows);
+            }
+            final split = (rows.length / 2).ceil();
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: _LeadDetailsColumn(rows: rows.sublist(0, split)),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: _LeadDetailsColumn(rows: rows.sublist(split)),
+                ),
+              ],
+            );
+          },
+        ),
+      ],
     );
   }
 }
@@ -1943,7 +2103,7 @@ class _LeadDetailsColumn extends StatelessWidget {
       children: [
         for (final row in rows)
           Padding(
-            padding: const EdgeInsets.only(bottom: 8),
+            padding: const EdgeInsets.only(bottom: 10),
             child: _LeadDetailRow(label: row.$1, value: row.$2),
           ),
       ],

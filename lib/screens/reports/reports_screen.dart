@@ -92,7 +92,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
   }
 
   List<String> _distinct(String Function(LandLead l) pick) {
-    final values = AppStore.instance.leads
+    final values = AppStore.instance.visibleLeads
         .map(pick)
         .where((v) => v.trim().isNotEmpty)
         .toSet()
@@ -102,7 +102,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
   }
 
   List<LandLead> get _filteredLeads {
-    return AppStore.instance.leads.where((l) {
+    return AppStore.instance.visibleLeads.where((l) {
       if (_dateRange != null) {
         final d = l.addedOn.toLocal();
         final start = _dateRange!.start;
@@ -246,7 +246,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
   @override
   Widget build(BuildContext context) {
     final pad = FomraLayout.pagePadding(context);
-    final leadsEmpty = AppStore.instance.leads.isEmpty;
+    final leadsEmpty = AppStore.instance.visibleLeads.isEmpty;
     final filteredCount = _filteredLeads.length;
 
     return FomraAppShell(

@@ -195,28 +195,6 @@ class _ManagementExecutiveDashboardState
   ManagementBiActivityBundle _activity = ManagementBiActivityBundle.empty;
   List<String> _order = List.of(DashboardLayoutPrefs.defaultOrder);
   bool _loadingActivity = true;
-  bool _customizing = false;
-
-  static const _widgetTitles = {
-    'pipeline': 'Pipeline Dashboard',
-    'reminders': 'Automatic Reminders',
-    'escalations': 'Automatic Escalations',
-    'approvals': 'Approval Queue',
-    'recommendations': 'AI Recommendations',
-    'predictive': 'Predictive Analytics',
-    'duplicates': 'Duplicate Detection',
-    'funnel': 'Conversion Funnel',
-    'ageing': 'Site Ageing',
-    'bottlenecks': 'Bottlenecks',
-    'sla': 'SLA Dashboard',
-    'executives': 'Executive Performance',
-    'executivesTable': 'Executive Performance',
-    'leaderboard': 'Employee Performance',
-    'heatmap': 'Activity Heat Map',
-    'district': 'District Performance',
-    'dealTerms': 'Deal Terms',
-    'activities': 'Recent Activities',
-  };
 
   @override
   void initState() {
@@ -246,19 +224,6 @@ class _ManagementExecutiveDashboardState
     setState(() {
       _activity = bundle;
       _loadingActivity = false;
-    });
-  }
-
-  Future<void> _persistOrder() async {
-    await DashboardLayoutPrefs.saveOrder(_order);
-  }
-
-  Future<void> _resetOrder() async {
-    await DashboardLayoutPrefs.reset();
-    if (!mounted) return;
-    setState(() {
-      _order = List.of(DashboardLayoutPrefs.defaultOrder);
-      _customizing = false;
     });
   }
 
@@ -398,10 +363,6 @@ class _ManagementExecutiveDashboardState
       children: [
         _BiToolbar(
           loading: _loadingActivity,
-          customizing: _customizing,
-          onToggleCustomize: () => setState(() => _customizing = !_customizing),
-          onRefresh: _loadActivity,
-          onReset: _resetOrder,
         ),
         SizedBox(height: gap),
         // Keep classic KPI strip as a fixed executive snapshot.
@@ -411,23 +372,10 @@ class _ManagementExecutiveDashboardState
           isTablet: MediaQuery.sizeOf(context).width >= 640,
         ),
         SizedBox(height: gap),
-        if (_customizing)
-          _CustomizeOrderList(
-            order: _order,
-            titles: _widgetTitles,
-            onReorderItem: (oldIndex, newIndex) {
-              setState(() {
-                final item = _order.removeAt(oldIndex);
-                _order.insert(newIndex, item);
-              });
-              _persistOrder();
-            },
-          )
-        else
-          for (var i = 0; i < _order.length; i++) ...[
-            if (i > 0) SizedBox(height: gap),
-            _buildWidget(_order[i], snap, intel, isDesktop),
-          ],
+        for (var i = 0; i < _order.length; i++) ...[
+          if (i > 0) SizedBox(height: gap),
+          _buildWidget(_order[i], snap, intel, isDesktop),
+        ],
       ],
     );
   }
@@ -435,17 +383,9 @@ class _ManagementExecutiveDashboardState
 
 class _BiToolbar extends StatelessWidget {
   final bool loading;
-  final bool customizing;
-  final VoidCallback onToggleCustomize;
-  final VoidCallback onRefresh;
-  final VoidCallback onReset;
 
   const _BiToolbar({
     required this.loading,
-    required this.customizing,
-    required this.onToggleCustomize,
-    required this.onRefresh,
-    required this.onReset,
   });
 
   @override
@@ -468,69 +408,7 @@ class _BiToolbar extends StatelessWidget {
             child: CircularProgressIndicator(strokeWidth: 2),
           ),
         ],
-        const Spacer(),
-        if (customizing)
-          TextButton(
-            onPressed: onReset,
-            child: const Text('Reset layout'),
-          ),
-        IconButton(
-          tooltip: 'Refresh activity data',
-          onPressed: loading ? null : onRefresh,
-          icon: const Icon(Icons.refresh_rounded, size: 20),
-        ),
-        FilledButton.tonalIcon(
-          onPressed: onToggleCustomize,
-          icon: Icon(
-            customizing ? Icons.check_rounded : Icons.dashboard_customize_outlined,
-            size: 18,
-          ),
-          label: Text(customizing ? 'Done' : 'Customize'),
-        ),
       ],
-    );
-  }
-}
-
-class _CustomizeOrderList extends StatelessWidget {
-  final List<String> order;
-  final Map<String, String> titles;
-  final void Function(int oldIndex, int newIndex) onReorderItem;
-
-  const _CustomizeOrderList({
-    required this.order,
-    required this.titles,
-    required this.onReorderItem,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return AppCard(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      radius: _kCardRadius,
-      interactive: false,
-      child: ReorderableListView.builder(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        itemCount: order.length,
-        onReorder: onReorderItem,
-        buildDefaultDragHandles: false,
-        itemBuilder: (context, index) {
-          final id = order[index];
-          return ListTile(
-            key: ValueKey(id),
-            leading: ReorderableDragStartListener(
-              index: index,
-              child: Icon(Icons.drag_indicator, color: context.fomraTextSecondary),
-            ),
-            title: Text(
-              titles[id] ?? id,
-              style: const TextStyle(fontWeight: FontWeight.w700),
-            ),
-            subtitle: Text('Widget ${index + 1} of ${order.length}'),
-          );
-        },
-      ),
     );
   }
 }

@@ -30,10 +30,7 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
   String? _user;
   String? _module;
   String? _action;
-  String? _leadId;
-  String? _owner;
-  String? _broker;
-  String? _executive;
+  final GlobalKey _dateChipKey = GlobalKey();
 
   @override
   void dispose() {
@@ -80,11 +77,7 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
       _dateRange != null ||
       _user != null ||
       _module != null ||
-      _action != null ||
-      _leadId != null ||
-      _owner != null ||
-      _broker != null ||
-      _executive != null;
+      _action != null;
 
   void _clearFilters() {
     _searchController.clear();
@@ -94,10 +87,6 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
       _user = null;
       _module = null;
       _action = null;
-      _leadId = null;
-      _owner = null;
-      _broker = null;
-      _executive = null;
     });
   }
 
@@ -120,10 +109,6 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
       if (_user != null && e.userName != _user) return false;
       if (_module != null && e.module != _module) return false;
       if (_action != null && e.action != _action) return false;
-      if (_leadId != null && e.leadId != _leadId) return false;
-      if (_owner != null && e.ownerName != _owner) return false;
-      if (_broker != null && e.brokerName != _broker) return false;
-      if (_executive != null && e.executiveName != _executive) return false;
       if (q.isNotEmpty) {
         final haystack = [
           e.userName,
@@ -146,14 +131,37 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
   }
 
   Future<void> _pickDateRange() async {
-    final now = DateTime.now();
-    final picked = await showDateRangePicker(
+    final box = _dateChipKey.currentContext?.findRenderObject() as RenderBox?;
+    final overlay =
+        Overlay.of(context).context.findRenderObject() as RenderBox?;
+    RelativeRect position;
+    if (box != null && overlay != null) {
+      final topLeft = box.localToGlobal(Offset(0, box.size.height + 4), ancestor: overlay);
+      final bottomRight = box.localToGlobal(
+          box.size.bottomRight(Offset.zero) + Offset(0, box.size.height + 4),
+          ancestor: overlay);
+      position = RelativeRect.fromRect(
+        Rect.fromPoints(topLeft, bottomRight),
+        Offset.zero & overlay.size,
+      );
+    } else {
+      position = const RelativeRect.fromLTRB(24, 100, 24, 0);
+    }
+
+    final result = await showMenu<_DateRangePickResult>(
       context: context,
-      firstDate: DateTime(now.year - 3),
-      lastDate: DateTime(now.year + 1),
-      initialDateRange: _dateRange,
+      position: position,
+      constraints: const BoxConstraints(maxWidth: 320),
+      items: [
+        PopupMenuItem<_DateRangePickResult>(
+          enabled: false,
+          padding: EdgeInsets.zero,
+          child: _CompactDateRangePopup(initialRange: _dateRange),
+        ),
+      ],
     );
-    if (picked != null) setState(() => _dateRange = picked);
+    if (result == null) return;
+    setState(() => _dateRange = result.cleared ? null : result.range);
   }
 
   @override
@@ -218,30 +226,6 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
                 options: _distinct((e) => e.action),
                 onChanged: (v) => setState(() => _action = v),
               ),
-              _filterDropdown(
-                label: 'Lead ID',
-                value: _leadId,
-                options: _distinct((e) => e.leadId),
-                onChanged: (v) => setState(() => _leadId = v),
-              ),
-              _filterDropdown(
-                label: 'Owner',
-                value: _owner,
-                options: _distinct((e) => e.ownerName),
-                onChanged: (v) => setState(() => _owner = v),
-              ),
-              _filterDropdown(
-                label: 'Broker',
-                value: _broker,
-                options: _distinct((e) => e.brokerName),
-                onChanged: (v) => setState(() => _broker = v),
-              ),
-              _filterDropdown(
-                label: 'Executive',
-                value: _executive,
-                options: _distinct((e) => e.executiveName),
-                onChanged: (v) => setState(() => _executive = v),
-              ),
               if (_hasActiveFilters)
                 TextButton.icon(
                   onPressed: _clearFilters,
@@ -295,6 +279,7 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
         ? 'Date Range'
         : '${DateFormat('d MMM').format(_dateRange!.start)} – ${DateFormat('d MMM yyyy').format(_dateRange!.end)}';
     return InputChip(
+      key: _dateChipKey,
       avatar: const Icon(Icons.date_range_outlined, size: 16),
       label: Text(label),
       onPressed: _pickDateRange,
@@ -451,6 +436,160 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _DateRangePickResult {
+  final DateTimeRange? range;
+  final bool cleared;
+  const _DateRangePickResult({this.range, this.cleared = false});
+}
+
+/// Small popup calendar (opens beside the date field) supporting both a
+/// single-date pick and a start/end date range pick, without the full-screen
+/// date range dialog.
+class _CompactDateRangePopup extends StatefulWidget {
+  final DateTimeRange? initialRange;
+
+  const _CompactDateRangePopup({this.initialRange});
+
+  @override
+  State<_CompactDateRangePopup> createState() =>
+      _CompactDateRangePopupState();
+}
+
+class _CompactDateRangePopupState extends State<_CompactDateRangePopup> {
+  late DateTime? _start = widget.initialRange?.start;
+  late DateTime? _end = widget.initialRange?.end;
+  bool _pickingEnd = false;
+
+  String _fmt(DateTime? d) => d == null ? 'Any' : DateFormat('d MMM yyyy').format(d);
+
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final target = _pickingEnd ? (_end ?? _start ?? now) : (_start ?? now);
+    return Material(
+      color: Theme.of(context).colorScheme.surface,
+      borderRadius: BorderRadius.circular(14),
+      child: SizedBox(
+        width: 300,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _rangeTargetChip(
+                      context: context,
+                      label: 'Start: ${_fmt(_start)}',
+                      selected: !_pickingEnd,
+                      onTap: () => setState(() => _pickingEnd = false),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _rangeTargetChip(
+                      context: context,
+                      label: 'End: ${_fmt(_end)}',
+                      selected: _pickingEnd,
+                      onTap: () => setState(() => _pickingEnd = true),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(
+              height: 320,
+              child: CalendarDatePicker(
+                initialDate: target,
+                firstDate: DateTime(now.year - 3),
+                lastDate: DateTime(now.year + 1),
+                onDateChanged: (picked) {
+                  setState(() {
+                    if (_pickingEnd) {
+                      _end = picked;
+                      if (_start != null && _end!.isBefore(_start!)) {
+                        _start = _end;
+                      }
+                    } else {
+                      _start = picked;
+                      if (_end != null && _end!.isBefore(_start!)) {
+                        _end = _start;
+                      }
+                    }
+                  });
+                },
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+              child: Row(
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(
+                        context, const _DateRangePickResult(cleared: true)),
+                    child: const Text('Clear'),
+                  ),
+                  const Spacer(),
+                  FilledButton(
+                    onPressed: _start == null
+                        ? null
+                        : () => Navigator.pop(
+                              context,
+                              _DateRangePickResult(
+                                range: DateTimeRange(
+                                  start: _start!,
+                                  end: _end ?? _start!,
+                                ),
+                              ),
+                            ),
+                    child: const Text('Apply'),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _rangeTargetChip({
+    required BuildContext context,
+    required String label,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        decoration: BoxDecoration(
+          color: selected
+              ? AppColors.primary.withValues(alpha: 0.12)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: selected
+                ? AppColors.primary.withValues(alpha: 0.4)
+                : context.fomraBorder,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            color: selected ? AppColors.primary : context.fomraTextSecondary,
+          ),
+          overflow: TextOverflow.ellipsis,
+        ),
+      ),
     );
   }
 }

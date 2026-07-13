@@ -386,7 +386,16 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
   late TabController _tabController;
   final List<TaskNotification> _notifications = [];
 
-  List<Task> get _tasks => sharedTasks;
+  /// Management sees every task; an Executive only sees tasks assigned to them.
+  List<Task> get _tasks {
+    if (AuthService.instance.isManagement) return sharedTasks;
+    final me =
+        (AuthService.instance.currentUser?.fullName ?? '').trim().toLowerCase();
+    if (me.isEmpty) return sharedTasks;
+    return sharedTasks
+        .where((t) => t.assignedTo.any((a) => a.trim().toLowerCase() == me))
+        .toList();
+  }
 
   @override
   void initState() {
@@ -915,7 +924,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
       builder: (_) => _AddTaskSheet(
         onSave: (task) {
           setState(() {
-            _tasks.insert(0, task);
+            sharedTasks.insert(0, task);
             _pushNotification(task, '✅ Task "${task.title}" created.');
           });
           notifyTaskCreated(task);

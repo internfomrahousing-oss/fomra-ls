@@ -64,7 +64,7 @@ class _LegalVerificationScreenState extends State<LegalVerificationScreen> {
 
   void _onStoreUpdate() => setState(() {});
 
-  List<LandLead> get _leads => AppStore.instance.leads;
+  List<LandLead> get _leads => AppStore.instance.visibleLeads;
 
   Future<void> _loadAllLegalData() async {
     try {

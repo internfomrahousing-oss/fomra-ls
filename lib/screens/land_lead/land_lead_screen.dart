@@ -265,16 +265,7 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
   }
 
   /// Management sees every lead; an employee sees only the leads they added.
-  List<LandLead> get _leads {
-    final all = AppStore.instance.leads;
-    if (AuthService.instance.isManagement) return all;
-    final me =
-        (AuthService.instance.currentUser?.fullName ?? '').trim().toLowerCase();
-    if (me.isEmpty) return all;
-    return all
-        .where((l) => l.createdByName.trim().toLowerCase() == me)
-        .toList();
-  }
+  List<LandLead> get _leads => AppStore.instance.visibleLeads;
 
   List<LandLead> get _filtered => _leads.where((l) {
         final matchStatus =
@@ -410,8 +401,8 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
   Widget build(BuildContext context) {
     final body = _buildScrollableBody();
 
-    // Employees with create access get the "+" Add Lead FAB.
-    final fab = (!_isManagement && RoleAccess.canCreate)
+    // Users with create access get the "+" Add Lead FAB (Management included).
+    final fab = RoleAccess.canCreate
         ? LandWorkspaceSpeedDial(
             onAddLead: _openAddLead,
           )
@@ -661,10 +652,10 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
           hasScrollBody: false,
           child: _EmptyState(
             hasLeads: _leads.isNotEmpty,
-            canAddLead: !_isManagement,
+            canAddLead: RoleAccess.canCreate,
             onAddLead: _leads.isNotEmpty
                 ? _clearAllFilters
-                : (_isManagement ? null : _openAddLead),
+                : (RoleAccess.canCreate ? _openAddLead : null),
           ),
         ),
       );
@@ -710,9 +701,9 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
                           : null,
                       onScheduleMeeting: () => _openMeetingForLead(lead),
                       onViewMap: () => _openLeadsMapFor(lead),
-                      onEdit: (_isManagement || !RoleAccess.canEdit)
-                          ? null
-                          : () => _editLead(lead),
+                      onEdit: RoleAccess.canEdit
+                          ? () => _editLead(lead)
+                          : null,
                       onDelete: RoleAccess.canDelete
                           ? () => _confirmAndDelete(lead)
                           : null,
@@ -792,8 +783,8 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
   }
 
   Future<void> _openAddLead() async {
-    if (_isManagement || !RoleAccess.canCreate) {
-      if (mounted && !RoleAccess.canCreate) {
+    if (!RoleAccess.canCreate) {
+      if (mounted) {
         AppFeedback.error(context, RoleAccess.deniedMessage('create leads'));
       }
       return;
@@ -927,8 +918,8 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
   }
 
   Future<void> _editLead(LandLead lead) async {
-    if (_isManagement || !RoleAccess.canEdit) {
-      if (mounted && !RoleAccess.canEdit) {
+    if (!RoleAccess.canEdit) {
+      if (mounted) {
         AppFeedback.error(context, RoleAccess.deniedMessage('edit leads'));
       }
       return;

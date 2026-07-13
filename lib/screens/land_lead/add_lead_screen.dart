@@ -19,7 +19,6 @@ import '../../widgets/tngis_parcel_summary.dart';
 import '../../widgets/ui/app_feedback.dart';
 import '../../services/gps_verification_service.dart';
 import '../../services/land_lead_service.dart';
-import '../../services/auth_service.dart';
 import '../../services/offline_sync_service.dart';
 import '../../services/api_client.dart';
 import '../../utils/image_compressor.dart';
@@ -121,19 +120,6 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
   @override
   void initState() {
     super.initState();
-    if (AuthService.instance.isManagement) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        final editing = widget.existingLead != null;
-        AppFeedback.info(
-          context,
-          editing
-              ? 'Management can view leads only — editing is for employees.'
-              : 'Management can view leads only — adding is for employees.',
-        );
-        Navigator.pop(context);
-      });
-    }
     _scrollController.addListener(_onScroll);
     _gpsCtrl.addListener(_onGpsTextChanged);
     final existing = widget.existingLead;

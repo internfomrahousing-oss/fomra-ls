@@ -724,7 +724,7 @@ class PortalApprovalsSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AppCard(
-      padding: const EdgeInsets.all(AppSpacing.lg),
+      padding: const EdgeInsets.all(AppSpacing.md),
       radius: AppColors.radiusLg,
       interactive: false,
       child: Column(
@@ -734,15 +734,15 @@ class PortalApprovalsSection extends StatelessWidget {
             title: 'Approvals',
             subtitle: 'Pending management site visit requests',
             icon: Icons.verified_outlined,
-            padding: EdgeInsets.only(bottom: AppSpacing.md),
+            padding: EdgeInsets.only(bottom: AppSpacing.sm),
           ),
           if (loading)
             const Padding(
-              padding: EdgeInsets.symmetric(vertical: 24),
+              padding: EdgeInsets.symmetric(vertical: 12),
               child: Center(
                 child: SizedBox(
-                  width: 24,
-                  height: 24,
+                  width: 20,
+                  height: 20,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 ),
               ),
@@ -752,19 +752,26 @@ class PortalApprovalsSection extends StatelessWidget {
               hint: 'No pending approvals — new requests will appear here.',
             )
           else
-            Column(
-              children: [
-                for (var i = 0; i < visits.length; i++) ...[
-                  if (i > 0) const SizedBox(height: 12),
-                  _ApprovalVisitRow(
-                    visit: visits[i],
-                    lead: _leadFor(visits[i].leadId),
-                    onReview: () => onReview(visits[i]),
-                    onApprove: () => onApprove(visits[i]),
-                    onReject: () => onReject(visits[i]),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 220),
+              child: Scrollbar(
+                child: SingleChildScrollView(
+                  child: Column(
+                    children: [
+                      for (var i = 0; i < visits.length; i++) ...[
+                        if (i > 0) const SizedBox(height: 6),
+                        _ApprovalVisitRow(
+                          visit: visits[i],
+                          lead: _leadFor(visits[i].leadId),
+                          onReview: () => onReview(visits[i]),
+                          onApprove: () => onApprove(visits[i]),
+                          onReject: () => onReject(visits[i]),
+                        ),
+                      ],
+                    ],
                   ),
-                ],
-              ],
+                ),
+              ),
             ),
         ],
       ),
@@ -831,7 +838,7 @@ class _ApprovalVisitRowState extends State<_ApprovalVisitRow> {
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: context.fomraBorder),
           ),
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
           child: LayoutBuilder(
             builder: (context, constraints) {
               final stacked = constraints.maxWidth < 520;
@@ -839,20 +846,20 @@ class _ApprovalVisitRowState extends State<_ApprovalVisitRow> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Container(
-                    width: 44,
-                    height: 44,
+                    width: 32,
+                    height: 32,
                     decoration: BoxDecoration(
                       color: AppColors.warning.withValues(alpha: 0.14),
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(10),
                     ),
                     alignment: Alignment.center,
                     child: const Icon(
                       Icons.apartment_outlined,
                       color: AppColors.warning,
-                      size: 22,
+                      size: 16,
                     ),
                   ),
-                  const SizedBox(width: 14),
+                  const SizedBox(width: 10),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -860,17 +867,17 @@ class _ApprovalVisitRowState extends State<_ApprovalVisitRow> {
                         Text(
                           'Management site visit',
                           style: TextStyle(
-                            fontSize: 15,
+                            fontSize: 13,
                             fontWeight: FontWeight.w700,
                             color: context.fomraTextPrimary,
                           ),
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 2),
                         Text(
                           subtitleParts.join(' · '),
                           style: TextStyle(
-                            fontSize: 12,
-                            height: 1.35,
+                            fontSize: 11,
+                            height: 1.2,
                             color: context.fomraTextSecondary,
                           ),
                         ),
@@ -882,10 +889,10 @@ class _ApprovalVisitRowState extends State<_ApprovalVisitRow> {
 
               final actions = _busy
                   ? const Padding(
-                      padding: EdgeInsets.all(8),
+                      padding: EdgeInsets.all(6),
                       child: SizedBox(
-                        width: 18,
-                        height: 18,
+                        width: 16,
+                        height: 16,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       ),
                     )
@@ -900,22 +907,22 @@ class _ApprovalVisitRowState extends State<_ApprovalVisitRow> {
                               color: AppColors.error.withValues(alpha: 0.45),
                             ),
                             padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 10,
+                              horizontal: 12,
+                              vertical: 6,
                             ),
                             minimumSize: Size.zero,
                             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                           ),
                           child: const Text('Reject'),
                         ),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: 6),
                         FilledButton(
                           onPressed: () => _act(widget.onApprove),
                           style: FilledButton.styleFrom(
                             backgroundColor: AppColors.primary,
                             padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 10,
+                              horizontal: 12,
+                              vertical: 6,
                             ),
                             minimumSize: Size.zero,
                             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -930,7 +937,7 @@ class _ApprovalVisitRowState extends State<_ApprovalVisitRow> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     info,
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 8),
                     Align(alignment: Alignment.centerRight, child: actions),
                   ],
                 );

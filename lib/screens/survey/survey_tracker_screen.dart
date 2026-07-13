@@ -136,14 +136,14 @@ class _SurveyTrackerScreenState extends State<SurveyTrackerScreen> {
   @override
   Widget build(BuildContext context) {
     final df = DateFormat('dd MMM yyyy · hh:mm a');
-    final leads = AppStore.instance.leads.where(_matches).toList();
+    final leads = AppStore.instance.visibleLeads.where(_matches).toList();
     final scheduled = _events.where((e) => !e.completed).length;
-    final completed = AppStore.instance.leads
+    final completed = AppStore.instance.visibleLeads
         .where((l) =>
             (_eventFor(l.leadId)?.completed ?? false) ||
             _hasSurveyReport(l.leadId))
         .length;
-    final pending = AppStore.instance.leads
+    final pending = AppStore.instance.visibleLeads
         .where((l) =>
             l.surveyNumber.trim().isNotEmpty &&
             !(_eventFor(l.leadId)?.completed ?? false) &&

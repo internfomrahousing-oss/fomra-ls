@@ -701,7 +701,7 @@ class _LandWorkspaceFilterPanelState extends State<_LandWorkspaceFilterPanel> {
 
   List<String> _distinctField(String Function(LandLead) pick) {
     final set = <String>{};
-    for (final l in AppStore.instance.leads) {
+    for (final l in AppStore.instance.visibleLeads) {
       final v = pick(l).trim();
       if (v.isNotEmpty) set.add(v);
     }

@@ -79,20 +79,11 @@ abstract final class NotificationCenterService {
       if (ok) n++;
     }
 
-    for (final item in intel.reminders.take(10)) {
-      final ok = await _emitOnce(
-        key: 'reminder_${item.kind.name}_${item.lead.leadId}',
-        audience: audience,
-        title: 'Reminder · ${item.kind.label}',
-        message:
-            'Lead #${item.lead.leadId} · ${item.lead.ownerName} — ${item.detail}',
-        type: 'reminder',
-        leadId: item.lead.leadId,
-      );
-      if (ok) n++;
-    }
-
-    n += await _syncCalendarReminders(audience);
+    // NOTE: Executive-facing reminders (no activity, owner not contacted,
+    // no meeting after assignment, follow-ups) are intentionally NOT synced
+    // here — those belong only to the assigned Executive's notifications.
+    // Management only receives approval requests, escalations (SLA breaches)
+    // and management-specific alerts (pending leads, overdue tasks).
 
     final pending = leads
         .where((l) =>

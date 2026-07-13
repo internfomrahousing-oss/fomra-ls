@@ -85,6 +85,13 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen> {
     if (!AuthService.instance.isManagement) {
       final me =
           (AuthService.instance.currentUser?.fullName ?? '').trim().toLowerCase();
+      // Notifications are stored in a shared 'employee' audience bucket (no
+      // per-user column in the schema), so scope client-side: a lead-linked
+      // notification only belongs to this Executive if the lead is one of
+      // theirs. Notifications without a lead reference (general alerts)
+      // still show, since ownership can't be determined for those.
+      final myLeadIds =
+          AppStore.instance.visibleLeads.map((l) => l.leadId).toSet();
       return rows.where((n) {
         if (n.type == NotificationType.lead ||
             n.type == NotificationType.assignedLead) {
@@ -94,6 +101,10 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen> {
               !msg.contains(me)) {
             return false;
           }
+        }
+        if ((n.leadId ?? '').trim().isNotEmpty &&
+            !myLeadIds.contains(n.leadId)) {
+          return false;
         }
         return true;
       }).toList();

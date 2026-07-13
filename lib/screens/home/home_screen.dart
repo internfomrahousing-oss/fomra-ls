@@ -117,13 +117,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   /// Leads added by the currently signed-in user (matched by creator name).
-  List<LandLead> get _myLeads {
-    final me = (AuthService.instance.currentUser?.fullName ?? '').trim();
-    if (me.isEmpty) return AppStore.instance.leads;
-    return AppStore.instance.leads
-        .where((l) => l.createdByName.trim() == me)
-        .toList();
-  }
+  List<LandLead> get _myLeads => AppStore.instance.visibleLeads;
 
   /// Summary tiles on home — all leads for management, own leads for employees.
   List<LandLead> get _homeSummaryLeads =>
@@ -196,14 +190,24 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     const marker = 'assigned to ';
     final msg = n.message.toLowerCase();
     final idx = msg.lastIndexOf(marker);
-    if (idx == -1) return true; // can't tell who it's for → show it
     final me = (AuthService.instance.currentUser?.fullName ?? '')
         .trim()
         .toLowerCase();
-    if (me.isEmpty) return true;
-    final assignees =
-        msg.substring(idx + marker.length).split(',').map((s) => s.trim());
-    return assignees.contains(me);
+    if (idx != -1 && me.isNotEmpty) {
+      final assignees =
+          msg.substring(idx + marker.length).split(',').map((s) => s.trim());
+      if (!assignees.contains(me)) return false;
+    }
+    // Notifications are stored in a shared 'employee' audience bucket (no
+    // per-user column in the schema), so any notification tied to a specific
+    // lead only belongs to this Executive if that lead is one of theirs.
+    final leadId = (n.leadId ?? '').trim();
+    if (leadId.isNotEmpty) {
+      final myLeadIds =
+          AppStore.instance.visibleLeads.map((l) => l.leadId).toSet();
+      if (!myLeadIds.contains(leadId)) return false;
+    }
+    return true;
   }
 
   /// On the first refresh we only record the existing ids (so the whole history

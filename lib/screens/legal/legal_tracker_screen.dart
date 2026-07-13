@@ -105,12 +105,12 @@ class _LegalTrackerScreenState extends State<LegalTrackerScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final leads = AppStore.instance.leads.where(_matches).toList();
+    final leads = AppStore.instance.visibleLeads.where(_matches).toList();
     final ecDone =
-        AppStore.instance.leads.where((l) => _hasEc(l.leadId)).length;
+        AppStore.instance.visibleLeads.where((l) => _hasEc(l.leadId)).length;
     final verified =
-        AppStore.instance.leads.where((l) => _hasVerification(l.leadId)).length;
-    final approved = AppStore.instance.leads
+        AppStore.instance.visibleLeads.where((l) => _hasVerification(l.leadId)).length;
+    final approved = AppStore.instance.visibleLeads
         .where((l) {
           final r = _result(l.leadId);
           return r.contains('APPROVE') || r == 'CLEAR';

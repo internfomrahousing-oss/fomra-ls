@@ -45,7 +45,7 @@ class _BrokerManagementScreenState extends State<BrokerManagementScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final rows = BrokerPerformanceAnalytics.compute(AppStore.instance.leads)
+    final rows = BrokerPerformanceAnalytics.compute(AppStore.instance.visibleLeads)
         .where((r) =>
             _query.isEmpty ||
             r.name.toLowerCase().contains(_query.toLowerCase()) ||
@@ -122,7 +122,7 @@ class _BrokerManagementScreenState extends State<BrokerManagementScreen> {
           else
             ...rows.map((r) {
               final expanded = _expandedBroker == r.name.toLowerCase();
-              final brokerLeads = AppStore.instance.leads
+              final brokerLeads = AppStore.instance.visibleLeads
                   .where((l) =>
                       l.brokerName.trim().toLowerCase() == r.name.toLowerCase())
                   .toList();

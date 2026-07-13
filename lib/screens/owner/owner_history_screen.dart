@@ -58,7 +58,7 @@ class _OwnerHistoryScreenState extends State<OwnerHistoryScreen> {
 
   List<_OwnerHistoryGroup> get _groups {
     final map = <String, List<LandLead>>{};
-    for (final lead in AppStore.instance.leads) {
+    for (final lead in AppStore.instance.visibleLeads) {
       final name = lead.ownerName.trim();
       if (name.isEmpty) continue;
       final contact = lead.contactDetails.replaceAll(RegExp(r'[^\d+]'), '');
