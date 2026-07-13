@@ -2,6 +2,11 @@
 backend/.env
 backend/node_modules/
 
+# Environment
+.env
+.env.local
+.env.*.local
+
 # Miscellaneous
 *.class
 *.log
