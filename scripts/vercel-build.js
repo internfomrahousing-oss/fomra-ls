@@ -105,9 +105,8 @@ installFlutter();
 // Make the freshly-installed Flutter SDK available to every command below.
 process.env.PATH = `${flutterBin}${path.delimiter}${process.env.PATH}`;
 process.env.CI = 'true';
+process.env.FLUTTER_SUPPRESS_ANALYTICS = 'true';
 
-run('flutter config --no-analytics --enable-web');
-run('flutter --version');
 run('flutter pub get');
 run('flutter build web --release');
 
