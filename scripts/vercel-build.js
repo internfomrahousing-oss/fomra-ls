@@ -19,11 +19,52 @@ const repoRoot = path.join(__dirname, '..');
 const flutterDir = path.join(repoRoot, '.flutter-sdk');
 const flutterBin = path.join(flutterDir, 'bin');
 const flutterArchiveVersion = '3.35.5';
-const flutterArchiveUrl = `https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_${flutterArchiveVersion}-stable.tar.xz`;
+const flutterPlatform = process.platform;
+const flutterArch = process.arch;
+
+function flutterArchiveInfo() {
+  if (flutterPlatform === 'linux' && flutterArch === 'x64') {
+    return {
+      url: `https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_${flutterArchiveVersion}-stable.tar.xz`,
+      extractFolder: 'flutter',
+    };
+  }
+
+  if (flutterPlatform === 'linux' && flutterArch === 'arm64') {
+    return {
+      url: `https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_arm64_${flutterArchiveVersion}-stable.tar.xz`,
+      extractFolder: 'flutter',
+    };
+  }
+
+  if (flutterPlatform === 'darwin' && flutterArch === 'arm64') {
+    return {
+      url: `https://storage.googleapis.com/flutter_infra_release/releases/stable/macos/flutter_macos_arm64_${flutterArchiveVersion}-stable.zip`,
+      extractFolder: 'flutter',
+    };
+  }
+
+  if (flutterPlatform === 'darwin' && flutterArch === 'x64') {
+    return {
+      url: `https://storage.googleapis.com/flutter_infra_release/releases/stable/macos/flutter_macos_${flutterArchiveVersion}-stable.zip`,
+      extractFolder: 'flutter',
+    };
+  }
+
+  throw new Error(`Unsupported Flutter build host: ${flutterPlatform}/${flutterArch}`);
+}
 
 function run(cmd, opts = {}) {
   console.log(`$ ${cmd}`);
   execSync(cmd, { stdio: 'inherit', cwd: repoRoot, timeout: 8 * 60 * 1000, ...opts });
+}
+
+function extractArchive(archivePath, extractDir, archiveUrl) {
+  if (archiveUrl.endsWith('.zip')) {
+    run(`unzip -q "${archivePath}" -d "${extractDir}"`);
+  } else {
+    run(`tar -xf "${archivePath}" -C "${extractDir}"`);
+  }
 }
 
 function installFlutter() {
@@ -32,6 +73,7 @@ function installFlutter() {
     return;
   }
 
+  const archiveInfo = flutterArchiveInfo();
   console.log(`Installing Flutter SDK ${flutterArchiveVersion} from the official release archive...`);
   fs.rmSync(flutterDir, { recursive: true, force: true });
   fs.mkdirSync(flutterDir, { recursive: true });
@@ -41,9 +83,15 @@ function installFlutter() {
   fs.rmSync(archivePath, { force: true });
   fs.rmSync(extractDir, { recursive: true, force: true });
   fs.mkdirSync(extractDir, { recursive: true });
-  run(`curl -L --retry 3 --fail "${flutterArchiveUrl}" -o "${archivePath}"`);
-  run(`tar -xf "${archivePath}" -C "${extractDir}"`);
-  fs.renameSync(path.join(extractDir, 'flutter'), flutterDir);
+  run(`curl -L --retry 3 --fail "${archiveInfo.url}" -o "${archivePath}"`);
+  extractArchive(archivePath, extractDir, archiveInfo.url);
+
+  const extractedFlutterDir = path.join(extractDir, archiveInfo.extractFolder);
+  if (!fs.existsSync(extractedFlutterDir)) {
+    throw new Error(`Flutter release archive did not contain expected folder: ${extractedFlutterDir}`);
+  }
+
+  fs.renameSync(extractedFlutterDir, flutterDir);
   fs.rmSync(archivePath, { force: true });
   fs.rmSync(extractDir, { recursive: true, force: true });
 
