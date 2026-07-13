@@ -23,6 +23,11 @@ class _ReportsScreenState extends State<ReportsScreen> {
   ReportFormat _format = ReportFormat.pdf;
   ReportKind? _busyKind;
 
+  List<ReportKind> get _visibleReportKinds => [
+        for (final kind in ReportKind.values)
+          if (kind != ReportKind.survey) kind,
+      ];
+
   @override
   void initState() {
     super.initState();
@@ -150,7 +155,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
           ),
           const SizedBox(height: 4),
           Text(
-            'One-click export for daily, weekly, monthly, employee, village, broker, owner, conversion, ageing, approvals, survey, and site-visit reports.',
+            'One-click export for daily, weekly, monthly, employee, village, broker, owner, conversion, ageing, approvals, and site-visit reports.',
             style: TextStyle(fontSize: 13, color: context.fomraTextSecondary),
           ),
           const SizedBox(height: 16),
@@ -231,7 +236,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                 return GridView.builder(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
-                  itemCount: ReportKind.values.length,
+                  itemCount: _visibleReportKinds.length,
                   gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: cross,
                     crossAxisSpacing: 12,
@@ -239,7 +244,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                     mainAxisExtent: 150,
                   ),
                   itemBuilder: (context, i) {
-                    final kind = ReportKind.values[i];
+                    final kind = _visibleReportKinds[i];
                     return _ReportExportCard(
                       kind: kind,
                       icon: _icon(kind),
