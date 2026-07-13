@@ -513,7 +513,7 @@ class _CustomizeOrderList extends StatelessWidget {
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
         itemCount: order.length,
-        onReorderItem: onReorderItem,
+        onReorder: onReorderItem,
         buildDefaultDragHandles: false,
         itemBuilder: (context, index) {
           final id = order[index];

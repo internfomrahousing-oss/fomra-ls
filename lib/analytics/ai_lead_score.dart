@@ -244,7 +244,8 @@ abstract final class AiLeadScore {
     List<LandLeadLegalDocument> legalDocs,
   ) {
     final present = _presentDocTypes(legalDocs);
-    final raw = (present.length / _requiredDocTypes.length * 100).clamp(0, 100);
+    final raw =
+        (present.length / _requiredDocTypes.length * 100).clamp(0, 100).toDouble();
     final missing =
         _requiredDocTypes.where((t) => !present.contains(t)).toList();
     return AiScoreCategory(
@@ -372,7 +373,7 @@ abstract final class AiLeadScore {
 
     if (notes.isEmpty) notes.add('No risk indicators detected');
 
-    final raw = (100 - deductions).clamp(0, 100);
+    final raw = (100 - deductions).clamp(0, 100).toDouble();
     return AiScoreCategory(
       label: 'Risk Factors',
       weightPercent: 10,

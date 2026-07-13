@@ -292,14 +292,14 @@ class ReportService {
         children: [
           pw.Text(
             'Fomra Housing & Infrastructure Pvt. Ltd.',
-            style: const pw.TextStyle(
+            style: pw.TextStyle(
                 fontSize: 18, fontWeight: pw.FontWeight.bold, color: _brand),
           ),
           pw.SizedBox(height: 2),
           pw.Text(reportLabel,
-              style: const pw.TextStyle(fontSize: 12, color: _ink)),
+              style: pw.TextStyle(fontSize: 12, color: _ink)),
           pw.Text('Generated ${_stamp.format(now)}',
-              style: const pw.TextStyle(fontSize: 9, color: _muted)),
+              style: pw.TextStyle(fontSize: 9, color: _muted)),
           pw.SizedBox(height: 8),
           pw.Divider(color: _border, thickness: 1),
         ],
@@ -320,13 +320,13 @@ class ReportService {
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
                 pw.Text(value,
-                    style: const pw.TextStyle(
+                    style: pw.TextStyle(
                         fontSize: 16,
                         fontWeight: pw.FontWeight.bold,
                         color: _brand)),
                 pw.SizedBox(height: 2),
                 pw.Text(label,
-                    style: const pw.TextStyle(fontSize: 9, color: _muted)),
+                    style: pw.TextStyle(fontSize: 9, color: _muted)),
               ],
             ),
           ),
@@ -348,13 +348,13 @@ class ReportService {
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
               pw.Text('$rejected',
-                  style: const pw.TextStyle(
+                  style: pw.TextStyle(
                       fontSize: 16,
                       fontWeight: pw.FontWeight.bold,
                       color: _brand)),
               pw.SizedBox(height: 2),
               pw.Text('Rejected',
-                  style: const pw.TextStyle(fontSize: 9, color: _muted)),
+                  style: pw.TextStyle(fontSize: 9, color: _muted)),
             ],
           ),
         ),
@@ -368,13 +368,13 @@ class ReportService {
           crossAxisAlignment: pw.CrossAxisAlignment.center,
           children: [
             pw.Text(title,
-                style: const pw.TextStyle(
+                style: pw.TextStyle(
                     fontSize: 13,
                     fontWeight: pw.FontWeight.bold,
                     color: _ink)),
             pw.SizedBox(width: 6),
             pw.Text('($count)',
-                style: const pw.TextStyle(fontSize: 11, color: _muted)),
+                style: pw.TextStyle(fontSize: 11, color: _muted)),
           ],
         ),
       );
@@ -624,7 +624,7 @@ class ReportService {
                     ),
                     child: pw.Text(
                       '${s.label}: ${s.value}',
-                      style: const pw.TextStyle(
+                      style: pw.TextStyle(
                         fontSize: 10,
                         fontWeight: pw.FontWeight.bold,
                         color: _ink,
@@ -648,7 +648,7 @@ class ReportService {
     if (section.rows.isEmpty) {
       return pw.Text(
         section.emptyMessage,
-        style: const pw.TextStyle(
+        style: pw.TextStyle(
           fontSize: 10,
           color: _muted,
           fontStyle: pw.FontStyle.italic,
@@ -659,13 +659,13 @@ class ReportService {
       headers: section.headers,
       data: section.rows,
       border: pw.TableBorder.all(color: _border, width: 0.5),
-      headerStyle: const pw.TextStyle(
+      headerStyle: pw.TextStyle(
         fontSize: 9,
         fontWeight: pw.FontWeight.bold,
         color: PdfColors.white,
       ),
       headerDecoration: const pw.BoxDecoration(color: _brand),
-      cellStyle: const pw.TextStyle(fontSize: 8.5, color: _ink),
+      cellStyle: pw.TextStyle(fontSize: 8.5, color: _ink),
       oddRowDecoration: const pw.BoxDecoration(color: _zebra),
       cellAlignment: pw.Alignment.centerLeft,
       cellPadding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 4),
@@ -685,7 +685,7 @@ class ReportService {
       {String emptyMsg = 'No leads.'}) {
     if (leads.isEmpty) {
       return pw.Text(emptyMsg,
-          style: const pw.TextStyle(
+          style: pw.TextStyle(
               fontSize: 10,
               color: _muted,
               fontStyle: pw.FontStyle.italic));
@@ -694,10 +694,10 @@ class ReportService {
       headers: _leadHeaders(),
       data: _leadRows(leads),
       border: pw.TableBorder.all(color: _border, width: 0.5),
-      headerStyle: const pw.TextStyle(
+      headerStyle: pw.TextStyle(
           fontSize: 9, fontWeight: pw.FontWeight.bold, color: PdfColors.white),
       headerDecoration: const pw.BoxDecoration(color: _brand),
-      cellStyle: const pw.TextStyle(fontSize: 8.5, color: _ink),
+      cellStyle: pw.TextStyle(fontSize: 8.5, color: _ink),
       oddRowDecoration: const pw.BoxDecoration(color: _zebra),
       cellAlignment: pw.Alignment.centerLeft,
       cellPadding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 4),
@@ -708,7 +708,7 @@ class ReportService {
   static pw.Widget _performanceTable(List<_Perf> perf) {
     if (perf.isEmpty) {
       return pw.Text('No employee activity yet.',
-          style: const pw.TextStyle(
+          style: pw.TextStyle(
               fontSize: 10,
               color: _muted,
               fontStyle: pw.FontStyle.italic));
@@ -731,10 +731,10 @@ class ReportService {
               ])
           .toList(),
       border: pw.TableBorder.all(color: _border, width: 0.5),
-      headerStyle: const pw.TextStyle(
+      headerStyle: pw.TextStyle(
           fontSize: 9, fontWeight: pw.FontWeight.bold, color: PdfColors.white),
       headerDecoration: const pw.BoxDecoration(color: _brand),
-      cellStyle: const pw.TextStyle(fontSize: 9, color: _ink),
+      cellStyle: pw.TextStyle(fontSize: 9, color: _ink),
       oddRowDecoration: const pw.BoxDecoration(color: _zebra),
       cellPadding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
       headerHeight: 18,
@@ -753,7 +753,7 @@ class ReportService {
         margin: const pw.EdgeInsets.only(top: 8),
         child: pw.Text(
           'FomraLS  ·  Page ${ctx.pageNumber} of ${ctx.pagesCount}',
-          style: const pw.TextStyle(fontSize: 8, color: _muted),
+          style: pw.TextStyle(fontSize: 8, color: _muted),
         ),
       );
 
@@ -849,7 +849,7 @@ class ReportService {
               children: [
                 pw.Text(
                   value,
-                  style: const pw.TextStyle(
+                  style: pw.TextStyle(
                     fontSize: 14,
                     fontWeight: pw.FontWeight.bold,
                     color: _brand,
@@ -857,7 +857,7 @@ class ReportService {
                 ),
                 pw.SizedBox(height: 2),
                 pw.Text(label,
-                    style: const pw.TextStyle(fontSize: 9, color: _muted)),
+                    style: pw.TextStyle(fontSize: 9, color: _muted)),
               ],
             ),
           ),
@@ -866,7 +866,7 @@ class ReportService {
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
         pw.Text('Employee: $employee',
-            style: const pw.TextStyle(
+            style: pw.TextStyle(
                 fontSize: 11, fontWeight: pw.FontWeight.bold, color: _ink)),
         pw.SizedBox(height: 6),
         pw.Row(
@@ -886,14 +886,14 @@ class ReportService {
                   crossAxisAlignment: pw.CrossAxisAlignment.start,
                   children: [
                     pw.Text('$conversion%',
-                        style: const pw.TextStyle(
+                        style: pw.TextStyle(
                             fontSize: 14,
                             fontWeight: pw.FontWeight.bold,
                             color: _brand)),
                     pw.SizedBox(height: 2),
                     pw.Text('Conversion',
                         style:
-                            const pw.TextStyle(fontSize: 9, color: _muted)),
+                            pw.TextStyle(fontSize: 9, color: _muted)),
                   ],
                 ),
               ),
