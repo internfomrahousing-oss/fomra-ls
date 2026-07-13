@@ -6,9 +6,10 @@
  * Vercel's build machines have full internet access (unlike some sandboxed
  * dev environments), so downloading the Flutter SDK/engine here works fine.
  *
- * Speed matters here (Vercel build minutes are limited, especially on the
- * Hobby plan), so this does a SHALLOW, single-commit fetch — not a full
- * clone of flutter/flutter's entire multi-year history.
+ * The SDK must come from the official prebuilt archive so Flutter has valid
+ * release metadata during dependency resolution. A bare git clone can report
+ * `0.0.0-unknown`, which breaks pub solves for packages that declare a minimum
+ * Flutter SDK version.
  */
 const { execSync } = require('child_process');
 const fs = require('fs');
@@ -17,34 +18,12 @@ const path = require('path');
 const repoRoot = path.join(__dirname, '..');
 const flutterDir = path.join(repoRoot, '.flutter-sdk');
 const flutterBin = path.join(flutterDir, 'bin');
-
-// Pinned Flutter revision this project was created with (see .metadata).
-// Used only as a best-effort pin; if the shallow fetch of that exact commit
-// fails for any reason we fall back to the stable channel tip so the build
-// never gets stuck on this.
-function pinnedRevision() {
-  try {
-    const metadata = fs.readFileSync(path.join(repoRoot, '.metadata'), 'utf8');
-    const match = metadata.match(/revision:\s*"([0-9a-f]{7,40})"/);
-    return match ? match[1] : null;
-  } catch (_) {
-    return null;
-  }
-}
+const flutterArchiveVersion = '3.35.5';
+const flutterArchiveUrl = `https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_${flutterArchiveVersion}-stable.tar.xz`;
 
 function run(cmd, opts = {}) {
   console.log(`$ ${cmd}`);
   execSync(cmd, { stdio: 'inherit', cwd: repoRoot, timeout: 8 * 60 * 1000, ...opts });
-}
-
-function tryRun(cmd, opts = {}) {
-  try {
-    run(cmd, opts);
-    return true;
-  } catch (err) {
-    console.warn(`Command failed, continuing with fallback: ${cmd}`);
-    return false;
-  }
 }
 
 function installFlutter() {
@@ -53,27 +32,23 @@ function installFlutter() {
     return;
   }
 
-  console.log('Installing Flutter SDK (shallow, single commit)...');
+  console.log(`Installing Flutter SDK ${flutterArchiveVersion} from the official release archive...`);
   fs.rmSync(flutterDir, { recursive: true, force: true });
   fs.mkdirSync(flutterDir, { recursive: true });
 
-  const revision = pinnedRevision();
-  let ok = false;
-  if (revision) {
-    console.log(`Trying pinned revision ${revision} (from .metadata)...`);
-    ok =
-      tryRun('git init -q .', { cwd: flutterDir }) &&
-      tryRun('git remote add origin https://github.com/flutter/flutter.git', { cwd: flutterDir }) &&
-      tryRun(`git fetch --depth 1 origin ${revision}`, { cwd: flutterDir }) &&
-      tryRun('git checkout -q FETCH_HEAD', { cwd: flutterDir });
-  }
+  const archivePath = path.join(repoRoot, 'flutter_linux.tar.xz');
+  const extractDir = path.join(repoRoot, '.flutter-sdk-extract');
+  fs.rmSync(archivePath, { force: true });
+  fs.rmSync(extractDir, { recursive: true, force: true });
+  fs.mkdirSync(extractDir, { recursive: true });
+  run(`curl -L --retry 3 --fail "${flutterArchiveUrl}" -o "${archivePath}"`);
+  run(`tar -xf "${archivePath}" -C "${extractDir}"`);
+  fs.renameSync(path.join(extractDir, 'flutter'), flutterDir);
+  fs.rmSync(archivePath, { force: true });
+  fs.rmSync(extractDir, { recursive: true, force: true });
 
-  if (!ok) {
-    console.log('Falling back to a shallow clone of the stable channel tip...');
-    fs.rmSync(flutterDir, { recursive: true, force: true });
-    run(
-      `git clone --depth 1 --no-tags --single-branch -b stable https://github.com/flutter/flutter.git "${flutterDir}"`,
-    );
+  if (!fs.existsSync(path.join(flutterBin, 'flutter'))) {
+    throw new Error('Flutter release archive did not produce a usable SDK at .flutter-sdk');
   }
 }
 
