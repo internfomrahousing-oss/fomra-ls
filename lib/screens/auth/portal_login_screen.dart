@@ -133,9 +133,13 @@ class _PortalLoginScreenState extends State<PortalLoginScreen> {
                           _isManagement
                               ? 'Management Portal'
                               : 'Employee Portal',
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: Colors.white,
-                            fontSize: 26,
+                            fontSize: FomraLayout.responsiveClamp(
+                              context,
+                              min: 22,
+                              max: 26,
+                            ),
                             fontWeight: FontWeight.w800,
                             letterSpacing: 0.3,
                           ),
@@ -152,7 +156,13 @@ class _PortalLoginScreenState extends State<PortalLoginScreen> {
 
                         // Login card
                         Container(
-                          padding: const EdgeInsets.all(24),
+                          padding: EdgeInsets.all(
+                            FomraLayout.responsiveClamp(
+                              context,
+                              min: 18,
+                              max: 24,
+                            ),
+                          ),
                           decoration: BoxDecoration(
                             color: isDark ? context.fomraSurface : Colors.white,
                             borderRadius: BorderRadius.circular(20),

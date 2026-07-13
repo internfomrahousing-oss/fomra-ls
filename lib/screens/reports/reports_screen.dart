@@ -139,7 +139,11 @@ class _ReportsScreenState extends State<ReportsScreen> {
           Text(
             'Reports',
             style: TextStyle(
-              fontSize: 22,
+              fontSize: FomraLayout.responsiveClamp(
+                context,
+                min: 20,
+                max: 22,
+              ),
               fontWeight: FontWeight.w800,
               color: context.fomraTextPrimary,
             ),
@@ -152,17 +156,10 @@ class _ReportsScreenState extends State<ReportsScreen> {
           const SizedBox(height: 16),
           AppCard(
             interactive: false,
-            child: Row(
-              children: [
-                Text(
-                  'Export format',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w700,
-                    color: context.fomraTextPrimary,
-                  ),
-                ),
-                const Spacer(),
-                SegmentedButton<ReportFormat>(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final compact = constraints.maxWidth < 520;
+                final control = SegmentedButton<ReportFormat>(
                   segments: const [
                     ButtonSegment(
                       value: ReportFormat.pdf,
@@ -178,8 +175,43 @@ class _ReportsScreenState extends State<ReportsScreen> {
                   selected: {_format},
                   onSelectionChanged: (s) =>
                       setState(() => _format = s.first),
-                ),
-              ],
+                );
+
+                if (compact) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Export format',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: context.fomraTextPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: control,
+                      ),
+                    ],
+                  );
+                }
+
+                return Row(
+                  children: [
+                    Text(
+                      'Export format',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: context.fomraTextPrimary,
+                      ),
+                    ),
+                    const Spacer(),
+                    control,
+                  ],
+                );
+              },
             ),
           ),
           const SizedBox(height: 16),
@@ -196,26 +228,29 @@ class _ReportsScreenState extends State<ReportsScreen> {
               builder: (context, constraints) {
                 final wide = constraints.maxWidth >= 720;
                 final cross = wide ? 3 : (constraints.maxWidth >= 480 ? 2 : 1);
-                return GridView.count(
-                  crossAxisCount: cross,
+                return GridView.builder(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
-                  crossAxisSpacing: 12,
-                  mainAxisSpacing: 12,
-                  childAspectRatio: wide ? 1.55 : 1.7,
-                  children: [
-                    for (final kind in ReportKind.values)
-                      _ReportExportCard(
-                        kind: kind,
-                        icon: _icon(kind),
-                        color: _color(kind),
-                        busy: _busyKind == kind,
-                        enabled: _busyKind == null && RoleAccess.canExport,
-                        format: _format,
-                        onExport: () => _export(kind),
-                        onPreview: () => _preview(kind),
-                      ),
-                  ],
+                  itemCount: ReportKind.values.length,
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: cross,
+                    crossAxisSpacing: 12,
+                    mainAxisSpacing: 12,
+                    mainAxisExtent: 150,
+                  ),
+                  itemBuilder: (context, i) {
+                    final kind = ReportKind.values[i];
+                    return _ReportExportCard(
+                      kind: kind,
+                      icon: _icon(kind),
+                      color: _color(kind),
+                      busy: _busyKind == kind,
+                      enabled: _busyKind == null && RoleAccess.canExport,
+                      format: _format,
+                      onExport: () => _export(kind),
+                      onPreview: () => _preview(kind),
+                    );
+                  },
                 );
               },
             ),

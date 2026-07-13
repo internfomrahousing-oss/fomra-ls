@@ -287,9 +287,18 @@ class _LoginScreenState extends State<LoginScreen> {
       child: SafeArea(
         child: Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
+              padding: EdgeInsets.symmetric(
+                horizontal: FomraLayout.responsiveClamp(
+                  context,
+                  min: 20,
+                  max: 28,
+                ),
+                vertical: 24,
+              ),
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 400),
+                constraints: BoxConstraints(
+                  maxWidth: MediaQuery.sizeOf(context).width >= 600 ? 400 : 360,
+                ),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [

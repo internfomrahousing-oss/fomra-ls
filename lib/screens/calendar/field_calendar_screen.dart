@@ -72,8 +72,8 @@ class _FieldCalendarScreenState extends State<FieldCalendarScreen> {
           builder: (ctx, setLocal) {
             return AlertDialog(
               title: const Text('Schedule event'),
-              content: SizedBox(
-                width: 420,
+              content: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 420),
                 child: SingleChildScrollView(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
