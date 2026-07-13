@@ -80,6 +80,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
     'Infrastructure',
     'Land Records',
     'Competitor Projects',
+    'Documents',
   ];
 
   static const _miTabStart = 2;
@@ -1222,13 +1223,15 @@ class _WorkspacePanel extends StatelessWidget {
                         section: MarketIntelLeadSection.landRecords,
                         scrollable: false,
                       );
-                    default:
+                    case 4:
                       return _LazyMarketIntelTab(
                         active: shouldLoadMiTab(4),
                         lead: lead,
                         section: MarketIntelLeadSection.competitorProjects,
                         scrollable: false,
                       );
+                    default:
+                      return _DocumentsTab(documents: legalDocs);
                   }
                 },
               ),
@@ -1821,6 +1824,153 @@ class _LeadDetailRow extends StatelessWidget {
             ),
           ),
         ),
+      ],
+    );
+  }
+}
+
+class _DocumentsTab extends StatelessWidget {
+  final List<LandLeadLegalDocument> documents;
+
+  const _DocumentsTab({required this.documents});
+
+  bool _isImage(String fileName) {
+    final lower = fileName.toLowerCase();
+    return lower.endsWith('.jpg') ||
+        lower.endsWith('.jpeg') ||
+        lower.endsWith('.png');
+  }
+
+  IconData _iconFor(String fileName) {
+    final lower = fileName.toLowerCase();
+    if (lower.endsWith('.pdf')) return Icons.picture_as_pdf_outlined;
+    if (_isImage(fileName)) return Icons.image_outlined;
+    if (lower.endsWith('.doc') || lower.endsWith('.docx')) {
+      return Icons.description_outlined;
+    }
+    return Icons.insert_drive_file_outlined;
+  }
+
+  Future<void> _open(BuildContext context, String url) async {
+    final uri = Uri.tryParse(url);
+    if (uri == null) return;
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      if (context.mounted) {
+        AppFeedback.error(context, 'Could not open document');
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (documents.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 28),
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.folder_open_outlined,
+                size: 36,
+                color: context.fomraTextSecondary,
+              ),
+              const SizedBox(height: 10),
+              Text(
+                'No documents uploaded',
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: context.fomraTextPrimary,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Use Upload Document to capture Patta, Chitta, FMB or Sale Deed.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: context.fomraTextSecondary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          '${documents.length} document${documents.length == 1 ? '' : 's'} for this lead',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: context.fomraTextSecondary,
+          ),
+        ),
+        const SizedBox(height: 8),
+        for (final doc in documents)
+          Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              border: Border.all(color: context.fomraBorder),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: AppColors.purple.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  alignment: Alignment.center,
+                  child: Icon(
+                    _iconFor(doc.fileName),
+                    size: 18,
+                    color: AppColors.purple,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        doc.fileName,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: context.fomraTextPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        doc.loggedByName.isEmpty
+                            ? _formatReceivedOn(doc.verifiedAt)
+                            : '${_formatReceivedOn(doc.verifiedAt)} · ${doc.loggedByName}',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: context.fomraTextSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => _open(context, doc.fileUrl),
+                  icon: const Icon(Icons.open_in_new, size: 18),
+                  tooltip: 'Open document',
+                  color: AppColors.purple,
+                ),
+              ],
+            ),
+          ),
       ],
     );
   }

@@ -146,20 +146,38 @@ class LandLeadService {
     LeadStatus status, {
     LeadStatus? previousStatus,
   }) async {
-    final payload = <String, dynamic>{
+    final base = <String, dynamic>{
       'status': status.name,
       'updated_at': DateTime.now().toUtc().toIso8601String(),
     };
+    // Clearing drop reason/notes is best-effort: on a plain status change we
+    // don't want a database that hasn't had lead_drop_reason.sql applied to
+    // block the update. Retry without those columns if they're missing.
+    final payload = <String, dynamic>{...base};
     if (status != LeadStatus.dropped) {
       payload['drop_reason'] = '';
       payload['drop_notes'] = '';
     }
-    final rows = await _db
-        .from('land_leads')
-        .update(payload)
-        .eq('id', leadId)
-        .select('id');
-    if ((rows as List).isEmpty) {
+
+    List rows;
+    try {
+      rows = await _db
+          .from('land_leads')
+          .update(payload)
+          .eq('id', leadId)
+          .select('id');
+    } on PostgrestException catch (e) {
+      final missingDropColumn = e.code == 'PGRST204' &&
+          (e.message.contains('drop_notes') ||
+              e.message.contains('drop_reason'));
+      if (!missingDropColumn) rethrow;
+      rows = await _db
+          .from('land_leads')
+          .update(base)
+          .eq('id', leadId)
+          .select('id');
+    }
+    if (rows.isEmpty) {
       throw Exception('Lead $leadId was not updated (not found or blocked)');
     }
     await AuditLogService.log(
