@@ -2,18 +2,17 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../models/land_lead.dart';
-import '../../utils/employee_today_tasks.dart';
 import '../land_lead/add_lead_screen.dart';
+import '../../models/lead_list_filter.dart';
 import '../land_lead/filtered_leads_screen.dart';
 import '../land_lead/lead_detail_screen.dart';
 import '../land_lead/leads_map_screen.dart';
 import '../land_lead/management_visit_review_dialog.dart';
-import '../task_management/task_management_screen.dart';
-import '../settings/change_password_screen.dart';
 import '../../services/auth_service.dart';
 import '../../services/app_store.dart';
 import '../../services/employee_service.dart';
 import '../../services/land_lead_service.dart';
+import '../../services/land_lead_signed_service.dart';
 import '../../services/land_lead_site_visit_service.dart';
 import '../../services/notification_center_service.dart';
 import '../../services/notifications_service.dart';
@@ -24,6 +23,7 @@ import '../../theme/app_theme.dart';
 import '../../theme/fomra_layout.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../models/app_notification.dart';
+import '../../models/land_lead_signed_request.dart';
 import '../../models/land_lead_site_visit.dart';
 import '../../widgets/fomra_app_bar.dart';
 import '../../widgets/fomra_app_shell.dart';
@@ -58,6 +58,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   bool get _notifOpen => _notifOverlay != null;
 
   List<LandLeadSiteVisit> _pendingApprovals = [];
+  List<LandLeadSignedRequest> _pendingSigned = [];
   bool _loadingApprovals = false;
   Timer? _reminderSyncTimer;
 
@@ -147,8 +148,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
-  String get _profileRole =>
-      _isManagement ? 'Administrator' : 'Employee';
 
   Future<void> _loadNotifications() async {
     try {
@@ -368,50 +367,57 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     setState(() {}); // repaint the bell in its active state
   }
 
-  Future<void> _showProfileMenu(TapDownDetails details) async {
-    final user = AuthService.instance.currentUser;
-    final userName = user?.fullName ?? 'User';
-    final profileName = _isManagement ? 'Management' : userName;
-    final initial =
-        profileName.isNotEmpty ? profileName[0].toUpperCase() : 'U';
-
-    final action = await showPortalProfileMenu(
-      context: context,
-      anchor: details.globalPosition,
-      name: profileName,
-      role: _profileRole,
-      initial: initial,
-    );
-    if (!mounted) return;
-    if (action == 'change_password') {
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => const ChangePasswordScreen()),
-      );
-      return;
-    }
-    if (action == 'sign_out') {
-      final confirmed = await confirmSignOut(context);
-      if (!confirmed || !mounted) return;
-      AuthService.instance.logout();
-      Navigator.pushNamedAndRemoveUntil(context, '/login', (_) => false);
-    }
-  }
-
   Future<void> _loadPendingApprovals() async {
     if (!_isManagement) return;
     setState(() => _loadingApprovals = true);
+    List<LandLeadSiteVisit> visits = const [];
     try {
-      final visits =
-          await LandLeadSiteVisitService.getPendingManagementVisits();
-      if (mounted) {
-        setState(() {
-          _pendingApprovals = visits;
-          _loadingApprovals = false;
-        });
-      }
-    } catch (_) {
-      if (mounted) setState(() => _loadingApprovals = false);
+      visits = await LandLeadSiteVisitService.getPendingManagementVisits();
+    } catch (_) {/* keep existing */}
+    List<LandLeadSignedRequest> signed = const [];
+    try {
+      signed = await LandLeadSignedService.getPending();
+    } catch (_) {/* table may not exist yet */}
+    if (mounted) {
+      setState(() {
+        _pendingApprovals = visits;
+        _pendingSigned = signed;
+        _loadingApprovals = false;
+      });
+    }
+  }
+
+  Future<void> _approveSignedRequest(LandLeadSignedRequest request) async {
+    if (!RoleAccess.canApprove) {
+      if (!mounted) return;
+      AppFeedback.error(context, RoleAccess.deniedMessage('approve requests'));
+      return;
+    }
+    try {
+      await LandLeadSignedService.review(id: request.id, approve: true);
+      if (!mounted) return;
+      AppFeedback.success(context, 'Project approved and marked as Signed');
+      await _loadPendingApprovals();
+    } catch (e) {
+      if (!mounted) return;
+      AppFeedback.error(context, 'Could not approve: $e');
+    }
+  }
+
+  Future<void> _rejectSignedRequest(LandLeadSignedRequest request) async {
+    if (!RoleAccess.canApprove) {
+      if (!mounted) return;
+      AppFeedback.error(context, RoleAccess.deniedMessage('approve requests'));
+      return;
+    }
+    try {
+      await LandLeadSignedService.review(id: request.id, approve: false);
+      if (!mounted) return;
+      AppFeedback.info(context, 'Signed request rejected');
+      await _loadPendingApprovals();
+    } catch (e) {
+      if (!mounted) return;
+      AppFeedback.error(context, 'Could not reject: $e');
     }
   }
 
@@ -482,8 +488,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final leads = AppStore.instance.leads;
     final summaryLeads = _homeSummaryLeads;
     final totalLeads = summaryLeads.length;
-    final brokerLeads =
-        summaryLeads.where((l) => l.inputSource == InputSource.broker).length;
+    final ownerMeetingPending = summaryLeads
+        .where((l) => l.status == LeadStatus.prospectMeetingPending)
+        .length;
     final teamRows = buildPortalTeamPerformance(leads);
 
     final quickActions = [
@@ -496,7 +503,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         )
       else
         PortalQuickAction(
-          label: 'Add Sites',
+          label: 'Add Lead',
           icon: Icons.add_location_alt_outlined,
           accent: AppColors.primary,
           onTap: _openAddLead,
@@ -581,14 +588,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 child: PortalWelcomeHeader(
                   greeting: greeting,
                   dateLabel: dateLabel,
-                  profileName: _isManagement ? 'Management' : userName,
-                  profileRole: _profileRole,
                   totalLeads: totalLeads,
                   activeLeads: _activeLeads,
-                  brokerLeads: brokerLeads,
-                  onProfileTapDown: _showProfileMenu,
-                  onSummaryTap: (filter) =>
-                      FilteredLeadsScreen.open(context, filter),
+                  ownerMeetingPending: ownerMeetingPending,
+                  onSummaryTap: (filter) {
+                    // "Total sites" opens the full Land Workspace directly;
+                    // the other tiles open their filtered list.
+                    if (filter == LeadListFilter.totalLeads) {
+                      _goTo('/land-lead');
+                    } else {
+                      FilteredLeadsScreen.open(context, filter);
+                    }
+                  },
                 ),
               ),
               const SizedBox(height: AppSpacing.lg),
@@ -611,11 +622,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   index: 2,
                   child: PortalApprovalsSection(
                     visits: _pendingApprovals,
+                    signedRequests: _pendingSigned,
                     leads: leads,
                     loading: _loadingApprovals,
                     onReview: _reviewPendingVisit,
                     onApprove: _approvePendingVisit,
                     onReject: _rejectPendingVisit,
+                    onApproveSigned: _approveSignedRequest,
+                    onRejectSigned: _rejectSignedRequest,
                   ),
                 ),
               if (_isManagement) const SizedBox(height: AppSpacing.lg),
@@ -652,6 +666,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                             icon: Icons.groups_rounded,
                             child: _EmployeePerformanceCard(
                               count: _myLeadCount,
+                              onTap: () => _goTo('/land-lead'),
                             ),
                           );
                           final todayTasks = _EmployeeTodayTasksSection(
@@ -701,15 +716,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
 class _EmployeePerformanceCard extends StatelessWidget {
   final int count;
+  final VoidCallback? onTap;
 
-  const _EmployeePerformanceCard({required this.count});
+  const _EmployeePerformanceCard({required this.count, this.onTap});
 
   @override
   Widget build(BuildContext context) {
     return AppCard(
       padding: const EdgeInsets.all(20),
       radius: AppColors.radiusMd,
-      interactive: false,
+      interactive: onTap != null,
+      onTap: onTap,
       child: Row(
         children: [
           Container(
@@ -776,196 +793,284 @@ class _EmployeeTodayTasksSection extends StatelessWidget {
     return 'Site #${lead.leadId}';
   }
 
-  String _formatDue(DateTime due) {
-    final local = due.toLocal();
-    return '${local.day}/${local.month}/${local.year}';
-  }
+  List<LandLead> get _myActiveLeads => AppStore.instance.leads
+      .where((l) =>
+          l.createdByName.trim() == employeeName.trim() && l.status.isActive)
+      .toList();
 
-  @override
-  Widget build(BuildContext context) {
-    final items = buildEmployeeTodayTasks(
-      employeeName: employeeName,
-      leads: AppStore.instance.leads,
-      tasks: sharedTasks,
-    );
-
-    return PortalSectionCard(
-      title: "Today's tasks",
-      subtitle: 'Site follow-ups and pending work for today',
-      icon: Icons.today_rounded,
-      child: items.isEmpty
-          ? const EmptyState(
-              icon: Icons.task_alt_outlined,
-              title: 'No tasks for today',
-              message:
-                  'Active leads you add will show follow-ups and pending work here.',
-            )
-          : Column(
-              children: [
-                for (final item in items) ...[
-                  AppCard(
-                    padding: const EdgeInsets.all(16),
+  void _openCategory(
+    BuildContext context,
+    String title,
+    Color color,
+    List<LandLead> leads,
+  ) {
+    if (leads.isEmpty) return;
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: context.fomraSurface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.6,
+        maxChildSize: 0.9,
+        minChildSize: 0.35,
+        builder: (ctx, controller) => Column(
+          children: [
+            const SizedBox(height: 10),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: context.fomraBorder,
+                borderRadius: BorderRadius.circular(999),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 12, 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '$title · ${leads.length}',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: context.fomraTextPrimary,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            Expanded(
+              child: ListView.separated(
+                controller: controller,
+                padding: const EdgeInsets.all(16),
+                itemCount: leads.length,
+                separatorBuilder: (_, __) =>
+                    const SizedBox(height: AppSpacing.sm),
+                itemBuilder: (_, i) {
+                  final lead = leads[i];
+                  return AppCard(
+                    padding: const EdgeInsets.all(14),
                     radius: AppColors.radiusMd,
                     interactive: true,
-                    onTap: () => onOpenLead(item.lead),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      onOpenLead(lead);
+                    },
+                    child: Row(
                       children: [
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Container(
-                              width: 40,
-                              height: 40,
-                              decoration: BoxDecoration(
-                                color: item.lead.status.color
-                                    .withValues(alpha: 0.14),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              alignment: Alignment.center,
-                              child: Icon(
-                                Icons.person_pin_circle_outlined,
-                                color: item.lead.status.color,
-                                size: 20,
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    _leadLabel(item.lead),
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w800,
-                                      color: context.fomraTextPrimary,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    'Site #${item.lead.leadId} · ${item.lead.status.shortLabel}',
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: context.fomraTextSecondary,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            Icon(
-                              Icons.chevron_right_rounded,
-                              color: context.fomraTextTertiary,
-                            ),
-                          ],
+                        Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: color.withValues(alpha: 0.14),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          alignment: Alignment.center,
+                          child: Icon(Icons.person_pin_circle_outlined,
+                              color: color, size: 20),
                         ),
-                        if (item.followUp.isNotEmpty) ...[
-                          const SizedBox(height: 12),
-                          Row(
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Icon(
-                                Icons.notifications_active_outlined,
-                                size: 16,
-                                color: AppColors.warning,
+                              Text(
+                                _leadLabel(lead),
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w800,
+                                  color: context.fomraTextPrimary,
+                                ),
                               ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'Follow-up',
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w800,
-                                        letterSpacing: 0.4,
-                                        color: context.fomraTextSecondary,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      item.followUp,
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w600,
-                                        color: context.fomraTextPrimary,
-                                      ),
-                                    ),
-                                  ],
+                              const SizedBox(height: 2),
+                              Text(
+                                'Site #${lead.leadId} · ${lead.status.shortLabel}',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: context.fomraTextSecondary,
                                 ),
                               ),
                             ],
                           ),
-                        ],
-                        if (item.pendingWork.isNotEmpty) ...[
-                          const SizedBox(height: 12),
-                          Text(
-                            'Pending work',
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: 0.4,
-                              color: context.fomraTextSecondary,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          for (final work in item.pendingWork)
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 6),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Icon(
-                                    work.isOverdue
-                                        ? Icons.error_outline_rounded
-                                        : work.isDueToday
-                                            ? Icons.schedule_rounded
-                                            : Icons.radio_button_unchecked_rounded,
-                                    size: 15,
-                                    color: work.isOverdue
-                                        ? AppColors.error
-                                        : work.isDueToday
-                                            ? AppColors.warning
-                                            : context.fomraTextSecondary,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      work.isOverdue
-                                          ? '${work.label} · Overdue (${_formatDue(work.dueDate)})'
-                                          : work.isDueToday
-                                              ? '${work.label} · Due today'
-                                              : '${work.label} · Due ${_formatDue(work.dueDate)}',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w600,
-                                        color: work.isOverdue
-                                            ? AppColors.error
-                                            : context.fomraTextPrimary,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                        ] else if (item.followUp.isNotEmpty) ...[
-                          const SizedBox(height: 8),
-                          Text(
-                            'No tasks created yet — tap to open lead and log activity.',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: context.fomraTextTertiary,
-                            ),
-                          ),
-                        ],
+                        ),
+                        Icon(Icons.chevron_right_rounded,
+                            color: context.fomraTextTertiary),
                       ],
                     ),
-                  ),
-                  if (item != items.last) const SizedBox(height: AppSpacing.sm),
-                ],
-              ],
+                  );
+                },
+              ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final mine = _myActiveLeads;
+    final categories = <
+        ({String label, IconData icon, Color color, List<LandLead> leads})>[
+      (
+        label: 'Call Pending',
+        icon: Icons.call_outlined,
+        color: AppColors.info,
+        leads: mine
+            .where((l) => l.status == LeadStatus.negotiation)
+            .toList(),
+      ),
+      (
+        label: 'Meeting Pending',
+        icon: Icons.groups_outlined,
+        color: LeadStatus.prospectMeetingPending.color,
+        leads: mine
+            .where((l) => l.status == LeadStatus.prospectMeetingPending)
+            .toList(),
+      ),
+      (
+        label: 'Site Visit Pending',
+        icon: Icons.location_on_outlined,
+        color: LeadStatus.prospectMeetingCompleted.color,
+        leads: mine
+            .where((l) => l.status == LeadStatus.prospectMeetingCompleted)
+            .toList(),
+      ),
+      (
+        label: 'Legal Pending',
+        icon: Icons.gavel_outlined,
+        color: LeadStatus.legal.color,
+        leads: mine.where((l) => l.status == LeadStatus.legal).toList(),
+      ),
+    ];
+    final total = categories.fold<int>(0, (s, c) => s + c.leads.length);
+
+    return PortalSectionCard(
+      title: "Today's tasks",
+      subtitle: 'Pending follow-ups by category',
+      icon: Icons.today_rounded,
+      child: total == 0
+          ? const EmptyState(
+              icon: Icons.task_alt_outlined,
+              title: 'No pending tasks',
+              message:
+                  'Active leads you add will show pending follow-ups here.',
+            )
+          : LayoutBuilder(
+              builder: (context, constraints) {
+                final twoCols = constraints.maxWidth >= 360;
+                final cardWidth = twoCols
+                    ? (constraints.maxWidth - AppSpacing.sm) / 2
+                    : constraints.maxWidth;
+                return Wrap(
+                  spacing: AppSpacing.sm,
+                  runSpacing: AppSpacing.sm,
+                  children: [
+                    for (final c in categories)
+                      SizedBox(
+                        width: cardWidth,
+                        child: _TaskSummaryCard(
+                          label: c.label,
+                          count: c.leads.length,
+                          icon: c.icon,
+                          color: c.color,
+                          onTap: c.leads.isEmpty
+                              ? null
+                              : () => _openCategory(
+                                  context, c.label, c.color, c.leads),
+                        ),
+                      ),
+                  ],
+                );
+              },
+            ),
+    );
+  }
+}
+
+class _TaskSummaryCard extends StatelessWidget {
+  final String label;
+  final int count;
+  final IconData icon;
+  final Color color;
+  final VoidCallback? onTap;
+
+  const _TaskSummaryCard({
+    required this.label,
+    required this.count,
+    required this.icon,
+    required this.color,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      padding: const EdgeInsets.all(16),
+      radius: AppColors.radiusMd,
+      interactive: onTap != null,
+      onTap: onTap,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                alignment: Alignment.center,
+                child: Icon(icon, color: color, size: 19),
+              ),
+              const Spacer(),
+              Text(
+                '$count',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w800,
+                  color: color,
+                  height: 1,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: context.fomraTextPrimary,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            count == 0
+                ? 'None pending'
+                : count == 1
+                    ? '1 lead to action'
+                    : '$count leads to action',
+            style: TextStyle(
+              fontSize: 11,
+              color: context.fomraTextSecondary,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

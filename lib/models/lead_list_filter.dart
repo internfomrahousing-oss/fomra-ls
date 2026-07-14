@@ -5,6 +5,7 @@ enum LeadListFilter {
   totalLeads,
   activeLeads,
   brokerLeads,
+  ownerMeetingPending,
   notes,
   calls,
   siteVisit,
@@ -28,6 +29,7 @@ extension LeadListFilterX on LeadListFilter {
         LeadListFilter.totalLeads => 'Total leads',
         LeadListFilter.activeLeads => 'Active leads',
         LeadListFilter.brokerLeads => 'Broker leads',
+        LeadListFilter.ownerMeetingPending => 'Owner meeting pending',
         LeadListFilter.notes => 'Notes',
         LeadListFilter.calls => 'Calls',
         LeadListFilter.siteVisit => 'Site visit',
@@ -44,6 +46,8 @@ extension LeadListFilterX on LeadListFilter {
         LeadListFilter.totalLeads => 'Every lead in the workspace',
         LeadListFilter.activeLeads => 'Leads still in the pipeline',
         LeadListFilter.brokerLeads => 'Leads sourced through brokers',
+        LeadListFilter.ownerMeetingPending =>
+          'Land owner meetings still pending',
         LeadListFilter.notes => 'Leads with saved notes',
         LeadListFilter.calls => 'Leads with contact details',
         LeadListFilter.siteVisit => 'Leads with site visit progress',
@@ -61,6 +65,8 @@ extension LeadListFilterX on LeadListFilter {
         LeadListFilter.totalLeads => true,
         LeadListFilter.activeLeads => lead.status.isActive,
         LeadListFilter.brokerLeads => lead.inputSource == InputSource.broker,
+        LeadListFilter.ownerMeetingPending =>
+          lead.status == LeadStatus.prospectMeetingPending,
         LeadListFilter.notes => lead.notes.trim().isNotEmpty,
         LeadListFilter.calls => lead.contactDetails.trim().isNotEmpty,
         LeadListFilter.siteVisit => leadHasSiteVisitProgress(lead),

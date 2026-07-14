@@ -73,9 +73,7 @@ class FomraLSApp extends StatelessWidget {
           '/survey-tracker':      (_) => const SurveyTrackerScreen(),
           '/owner-history':       (_) => const OwnerHistoryScreen(),
           '/cost-calculator':     (_) => const CostCalculatorScreen(),
-          '/reports':             (_) => AuthService.instance.isManagement
-                                      ? const ReportsScreen()
-                                      : const HomeScreen(),
+          '/reports':             (_) => const ReportsScreen(),
           '/notifications':       (_) => const NotificationCenterScreen(),
           '/audit-trail':         (_) => RoleAccess.canViewAudit
                                       ? const AuditTrailScreen()

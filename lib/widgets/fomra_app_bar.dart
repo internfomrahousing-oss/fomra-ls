@@ -12,6 +12,7 @@ import 'fomra_theme_toggle.dart';
 import 'fomra_universal_search.dart';
 import 'portal_home_sections.dart';
 import 'ui/app_components.dart';
+import 'ui/profile_avatar.dart';
 
 class FomraAppBar extends StatelessWidget implements PreferredSizeWidget {
   final String? moduleName;
@@ -239,6 +240,8 @@ class FomraHeaderProfile extends StatelessWidget {
   String get _profileRole =>
       AuthService.instance.isManagement ? 'Administrator' : 'Employee';
 
+  String? get _profileEmail => AuthService.instance.currentUser?.email;
+
   Future<void> _open(BuildContext context, TapDownDetails details) async {
     final name = _profileName;
     final initial = name.trim().isNotEmpty ? name.trim()[0].toUpperCase() : 'U';
@@ -248,9 +251,12 @@ class FomraHeaderProfile extends StatelessWidget {
       name: name,
       role: _profileRole,
       initial: initial,
+      email: _profileEmail,
     );
     if (!context.mounted) return;
-    if (action == 'change_password') {
+    if (action == 'upload_photo') {
+      await uploadProfilePhotoFlow(context);
+    } else if (action == 'change_password') {
       Navigator.push(
         context,
         MaterialPageRoute(builder: (_) => const ChangePasswordScreen()),
@@ -267,7 +273,6 @@ class FomraHeaderProfile extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = context.isDarkMode;
     final name = _profileName;
-    final initial = name.trim().isNotEmpty ? name.trim()[0].toUpperCase() : '?';
 
     return Tooltip(
       message: name,
@@ -275,19 +280,15 @@ class FomraHeaderProfile extends StatelessWidget {
         cursor: SystemMouseCursors.click,
         child: GestureDetector(
           onTapDown: (details) => _open(context, details),
-          child: CircleAvatar(
+          child: ProfileAvatar(
+            email: _profileEmail,
+            name: name,
             radius: 15,
             backgroundColor: isDark
                 ? Colors.white.withValues(alpha: 0.12)
                 : Colors.white.withValues(alpha: 0.22),
-            child: Text(
-              initial,
-              style: TextStyle(
-                color: isDark ? AppColors.darkTextPrimary : Colors.white,
-                fontWeight: FontWeight.w800,
-                fontSize: 12.5,
-              ),
-            ),
+            foregroundColor:
+                isDark ? AppColors.darkTextPrimary : Colors.white,
           ),
         ),
       ),

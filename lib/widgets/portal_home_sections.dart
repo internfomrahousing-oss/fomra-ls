@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 
 import '../models/land_lead.dart';
+import '../models/land_lead_signed_request.dart';
 import '../models/land_lead_site_visit.dart';
 import '../models/lead_list_filter.dart';
 import '../services/app_store.dart';
@@ -10,6 +11,7 @@ import '../theme/app_theme.dart';
 import '../theme/fomra_layout.dart';
 import '../theme/fomra_theme_context.dart';
 import 'ui/app_components.dart';
+import 'ui/profile_avatar.dart';
 
 /// Full date for the home hero — e.g. Monday, 6 July 2026.
 String portalHomeDateLabel(DateTime date) {
@@ -120,33 +122,23 @@ class _PortalFadeSectionState extends State<PortalFadeSection>
 class PortalWelcomeHeader extends StatelessWidget {
   final String greeting;
   final String dateLabel;
-  final String profileName;
-  final String profileRole;
   final int totalLeads;
   final int activeLeads;
-  final int brokerLeads;
-  final ValueChanged<TapDownDetails>? onProfileTapDown;
+  final int ownerMeetingPending;
   final ValueChanged<LeadListFilter>? onSummaryTap;
 
   const PortalWelcomeHeader({
     super.key,
     required this.greeting,
     required this.dateLabel,
-    required this.profileName,
-    required this.profileRole,
     required this.totalLeads,
     required this.activeLeads,
-    required this.brokerLeads,
-    this.onProfileTapDown,
+    required this.ownerMeetingPending,
     this.onSummaryTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    final initial = profileName.trim().isNotEmpty
-        ? profileName.trim()[0].toUpperCase()
-        : '?';
-
     return AppCard(
       padding: const EdgeInsets.all(AppSpacing.lg),
       radius: AppColors.radiusLg,
@@ -192,13 +184,6 @@ class PortalWelcomeHeader extends StatelessWidget {
                   ],
                 ),
               ),
-              const SizedBox(width: AppSpacing.sm),
-              _PortalProfileChip(
-                initial: initial,
-                name: profileName,
-                role: profileRole,
-                onTapDown: onProfileTapDown,
-              ),
             ],
           ),
           const SizedBox(height: AppSpacing.md),
@@ -225,13 +210,13 @@ class PortalWelcomeHeader extends StatelessWidget {
                       : () => onSummaryTap!(LeadListFilter.activeLeads),
                 ),
                 PortalSummaryTile(
-                  label: 'Broker sites',
-                  value: brokerLeads,
-                  icon: Icons.handshake_outlined,
+                  label: 'Owner meeting pending',
+                  value: ownerMeetingPending,
+                  icon: Icons.event_available_outlined,
                   accent: AppColors.warning,
                   onTap: onSummaryTap == null
                       ? null
-                      : () => onSummaryTap!(LeadListFilter.brokerLeads),
+                      : () => onSummaryTap!(LeadListFilter.ownerMeetingPending),
                 ),
               ];
               if (stacked) {
@@ -258,96 +243,6 @@ class PortalWelcomeHeader extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-class _PortalProfileChip extends StatelessWidget {
-  final String initial;
-  final String name;
-  final String role;
-  final ValueChanged<TapDownDetails>? onTapDown;
-
-  const _PortalProfileChip({
-    required this.initial,
-    required this.name,
-    required this.role,
-    this.onTapDown,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final chip = Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                gradient: AppColors.primaryGradient,
-                borderRadius: BorderRadius.circular(14),
-                boxShadow: AppColors.coloredShadow(AppColors.primary),
-              ),
-              alignment: Alignment.center,
-              child: Text(
-                initial,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 17,
-                ),
-              ),
-            ),
-            Positioned(
-              right: -1,
-              bottom: -1,
-              child: Container(
-                width: 12,
-                height: 12,
-                decoration: BoxDecoration(
-                  color: AppColors.success,
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: context.fomraSurface,
-                    width: 2,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(width: AppSpacing.sm),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              name,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: context.fomraTextPrimary,
-              ),
-            ),
-            Text(
-              role,
-              style: TextStyle(
-                fontSize: 11,
-                color: context.fomraTextSecondary,
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-
-    if (onTapDown == null) return chip;
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      child: GestureDetector(onTapDown: onTapDown, child: chip),
     );
   }
 }
@@ -698,20 +593,26 @@ String _portalFormatVisitDateTime(DateTime d) {
 
 class PortalApprovalsSection extends StatelessWidget {
   final List<LandLeadSiteVisit> visits;
+  final List<LandLeadSignedRequest> signedRequests;
   final List<LandLead> leads;
   final bool loading;
   final Future<void> Function(LandLeadSiteVisit visit) onReview;
   final Future<void> Function(LandLeadSiteVisit visit) onApprove;
   final Future<void> Function(LandLeadSiteVisit visit) onReject;
+  final Future<void> Function(LandLeadSignedRequest request)? onApproveSigned;
+  final Future<void> Function(LandLeadSignedRequest request)? onRejectSigned;
 
   const PortalApprovalsSection({
     super.key,
     required this.visits,
+    this.signedRequests = const [],
     required this.leads,
     required this.loading,
     required this.onReview,
     required this.onApprove,
     required this.onReject,
+    this.onApproveSigned,
+    this.onRejectSigned,
   });
 
   LandLead? _leadFor(String leadId) {
@@ -732,7 +633,7 @@ class PortalApprovalsSection extends StatelessWidget {
         children: [
           const SectionHeader(
             title: 'Approvals',
-            subtitle: 'Pending management site visit requests',
+            subtitle: 'Pending site visit & project signed requests',
             icon: Icons.verified_outlined,
             padding: EdgeInsets.only(bottom: AppSpacing.sm),
           ),
@@ -747,13 +648,13 @@ class PortalApprovalsSection extends StatelessWidget {
                 ),
               ),
             )
-          else if (visits.isEmpty)
+          else if (visits.isEmpty && signedRequests.isEmpty)
             const PortalEmptyHint(
               hint: 'No pending approvals — new requests will appear here.',
             )
           else
             ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 220),
+              constraints: const BoxConstraints(maxHeight: 280),
               child: Scrollbar(
                 child: SingleChildScrollView(
                   child: Column(
@@ -768,11 +669,175 @@ class PortalApprovalsSection extends StatelessWidget {
                           onReject: () => onReject(visits[i]),
                         ),
                       ],
+                      for (var i = 0; i < signedRequests.length; i++) ...[
+                        if (i > 0 || visits.isNotEmpty)
+                          const SizedBox(height: 6),
+                        _ApprovalSignedRow(
+                          request: signedRequests[i],
+                          lead: _leadFor(signedRequests[i].leadId),
+                          onApprove: onApproveSigned == null
+                              ? null
+                              : () => onApproveSigned!(signedRequests[i]),
+                          onReject: onRejectSigned == null
+                              ? null
+                              : () => onRejectSigned!(signedRequests[i]),
+                        ),
+                      ],
                     ],
                   ),
                 ),
               ),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ApprovalSignedRow extends StatefulWidget {
+  final LandLeadSignedRequest request;
+  final LandLead? lead;
+  final Future<void> Function()? onApprove;
+  final Future<void> Function()? onReject;
+
+  const _ApprovalSignedRow({
+    required this.request,
+    required this.lead,
+    required this.onApprove,
+    required this.onReject,
+  });
+
+  @override
+  State<_ApprovalSignedRow> createState() => _ApprovalSignedRowState();
+}
+
+class _ApprovalSignedRowState extends State<_ApprovalSignedRow> {
+  bool _busy = false;
+
+  Future<void> _act(Future<void> Function()? fn) async {
+    if (fn == null || _busy) return;
+    setState(() => _busy = true);
+    try {
+      await fn();
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final req = widget.request;
+    final lead = widget.lead;
+    final ownerLabel = lead != null && lead.ownerName.trim().isNotEmpty
+        ? lead.ownerName.trim()
+        : 'Lead #${req.leadId}';
+    final attachments = req.photoUrls.length;
+
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: LeadStatus.signed.color.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: LeadStatus.signed.color.withValues(alpha: 0.24),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: LeadStatus.signed.color.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                alignment: Alignment.center,
+                child: Icon(Icons.draw_outlined,
+                    color: LeadStatus.signed.color, size: 18),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Project Signed · $ownerLabel',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: context.fomraTextPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      [
+                        if (req.requestedByName.isNotEmpty) req.requestedByName,
+                        '$attachments file${attachments == 1 ? '' : 's'}',
+                      ].join(' · '),
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: context.fomraTextSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (req.note.trim().isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              req.note.trim(),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 12,
+                color: context.fomraTextSecondary,
+              ),
+            ),
+          ],
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: _busy ? null : () => _act(widget.onReject),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.error,
+                    side: BorderSide(
+                        color: AppColors.error.withValues(alpha: 0.4)),
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                  ),
+                  child: const Text('Reject'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: FilledButton(
+                  onPressed: _busy ? null : () => _act(widget.onApprove),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: LeadStatus.signed.color,
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                  ),
+                  child: _busy
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Text('Approve & Sign'),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
@@ -1638,6 +1703,7 @@ Future<String?> showPortalProfileMenu({
   required String name,
   required String role,
   required String initial,
+  String? email,
 }) {
   final media = MediaQuery.of(context);
   const menuWidth = 252.0;
@@ -1670,7 +1736,7 @@ Future<String?> showPortalProfileMenu({
             child: _PortalProfileMenuPanel(
               name: name,
               role: role,
-              initial: initial,
+              email: email,
               onSelect: (value) => Navigator.of(context).pop(value),
             ),
           ),
@@ -1698,13 +1764,13 @@ Future<String?> showPortalProfileMenu({
 class _PortalProfileMenuPanel extends StatelessWidget {
   final String name;
   final String role;
-  final String initial;
+  final String? email;
   final ValueChanged<String> onSelect;
 
   const _PortalProfileMenuPanel({
     required this.name,
     required this.role,
-    required this.initial,
+    this.email,
     required this.onSelect,
   });
 
@@ -1740,22 +1806,12 @@ class _PortalProfileMenuPanel extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
                 child: Row(
                   children: [
-                    Container(
-                      width: 40,
-                      height: 40,
-                      decoration: const BoxDecoration(
-                        gradient: AppColors.primaryGradient,
-                        shape: BoxShape.circle,
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(
-                        initial,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 16,
-                        ),
-                      ),
+                    ProfileAvatar(
+                      email: email,
+                      name: name,
+                      radius: 20,
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -1791,6 +1847,15 @@ class _PortalProfileMenuPanel extends StatelessWidget {
               Divider(height: 1, color: context.fomraBorder),
               Padding(
                 padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
+                child: _PortalProfileMenuItem(
+                  icon: Icons.add_a_photo_outlined,
+                  label: 'Upload Profile Photo',
+                  subtitle: 'Set your account picture',
+                  onTap: () => onSelect('upload_photo'),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(8, 0, 8, 4),
                 child: _PortalProfileMenuItem(
                   icon: Icons.lock_outline_rounded,
                   label: 'Change Password',

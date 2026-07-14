@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
@@ -623,9 +625,36 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
 
   // ── Photo picker ───────────────────────────────────────────────────────────
 
+  /// Mobile (Android/iOS) offers Camera + Gallery via the native picker;
+  /// desktop and web keep the standard file picker.
+  bool get _mobileNativePickers =>
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.iOS);
+
   Future<void> _pickPhoto() async {
     if (_keptPhotoUrls.length + _photos.length >= _kMaxSitePhotos) {
       AppFeedback.warning(context, 'Maximum $_kMaxSitePhotos photos per lead');
+      return;
+    }
+
+    if (_mobileNativePickers) {
+      final source = await _choosePhotoSource();
+      if (source == null || !mounted) return;
+      try {
+        final picked = await ImagePicker().pickImage(
+          source: source,
+          maxWidth: 2400,
+          imageQuality: 90,
+        );
+        if (picked == null) return;
+        final bytes = await picked.readAsBytes();
+        await _addPhotoBytes(bytes, picked.name);
+      } catch (e) {
+        if (!mounted) return;
+        AppFeedback.error(
+            context, e.toString().replaceFirst('Exception: ', ''));
+      }
       return;
     }
 
@@ -637,17 +666,61 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
     if (result == null || result.files.isEmpty) return;
     final file = result.files.first;
     if (file.bytes == null) return;
+    await _addPhotoBytes(file.bytes!, file.name);
+  }
 
+  Future<ImageSource?> _choosePhotoSource() {
+    return showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: context.fomraSurface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: context.fomraBorder,
+                borderRadius: BorderRadius.circular(999),
+              ),
+            ),
+            const SizedBox(height: 8),
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined,
+                  color: AppColors.primary),
+              title: const Text('Take photo'),
+              subtitle: const Text('Open camera'),
+              onTap: () => Navigator.pop(ctx, ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined,
+                  color: AppColors.primary),
+              title: const Text('Choose from gallery'),
+              subtitle: const Text('Pick an existing photo'),
+              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _addPhotoBytes(Uint8List bytes, String name) async {
     setState(() => _compressingPhoto = true);
-
     try {
-      final compressed = await ImageCompressor.compressTo250Kb(file.bytes!);
+      final compressed = await ImageCompressor.compressTo250Kb(bytes);
       if (!mounted) return;
       setState(() {
         _photos.add(AddLeadPhotoDraft(
           bytes: compressed,
-          name: file.name,
-          originalSize: file.bytes!.length,
+          name: name,
+          originalSize: bytes.length,
         ));
         _compressingPhoto = false;
       });

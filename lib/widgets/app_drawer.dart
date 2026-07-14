@@ -4,6 +4,7 @@ import '../theme/fomra_layout.dart';
 import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/fomra_theme_context.dart';
+import 'ui/profile_avatar.dart';
 
 class _MenuItem {
   final String title;
@@ -150,6 +151,50 @@ class _DrawerHeader extends StatelessWidget {
                   color: isDark ? context.fomraTextSecondary : const Color(0xFFB0BEC5),
                   fontSize: 13,
                 ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  ProfileAvatar(
+                    email: AuthService.instance.currentUser?.email,
+                    name: AuthService.instance.currentUser?.fullName ?? 'User',
+                    radius: 18,
+                    backgroundColor: Colors.white.withValues(alpha: 0.18),
+                    foregroundColor: Colors.white,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          AuthService.instance.isManagement
+                              ? 'Management'
+                              : (AuthService.instance.currentUser?.fullName ??
+                                  'User'),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: isDark ? context.fomraTextPrimary : Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        Text(
+                          AuthService.instance.isManagement
+                              ? 'Administrator'
+                              : 'Employee',
+                          style: TextStyle(
+                            color: isDark
+                                ? context.fomraTextSecondary
+                                : const Color(0xFFB0BEC5),
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

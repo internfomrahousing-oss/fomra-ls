@@ -36,6 +36,7 @@ import 'lead_drop_reason_dialog.dart';
 import 'legal_documents_dialog.dart';
 import 'meeting_log_dialog.dart';
 import 'notes_log_dialog.dart';
+import 'signed_project_dialog.dart';
 import 'site_visit_dialog.dart';
 
 int _leadAgeDaysFromReceived(DateTime receivedOn) {
@@ -216,6 +217,13 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
       if (!mounted) return;
       AppFeedback.info(context,
           'Management view is read-only. Sign in as employee to update status.');
+      return;
+    }
+
+    // Signing is approval-gated: employees submit a Project Signed request and
+    // the lead only becomes Signed once management approves it.
+    if (status == LeadStatus.signed) {
+      _handleDetailAction('Signed');
       return;
     }
 
@@ -424,6 +432,27 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
           readOnly: viewOnly,
         ),
       );
+      await _loadActivityData();
+      return;
+    }
+
+    if (label == 'Signed') {
+      if (viewOnly) {
+        AppFeedback.info(context,
+            'Management view is read-only. Sign in as employee to submit.');
+        return;
+      }
+      final submitted = await showFomraDialog<bool>(
+        context: context,
+        builder: (ctx) => SignedProjectDialog(leadId: lead.leadId),
+      );
+      if (submitted == true) {
+        await _loadActivityData();
+        if (mounted) {
+          AppFeedback.info(context,
+              'Submitted — awaiting management approval before the lead is marked Signed.');
+        }
+      }
       return;
     }
 
@@ -1387,7 +1416,10 @@ class _WorkspacePanel extends StatelessWidget {
                         scrollable: false,
                       );
                     default:
-                      return _DocumentsTab(documents: legalDocs);
+                      return _DocumentsTab(
+                        documents: legalDocs,
+                        onUpload: () => onDetailAction('Legal'),
+                      );
                   }
                 },
               ),
@@ -2141,8 +2173,9 @@ class _LeadDetailRow extends StatelessWidget {
 
 class _DocumentsTab extends StatelessWidget {
   final List<LandLeadLegalDocument> documents;
+  final VoidCallback onUpload;
 
-  const _DocumentsTab({required this.documents});
+  const _DocumentsTab({required this.documents, required this.onUpload});
 
   bool _isImage(String fileName) {
     final lower = fileName.toLowerCase();
@@ -2202,6 +2235,22 @@ class _DocumentsTab extends StatelessWidget {
                   color: context.fomraTextSecondary,
                 ),
               ),
+              const SizedBox(height: 16),
+              FilledButton.icon(
+                onPressed: onUpload,
+                icon: const Icon(Icons.upload_file_outlined, size: 18),
+                label: const Text('Upload Document'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.purple,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 12,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
             ],
           ),
         ),
@@ -2211,15 +2260,40 @@ class _DocumentsTab extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          '${documents.length} document${documents.length == 1 ? '' : 's'} for this lead',
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
-            color: context.fomraTextSecondary,
-          ),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                '${documents.length} document${documents.length == 1 ? '' : 's'} for this lead',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: context.fomraTextSecondary,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            OutlinedButton.icon(
+              onPressed: onUpload,
+              icon: const Icon(Icons.upload_file_outlined, size: 16),
+              label: const Text('Upload Document'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.purple,
+                side: BorderSide(color: AppColors.purple.withValues(alpha: 0.4)),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                textStyle: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 10),
         for (final doc in documents)
           Container(
             margin: const EdgeInsets.only(bottom: 8),

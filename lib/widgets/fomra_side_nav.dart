@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'fomra_brand_logo.dart';
 
 import '../screens/home/home_screen.dart';
-import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/fomra_theme_context.dart';
 
@@ -46,14 +45,14 @@ class FomraSideNav extends StatefulWidget {
         'Workspace',
       ),
     ];
-    if (AuthService.instance.isManagement) {
-      items.add(const FomraSideNavItem(
-        '/reports',
-        Icons.summarize_outlined,
-        Icons.summarize_rounded,
-        'Reports',
-      ));
-    }
+    // Reports are available to everyone; the report data is role-scoped
+    // (an executive only ever sees their own leads via visibleLeads).
+    items.add(const FomraSideNavItem(
+      '/reports',
+      Icons.summarize_outlined,
+      Icons.summarize_rounded,
+      'Reports',
+    ));
     return items;
   }
 

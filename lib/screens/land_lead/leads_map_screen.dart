@@ -10,6 +10,7 @@ import '../../models/land_lead_legal_document.dart';
 import '../../models/land_lead_meeting.dart';
 import '../../models/land_lead_site_visit.dart';
 import '../../models/lead_call_log.dart';
+import '../../services/auth_service.dart';
 import '../../services/land_lead_legal_service.dart';
 import '../../services/land_lead_meeting_service.dart';
 import '../../services/land_lead_site_visit_service.dart';
@@ -63,9 +64,23 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
     _dateRange = null;
   }
 
+  /// Role-scoped source leads: an executive only ever sees the sites assigned
+  /// to / created by them, even if the caller passed a broader list. Management
+  /// sees everything. This enforces the access rule at the map itself.
+  List<LandLead> get _scopedLeads {
+    if (AuthService.instance.isManagement) return widget.leads;
+    final me = (AuthService.instance.currentUser?.fullName ?? '')
+        .trim()
+        .toLowerCase();
+    if (me.isEmpty) return widget.leads;
+    return widget.leads
+        .where((l) => l.createdByName.trim().toLowerCase() == me)
+        .toList();
+  }
+
   List<String> _distinct(String Function(LandLead) selector) {
     final set = <String>{};
-    for (final l in widget.leads) {
+    for (final l in _scopedLeads) {
       final v = selector(l).trim();
       if (v.isNotEmpty) set.add(v);
     }
@@ -74,7 +89,7 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
   }
 
   List<LandLead> get _filteredLeads {
-    return widget.leads.where((l) {
+    return _scopedLeads.where((l) {
       if (_stages.isNotEmpty && !_stages.contains(l.status)) return false;
       if (_executive != null && l.createdByName.trim() != _executive) {
         return false;
@@ -108,7 +123,7 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
     final missingGps = filtered.length - plotted.length;
 
     // Initial view uses the full (unfiltered) set so the camera is stable.
-    final allPlotted = _plottedFrom(widget.leads);
+    final allPlotted = _plottedFrom(_scopedLeads);
     final initialView =
         allPlotted.isEmpty ? null : _computeCenterAndZoom(allPlotted);
 
@@ -644,7 +659,7 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
       barrierColor: Colors.black.withValues(alpha: 0.35),
       builder: (_) => _PropertyPopup(
         lead: lead,
-        allLeads: widget.leads,
+        allLeads: _scopedLeads,
         onOpenSite: () => _openLead(context, lead),
       ),
     );

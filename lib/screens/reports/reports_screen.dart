@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 
 import '../../models/land_lead.dart';
 import '../../services/app_store.dart';
+import '../../services/auth_service.dart';
 import '../../services/report_catalog_service.dart';
 import '../../services/role_access.dart';
 import '../../theme/fomra_layout.dart';
@@ -13,6 +14,11 @@ import '../../widgets/fomra_breadcrumb.dart';
 import '../../widgets/ui/app_components.dart';
 import '../../widgets/ui/app_feedback.dart';
 import '../../widgets/ui/app_table.dart';
+
+/// Management + admins can export reports, and executives can export their own
+/// (report data is already scoped to their leads via [AppStore.visibleLeads]).
+bool get _reportsCanExport =>
+    RoleAccess.canExport || AuthService.instance.isEmployee;
 
 enum _StatusFilter { active, closed, dropped }
 
@@ -137,7 +143,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
       AppFeedback.warning(context, 'Select at least one report type.');
       return;
     }
-    if (!RoleAccess.canExport) {
+    if (!_reportsCanExport) {
       AppFeedback.error(context, RoleAccess.deniedMessage('export reports'));
       return;
     }
@@ -545,7 +551,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
             onSelectionChanged: (s) => setState(() => _format = s.first),
           );
           final exportButton = FilledButton.icon(
-            onPressed: _exporting || !RoleAccess.canExport ? null : _generate,
+            onPressed: _exporting || !_reportsCanExport ? null : _generate,
             icon: _exporting
                 ? const SizedBox(
                     width: 14,
@@ -568,7 +574,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                 control,
                 const SizedBox(height: 12),
                 exportButton,
-                if (!RoleAccess.canExport) ...[
+                if (!_reportsCanExport) ...[
                   const SizedBox(height: 8),
                   Text(
                     RoleAccess.deniedMessage('export reports'),
@@ -584,7 +590,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
             children: [
               control,
               const Spacer(),
-              if (!RoleAccess.canExport)
+              if (!_reportsCanExport)
                 Padding(
                   padding: const EdgeInsets.only(right: 12),
                   child: Text(
@@ -756,7 +762,7 @@ class _CatalogPreviewDialog extends StatelessWidget {
                   ),
                   const Spacer(),
                   FilledButton.icon(
-                    onPressed: RoleAccess.canExport ? onExport : null,
+                    onPressed: _reportsCanExport ? onExport : null,
                     icon: const Icon(Icons.download_outlined, size: 18),
                     label: const Text('Export'),
                   ),
