@@ -475,6 +475,78 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     });
   }
 
+  Widget _quickActionsSection(List<PortalQuickAction> actions) {
+    return PortalFadeSection(
+      index: 1,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const SectionHeader(
+            title: 'Quick actions',
+            icon: Icons.flash_on_rounded,
+          ),
+          PortalQuickActionsGrid(actions: actions),
+        ],
+      ),
+    );
+  }
+
+  /// Opens the pending approvals list (management) directly — replaces the old
+  /// always-visible Approvals dashboard section.
+  void _openApprovalsList() {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: context.fomraSurface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheet) {
+          Future<void> wrap(Future<void> Function() fn) async {
+            await fn();
+            setSheet(() {});
+          }
+
+          return DraggableScrollableSheet(
+            expand: false,
+            initialChildSize: 0.72,
+            maxChildSize: 0.95,
+            minChildSize: 0.4,
+            builder: (ctx, controller) => ListView(
+              controller: controller,
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: context.fomraBorder,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                PortalApprovalsSection(
+                  visits: _pendingApprovals,
+                  signedRequests: _pendingSigned,
+                  leads: AppStore.instance.leads,
+                  loading: _loadingApprovals,
+                  onReview: (v) => wrap(() => _reviewPendingVisit(v)),
+                  onApprove: (v) => wrap(() => _approvePendingVisit(v)),
+                  onReject: (v) => wrap(() => _rejectPendingVisit(v)),
+                  onApproveSigned: (r) => wrap(() => _approveSignedRequest(r)),
+                  onRejectSigned: (r) => wrap(() => _rejectSignedRequest(r)),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = AuthService.instance.currentUser;
@@ -493,28 +565,22 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         .length;
     final teamRows = buildPortalTeamPerformance(leads);
 
+    final approvalPending = _pendingApprovals.length + _pendingSigned.length;
+
     final quickActions = [
-      if (_isManagement)
-        PortalQuickAction(
-          label: 'View Sites',
-          icon: Icons.list_alt_outlined,
-          accent: AppColors.primary,
-          onTap: () => _goTo('/land-lead'),
-        )
-      else
+      if (!_isManagement)
         PortalQuickAction(
           label: 'Add Lead',
           icon: Icons.add_location_alt_outlined,
           accent: AppColors.primary,
           onTap: _openAddLead,
         ),
-      if (_isManagement)
-        PortalQuickAction(
-          label: 'Show all projects',
-          icon: Icons.map_outlined,
-          accent: AppColors.info,
-          onTap: () => _openAllProjectsMap(leads),
-        ),
+      PortalQuickAction(
+        label: 'Show all projects',
+        icon: Icons.map_outlined,
+        accent: AppColors.info,
+        onTap: () => _openAllProjectsMap(leads),
+      ),
       PortalQuickAction(
         label: 'Owner details',
         icon: Icons.person_outline,
@@ -590,7 +656,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   dateLabel: dateLabel,
                   totalLeads: totalLeads,
                   activeLeads: _activeLeads,
-                  ownerMeetingPending: ownerMeetingPending,
+                  thirdLabel:
+                      _isManagement ? 'Approval pending' : 'Owner meeting pending',
+                  thirdValue:
+                      _isManagement ? approvalPending : ownerMeetingPending,
+                  thirdIcon: _isManagement
+                      ? Icons.approval_outlined
+                      : Icons.event_available_outlined,
+                  onThirdTap: _isManagement
+                      ? _openApprovalsList
+                      : () => FilteredLeadsScreen.open(
+                          context, LeadListFilter.ownerMeetingPending),
                   onSummaryTap: (filter) {
                     // "Total sites" opens the full Land Workspace directly;
                     // the other tiles open their filtered list.
@@ -603,105 +679,64 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 ),
               ),
               const SizedBox(height: AppSpacing.lg),
-              PortalFadeSection(
-                index: 1,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const SectionHeader(
-                      title: 'Quick actions',
-                      icon: Icons.flash_on_rounded,
-                    ),
-                    PortalQuickActionsGrid(actions: quickActions),
-                  ],
-                ),
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              if (_isManagement)
+              if (_isManagement) ...[
+                _quickActionsSection(quickActions),
+                const SizedBox(height: AppSpacing.lg),
                 PortalFadeSection(
                   index: 2,
-                  child: PortalApprovalsSection(
-                    visits: _pendingApprovals,
-                    signedRequests: _pendingSigned,
+                  child: ManagementExecutiveDashboard(
                     leads: leads,
-                    loading: _loadingApprovals,
-                    onReview: _reviewPendingVisit,
-                    onApprove: _approvePendingVisit,
-                    onReject: _rejectPendingVisit,
-                    onApproveSigned: _approveSignedRequest,
-                    onRejectSigned: _rejectSignedRequest,
+                    teamRows: teamRows,
+                    notifications: _notifications,
+                    widgetIds: const [
+                      'pipelineDeals',
+                      'leaderboard',
+                      'bottlenecks',
+                      'district',
+                      'ageing',
+                    ],
+                    onViewLead: (lead) {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => LeadDetailScreen(lead: lead),
+                        ),
+                      );
+                    },
                   ),
                 ),
-              if (_isManagement) const SizedBox(height: AppSpacing.lg),
-              PortalFadeSection(
-                index: _isManagement ? 3 : 2,
-                child: _isManagement
-                    ? ManagementExecutiveDashboard(
-                        leads: leads,
-                        teamRows: teamRows,
-                        notifications: _notifications,
-                        widgetIds: const [
-                          'pipeline',
-                          'leaderboard',
-                          'bottlenecks',
-                          'district',
-                          'ageing',
-                        ],
-                        onViewLead: (lead) {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => LeadDetailScreen(lead: lead),
-                            ),
-                          );
-                        },
-                      )
-                    : LayoutBuilder(
-                        builder: (context, constraints) {
-                          final sideBySide = constraints.maxWidth >= 640;
-                          final performance = PortalSectionCard(
-                            title: 'My performance',
-                            subtitle:
-                                'Your site contribution this period',
-                            icon: Icons.groups_rounded,
-                            child: _EmployeePerformanceCard(
-                              count: _myLeadCount,
-                              onTap: () => _goTo('/land-lead'),
-                            ),
-                          );
-                          final todayTasks = _EmployeeTodayTasksSection(
-                            employeeName: userName,
-                            onOpenLead: (lead) {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) =>
-                                      LeadDetailScreen(lead: lead),
-                                ),
-                              );
-                            },
-                          );
-                          if (!sideBySide) {
-                            return Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                performance,
-                                const SizedBox(height: AppSpacing.lg),
-                                todayTasks,
-                              ],
-                            );
-                          }
-                          return Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(child: performance),
-                              const SizedBox(width: AppSpacing.lg),
-                              Expanded(child: todayTasks),
-                            ],
-                          );
-                        },
-                      ),
-              ),
+              ] else ...[
+                // Employee order: Greeting, Today's Tasks, Quick Actions, Perf.
+                PortalFadeSection(
+                  index: 1,
+                  child: _EmployeeTodayTasksSection(
+                    employeeName: userName,
+                    onOpenLead: (lead) {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => LeadDetailScreen(lead: lead),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                _quickActionsSection(quickActions),
+                const SizedBox(height: AppSpacing.lg),
+                PortalFadeSection(
+                  index: 3,
+                  child: PortalSectionCard(
+                    title: 'My performance',
+                    subtitle: 'Your site contribution this period',
+                    icon: Icons.groups_rounded,
+                    child: _EmployeePerformanceCard(
+                      count: _myLeadCount,
+                      onTap: () => _goTo('/land-lead'),
+                    ),
+                  ),
+                ),
+              ],
               const SizedBox(height: 88),
             ],
           ),
@@ -723,26 +758,27 @@ class _EmployeePerformanceCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AppCard(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       radius: AppColors.radiusMd,
       interactive: onTap != null,
       onTap: onTap,
       child: Row(
         children: [
           Container(
-            width: 48,
-            height: 48,
+            width: 38,
+            height: 38,
             decoration: BoxDecoration(
               color: AppColors.primary.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(11),
             ),
             alignment: Alignment.center,
             child: const Icon(
               Icons.emoji_events_outlined,
+              size: 20,
               color: AppColors.primary,
             ),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -750,16 +786,16 @@ class _EmployeePerformanceCard extends StatelessWidget {
                 Text(
                   'Sites added',
                   style: TextStyle(
-                    fontSize: 15,
+                    fontSize: 14,
                     fontWeight: FontWeight.w700,
                     color: context.fomraTextPrimary,
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 2),
                 Text(
                   'Your total contribution to the pipeline',
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: 11,
                     color: context.fomraTextSecondary,
                   ),
                 ),
@@ -768,7 +804,7 @@ class _EmployeePerformanceCard extends StatelessWidget {
           ),
           AnimatedCounter(
             value: count,
-            style: Theme.of(context).textTheme.headlineLarge?.copyWith(
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                   fontWeight: FontWeight.w800,
                   color: AppColors.primary,
                 ),

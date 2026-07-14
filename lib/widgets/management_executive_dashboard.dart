@@ -239,6 +239,34 @@ class _ManagementExecutiveDashboardState
           summary: snap.pipeline,
           leads: widget.leads,
         );
+      case 'pipelineDeals':
+        return LayoutBuilder(
+          builder: (context, c) {
+            final pipeline = BiPipelineSection(
+              summary: snap.pipeline,
+              leads: widget.leads,
+            );
+            final donut = _DealTermsDonutCard(leads: widget.leads);
+            if (c.maxWidth < 900) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  pipeline,
+                  const SizedBox(height: AppSpacing.md),
+                  donut,
+                ],
+              );
+            }
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(flex: 6, child: pipeline),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(flex: 4, child: donut),
+              ],
+            );
+          },
+        );
       case 'reminders':
         return IntelRemindersSection(
           items: intel.reminders,

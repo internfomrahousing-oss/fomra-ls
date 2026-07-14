@@ -20,7 +20,7 @@ import 'pdf_saver_stub.dart'
     if (dart.library.html) 'pdf_saver_web.dart'
     if (dart.library.io) 'pdf_saver_io.dart';
 
-enum ReportFormat { pdf, excel }
+enum ReportFormat { pdf, excel, csv }
 
 class ReportPreviewSection {
   final String title;
@@ -164,9 +164,10 @@ class ReportCatalogService {
     );
     final fileName =
         'FomraLS_${kind.fileStem}_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}'
-        '.${format == ReportFormat.excel ? 'csv' : 'pdf'}';
+        '.${format == ReportFormat.pdf ? 'pdf' : 'csv'}';
 
-    if (format == ReportFormat.excel) {
+    // Excel and CSV both export tabular CSV data (opens directly in Excel).
+    if (format == ReportFormat.excel || format == ReportFormat.csv) {
       final bytes = _excelFromPreview(preview);
       await saveCsv(bytes, fileName);
       return;

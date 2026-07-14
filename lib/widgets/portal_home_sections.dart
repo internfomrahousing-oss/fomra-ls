@@ -124,8 +124,14 @@ class PortalWelcomeHeader extends StatelessWidget {
   final String dateLabel;
   final int totalLeads;
   final int activeLeads;
-  final int ownerMeetingPending;
   final ValueChanged<LeadListFilter>? onSummaryTap;
+
+  /// Configurable third KPI tile. Management uses "Approval pending" (opening
+  /// the approvals list); employees use "Owner meeting pending".
+  final String thirdLabel;
+  final int thirdValue;
+  final IconData thirdIcon;
+  final VoidCallback? onThirdTap;
 
   const PortalWelcomeHeader({
     super.key,
@@ -133,7 +139,10 @@ class PortalWelcomeHeader extends StatelessWidget {
     required this.dateLabel,
     required this.totalLeads,
     required this.activeLeads,
-    required this.ownerMeetingPending,
+    required this.thirdLabel,
+    required this.thirdValue,
+    required this.thirdIcon,
+    this.onThirdTap,
     this.onSummaryTap,
   });
 
@@ -210,13 +219,11 @@ class PortalWelcomeHeader extends StatelessWidget {
                       : () => onSummaryTap!(LeadListFilter.activeLeads),
                 ),
                 PortalSummaryTile(
-                  label: 'Owner meeting pending',
-                  value: ownerMeetingPending,
-                  icon: Icons.event_available_outlined,
+                  label: thirdLabel,
+                  value: thirdValue,
+                  icon: thirdIcon,
                   accent: AppColors.warning,
-                  onTap: onSummaryTap == null
-                      ? null
-                      : () => onSummaryTap!(LeadListFilter.ownerMeetingPending),
+                  onTap: onThirdTap,
                 ),
               ];
               if (stacked) {
@@ -1240,37 +1247,45 @@ class _PortalPerformanceRowState extends State<PortalPerformanceRow> {
             borderRadius: BorderRadius.circular(20),
             onTap: () => setState(() => _expanded = !_expanded),
             child: Padding(
-              padding: const EdgeInsets.all(AppSpacing.md),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.md, vertical: AppSpacing.sm),
               child: Column(
                 children: [
                   Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       Container(
-                        width: 42,
-                        height: 42,
+                        width: 34,
+                        height: 34,
                         decoration: BoxDecoration(
                           color: accent.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(14),
+                          borderRadius: BorderRadius.circular(11),
                         ),
                         alignment: Alignment.center,
                         child: Text(
                           initials.toUpperCase(),
-                          style: TextStyle(fontWeight: FontWeight.w800, color: accent),
+                          style: TextStyle(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 13,
+                            color: accent,
+                          ),
                         ),
                       ),
                       const SizedBox(width: AppSpacing.sm),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
                           children: [
                             Row(
                               children: [
                                 Expanded(
                                   child: Text(
                                     data.name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
-                                      fontSize: 15,
+                                      fontSize: 14,
                                       fontWeight: FontWeight.w700,
                                       color: context.fomraTextPrimary,
                                     ),
@@ -1286,17 +1301,7 @@ class _PortalPerformanceRowState extends State<PortalPerformanceRow> {
                                 ),
                               ],
                             ),
-                            if (data.designation.isNotEmpty) ...[
-                              const SizedBox(height: 3),
-                              Text(
-                                data.designation,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: context.fomraTextSecondary,
-                                ),
-                              ),
-                            ],
-                            const SizedBox(height: AppSpacing.sm),
+                            const SizedBox(height: 6),
                             TweenAnimationBuilder<double>(
                               tween: Tween(begin: 0, end: data.percent),
                               duration: AppMotion.slow,
@@ -1308,7 +1313,7 @@ class _PortalPerformanceRowState extends State<PortalPerformanceRow> {
                                       borderRadius: BorderRadius.circular(999),
                                       child: LinearProgressIndicator(
                                         value: value,
-                                        minHeight: 10,
+                                        minHeight: 6,
                                         backgroundColor:
                                             accent.withValues(alpha: 0.12),
                                         valueColor:
@@ -1320,7 +1325,7 @@ class _PortalPerformanceRowState extends State<PortalPerformanceRow> {
                                   Text(
                                     '${(value * 100).round()}%',
                                     style: TextStyle(
-                                      fontSize: 12,
+                                      fontSize: 11,
                                       fontWeight: FontWeight.w700,
                                       color: context.fomraTextPrimary,
                                     ),
@@ -1328,27 +1333,27 @@ class _PortalPerformanceRowState extends State<PortalPerformanceRow> {
                                 ],
                               ),
                             ),
-                            const SizedBox(height: AppSpacing.sm),
+                            const SizedBox(height: 6),
                             Wrap(
                               spacing: AppSpacing.xs,
                               runSpacing: AppSpacing.xs,
                               children: [
                                 StatusChip(label: data.statusLabel, tone: data.tone),
-                                _TinyStat(label: 'Lead count', value: '${data.total}'),
+                                _TinyStat(label: 'Leads', value: '${data.total}'),
                                 _TinyStat(label: 'Today', value: '${data.today}'),
                               ],
                             ),
                           ],
                         ),
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: 6),
                       AnimatedRotation(
                         turns: _expanded ? 0.5 : 0,
                         duration: _expandMs,
                         curve: Curves.easeOutCubic,
                         child: Icon(
                           Icons.keyboard_arrow_down_rounded,
-                          size: 24,
+                          size: 22,
                           color: context.fomraTextSecondary,
                         ),
                       ),

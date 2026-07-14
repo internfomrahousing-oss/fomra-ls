@@ -3,15 +3,12 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
 
-import '../../analytics/ai_lead_score.dart';
 import '../../config/maptiler_tiles.dart';
 import '../../models/land_lead.dart';
-import '../../models/land_lead_legal_document.dart';
 import '../../models/land_lead_meeting.dart';
 import '../../models/land_lead_site_visit.dart';
 import '../../models/lead_call_log.dart';
 import '../../services/auth_service.dart';
-import '../../services/land_lead_legal_service.dart';
 import '../../services/land_lead_meeting_service.dart';
 import '../../services/land_lead_site_visit_service.dart';
 import '../../services/lead_call_log_service.dart';
@@ -23,6 +20,7 @@ import '../../widgets/fomra_app_shell.dart';
 import '../../widgets/fomra_breadcrumb.dart';
 import '../../widgets/lead_portfolio_breakdown.dart';
 import '../../widgets/portal_page_layout.dart';
+import '../../widgets/terms_deal_selector.dart';
 import 'lead_detail_screen.dart';
 
 class _PlottedLead {
@@ -659,7 +657,6 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
       barrierColor: Colors.black.withValues(alpha: 0.35),
       builder: (_) => _PropertyPopup(
         lead: lead,
-        allLeads: _scopedLeads,
         onOpenSite: () => _openLead(context, lead),
       ),
     );
@@ -682,12 +679,10 @@ String _siteName(LandLead l) {
 /// actions (open the full site, or launch Google Maps navigation).
 class _PropertyPopup extends StatefulWidget {
   final LandLead lead;
-  final List<LandLead> allLeads;
   final VoidCallback onOpenSite;
 
   const _PropertyPopup({
     required this.lead,
-    required this.allLeads,
     required this.onOpenSite,
   });
 
@@ -697,7 +692,6 @@ class _PropertyPopup extends StatefulWidget {
 
 class _PropertyPopupState extends State<_PropertyPopup> {
   bool _loading = true;
-  AiLeadScoreResult? _score;
   DateTime? _lastActivity;
 
   @override
@@ -713,12 +707,10 @@ class _PropertyPopupState extends State<_PropertyPopup> {
         LeadCallLogService.getForLead(leadId),
         LandLeadMeetingService.getForLead(leadId),
         LandLeadSiteVisitService.getAllForLead(leadId),
-        LandLeadLegalService.getDocuments(leadId),
       ]);
       final callLogs = results[0] as List<LeadCallLog>;
       final meetings = results[1] as List<LandLeadMeeting>;
       final siteVisits = results[2] as List<LandLeadSiteVisit>;
-      final legalDocs = results[3] as List<LandLeadLegalDocument>;
 
       var last = widget.lead.addedOn;
       for (final c in callLogs) {
@@ -731,18 +723,8 @@ class _PropertyPopupState extends State<_PropertyPopup> {
         if (v.visitedAt.isAfter(last)) last = v.visitedAt;
       }
 
-      final score = AiLeadScore.compute(
-        lead: widget.lead,
-        callLogs: callLogs,
-        meetings: meetings,
-        siteVisits: siteVisits,
-        legalDocs: legalDocs,
-        allLeads: widget.allLeads,
-      );
-
       if (!mounted) return;
       setState(() {
-        _score = score;
         _lastActivity = last;
         _loading = false;
       });
@@ -752,13 +734,10 @@ class _PropertyPopupState extends State<_PropertyPopup> {
     }
   }
 
-  Color _scoreColor(AiScoreBand band) => switch (band) {
-        AiScoreBand.excellent => AppColors.success,
-        AiScoreBand.good => AppColors.info,
-        AiScoreBand.moderate => AppColors.warning,
-        AiScoreBand.needsAttention => const Color(0xFFF97316),
-        AiScoreBand.highRisk => AppColors.error,
-      };
+  String get _termsLabel {
+    final primary = parseTermsDeal(widget.lead.accessDetails).primary;
+    return (primary == null || primary.trim().isEmpty) ? '—' : primary.trim();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -770,9 +749,9 @@ class _PropertyPopupState extends State<_PropertyPopup> {
       backgroundColor: context.fomraSurface,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 420),
+        constraints: const BoxConstraints(maxWidth: 400),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -809,6 +788,7 @@ class _PropertyPopupState extends State<_PropertyPopup> {
                   lead.createdByName.trim().isEmpty ? '—' : lead.createdByName),
               _row('Owner', lead.ownerName.trim().isEmpty ? '—' : lead.ownerName),
               _row('Broker', lead.brokerName.trim().isEmpty ? '—' : lead.brokerName),
+              _row('Terms', _termsLabel),
               _row(
                 'Last Activity',
                 _loading
@@ -817,49 +797,7 @@ class _PropertyPopupState extends State<_PropertyPopup> {
                         ? '—'
                         : DateFormat('dd MMM yyyy').format(_lastActivity!),
               ),
-              const SizedBox(height: 4),
-              Row(
-                children: [
-                  Text(
-                    'AI Score',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: context.fomraTextSecondary,
-                    ),
-                  ),
-                  const Spacer(),
-                  if (_loading)
-                    const SizedBox(
-                      width: 14,
-                      height: 14,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  else if (_score != null)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color:
-                            _scoreColor(_score!.band).withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(999),
-                        border: Border.all(
-                          color: _scoreColor(_score!.band)
-                              .withValues(alpha: 0.4),
-                        ),
-                      ),
-                      child: Text(
-                        '${_score!.score} · ${_score!.band.label}',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800,
-                          color: _scoreColor(_score!.band),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 14),
               Row(
                 children: [
                   Expanded(

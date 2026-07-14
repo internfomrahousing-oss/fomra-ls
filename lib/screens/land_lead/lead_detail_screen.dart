@@ -186,12 +186,21 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
 
   int get _leadAgeDays => _leadAgeDaysFromReceived(lead.addedOn);
 
-  bool get _readOnly => AuthService.instance.isManagement;
+  /// A lead an executive posted themselves (vs. one management created/assigned).
+  bool get _isEmployeePostedLead => lead.createdByRole == 'employee';
 
-  /// Management can create/edit/manage site (lead) details directly, even
-  /// though the rest of the workspace (calls, status, activities) stays
-  /// read-only for them.
-  bool get _canEditSite => RoleAccess.canEdit;
+  /// Management gets FULL access to leads it created/assigned, but only a
+  /// review view (employee-specific editing hidden) for leads posted by another
+  /// executive.
+  bool get _managementReviewOnly =>
+      AuthService.instance.isManagement && _isEmployeePostedLead;
+
+  bool get _readOnly => _managementReviewOnly;
+
+  /// Edit Lead + full modifications: employees on their own leads, and
+  /// management on the leads it owns. Hidden when management is only reviewing
+  /// another executive's lead.
+  bool get _canEditSite => _managementReviewOnly ? false : RoleAccess.canEdit;
 
   CallActivityMetrics get _callMetrics =>
       CallActivityMetrics.fromLogs(_callLogs);
