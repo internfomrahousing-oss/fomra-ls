@@ -10,7 +10,10 @@ import '../land_lead/leads_map_screen.dart';
 import '../land_lead/management_visit_review_dialog.dart';
 import '../../services/auth_service.dart';
 import '../../services/app_store.dart';
+import '../../models/employee_profile.dart';
 import '../../services/employee_service.dart';
+import '../../services/team_hierarchy.dart';
+import '../employee_management/team_management_screen.dart';
 import '../../services/land_lead_service.dart';
 import '../../services/lead_drop_approval_service.dart';
 import '../../services/land_lead_signed_service.dart';
@@ -111,10 +114,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         AppStore.instance.setLeads(leads);
       } catch (_) {/* keep whatever is cached */}
     }
-    if (_isManagement && AppStore.instance.employees.isEmpty) {
+    // The roster is needed by the management leaderboard and by Reporting
+    // Manager / Head team + performance views, so load it for everyone.
+    if (AppStore.instance.employees.isEmpty) {
       try {
         final employees = await EmployeeService.getAll();
-        if (employees.isNotEmpty) AppStore.instance.setEmployees(employees);
+        if (employees.isNotEmpty) {
+          AppStore.instance.setEmployees(employees);
+          if (mounted) setState(() {});
+        }
       } catch (_) {/* fall back to lead-derived names */}
     }
   }
@@ -127,6 +135,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       _isManagement ? AppStore.instance.leads : _myLeads;
 
   int get _myLeadCount => _myLeads.length;
+
+  /// Leads across the current Reporting Manager / Head's whole team (recursively
+  /// down the reporting line, including their own).
+  int get _teamLeadCount {
+    final me = TeamHierarchy.currentProfile;
+    if (me == null) return _myLeadCount;
+    final names = TeamHierarchy.teamMemberNames(me);
+    return AppStore.instance.leads
+        .where((l) => names.contains(l.createdByName.trim().toLowerCase()))
+        .length;
+  }
 
   @override
   void dispose() {
@@ -634,6 +653,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         ),
     ];
 
+    final designation = TeamHierarchy.currentDesignation;
+    final canManageTeam = !_isManagement &&
+        (designation == EmployeeDesignations.reportingManager ||
+            designation == EmployeeDesignations.head);
+
     final quickActions = [
       if (!_isManagement)
         PortalQuickAction(
@@ -641,6 +665,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           icon: Icons.add_location_alt_outlined,
           accent: AppColors.primary,
           onTap: _openAddLead,
+        ),
+      if (canManageTeam)
+        PortalQuickAction(
+          label: 'Manage Team',
+          icon: Icons.groups_2_outlined,
+          accent: AppColors.purple,
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const TeamManagementScreen()),
+          ),
         ),
       PortalQuickAction(
         label: 'Show All Projects',
@@ -793,11 +827,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 PortalFadeSection(
                   index: 3,
                   child: PortalSectionCard(
-                    title: 'My performance',
-                    subtitle: 'Your site contribution this period',
+                    title: canManageTeam ? 'Performance' : 'My performance',
+                    subtitle: canManageTeam
+                        ? 'Switch between your team and your own contribution'
+                        : 'Your site contribution this period',
                     icon: Icons.groups_rounded,
-                    child: _EmployeePerformanceCard(
-                      count: _myLeadCount,
+                    child: _RolePerformanceCard(
+                      isTeamLead: canManageTeam,
+                      ownCount: _myLeadCount,
+                      teamCount: _teamLeadCount,
                       onTap: () => _goTo('/land-lead'),
                     ),
                   ),
@@ -815,69 +853,107 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 }
 
-class _EmployeePerformanceCard extends StatelessWidget {
-  final int count;
+class _RolePerformanceCard extends StatefulWidget {
+  final bool isTeamLead;
+  final int ownCount;
+  final int teamCount;
   final VoidCallback? onTap;
 
-  const _EmployeePerformanceCard({required this.count, this.onTap});
+  const _RolePerformanceCard({
+    required this.isTeamLead,
+    required this.ownCount,
+    required this.teamCount,
+    this.onTap,
+  });
+
+  @override
+  State<_RolePerformanceCard> createState() => _RolePerformanceCardState();
+}
+
+class _RolePerformanceCardState extends State<_RolePerformanceCard> {
+  bool _team = true;
 
   @override
   Widget build(BuildContext context) {
-    return AppCard(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      radius: AppColors.radiusMd,
-      interactive: onTap != null,
-      onTap: onTap,
-      child: Row(
-        children: [
-          Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            alignment: Alignment.center,
-            child: const Icon(
-              Icons.emoji_events_outlined,
-              size: 17,
-              color: AppColors.primary,
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Sites Added',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: context.fomraTextPrimary,
-                  ),
-                ),
-                const SizedBox(height: 1),
-                Text(
-                  'Your total contribution to the pipeline',
-                  style: TextStyle(
-                    fontSize: 10.5,
-                    color: context.fomraTextSecondary,
-                  ),
-                ),
+    final showTeam = widget.isTeamLead && _team;
+    final count = showTeam ? widget.teamCount : widget.ownCount;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (widget.isTeamLead) ...[
+          Align(
+            alignment: Alignment.centerLeft,
+            child: SegmentedButton<bool>(
+              segments: const [
+                ButtonSegment(value: true, label: Text('Team')),
+                ButtonSegment(value: false, label: Text('Individual')),
               ],
+              selected: {_team},
+              onSelectionChanged: (s) => setState(() => _team = s.first),
+              showSelectedIcon: false,
             ),
           ),
-          AnimatedCounter(
-            value: count,
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.primary,
-                  fontSize: 18,
-                ),
-          ),
+          const SizedBox(height: 10),
         ],
-      ),
+        AppCard(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          radius: AppColors.radiusMd,
+          interactive: widget.onTap != null,
+          onTap: widget.onTap,
+          child: Row(
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                alignment: Alignment.center,
+                child: const Icon(
+                  Icons.emoji_events_outlined,
+                  size: 17,
+                  color: AppColors.primary,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      showTeam ? 'Team Sites Added' : 'Sites Added',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: context.fomraTextPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 1),
+                    Text(
+                      showTeam
+                          ? "Your team's total contribution to the pipeline"
+                          : 'Your total contribution to the pipeline',
+                      style: TextStyle(
+                        fontSize: 10.5,
+                        color: context.fomraTextSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              AnimatedCounter(
+                value: count,
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.primary,
+                      fontSize: 18,
+                    ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

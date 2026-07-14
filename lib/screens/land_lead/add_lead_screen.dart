@@ -589,6 +589,14 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
     });
 
     try {
+      // Instant feedback: drop a provisional pin at the last-known location
+      // while a fresh, accurate reading is acquired.
+      final last = await GpsVerificationService.lastKnown();
+      if (last != null && mounted) {
+        _centerMapOn(last.point);
+        setState(() => _pinnedPoint = last.point);
+      }
+
       final fix = await GpsVerificationService.captureLive();
       final point = fix.point;
       if (!mounted) return;

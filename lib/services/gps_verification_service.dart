@@ -4,6 +4,24 @@ import '../models/gps_fix.dart';
 
 /// Live-GPS-only capture. Rejects manual pins / typed coordinates.
 abstract final class GpsVerificationService {
+  /// A fast last-known fix for instant map feedback while a fresh reading is
+  /// obtained. Returns null when unavailable.
+  static Future<GpsFix?> lastKnown() async {
+    try {
+      final p = await Geolocator.getLastKnownPosition();
+      if (p == null) return null;
+      return GpsFix(
+        latitude: p.latitude,
+        longitude: p.longitude,
+        accuracyMeters: p.accuracy,
+        timestamp: p.timestamp.toUtc(),
+        isLive: true,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Throws [GpsVerificationException] when live GPS cannot be obtained.
   static Future<GpsFix> captureLive({
     Duration timeLimit = const Duration(seconds: 20),
@@ -30,7 +48,9 @@ abstract final class GpsVerificationService {
 
     final position = await Geolocator.getCurrentPosition(
       locationSettings: LocationSettings(
-        accuracy: LocationAccuracy.best,
+        // `high` acquires a fix noticeably faster than `best` while staying
+        // well within the acceptable-accuracy threshold.
+        accuracy: LocationAccuracy.high,
         timeLimit: timeLimit,
         // Prefer a fresh reading over a cached last-known fix.
         distanceFilter: 0,

@@ -234,6 +234,29 @@ class EmployeeService {
     await _saveCache(cached);
   }
 
+  /// Assigns [employeeEmail] to report to [managerEmail] (empty to unassign).
+  /// Best-effort DB update with a graceful local-cache fallback.
+  static Future<void> assignReportsTo(
+    String employeeEmail,
+    String managerEmail,
+  ) async {
+    final emp = employeeEmail.trim().toLowerCase();
+    final mgr = managerEmail.trim().toLowerCase();
+    try {
+      await _db
+          .from('employee_profiles')
+          .update({'reports_to': mgr}).eq('id', emp);
+    } catch (_) {
+      // Column may not exist yet / offline — update the cache anyway.
+    }
+    final cached = await _loadCache();
+    final idx = cached.indexWhere((e) => e.id.toLowerCase() == emp);
+    if (idx != -1) {
+      cached[idx] = cached[idx].copyWith(reportsTo: mgr);
+      await _saveCache(cached);
+    }
+  }
+
   static EmployeeProfile _fromRow(Map<String, dynamic> r) {
     return EmployeeProfile(
       id: r['id'] as String,
@@ -243,6 +266,7 @@ class EmployeeService {
       designation: r['designation'] as String? ?? '',
       department: r['department'] as String? ?? '',
       notes: r['notes'] as String? ?? '',
+      reportsTo: r['reports_to'] as String? ?? '',
       status: EmployeeStatus.values.firstWhere(
         (s) => s.name == (r['status'] as String? ?? 'active'),
         orElse: () => EmployeeStatus.active,
@@ -259,6 +283,7 @@ class EmployeeService {
         'designation': e.designation,
         'department': e.department,
         'notes': e.notes,
+        'reports_to': e.reportsTo,
         'status': e.status.name,
         'joined_on': e.joinedOn.toUtc().toIso8601String(),
       };
