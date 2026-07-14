@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:fl_chart/fl_chart.dart';
 import '../../services/api_client.dart';
+import '../../services/auth_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
@@ -1306,6 +1307,17 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
   }
 
   Widget _buildMagicBricksSection() {
+    // Competitor Projects are available to management users only.
+    if (!AuthService.instance.isManagement) {
+      return const _SectionCard(
+        title: 'Competitor Projects',
+        subtitle: 'Available to management only',
+        icon: Icons.lock_outline_rounded,
+        child: Text(
+          'Competitor Projects are restricted to management users.',
+        ),
+      );
+    }
     const mbColor = Color(0xFFE65100);
     final city = (_detectedDistrict ?? '')
         .replaceAll(RegExp(r'\s*[Dd]istrict\s*$'), '').trim();

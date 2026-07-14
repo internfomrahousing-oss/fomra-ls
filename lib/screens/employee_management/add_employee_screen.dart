@@ -19,9 +19,17 @@ class AddEmployeeScreen extends StatefulWidget {
 }
 
 class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
+  static const _designations = <String>[
+    'Executive',
+    'Reporting Manager',
+    'Head',
+    'Management',
+  ];
+
   final _formKey = GlobalKey<FormState>();
   final _nameCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
+  String? _designation;
   bool _saving = false;
 
   @override
@@ -33,11 +41,16 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
+    if (_designation == null) {
+      AppFeedback.warning(context, 'Select a designation');
+      return;
+    }
     setState(() => _saving = true);
     try {
       final profile = await EmployeeService.create(
         fullName: _nameCtrl.text,
         email: _emailCtrl.text,
+        designation: _designation!,
       );
       // Send the "set your password" invite email. If it fails, the profile is
       // still created — surface the reason so management can re-send.
@@ -148,6 +161,24 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
                             if (!v.contains('@')) return 'Enter a valid email';
                             return null;
                           },
+                        ),
+                        const SizedBox(height: 16),
+                        DropdownButtonFormField<String>(
+                          initialValue: _designation,
+                          decoration: FomraInput.decoration(
+                            context: context,
+                            label: 'Designation',
+                            icon: Icons.workspace_premium_outlined,
+                            required: true,
+                          ),
+                          items: [
+                            for (final d in _designations)
+                              DropdownMenuItem(value: d, child: Text(d)),
+                          ],
+                          validator: (v) => (v == null || v.isEmpty)
+                              ? 'Designation is required'
+                              : null,
+                          onChanged: (v) => setState(() => _designation = v),
                         ),
                         const SizedBox(height: 28),
                         SizedBox(

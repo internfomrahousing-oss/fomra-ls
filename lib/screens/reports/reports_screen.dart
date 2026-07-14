@@ -64,9 +64,6 @@ const _reportCategories = <({String name, List<ReportKind> kinds})>[
     kinds: [
       ReportKind.siteVisit,
       ReportKind.pendingApproval,
-      ReportKind.legal,
-      ReportKind.document,
-      ReportKind.survey,
     ],
   ),
   (

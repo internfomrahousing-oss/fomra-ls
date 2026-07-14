@@ -161,7 +161,7 @@ class _SignedProjectDialogState extends State<SignedProjectDialog> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     alignment: Alignment.center,
-                    child: Icon(Icons.draw_outlined,
+                    child: Icon(Icons.check_circle,
                         color: LeadStatus.signed.color, size: 20),
                   ),
                   const SizedBox(width: 12),
@@ -326,7 +326,7 @@ class _SignedProjectDialogState extends State<SignedProjectDialog> {
                               color: Colors.white,
                             ),
                           )
-                        : const Icon(Icons.draw_outlined, size: 18),
+                        : const Icon(Icons.check_circle, size: 18),
                     label: Text(_submitting ? 'Submitting…' : 'Project Signed'),
                     style: FilledButton.styleFrom(
                       backgroundColor: LeadStatus.signed.color,

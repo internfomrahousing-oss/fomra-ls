@@ -1,17 +1,13 @@
-import 'dart:typed_data';
-
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 
-import '../../models/land_lead_legal_document.dart';
 import '../../services/land_lead_legal_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_theme_context.dart';
-import '../../utils/image_compressor.dart';
-import '../../widgets/separate_date_time_fields.dart';
 import '../../widgets/ui/app_feedback.dart';
 
+/// Legal action window: capture Legal Queries and Legal Notes for a lead.
+/// Document upload has been removed; both fields are persisted in the existing
+/// `reference_notes` backend column (encoded together — no schema change).
 class LegalDocumentsDialog extends StatefulWidget {
   final String leadId;
   final bool readOnly;
@@ -27,13 +23,13 @@ class LegalDocumentsDialog extends StatefulWidget {
 }
 
 class _LegalDocumentsDialogState extends State<LegalDocumentsDialog> {
-  static const _maxDocuments = 4;
+  static const _queriesMarker = '[Legal Queries]';
+  static const _notesMarker = '[Legal Notes]';
 
+  final _queriesCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
   bool _loading = true;
-  bool _uploading = false;
-  bool _savingNotes = false;
-  List<LandLeadLegalDocument> _documents = [];
+  bool _saving = false;
 
   @override
   void initState() {
@@ -43,30 +39,79 @@ class _LegalDocumentsDialogState extends State<LegalDocumentsDialog> {
 
   @override
   void dispose() {
+    _queriesCtrl.dispose();
     _notesCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _load() async {
     try {
-      final results = await Future.wait([
-        LandLeadLegalService.getDocuments(widget.leadId),
-        LandLeadLegalService.getReferenceNotes(widget.leadId),
-      ]);
+      final raw = await LandLeadLegalService.getReferenceNotes(widget.leadId);
+      final decoded = _decode(raw);
       if (!mounted) return;
       setState(() {
-        _documents = results[0] as List<LandLeadLegalDocument>;
-        _notesCtrl.text = results[1] as String;
+        _queriesCtrl.text = decoded.queries;
+        _notesCtrl.text = decoded.notes;
       });
     } catch (_) {
-      // Tables may not exist yet.
+      // Table may not exist yet — start with empty fields.
     } finally {
       if (mounted) setState(() => _loading = false);
     }
   }
 
-  InputDecoration _fieldDecoration(BuildContext context, String label,
-      {String? hint}) {
+  ({String queries, String notes}) _decode(String raw) {
+    final text = raw.trim();
+    if (text.isEmpty) return (queries: '', notes: '');
+    final qIdx = text.indexOf(_queriesMarker);
+    final nIdx = text.indexOf(_notesMarker);
+    if (qIdx == -1 && nIdx == -1) {
+      // Legacy reference notes — treat the whole blob as Legal Notes.
+      return (queries: '', notes: text);
+    }
+    String section(int start, int end) {
+      if (start == -1) return '';
+      final from = start + (start == qIdx ? _queriesMarker.length : _notesMarker.length);
+      final to = end == -1 ? text.length : end;
+      return text.substring(from, to).trim();
+    }
+
+    if (qIdx != -1 && nIdx != -1) {
+      if (qIdx < nIdx) {
+        return (queries: section(qIdx, nIdx), notes: section(nIdx, -1));
+      }
+      return (queries: section(qIdx, -1), notes: section(nIdx, qIdx));
+    }
+    if (qIdx != -1) return (queries: section(qIdx, -1), notes: '');
+    return (queries: '', notes: section(nIdx, -1));
+  }
+
+  String _encode() {
+    final q = _queriesCtrl.text.trim();
+    final n = _notesCtrl.text.trim();
+    if (q.isEmpty && n.isEmpty) return '';
+    return '$_queriesMarker\n$q\n\n$_notesMarker\n$n';
+  }
+
+  Future<void> _save() async {
+    if (_saving) return;
+    setState(() => _saving = true);
+    try {
+      await LandLeadLegalService.saveReferenceNotes(widget.leadId, _encode());
+      if (mounted) {
+        AppFeedback.success(context, 'Legal details saved');
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) {
+        AppFeedback.error(context, 'Could not save: $e');
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  InputDecoration _fieldDecoration(String label, String hint) {
     return InputDecoration(
       labelText: label,
       hintText: hint,
@@ -84,135 +129,30 @@ class _LegalDocumentsDialogState extends State<LegalDocumentsDialog> {
     );
   }
 
-  int get _remainingSlots => _maxDocuments - _documents.length;
-
-  bool _isImageFile(String fileName) {
-    final lower = fileName.toLowerCase();
-    return lower.endsWith('.jpg') ||
-        lower.endsWith('.jpeg') ||
-        lower.endsWith('.png');
-  }
-
-  String _jpegFileName(String fileName) {
-    final dot = fileName.lastIndexOf('.');
-    final base = dot > 0 ? fileName.substring(0, dot) : fileName;
-    return '$base.jpg';
-  }
-
-  Future<({Uint8List bytes, String fileName})> _prepareUploadBytes(
-    Uint8List bytes,
-    String fileName,
-  ) async {
-    if (_isImageFile(fileName)) {
-      final compressed = await ImageCompressor.compressTo1Mb(bytes);
-      return (bytes: compressed, fileName: _jpegFileName(fileName));
-    }
-    if (bytes.length > ImageCompressor.maxBytes1Mb) {
-      throw Exception(
-        '$fileName exceeds 1 MB. Use a smaller file or upload as JPG/PNG.',
-      );
-    }
-    return (bytes: bytes, fileName: fileName);
-  }
-
-  Future<void> _uploadDocument() async {
-    if (_uploading) return;
-    if (_remainingSlots <= 0) {
-      AppFeedback.warning(context, 'Maximum $_maxDocuments documents allowed');
-      return;
-    }
-
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: const ['pdf', 'png', 'jpg', 'jpeg', 'doc', 'docx'],
-      allowMultiple: true,
-      withData: true,
+  Widget _readOnlyBlock(String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0.3,
+            color: context.fomraTextSecondary,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          value.trim().isEmpty ? '—' : value.trim(),
+          style: TextStyle(
+            fontSize: 13,
+            height: 1.45,
+            color: context.fomraTextPrimary,
+          ),
+        ),
+      ],
     );
-    if (result == null || result.files.isEmpty) return;
-
-    final picked = result.files
-        .where((f) => f.bytes != null && f.name.trim().isNotEmpty)
-        .take(_remainingSlots)
-        .toList();
-    if (picked.isEmpty) {
-      if (mounted) {
-        AppFeedback.error(context, 'Could not read selected file(s)');
-      }
-      return;
-    }
-    if (result.files.length > _remainingSlots && mounted) {
-      AppFeedback.warning(
-        context,
-        'Only $_remainingSlots more file${_remainingSlots == 1 ? '' : 's'} allowed (max $_maxDocuments)',
-      );
-    }
-
-    setState(() => _uploading = true);
-    var uploaded = 0;
-    try {
-      for (final file in picked) {
-        if (!mounted || _documents.length >= _maxDocuments) break;
-        final prepared = await _prepareUploadBytes(file.bytes!, file.name);
-        final doc = await LandLeadLegalService.uploadDocument(
-          leadId: widget.leadId,
-          bytes: prepared.bytes,
-          fileName: prepared.fileName,
-        );
-        if (!mounted) return;
-        setState(() => _documents = [doc, ..._documents]);
-        uploaded++;
-      }
-      if (mounted && uploaded > 0) {
-        AppFeedback.success(
-          context,
-          uploaded == 1
-              ? 'Uploaded 1 document'
-              : 'Uploaded $uploaded documents',
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        AppFeedback.error(
-          context,
-          uploaded > 0
-              ? 'Uploaded $uploaded file(s); then failed: $e'
-              : 'Upload failed: $e',
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _uploading = false);
-    }
-  }
-
-  Future<void> _saveNotes() async {
-    if (_savingNotes) return;
-    setState(() => _savingNotes = true);
-    try {
-      await LandLeadLegalService.saveReferenceNotes(
-        widget.leadId,
-        _notesCtrl.text,
-      );
-      if (mounted) {
-        AppFeedback.success(context, 'Reference notes saved');
-        Navigator.pop(context);
-      }
-    } catch (e) {
-      if (mounted) {
-        AppFeedback.error(context, 'Could not save notes: $e');
-      }
-    } finally {
-      if (mounted) setState(() => _savingNotes = false);
-    }
-  }
-
-  Future<void> _openDocument(String url) async {
-    final uri = Uri.tryParse(url);
-    if (uri == null) return;
-    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-      if (mounted) {
-        AppFeedback.error(context, 'Could not open document');
-      }
-    }
   }
 
   @override
@@ -222,7 +162,7 @@ class _LegalDocumentsDialogState extends State<LegalDocumentsDialog> {
       backgroundColor: context.fomraSurface,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 480, maxHeight: 680),
+        constraints: const BoxConstraints(maxWidth: 480, maxHeight: 620),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 18, 12, 16),
           child: Column(
@@ -277,8 +217,8 @@ class _LegalDocumentsDialogState extends State<LegalDocumentsDialog> {
               const SizedBox(height: 4),
               Text(
                 widget.readOnly
-                    ? 'Legal documents and reference notes for this lead'
-                    : 'Upload legal verified documents and keep reference notes',
+                    ? 'Legal queries and notes for this lead'
+                    : 'Record legal queries and notes for this lead',
                 style: TextStyle(
                   fontSize: 12,
                   color: context.fomraTextSecondary,
@@ -287,135 +227,82 @@ class _LegalDocumentsDialogState extends State<LegalDocumentsDialog> {
               const SizedBox(height: 14),
               Flexible(
                 child: SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      if (!widget.readOnly) ...[
-                        OutlinedButton.icon(
-                          onPressed:
-                              (_uploading || _remainingSlots <= 0)
-                                  ? null
-                                  : _uploadDocument,
-                          icon: _uploading
-                              ? const SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(strokeWidth: 2),
-                                )
-                              : const Icon(Icons.upload_file_outlined, size: 18),
-                          label: Text(
-                            _uploading
-                                ? 'Uploading…'
-                                : _remainingSlots <= 0
-                                    ? 'Maximum $_maxDocuments documents uploaded'
-                                    : 'Upload legal document',
-                          ),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: AppColors.purple,
-                            side: BorderSide(color: context.fomraBorder),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 12,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          '${_documents.length}/$_maxDocuments uploaded · PDF, JPG, PNG, DOC · images auto-compress to 1 MB',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: context.fomraTextSecondary,
-                          ),
-                        ),
-                      ],
-                      if (_loading)
-                        const Padding(
-                          padding: EdgeInsets.only(top: 16),
+                  child: _loading
+                      ? const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 24),
                           child: Center(
                             child: SizedBox(
                               width: 22,
                               height: 22,
-                              child: CircularProgressIndicator(strokeWidth: 2),
+                              child:
+                                  CircularProgressIndicator(strokeWidth: 2),
                             ),
                           ),
                         )
-                      else if (_documents.isNotEmpty) ...[
-                        const SizedBox(height: 16),
-                        Text(
-                          'Verified documents',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: context.fomraTextSecondary,
-                          ),
+                      : Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            if (widget.readOnly) ...[
+                              _readOnlyBlock(
+                                  'Legal Queries', _queriesCtrl.text),
+                              const SizedBox(height: 16),
+                              _readOnlyBlock('Legal Notes', _notesCtrl.text),
+                            ] else ...[
+                              TextField(
+                                controller: _queriesCtrl,
+                                minLines: 3,
+                                maxLines: 5,
+                                maxLength: 500,
+                                decoration: _fieldDecoration(
+                                  'Legal Queries',
+                                  'Raise queries for legal review…',
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              TextField(
+                                controller: _notesCtrl,
+                                minLines: 3,
+                                maxLines: 5,
+                                maxLength: 500,
+                                decoration: _fieldDecoration(
+                                  'Legal Notes',
+                                  'Add legal notes / reference…',
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
-                        const SizedBox(height: 8),
-                        for (final doc in _documents)
-                          _DocumentTile(
-                            document: doc,
-                            onOpen: () => _openDocument(doc.fileUrl),
-                          ),
-                      ],
-                      const SizedBox(height: 16),
-                      if (widget.readOnly)
-                        Text(
-                          _notesCtrl.text.trim().isEmpty
-                              ? 'No reference notes yet.'
-                              : _notesCtrl.text.trim(),
-                          style: TextStyle(
-                            fontSize: 13,
-                            height: 1.45,
-                            color: context.fomraTextPrimary,
-                          ),
-                        )
-                      else
-                        TextField(
-                          controller: _notesCtrl,
-                          minLines: 4,
-                          maxLines: 6,
-                          maxLength: 500,
-                          decoration: _fieldDecoration(
-                            context,
-                            'Reference notes',
-                            hint: 'Add notes for legal reference…',
-                          ),
-                        ),
-                    ],
-                  ),
                 ),
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 12),
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   TextButton(
                     onPressed: () => Navigator.pop(context),
-                    child: const Text('Close'),
+                    child: Text(widget.readOnly ? 'Close' : 'Cancel'),
                   ),
                   if (!widget.readOnly) ...[
                     const SizedBox(width: 8),
                     FilledButton(
-                      onPressed: _savingNotes ? null : _saveNotes,
-                    style: FilledButton.styleFrom(
-                      backgroundColor: AppColors.purple,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 18,
-                        vertical: 10,
+                      onPressed: _saving ? null : _save,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.purple,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 18,
+                          vertical: 10,
+                        ),
                       ),
-                    ),
-                    child: _savingNotes
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Text('Save Notes'),
+                      child: _saving
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Text('Save'),
                     ),
                   ],
                 ],
@@ -423,86 +310,6 @@ class _LegalDocumentsDialogState extends State<LegalDocumentsDialog> {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _DocumentTile extends StatelessWidget {
-  final LandLeadLegalDocument document;
-  final VoidCallback onOpen;
-
-  const _DocumentTile({
-    required this.document,
-    required this.onOpen,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        border: Border.all(color: context.fomraBorder),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              color: AppColors.purple.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            alignment: Alignment.center,
-            child: const Icon(
-              Icons.verified_outlined,
-              size: 18,
-              color: AppColors.purple,
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  document.fileName,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: context.fomraTextPrimary,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'Verified ${formatCallDateTime(document.verifiedAt)}',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: context.fomraTextSecondary,
-                  ),
-                ),
-                if (document.loggedByName.isNotEmpty)
-                  Text(
-                    document.loggedByName,
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: context.fomraTextSecondary,
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          IconButton(
-            onPressed: onOpen,
-            icon: const Icon(Icons.open_in_new, size: 18),
-            tooltip: 'Open document',
-            color: AppColors.purple,
-          ),
-        ],
       ),
     );
   }

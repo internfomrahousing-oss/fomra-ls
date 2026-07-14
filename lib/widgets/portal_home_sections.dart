@@ -783,7 +783,7 @@ class _ApprovalSignedRowState extends State<_ApprovalSignedRow> {
                   borderRadius: BorderRadius.circular(9),
                 ),
                 alignment: Alignment.center,
-                child: Icon(Icons.draw_outlined,
+                child: Icon(Icons.check_circle,
                     color: LeadStatus.signed.color, size: 18),
               ),
               const SizedBox(width: 10),

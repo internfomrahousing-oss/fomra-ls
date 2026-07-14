@@ -9,7 +9,6 @@ import '../../models/land_lead_meeting.dart';
 import '../../models/land_lead_site_visit.dart';
 import '../../models/lead_call_log.dart';
 import '../../services/app_store.dart';
-import '../../services/auth_service.dart';
 import '../../services/role_access.dart';
 import '../../services/lead_drop_approval_service.dart';
 import '../../services/lead_drop_reason_catalog_service.dart';
@@ -82,7 +81,6 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
     'Site Photos',
     'Infrastructure',
     'Land Records',
-    'Documents',
   ];
 
   static const _miTabStart = 2;
@@ -187,21 +185,13 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
 
   int get _leadAgeDays => _leadAgeDaysFromReceived(lead.addedOn);
 
-  /// A lead an executive posted themselves (vs. one management created/assigned).
-  bool get _isEmployeePostedLead => lead.createdByRole == 'employee';
+  /// Management has unrestricted view/edit access to every lead regardless of
+  /// owner, so nothing on the lead detail is read-only.
+  bool get _readOnly => false;
 
-  /// Management gets FULL access to leads it created/assigned, but only a
-  /// review view (employee-specific editing hidden) for leads posted by another
-  /// executive.
-  bool get _managementReviewOnly =>
-      AuthService.instance.isManagement && _isEmployeePostedLead;
-
-  bool get _readOnly => _managementReviewOnly;
-
-  /// Edit Lead + full modifications: employees on their own leads, and
-  /// management on the leads it owns. Hidden when management is only reviewing
-  /// another executive's lead.
-  bool get _canEditSite => _managementReviewOnly ? false : RoleAccess.canEdit;
+  /// Edit Lead + full modifications for employees on their own leads and
+  /// management on every lead.
+  bool get _canEditSite => RoleAccess.canEdit;
 
   CallActivityMetrics get _callMetrics =>
       CallActivityMetrics.fromLogs(_callLogs);
@@ -463,7 +453,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
       'Management site visit' => Icons.apartment_outlined,
       'Meeting' => Icons.groups_outlined,
       'Legal' => Icons.gavel_outlined,
-      'Signed' => Icons.draw_outlined,
+      'Signed' => Icons.check_circle,
       _ => Icons.touch_app_outlined,
     };
 
@@ -532,9 +522,6 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
                   leadId: lead.leadId,
                   onBack: () => Navigator.pop(context),
                   onEdit: _canEditSite ? _openEdit : null,
-                  onNavigate: lead.gpsCoordinates.trim().isEmpty
-                      ? null
-                      : _navigateToProperty,
                 ),
                 FomraBreadcrumbStrip(items: _breadcrumbs),
                 Expanded(
@@ -560,6 +547,10 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
                                         onStatusChanged: _changeStatus,
                                         onCreateTask: _openCreateTask,
                                         onViewTasks: _openViewTasks,
+                                        onNavigate:
+                                            lead.gpsCoordinates.trim().isEmpty
+                                                ? null
+                                                : _navigateToProperty,
                                       ),
                                     ),
                                     const SizedBox(width: 12),
@@ -619,13 +610,11 @@ class _TopBar extends StatelessWidget {
   final String leadId;
   final VoidCallback onBack;
   final VoidCallback? onEdit;
-  final VoidCallback? onNavigate;
 
   const _TopBar({
     required this.leadId,
     required this.onBack,
     this.onEdit,
-    this.onNavigate,
   });
 
   @override
@@ -688,12 +677,6 @@ class _TopBar extends StatelessWidget {
               ],
             ),
           ),
-          if (onNavigate != null)
-            IconButton(
-              tooltip: 'Navigate in Google Maps',
-              onPressed: onNavigate,
-              icon: const Icon(Icons.directions_outlined),
-            ),
           if (onEdit != null)
             FilledButton.icon(
               onPressed: onEdit,
@@ -723,6 +706,7 @@ class _ProfilePanel extends StatelessWidget {
   final ValueChanged<LeadStatus?> onStatusChanged;
   final VoidCallback onCreateTask;
   final VoidCallback onViewTasks;
+  final VoidCallback? onNavigate;
 
   const _ProfilePanel({
     required this.lead,
@@ -734,6 +718,7 @@ class _ProfilePanel extends StatelessWidget {
     required this.onStatusChanged,
     required this.onCreateTask,
     required this.onViewTasks,
+    this.onNavigate,
   });
 
   static Color scoreColorFor(AiScoreBand band) => switch (band) {
@@ -895,6 +880,25 @@ class _ProfilePanel extends StatelessWidget {
                               ),
                             ],
                           ),
+                          if (onNavigate != null) ...[
+                            const SizedBox(height: 10),
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: OutlinedButton.icon(
+                                onPressed: onNavigate,
+                                icon: const Icon(Icons.place_outlined, size: 16),
+                                label: const Text('Navigate'),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: AppColors.purple,
+                                  side: BorderSide(
+                                      color: AppColors.purple
+                                          .withValues(alpha: 0.4)),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 14, vertical: 8),
+                                ),
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ),
@@ -1409,17 +1413,12 @@ class _WorkspacePanel extends StatelessWidget {
                         section: MarketIntelLeadSection.infrastructure,
                         scrollable: false,
                       );
-                    case 3:
+                    default:
                       return _LazyMarketIntelTab(
                         active: shouldLoadMiTab(3),
                         lead: lead,
                         section: MarketIntelLeadSection.landRecords,
                         scrollable: false,
-                      );
-                    default:
-                      return _DocumentsTab(
-                        documents: legalDocs,
-                        onUpload: () => onDetailAction('Legal'),
                       );
                   }
                 },
@@ -1440,13 +1439,13 @@ class _ActionToolbar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final actions = [
-      (Icons.sticky_note_2_outlined, 'Notes'),
-      (Icons.call_outlined, 'Calls'),
-      (Icons.location_on_outlined, 'Site visit'),
-      (Icons.apartment_outlined, 'Management site visit'),
-      (Icons.groups_outlined, 'Meeting'),
-      (Icons.gavel_outlined, 'Legal'),
-      (Icons.draw_outlined, 'Signed'),
+      (Icons.sticky_note_2_outlined, 'Notes', AppColors.purple),
+      (Icons.call_outlined, 'Calls', AppColors.purple),
+      (Icons.location_on_outlined, 'Site visit', AppColors.purple),
+      (Icons.apartment_outlined, 'Management site visit', AppColors.purple),
+      (Icons.groups_outlined, 'Meeting', AppColors.purple),
+      (Icons.gavel_outlined, 'Legal', AppColors.purple),
+      (Icons.check_circle, 'Signed', AppColors.success),
     ];
 
     return SingleChildScrollView(
@@ -1457,7 +1456,7 @@ class _ActionToolbar extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(right: 8),
               child: Material(
-                color: AppColors.purple.withValues(alpha: 0.07),
+                color: action.$3.withValues(alpha: 0.07),
                 borderRadius: BorderRadius.circular(24),
                 child: InkWell(
                   onTap: () => onAction(action.$2),
@@ -1470,7 +1469,7 @@ class _ActionToolbar extends StatelessWidget {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(action.$1, size: 16, color: AppColors.purple),
+                        Icon(action.$1, size: 16, color: action.$3),
                         const SizedBox(width: 6),
                         Text(
                           action.$2,
@@ -1668,10 +1667,7 @@ enum _ActivityFilter {
   siteVisits,
   managementSiteVisits,
   meetings,
-  documents,
   notes,
-  legal,
-  survey,
 }
 
 extension on _ActivityFilter {
@@ -1681,10 +1677,7 @@ extension on _ActivityFilter {
         _ActivityFilter.siteVisits => 'Site Visits',
         _ActivityFilter.managementSiteVisits => 'Management Site Visits',
         _ActivityFilter.meetings => 'Meetings',
-        _ActivityFilter.documents => 'Documents',
         _ActivityFilter.notes => 'Notes',
-        _ActivityFilter.legal => 'Legal',
-        _ActivityFilter.survey => 'Survey',
       };
 }
 
@@ -1716,7 +1709,6 @@ class _ActivityTimelineState extends State<_ActivityTimeline> {
     final callLogs = widget.callLogs;
     final siteVisits = widget.siteVisits;
     final meetings = widget.meetings;
-    final legalDocs = widget.legalDocs;
 
     final events = <({
       DateTime at,
@@ -1777,32 +1769,6 @@ class _ActivityTimelineState extends State<_ActivityTimeline> {
         icon: Icons.groups_outlined,
         audioUrl: null,
         category: _ActivityFilter.meetings,
-      ));
-    }
-
-    for (final doc in legalDocs) {
-      events.add((
-        at: doc.verifiedAt,
-        title: 'Document — ${doc.fileName}',
-        subtitle: [
-          _formatReceivedOn(doc.verifiedAt),
-          if (doc.loggedByName.isNotEmpty) doc.loggedByName,
-        ].join('\n'),
-        icon: Icons.upload_file_outlined,
-        audioUrl: null,
-        category: _ActivityFilter.legal,
-      ));
-    }
-
-    for (final url in lead.sitePhotoUrls) {
-      if (url.trim().isEmpty) continue;
-      events.add((
-        at: lead.addedOn,
-        title: 'Site photo',
-        subtitle: 'Attached to lead',
-        icon: Icons.photo_outlined,
-        audioUrl: null,
-        category: _ActivityFilter.documents,
       ));
     }
 
@@ -2167,195 +2133,6 @@ class _LeadDetailRow extends StatelessWidget {
             ),
           ),
         ),
-      ],
-    );
-  }
-}
-
-class _DocumentsTab extends StatelessWidget {
-  final List<LandLeadLegalDocument> documents;
-  final VoidCallback onUpload;
-
-  const _DocumentsTab({required this.documents, required this.onUpload});
-
-  bool _isImage(String fileName) {
-    final lower = fileName.toLowerCase();
-    return lower.endsWith('.jpg') ||
-        lower.endsWith('.jpeg') ||
-        lower.endsWith('.png');
-  }
-
-  IconData _iconFor(String fileName) {
-    final lower = fileName.toLowerCase();
-    if (lower.endsWith('.pdf')) return Icons.picture_as_pdf_outlined;
-    if (_isImage(fileName)) return Icons.image_outlined;
-    if (lower.endsWith('.doc') || lower.endsWith('.docx')) {
-      return Icons.description_outlined;
-    }
-    return Icons.insert_drive_file_outlined;
-  }
-
-  Future<void> _open(BuildContext context, String url) async {
-    final uri = Uri.tryParse(url);
-    if (uri == null) return;
-    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-      if (context.mounted) {
-        AppFeedback.error(context, 'Could not open document');
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (documents.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 28),
-        child: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.folder_open_outlined,
-                size: 36,
-                color: context.fomraTextSecondary,
-              ),
-              const SizedBox(height: 10),
-              Text(
-                'No documents uploaded',
-                style: TextStyle(
-                  fontWeight: FontWeight.w700,
-                  color: context.fomraTextPrimary,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Use Upload Document to capture Patta, Chitta, FMB or Sale Deed.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: context.fomraTextSecondary,
-                ),
-              ),
-              const SizedBox(height: 16),
-              FilledButton.icon(
-                onPressed: onUpload,
-                icon: const Icon(Icons.upload_file_outlined, size: 18),
-                label: const Text('Upload Document'),
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.purple,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 18,
-                    vertical: 12,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                '${documents.length} document${documents.length == 1 ? '' : 's'} for this lead',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: context.fomraTextSecondary,
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            OutlinedButton.icon(
-              onPressed: onUpload,
-              icon: const Icon(Icons.upload_file_outlined, size: 16),
-              label: const Text('Upload Document'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.purple,
-                side: BorderSide(color: AppColors.purple.withValues(alpha: 0.4)),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                textStyle: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        for (final doc in documents)
-          Container(
-            margin: const EdgeInsets.only(bottom: 8),
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              border: Border.all(color: context.fomraBorder),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 34,
-                  height: 34,
-                  decoration: BoxDecoration(
-                    color: AppColors.purple.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  alignment: Alignment.center,
-                  child: Icon(
-                    _iconFor(doc.fileName),
-                    size: 18,
-                    color: AppColors.purple,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        doc.fileName,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: context.fomraTextPrimary,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        doc.loggedByName.isEmpty
-                            ? _formatReceivedOn(doc.verifiedAt)
-                            : '${_formatReceivedOn(doc.verifiedAt)} · ${doc.loggedByName}',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: context.fomraTextSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                IconButton(
-                  onPressed: () => _open(context, doc.fileUrl),
-                  icon: const Icon(Icons.open_in_new, size: 18),
-                  tooltip: 'Open document',
-                  color: AppColors.purple,
-                ),
-              ],
-            ),
-          ),
       ],
     );
   }
