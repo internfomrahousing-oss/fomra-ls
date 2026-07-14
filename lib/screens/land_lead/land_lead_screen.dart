@@ -428,25 +428,40 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
   }
 
   /// Always-visible management actions shown next to the lead summary:
-  /// Select (enter assign mode) and View all leads (open the leads map).
+  /// Select (enter assign mode) and View all leads (open the leads map), with
+  /// the District Performance toggle sitting directly below View all leads.
   Widget _buildIdleManagementActions() {
-    // Both pills on one row, sized to content so they sit in the empty space
-    // to the right of the KPI summary tiles.
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
       mainAxisSize: MainAxisSize.min,
       children: [
-        _actionPill(
-          onTap: _toggleSelectMode,
-          icon: Icons.checklist_rtl,
-          label: 'Select',
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _actionPill(
+              onTap: _toggleSelectMode,
+              icon: Icons.checklist_rtl,
+              label: 'Select',
+            ),
+            const SizedBox(width: 8),
+            _actionPill(
+              onTap: _openLeadsMap,
+              icon: Icons.map_outlined,
+              label: 'View all leads',
+              foreground: const Color(0xFF0F766E),
+              background: const Color(0xFF0F766E).withValues(alpha: 0.10),
+            ),
+          ],
         ),
-        const SizedBox(width: 8),
+        const SizedBox(height: 8),
         _actionPill(
-          onTap: _openLeadsMap,
-          icon: Icons.map_outlined,
-          label: 'View all leads',
-          foreground: const Color(0xFF0F766E),
-          background: const Color(0xFF0F766E).withValues(alpha: 0.10),
+          onTap: () => setState(() => _showDistrict = !_showDistrict),
+          icon: _showDistrict
+              ? Icons.list_alt_outlined
+              : Icons.insights_outlined,
+          label: _showDistrict ? 'Back to Leads' : 'District Performance',
+          foreground: AppColors.purple,
+          background: AppColors.purple.withValues(alpha: 0.10),
         ),
       ],
     );
@@ -647,40 +662,6 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
           ),
         ),
     ];
-
-    if (_leads.isNotEmpty) {
-      slivers.add(
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.only(top: 12),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: SegmentedButton<bool>(
-                  segments: const [
-                    ButtonSegment(
-                      value: false,
-                      label: Text('Leads'),
-                      icon: Icon(Icons.list_alt_outlined, size: 16),
-                    ),
-                    ButtonSegment(
-                      value: true,
-                      label: Text('District Performance'),
-                      icon: Icon(Icons.map_outlined, size: 16),
-                    ),
-                  ],
-                  selected: {_showDistrict},
-                  onSelectionChanged: (s) =>
-                      setState(() => _showDistrict = s.first),
-                  showSelectedIcon: false,
-                ),
-              ),
-            ),
-          ),
-        ),
-      );
-    }
 
     if (_showDistrict) {
       slivers.add(
