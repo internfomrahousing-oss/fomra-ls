@@ -195,8 +195,16 @@ class _ReportsScreenState extends State<ReportsScreen> {
   }
 
   void _toggleKind(ReportKind kind) {
+    // Only one report type may be selected at a time — selecting another
+    // automatically deselects the previous one.
     setState(() {
-      if (!_selectedKinds.remove(kind)) _selectedKinds.add(kind);
+      if (_selectedKinds.contains(kind)) {
+        _selectedKinds.clear();
+      } else {
+        _selectedKinds
+          ..clear()
+          ..add(kind);
+      }
     });
   }
 

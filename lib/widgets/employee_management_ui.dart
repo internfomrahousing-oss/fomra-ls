@@ -4,6 +4,7 @@ import '../models/employee_profile.dart';
 import '../theme/app_theme.dart';
 import '../theme/fomra_theme_context.dart';
 import 'ui/app_components.dart';
+import 'ui/profile_avatar.dart';
 
 /// Enterprise search bar for the employee list.
 class EmployeeManagementSearchBar extends StatefulWidget {
@@ -208,34 +209,12 @@ class EmployeeManagementCard extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              width: 50,
-              height: 50,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    AppColors.primary.withValues(alpha: 0.18),
-                    AppColors.primary.withValues(alpha: 0.08),
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                  color: AppColors.primary.withValues(alpha: 0.15),
-                ),
-              ),
-              alignment: Alignment.center,
-              child: Text(
-                employee.fullName.isNotEmpty
-                    ? employee.fullName[0].toUpperCase()
-                    : '?',
-                style: const TextStyle(
-                  color: AppColors.primary,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 20,
-                ),
-              ),
+            ProfileAvatar(
+              email: employee.email,
+              name: employee.fullName,
+              radius: 25,
+              backgroundColor: AppColors.primary.withValues(alpha: 0.12),
+              foregroundColor: AppColors.primary,
             ),
             const SizedBox(width: 14),
             Expanded(

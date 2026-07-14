@@ -76,7 +76,6 @@ class _SideNavTokens {
   static const navItemGap = 14.0;
   static const horizontalPad = 14.0;
   static const collapsedHorizontalPad = 10.0;
-  static const verticalPad = 20.0;
   static const animDuration = Duration(milliseconds: 250);
   static const animCurve = Curves.easeOutCubic;
 
@@ -176,34 +175,6 @@ class _FomraSideNavState extends State<FomraSideNav> {
                 ),
               ),
             ),
-            if (AuthService.instance.isManagement)
-              Padding(
-                padding: EdgeInsets.fromLTRB(
-                  _expanded
-                      ? _SideNavTokens.horizontalPad
-                      : _SideNavTokens.collapsedHorizontalPad,
-                  0,
-                  _expanded
-                      ? _SideNavTokens.horizontalPad
-                      : _SideNavTokens.collapsedHorizontalPad,
-                  _SideNavTokens.verticalPad,
-                ),
-                child: _NavTile(
-                  item: const FomraSideNavItem(
-                    '/settings',
-                    Icons.settings_outlined,
-                    Icons.settings_rounded,
-                    'Settings',
-                  ),
-                  expanded: _expanded,
-                  active: widget.currentRoute == '/settings',
-                  onTap: () {
-                    if (widget.currentRoute != '/settings') {
-                      Navigator.pushNamed(context, '/settings');
-                    }
-                  },
-                ),
-              ),
           ],
         ),
       ),

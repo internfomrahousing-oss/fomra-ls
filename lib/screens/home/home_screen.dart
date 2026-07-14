@@ -613,6 +613,27 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final approvalCount =
       _pendingApprovals.length + _pendingSigned.length + dropApprovalPending;
 
+    final pendingApprovalItems = <PendingApprovalItem>[
+      for (final v in _pendingApprovals)
+        PendingApprovalItem(
+          leadId: v.leadId,
+          label: 'Management site visit',
+          since: v.visitedAt,
+        ),
+      for (final s in _pendingSigned)
+        PendingApprovalItem(
+          leadId: s.leadId,
+          label: 'Project Signed',
+          since: s.createdAt,
+        ),
+      for (final d in _pendingDropApprovals)
+        PendingApprovalItem(
+          leadId: d.leadId,
+          label: 'Drop request',
+          since: d.createdAt,
+        ),
+    ];
+
     final quickActions = [
       if (!_isManagement)
         PortalQuickAction(
@@ -734,12 +755,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     leads: leads,
                     teamRows: teamRows,
                     notifications: _notifications,
+                    pendingApprovals: pendingApprovalItems,
                     widgetIds: const [
                       'pipelineDeals',
                       'leaderboard',
-                      'bottlenecks',
-                      'district',
-                      'ageing',
+                      'pendingWorkflow',
                     ],
                     onViewLead: (lead) {
                       Navigator.push(

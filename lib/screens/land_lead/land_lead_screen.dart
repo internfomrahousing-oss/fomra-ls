@@ -19,6 +19,7 @@ import '../../widgets/fomra_app_shell.dart';
 import '../../widgets/fomra_breadcrumb.dart';
 import '../../widgets/ui/app_feedback.dart';
 import '../../widgets/land_workspace_ui.dart';
+import '../../widgets/management_executive_dashboard.dart';
 import '../../widgets/portal_home_sections.dart';
 import '../../widgets/portal_page_layout.dart';
 import '../../widgets/ui/app_components.dart';
@@ -44,6 +45,7 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
   final LandWorkspaceFilters _filters = LandWorkspaceFilters();
 
   bool _selectMode = false;
+  bool _showDistrict = false;
   final Set<String> _selectedLeadIds = {};
 
   @override
@@ -646,7 +648,50 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
         ),
     ];
 
-    if (_filtered.isEmpty) {
+    if (_leads.isNotEmpty) {
+      slivers.add(
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: SegmentedButton<bool>(
+                  segments: const [
+                    ButtonSegment(
+                      value: false,
+                      label: Text('Leads'),
+                      icon: Icon(Icons.list_alt_outlined, size: 16),
+                    ),
+                    ButtonSegment(
+                      value: true,
+                      label: Text('District Performance'),
+                      icon: Icon(Icons.map_outlined, size: 16),
+                    ),
+                  ],
+                  selected: {_showDistrict},
+                  onSelectionChanged: (s) =>
+                      setState(() => _showDistrict = s.first),
+                  showSelectedIcon: false,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (_showDistrict) {
+      slivers.add(
+        SliverPadding(
+          padding: pagePad.copyWith(top: 12, bottom: 96),
+          sliver: SliverToBoxAdapter(
+            child: DistrictPerformanceCard(leads: _filtered),
+          ),
+        ),
+      );
+    } else if (_filtered.isEmpty) {
       slivers.add(
         SliverFillRemaining(
           hasScrollBody: false,

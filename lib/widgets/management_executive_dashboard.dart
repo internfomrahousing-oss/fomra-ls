@@ -8,6 +8,7 @@ import '../analytics/management_intelligence.dart';
 import '../models/app_notification.dart';
 import '../models/land_lead.dart';
 import '../screens/land_lead/filtered_leads_screen.dart';
+import '../services/app_store.dart';
 import '../services/dashboard_layout_prefs.dart';
 import '../services/management_bi_activity_service.dart';
 import '../theme/app_theme.dart';
@@ -18,6 +19,7 @@ import 'management_intelligence_sections.dart';
 import 'portal_home_sections.dart';
 import 'terms_deal_selector.dart';
 import 'ui/app_components.dart';
+import 'ui/profile_avatar.dart';
 
 const _kCardRadius = 20.0;
 const _kFocusDistricts = [
@@ -155,12 +157,18 @@ void _openLeadsList(
 double _conversionPercent(int signed, int total) =>
     total == 0 ? 0 : (signed / total) * 100;
 
-int _starRating(double conversion) {
-  if (conversion >= 80) return 5;
-  if (conversion >= 60) return 4;
-  if (conversion >= 40) return 3;
-  if (conversion >= 20) return 2;
-  return conversion > 0 ? 1 : 0;
+/// A pending management-approval entry (signed / drop / management visit)
+/// surfaced in the pending-workflow dashboard.
+class PendingApprovalItem {
+  final String leadId;
+  final String label;
+  final DateTime since;
+
+  const PendingApprovalItem({
+    required this.leadId,
+    required this.label,
+    required this.since,
+  });
 }
 
 // ── Main widget ─────────────────────────────────────────────────────────────
@@ -170,6 +178,10 @@ class ManagementExecutiveDashboard extends StatefulWidget {
   final List<PortalTeamPerf> teamRows;
   final List<AppNotification> notifications;
   final ValueChanged<LandLead>? onViewLead;
+
+  /// Pending management approvals (signed / drop / visit requests) — feeds the
+  /// "Management Approval Pending" card in the pending-workflow dashboard.
+  final List<PendingApprovalItem> pendingApprovals;
 
   /// When provided, renders exactly these widgets in this order as a fixed
   /// (non-customizable) layout — no toolbar or executive KPI strip. Used to
@@ -182,6 +194,7 @@ class ManagementExecutiveDashboard extends StatefulWidget {
     required this.teamRows,
     required this.notifications,
     this.onViewLead,
+    this.pendingApprovals = const [],
     this.widgetIds,
   });
 
@@ -247,6 +260,12 @@ class _ManagementExecutiveDashboardState
               leads: widget.leads,
             );
             final donut = _DealTermsDonutCard(leads: widget.leads);
+            // Lead Ageing fills the empty space beside the Deal Terms donut so
+            // the dashboard's top section stays balanced.
+            final ageing = BiAgeingSection(
+              rows: snap.ageing,
+              onViewLead: widget.onViewLead,
+            );
             if (c.maxWidth < 900) {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -254,13 +273,25 @@ class _ManagementExecutiveDashboardState
                   pipeline,
                   const SizedBox(height: AppSpacing.md),
                   donut,
+                  const SizedBox(height: AppSpacing.md),
+                  ageing,
                 ],
               );
             }
             return Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(flex: 6, child: pipeline),
+                Expanded(
+                  flex: 6,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      pipeline,
+                      const SizedBox(height: AppSpacing.md),
+                      ageing,
+                    ],
+                  ),
+                ),
                 const SizedBox(width: AppSpacing.md),
                 Expanded(flex: 4, child: donut),
               ],
@@ -303,6 +334,12 @@ class _ManagementExecutiveDashboardState
         );
       case 'bottlenecks':
         return BiBottleneckSection(rows: snap.bottlenecks);
+      case 'pendingWorkflow':
+        return _PendingWorkflowDashboard(
+          leads: widget.leads,
+          approvals: widget.pendingApprovals,
+          onViewLead: widget.onViewLead,
+        );
       case 'sla':
         return BiSlaSection(
           summary: snap.sla,
@@ -330,7 +367,7 @@ class _ManagementExecutiveDashboardState
       case 'heatmap':
         return BiHeatmapSection(rows: snap.heatmap);
       case 'district':
-        return _DistrictPerformanceCard(leads: widget.leads);
+        return DistrictPerformanceCard(leads: widget.leads);
       case 'dealTerms':
         return _DealTermsDonutCard(leads: widget.leads);
       case 'activities':
@@ -1053,14 +1090,312 @@ class _LegendChip extends StatelessWidget {
 
 enum _DistrictSort { district, acres, deals, rate }
 
-class _DistrictPerformanceCard extends StatefulWidget {
-  final List<LandLead> leads;
+class _PendingRow {
+  final String leadId;
+  final String owner;
+  final String executive;
+  final String stage;
+  final DateTime since;
+  final LandLead? lead;
 
-  const _DistrictPerformanceCard({required this.leads});
+  const _PendingRow({
+    required this.leadId,
+    required this.owner,
+    required this.executive,
+    required this.stage,
+    required this.since,
+    required this.lead,
+  });
+}
+
+/// Replaces the old bottleneck dashboard with compact accordion cards for the
+/// three pending workflows: Legal, Land Owner Meeting, and Management Approval.
+class _PendingWorkflowDashboard extends StatelessWidget {
+  final List<LandLead> leads;
+  final List<PendingApprovalItem> approvals;
+  final ValueChanged<LandLead>? onViewLead;
+
+  const _PendingWorkflowDashboard({
+    required this.leads,
+    required this.approvals,
+    required this.onViewLead,
+  });
+
+  LandLead? _leadById(String id) {
+    for (final l in leads) {
+      if (l.leadId == id) return l;
+    }
+    return null;
+  }
+
+  List<_PendingRow> _fromLeads(List<LandLead> ls) => ls
+      .map((l) => _PendingRow(
+            leadId: l.leadId,
+            owner: l.ownerName.trim().isEmpty ? '—' : l.ownerName.trim(),
+            executive:
+                l.createdByName.trim().isEmpty ? '—' : l.createdByName.trim(),
+            stage: l.status.label,
+            since: l.addedOn,
+            lead: l,
+          ))
+      .toList();
 
   @override
-  State<_DistrictPerformanceCard> createState() =>
-      _DistrictPerformanceCardState();
+  Widget build(BuildContext context) {
+    final legal =
+        _fromLeads(leads.where((l) => l.status == LeadStatus.legal).toList());
+    final meeting = _fromLeads(leads
+        .where((l) => l.status == LeadStatus.prospectMeetingPending)
+        .toList());
+    final approvalRows = approvals.map((a) {
+      final l = _leadById(a.leadId);
+      return _PendingRow(
+        leadId: a.leadId,
+        owner: (l != null && l.ownerName.trim().isNotEmpty)
+            ? l.ownerName.trim()
+            : '—',
+        executive: (l != null && l.createdByName.trim().isNotEmpty)
+            ? l.createdByName.trim()
+            : '—',
+        stage: l != null ? '${a.label} · ${l.status.label}' : a.label,
+        since: a.since,
+        lead: l,
+      );
+    }).toList();
+
+    return _DashboardCard(
+      title: 'Pending Workflow',
+      subtitle: 'Items awaiting action across the pipeline',
+      icon: Icons.pending_actions_outlined,
+      child: Column(
+        children: [
+          _PendingAccordionCard(
+            title: 'Legal Pending',
+            color: AppColors.warning,
+            rows: legal,
+            onViewLead: onViewLead,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          _PendingAccordionCard(
+            title: 'Land Owner Meeting Pending',
+            color: LeadStatus.prospectMeetingPending.color,
+            rows: meeting,
+            onViewLead: onViewLead,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          _PendingAccordionCard(
+            title: 'Management Approval Pending',
+            color: AppColors.primary,
+            rows: approvalRows,
+            onViewLead: onViewLead,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PendingAccordionCard extends StatefulWidget {
+  final String title;
+  final Color color;
+  final List<_PendingRow> rows;
+  final ValueChanged<LandLead>? onViewLead;
+
+  const _PendingAccordionCard({
+    required this.title,
+    required this.color,
+    required this.rows,
+    required this.onViewLead,
+  });
+
+  @override
+  State<_PendingAccordionCard> createState() => _PendingAccordionCardState();
+}
+
+class _PendingAccordionCardState extends State<_PendingAccordionCard> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final count = widget.rows.length;
+    return Container(
+      decoration: BoxDecoration(
+        color: context.fomraSurfaceVar.withValues(alpha: 0.4),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: context.fomraBorder),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          InkWell(
+            onTap: count == 0
+                ? null
+                : () => setState(() => _expanded = !_expanded),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              child: Row(
+                children: [
+                  Container(
+                    width: 10,
+                    height: 10,
+                    decoration: BoxDecoration(
+                      color: count == 0 ? AppColors.success : widget.color,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      widget.title,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: context.fomraTextPrimary,
+                      ),
+                    ),
+                  ),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: widget.color.withValues(alpha: 0.14),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      '$count',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                        color: widget.color,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  AnimatedRotation(
+                    turns: _expanded ? 0.5 : 0,
+                    duration: const Duration(milliseconds: 200),
+                    child: Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      size: 22,
+                      color: count == 0
+                          ? context.fomraTextTertiary
+                          : context.fomraTextSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          AnimatedSize(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOutCubic,
+            child: !_expanded
+                ? const SizedBox(width: double.infinity)
+                : Column(
+                    children: [
+                      const Divider(height: 1),
+                      for (final row in widget.rows)
+                        _PendingLeadTile(
+                          row: row,
+                          onOpen:
+                              (row.lead != null && widget.onViewLead != null)
+                                  ? () => widget.onViewLead!(row.lead!)
+                                  : null,
+                        ),
+                    ],
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PendingLeadTile extends StatelessWidget {
+  final _PendingRow row;
+  final VoidCallback? onOpen;
+
+  const _PendingLeadTile({required this.row, required this.onOpen});
+
+  Widget _kv(BuildContext context, String label, String value) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 88,
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: context.fomraTextSecondary,
+            ),
+          ),
+        ),
+        Expanded(
+          child: Text(
+            value,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: context.fomraTextPrimary,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: context.fomraBorder)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _kv(context, 'Lead ID', '#${row.leadId}'),
+          const SizedBox(height: 4),
+          _kv(context, 'Owner', row.owner),
+          const SizedBox(height: 4),
+          _kv(context, 'Executive', row.executive),
+          const SizedBox(height: 4),
+          _kv(context, 'Current Stage', row.stage),
+          const SizedBox(height: 4),
+          _kv(context, 'Pending Since', _relativeTime(row.since)),
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: OutlinedButton.icon(
+              onPressed: onOpen,
+              icon: const Icon(Icons.open_in_new_rounded, size: 15),
+              label: const Text('Open Lead'),
+              style: OutlinedButton.styleFrom(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                textStyle: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class DistrictPerformanceCard extends StatefulWidget {
+  final List<LandLead> leads;
+
+  const DistrictPerformanceCard({super.key, required this.leads});
+
+  @override
+  State<DistrictPerformanceCard> createState() =>
+      DistrictPerformanceCardState();
 }
 
 class _DistrictRow {
@@ -1081,7 +1416,7 @@ class _DistrictRow {
   });
 }
 
-class _DistrictPerformanceCardState extends State<_DistrictPerformanceCard> {
+class DistrictPerformanceCardState extends State<DistrictPerformanceCard> {
   _DistrictSort _sort = _DistrictSort.rate;
   bool _asc = false;
 
@@ -1527,17 +1862,16 @@ class _LeaderboardRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final metrics = _employeeMetrics(row.name, leads);
     final conversion = _conversionPercent(metrics.signed, metrics.total);
-    final stars = _starRating(conversion);
     final isTop = row.rank == 1;
     final accent = isTop ? AppColors.accentLight : AppColors.primary;
 
-    final initials = row.name
-        .trim()
-        .split(RegExp(r'\s+'))
-        .where((s) => s.isNotEmpty)
-        .take(2)
-        .map((s) => s[0].toUpperCase())
-        .join();
+    String? avatarEmail;
+    for (final e in AppStore.instance.employees) {
+      if (e.fullName.trim().toLowerCase() == row.name.trim().toLowerCase()) {
+        avatarEmail = e.email;
+        break;
+      }
+    }
 
     return _DashboardCard(
       child: Column(
@@ -1548,16 +1882,13 @@ class _LeaderboardRow extends StatelessWidget {
               Stack(
                 clipBehavior: Clip.none,
                 children: [
-                  CircleAvatar(
-                    radius: 22,
+                  ProfileAvatar(
+                    email: avatarEmail,
+                    name: row.name,
+                    radius: 17,
                     backgroundColor: accent.withValues(alpha: 0.15),
-                    child: Text(
-                      initials,
-                      style: TextStyle(
-                        fontWeight: FontWeight.w800,
-                        color: isTop ? AppColors.warning : AppColors.primary,
-                      ),
-                    ),
+                    foregroundColor:
+                        isTop ? AppColors.warning : AppColors.primary,
                   ),
                   if (isTop)
                     Positioned(
@@ -1653,65 +1984,21 @@ class _LeaderboardRow extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           Wrap(
-            spacing: 12,
-            runSpacing: 4,
+            spacing: 10,
+            runSpacing: 6,
             children: [
               _LeaderStat(label: 'Leads', value: '${metrics.total}'),
               _LeaderStat(label: 'Closed', value: '${metrics.signed}'),
+              _LeaderStat(label: 'Neg.', value: '${metrics.negotiation}'),
+              _LeaderStat(label: 'Legal', value: '${metrics.legal}'),
               _LeaderStat(
                 label: 'Acres',
                 value: metrics.acres.toStringAsFixed(1),
               ),
-              _LeaderStat(
-                label: 'Conv.',
-                value: '${conversion.round()}%',
-              ),
+              _LeaderStat(label: 'Conv.', value: '${conversion.round()}%'),
             ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              ...List.generate(5, (i) {
-                return Icon(
-                  i < stars ? Icons.star_rounded : Icons.star_outline_rounded,
-                  size: 14,
-                  color: i < stars
-                      ? AppColors.warning
-                      : context.fomraTextTertiary,
-                );
-              }),
-              const Spacer(),
-              Text(
-                '${conversion.round()}% conversion',
-                style: TextStyle(
-                  fontSize: 10,
-                  color: context.fomraTextSecondary,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          _StatusProgressLine(
-            label: 'Signed',
-            count: metrics.signed,
-            total: metrics.total,
-            color: AppColors.success,
-          ),
-          const SizedBox(height: 6),
-          _StatusProgressLine(
-            label: 'Negotiation',
-            count: metrics.negotiation,
-            total: metrics.total,
-            color: AppColors.primary,
-          ),
-          const SizedBox(height: 6),
-          _StatusProgressLine(
-            label: 'Legal',
-            count: metrics.legal,
-            total: metrics.total,
-            color: AppColors.warning,
           ),
         ],
       ),
@@ -1719,68 +2006,6 @@ class _LeaderboardRow extends StatelessWidget {
   }
 }
 
-class _StatusProgressLine extends StatelessWidget {
-  final String label;
-  final int count;
-  final int total;
-  final Color color;
-
-  const _StatusProgressLine({
-    required this.label,
-    required this.count,
-    required this.total,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final value = total == 0 ? 0.0 : (count / total).clamp(0.0, 1.0);
-    return Row(
-      children: [
-        SizedBox(
-          width: 78,
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: context.fomraTextSecondary,
-            ),
-          ),
-        ),
-        Expanded(
-          child: TweenAnimationBuilder<double>(
-            tween: Tween(begin: 0, end: value),
-            duration: AppMotion.slow,
-            curve: AppMotion.curve,
-            builder: (_, v, __) => ClipRRect(
-              borderRadius: BorderRadius.circular(6),
-              child: LinearProgressIndicator(
-                value: v,
-                minHeight: 6,
-                backgroundColor: context.fomraSurfaceVar,
-                color: color,
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        SizedBox(
-          width: 20,
-          child: Text(
-            '$count',
-            textAlign: TextAlign.end,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              color: context.fomraTextPrimary,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
 
 class _LeaderStat extends StatelessWidget {
   final String label;
