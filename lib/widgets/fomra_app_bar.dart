@@ -240,7 +240,13 @@ class FomraHeaderProfile extends StatelessWidget {
   String get _profileRole =>
       AuthService.instance.isManagement ? 'Administrator' : 'Employee';
 
-  String? get _profileEmail => AuthService.instance.currentUser?.email;
+  String? get _profileEmail {
+    try {
+      return AuthService.instance.currentUser?.email;
+    } catch (_) {
+      return null;
+    }
+  }
 
   Future<void> _open(BuildContext context, TapDownDetails details) async {
     final name = _profileName;

@@ -2,7 +2,6 @@ import 'dart:typed_data';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/land_lead.dart';
-import '../models/lead_drop_reason.dart';
 import '../utils/image_compressor.dart';
 import 'app_store.dart';
 import 'audit_log_service.dart';
@@ -279,12 +278,12 @@ class LandLeadService {
 
   static Future<void> markDropped({
     required String leadId,
-    required LeadDropReason reason,
+    required String reasonLabel,
     required String notes,
   }) async {
     await _db.from('land_leads').update({
       'status': LeadStatus.dropped.name,
-      'drop_reason': reason.dbValue,
+      'drop_reason': reasonLabel.trim(),
       'drop_notes': notes.trim(),
       'updated_at': DateTime.now().toUtc().toIso8601String(),
     }).eq('id', leadId);
@@ -295,7 +294,7 @@ class LandLeadService {
       entityId: leadId,
       field: 'status',
       oldValue: '',
-      newValue: 'dropped:${reason.dbValue}',
+      newValue: 'dropped:${reasonLabel.trim()}',
       module: 'Lead',
       leadId: leadId,
       ownerName: ctx.owner,

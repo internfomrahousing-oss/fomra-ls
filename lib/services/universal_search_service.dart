@@ -126,11 +126,12 @@ abstract final class UniversalSearchService {
         route: '/change-password',
         keywords: ['security', 'account', 'settings'],
       ),
-      const _NavEntry(
-        label: 'Settings',
-        route: '/settings',
-        keywords: ['preferences', 'account', 'users'],
-      ),
+      if (isManagement)
+        const _NavEntry(
+          label: 'Settings',
+          route: '/settings',
+          keywords: ['preferences', 'account', 'users', 'dropped reasons'],
+        ),
       const _NavEntry(
         label: 'Notifications',
         route: '/notifications',

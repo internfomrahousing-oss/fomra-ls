@@ -6,6 +6,7 @@ import '../models/land_lead.dart';
 import '../models/land_lead_signed_request.dart';
 import '../models/land_lead_site_visit.dart';
 import '../models/lead_list_filter.dart';
+import '../services/lead_drop_approval_service.dart';
 import '../services/app_store.dart';
 import '../theme/app_theme.dart';
 import '../theme/fomra_layout.dart';
@@ -601,6 +602,7 @@ String _portalFormatVisitDateTime(DateTime d) {
 class PortalApprovalsSection extends StatelessWidget {
   final List<LandLeadSiteVisit> visits;
   final List<LandLeadSignedRequest> signedRequests;
+  final List<LeadDropApprovalRequest> dropRequests;
   final List<LandLead> leads;
   final bool loading;
   final Future<void> Function(LandLeadSiteVisit visit) onReview;
@@ -608,11 +610,14 @@ class PortalApprovalsSection extends StatelessWidget {
   final Future<void> Function(LandLeadSiteVisit visit) onReject;
   final Future<void> Function(LandLeadSignedRequest request)? onApproveSigned;
   final Future<void> Function(LandLeadSignedRequest request)? onRejectSigned;
+  final Future<void> Function(LeadDropApprovalRequest request)? onApproveDrop;
+  final Future<void> Function(LeadDropApprovalRequest request)? onRejectDrop;
 
   const PortalApprovalsSection({
     super.key,
     required this.visits,
     this.signedRequests = const [],
+    this.dropRequests = const [],
     required this.leads,
     required this.loading,
     required this.onReview,
@@ -620,6 +625,8 @@ class PortalApprovalsSection extends StatelessWidget {
     required this.onReject,
     this.onApproveSigned,
     this.onRejectSigned,
+    this.onApproveDrop,
+    this.onRejectDrop,
   });
 
   LandLead? _leadFor(String leadId) {
@@ -640,7 +647,7 @@ class PortalApprovalsSection extends StatelessWidget {
         children: [
           const SectionHeader(
             title: 'Approvals',
-            subtitle: 'Pending site visit & project signed requests',
+            subtitle: 'Pending site visit, project signed, and drop requests',
             icon: Icons.verified_outlined,
             padding: EdgeInsets.only(bottom: AppSpacing.sm),
           ),
@@ -655,7 +662,7 @@ class PortalApprovalsSection extends StatelessWidget {
                 ),
               ),
             )
-          else if (visits.isEmpty && signedRequests.isEmpty)
+          else if (visits.isEmpty && signedRequests.isEmpty && dropRequests.isEmpty)
             const PortalEmptyHint(
               hint: 'No pending approvals — new requests will appear here.',
             )
@@ -688,6 +695,20 @@ class PortalApprovalsSection extends StatelessWidget {
                           onReject: onRejectSigned == null
                               ? null
                               : () => onRejectSigned!(signedRequests[i]),
+                        ),
+                      ],
+                      for (var i = 0; i < dropRequests.length; i++) ...[
+                        if (i > 0 || visits.isNotEmpty || signedRequests.isNotEmpty)
+                          const SizedBox(height: 6),
+                        _ApprovalDropRow(
+                          request: dropRequests[i],
+                          lead: _leadFor(dropRequests[i].leadId),
+                          onApprove: onApproveDrop == null
+                              ? null
+                              : () => onApproveDrop!(dropRequests[i]),
+                          onReject: onRejectDrop == null
+                              ? null
+                              : () => onRejectDrop!(dropRequests[i]),
                         ),
                       ],
                     ],
@@ -841,6 +862,153 @@ class _ApprovalSignedRowState extends State<_ApprovalSignedRow> {
                           ),
                         )
                       : const Text('Approve & Sign'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ApprovalDropRow extends StatefulWidget {
+  final LeadDropApprovalRequest request;
+  final LandLead? lead;
+  final Future<void> Function()? onApprove;
+  final Future<void> Function()? onReject;
+
+  const _ApprovalDropRow({
+    required this.request,
+    required this.lead,
+    required this.onApprove,
+    required this.onReject,
+  });
+
+  @override
+  State<_ApprovalDropRow> createState() => _ApprovalDropRowState();
+}
+
+class _ApprovalDropRowState extends State<_ApprovalDropRow> {
+  bool _busy = false;
+
+  Future<void> _act(Future<void> Function()? fn) async {
+    if (fn == null || _busy) return;
+    setState(() => _busy = true);
+    try {
+      await fn();
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final req = widget.request;
+    final lead = widget.lead;
+    final ownerLabel = lead != null && lead.ownerName.trim().isNotEmpty
+        ? lead.ownerName.trim()
+        : 'Lead #${req.leadId}';
+
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: AppColors.error.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.error.withValues(alpha: 0.22)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: AppColors.error.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                alignment: Alignment.center,
+                child: const Icon(Icons.cancel_schedule_send_outlined,
+                    color: AppColors.error, size: 18),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Drop request · $ownerLabel',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: context.fomraTextPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      [
+                        if (req.requestedByName.isNotEmpty) req.requestedByName,
+                        req.reason.label,
+                      ].join(' · '),
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: context.fomraTextSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (req.notes.trim().isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              req.notes.trim(),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 12,
+                color: context.fomraTextSecondary,
+              ),
+            ),
+          ],
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: _busy ? null : () => _act(widget.onReject),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.error,
+                    side: BorderSide(
+                        color: AppColors.error.withValues(alpha: 0.4)),
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                  ),
+                  child: const Text('Reject'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: FilledButton(
+                  onPressed: _busy ? null : () => _act(widget.onApprove),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                  ),
+                  child: _busy
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Text('Approve & Drop'),
                 ),
               ),
             ],
@@ -1233,7 +1401,7 @@ class _PortalPerformanceRowState extends State<PortalPerformanceRow> {
         curve: Curves.easeOutCubic,
         decoration: BoxDecoration(
           color: context.fomraSurface,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: _expanded
                 ? AppColors.primary.withValues(alpha: 0.26)
@@ -1244,22 +1412,22 @@ class _PortalPerformanceRowState extends State<PortalPerformanceRow> {
         child: Material(
           color: Colors.transparent,
           child: InkWell(
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(16),
             onTap: () => setState(() => _expanded = !_expanded),
             child: Padding(
               padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+                  horizontal: 12, vertical: 10),
               child: Column(
                 children: [
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       Container(
-                        width: 34,
-                        height: 34,
+                        width: 30,
+                        height: 30,
                         decoration: BoxDecoration(
                           color: accent.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(11),
+                          borderRadius: BorderRadius.circular(10),
                         ),
                         alignment: Alignment.center,
                         child: Text(
@@ -1285,7 +1453,7 @@ class _PortalPerformanceRowState extends State<PortalPerformanceRow> {
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
-                                      fontSize: 14,
+                                      fontSize: 13.5,
                                       fontWeight: FontWeight.w700,
                                       color: context.fomraTextPrimary,
                                     ),
@@ -1294,14 +1462,14 @@ class _PortalPerformanceRowState extends State<PortalPerformanceRow> {
                                 Text(
                                   '#${data.rank}',
                                   style: TextStyle(
-                                    fontSize: 12,
+                                    fontSize: 11,
                                     fontWeight: FontWeight.w800,
                                     color: accent,
                                   ),
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 6),
+                            const SizedBox(height: 4),
                             TweenAnimationBuilder<double>(
                               tween: Tween(begin: 0, end: data.percent),
                               duration: AppMotion.slow,
@@ -1313,7 +1481,7 @@ class _PortalPerformanceRowState extends State<PortalPerformanceRow> {
                                       borderRadius: BorderRadius.circular(999),
                                       child: LinearProgressIndicator(
                                         value: value,
-                                        minHeight: 6,
+                                        minHeight: 4.5,
                                         backgroundColor:
                                             accent.withValues(alpha: 0.12),
                                         valueColor:
@@ -1321,11 +1489,11 @@ class _PortalPerformanceRowState extends State<PortalPerformanceRow> {
                                       ),
                                     ),
                                   ),
-                                  const SizedBox(width: AppSpacing.sm),
+                                  const SizedBox(width: 8),
                                   Text(
                                     '${(value * 100).round()}%',
                                     style: TextStyle(
-                                      fontSize: 11,
+                                      fontSize: 10,
                                       fontWeight: FontWeight.w700,
                                       color: context.fomraTextPrimary,
                                     ),
@@ -1333,10 +1501,10 @@ class _PortalPerformanceRowState extends State<PortalPerformanceRow> {
                                 ],
                               ),
                             ),
-                            const SizedBox(height: 6),
+                            const SizedBox(height: 4),
                             Wrap(
-                              spacing: AppSpacing.xs,
-                              runSpacing: AppSpacing.xs,
+                              spacing: 6,
+                              runSpacing: 6,
                               children: [
                                 StatusChip(label: data.statusLabel, tone: data.tone),
                                 _TinyStat(label: 'Leads', value: '${data.total}'),
@@ -1366,16 +1534,16 @@ class _PortalPerformanceRowState extends State<PortalPerformanceRow> {
                         ? const SizedBox.shrink()
                         : Column(
                             children: [
-                              const SizedBox(height: 14),
+                              const SizedBox(height: 12),
                               const Divider(height: 1),
-                              const SizedBox(height: 14),
+                              const SizedBox(height: 12),
                               _PerformanceSummaryRow(
                                 totalLeads: leads.length,
                                 activeLeads: activeLeads,
                                 closedDeals: closedLeads,
                                 conversionRate: conversionRate,
                               ),
-                              const SizedBox(height: 12),
+                              const SizedBox(height: 10),
                               if (leads.isEmpty)
                                 _PerformanceEmptyState(name: data.name)
                               else
@@ -1461,17 +1629,17 @@ class _PerformanceLeadList extends StatelessWidget {
         const SizedBox(height: 8),
         for (final lead in leads) ...[
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
             decoration: BoxDecoration(
               color: context.fomraSurfaceVar.withValues(alpha: 0.5),
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(12),
               border: Border.all(color: context.fomraBorder.withValues(alpha: 0.5)),
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Expanded(
-                  flex: 19,
+                  flex: 18,
                   child: Text(
                     lead.ownerName.trim().isEmpty ? 'Lead #${lead.leadId}' : lead.ownerName.trim(),
                     maxLines: 1,
@@ -1484,7 +1652,7 @@ class _PerformanceLeadList extends StatelessWidget {
                   ),
                 ),
                 Expanded(
-                  flex: 22,
+                  flex: 20,
                   child: Text(
                     '${lead.landType.label} • ${lead.village.isNotEmpty ? lead.village : lead.location}',
                     maxLines: 1,
@@ -1496,29 +1664,29 @@ class _PerformanceLeadList extends StatelessWidget {
                   ),
                 ),
                 Expanded(
-                  flex: 12,
+                  flex: 11,
                   child: StatusChip(label: lead.status.label, tone: _statusTone(lead.status)),
                 ),
                 Expanded(
-                  flex: 10,
+                  flex: 9,
                   child: StatusChip(label: priorityLabel(lead), tone: priorityTone(lead)),
                 ),
                 Expanded(
-                  flex: 12,
+                  flex: 10,
                   child: Text(
                     fmtDate(lead.addedOn.toLocal()),
                     style: TextStyle(fontSize: 11, color: context.fomraTextSecondary),
                   ),
                 ),
                 Expanded(
-                  flex: 12,
+                  flex: 10,
                   child: Text(
                     fmtDate(lead.addedOn.toLocal()),
                     style: TextStyle(fontSize: 11, color: context.fomraTextSecondary),
                   ),
                 ),
                 Expanded(
-                  flex: 8,
+                  flex: 7,
                   child: Align(
                     alignment: Alignment.centerLeft,
                     child: TextButton(
@@ -1553,13 +1721,13 @@ class _LeadHeaderRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12),
       child: Row(
         children: [
-          Expanded(flex: 19, child: Text('Lead Name', style: style)),
-          Expanded(flex: 22, child: Text('Property / Location', style: style)),
-          Expanded(flex: 12, child: Text('Current Stage', style: style)),
-          Expanded(flex: 10, child: Text('Priority', style: style)),
-          Expanded(flex: 12, child: Text('Last Activity', style: style)),
-          Expanded(flex: 12, child: Text('Assigned Date', style: style)),
-          Expanded(flex: 8, child: Text('Action', style: style)),
+          Expanded(flex: 18, child: Text('Lead Name', style: style)),
+          Expanded(flex: 20, child: Text('Property / Location', style: style)),
+          Expanded(flex: 11, child: Text('Current Stage', style: style)),
+          Expanded(flex: 9, child: Text('Priority', style: style)),
+          Expanded(flex: 10, child: Text('Last Activity', style: style)),
+          Expanded(flex: 10, child: Text('Assigned Date', style: style)),
+          Expanded(flex: 7, child: Text('Action', style: style)),
         ],
       ),
     );

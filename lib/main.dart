@@ -6,6 +6,7 @@ import 'services/auth_service.dart';
 import 'services/session_scoped_local_storage.dart';
 import 'services/push_service.dart';
 import 'services/offline_sync_service.dart';
+import 'services/lead_drop_reason_catalog_service.dart';
 import 'services/supabase_config.dart';
 import 'services/theme_controller.dart';
 import 'services/role_access.dart';
@@ -130,6 +131,7 @@ class _StartupScreenState extends State<_StartupScreen> {
     // crashes startup if Firebase isn't configured on this platform.
     if (error == null) unawaited(PushService.init());
     if (error == null) unawaited(OfflineSyncService.instance.start());
+    if (error == null) unawaited(LeadDropReasonCatalogService.instance.load());
     bool loggedIn = false;
     if (error == null) {
       try {

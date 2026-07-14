@@ -8,10 +8,11 @@ import '../../models/land_lead_legal_document.dart';
 import '../../models/land_lead_meeting.dart';
 import '../../models/land_lead_site_visit.dart';
 import '../../models/lead_call_log.dart';
-import '../../models/lead_drop_reason.dart';
 import '../../services/app_store.dart';
 import '../../services/auth_service.dart';
 import '../../services/role_access.dart';
+import '../../services/lead_drop_approval_service.dart';
+import '../../services/lead_drop_reason_catalog_service.dart';
 import '../../services/land_lead_legal_service.dart';
 import '../../services/land_lead_meeting_service.dart';
 import '../../services/land_lead_service.dart';
@@ -239,26 +240,17 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
     if (status == LeadStatus.dropped) {
       final result = await showLeadDropReasonDialog(context);
       if (result == null || !mounted) return;
-
-      final previous = lead;
-      final updated = lead.copyWith(
-        status: LeadStatus.dropped,
-        dropReason: result.reason.dbValue,
-        dropNotes: result.notes,
-      );
-      setState(() => lead = updated);
-      AppStore.instance.replaceLead(updated);
       try {
-        await LandLeadService.markDropped(
+        await LeadDropApprovalService.submit(
           leadId: lead.leadId,
           reason: result.reason,
           notes: result.notes,
         );
+        if (!mounted) return;
+        AppFeedback.info(context, 'Drop request submitted for approval');
       } catch (_) {
         if (!mounted) return;
-        setState(() => lead = previous);
-        AppStore.instance.replaceLead(previous);
-        AppFeedback.error(context, 'Could not update drop reason');
+        AppFeedback.error(context, 'Could not submit drop request');
       }
       return;
     }
@@ -2052,7 +2044,7 @@ class _LeadDetailsList extends StatelessWidget {
           lead.dropReason.trim().isNotEmpty)
         (
           'Drop reason',
-          LeadDropReason.parse(lead.dropReason)?.label ?? lead.dropReason,
+          LeadDropReasonCatalogService.instance.displayLabelForRaw(lead.dropReason),
         ),
       if (lead.status == LeadStatus.dropped &&
           lead.dropNotes.trim().isNotEmpty)

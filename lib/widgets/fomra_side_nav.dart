@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import 'fomra_brand_logo.dart';
 
+import '../services/auth_service.dart';
 import '../screens/home/home_screen.dart';
 import '../theme/app_theme.dart';
 import '../theme/fomra_theme_context.dart';
@@ -53,6 +54,14 @@ class FomraSideNav extends StatefulWidget {
       Icons.summarize_rounded,
       'Reports',
     ));
+    if (AuthService.instance.isManagement) {
+      items.add(const FomraSideNavItem(
+        '/settings',
+        Icons.settings_outlined,
+        Icons.settings_rounded,
+        'Settings',
+      ));
+    }
     return items;
   }
 
@@ -167,33 +176,34 @@ class _FomraSideNavState extends State<FomraSideNav> {
                 ),
               ),
             ),
-            Padding(
-              padding: EdgeInsets.fromLTRB(
-                _expanded
-                    ? _SideNavTokens.horizontalPad
-                    : _SideNavTokens.collapsedHorizontalPad,
-                0,
-                _expanded
-                    ? _SideNavTokens.horizontalPad
-                    : _SideNavTokens.collapsedHorizontalPad,
-                _SideNavTokens.verticalPad,
-              ),
-              child: _NavTile(
-                item: const FomraSideNavItem(
-                  '/settings',
-                  Icons.settings_outlined,
-                  Icons.settings_rounded,
-                  'Settings',
+            if (AuthService.instance.isManagement)
+              Padding(
+                padding: EdgeInsets.fromLTRB(
+                  _expanded
+                      ? _SideNavTokens.horizontalPad
+                      : _SideNavTokens.collapsedHorizontalPad,
+                  0,
+                  _expanded
+                      ? _SideNavTokens.horizontalPad
+                      : _SideNavTokens.collapsedHorizontalPad,
+                  _SideNavTokens.verticalPad,
                 ),
-                expanded: _expanded,
-                active: widget.currentRoute == '/settings',
-                onTap: () {
-                  if (widget.currentRoute != '/settings') {
-                    Navigator.pushNamed(context, '/settings');
-                  }
-                },
+                child: _NavTile(
+                  item: const FomraSideNavItem(
+                    '/settings',
+                    Icons.settings_outlined,
+                    Icons.settings_rounded,
+                    'Settings',
+                  ),
+                  expanded: _expanded,
+                  active: widget.currentRoute == '/settings',
+                  onTap: () {
+                    if (widget.currentRoute != '/settings') {
+                      Navigator.pushNamed(context, '/settings');
+                    }
+                  },
+                ),
               ),
-            ),
           ],
         ),
       ),

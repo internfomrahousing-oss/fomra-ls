@@ -40,23 +40,20 @@ void main() {
     await tester.pumpWidget(_app());
     await tester.pumpAndSettle();
 
-    await tester.tap(find.widgetWithText(OutlinedButton, 'Change Password'));
+    await tester.tap(find.text('Reset Password'));
     await tester.pumpAndSettle();
 
-    // Empty submit -> field validators fire.
-    await tester.tap(find.text('Update Password'));
+    // Empty submit -> field validator fires.
+    await tester.tap(find.text('Send reset link'));
     await tester.pumpAndSettle();
-    expect(find.text('Enter your current password'), findsOneWidget);
-    expect(find.text('Enter a new password'), findsOneWidget);
+    expect(find.text('Enter a valid email address'), findsOneWidget);
 
-    // Mismatched confirmation.
-    final fields = find.byType(TextFormField);
-    await tester.enterText(fields.at(0), 'fomra@2024');
-    await tester.enterText(fields.at(1), 'newpass123');
-    await tester.enterText(fields.at(2), 'different99');
-    await tester.tap(find.text('Update Password'));
+    // Invalid email format.
+    final field = find.byType(TextFormField).first;
+    await tester.enterText(field, 'not-an-email');
+    await tester.tap(find.text('Send reset link'));
     await tester.pumpAndSettle();
-    expect(find.text('Passwords do not match'), findsOneWidget);
+    expect(find.text('Enter a valid email address'), findsOneWidget);
   });
 
   // Note: login and password-change now go through real Supabase Auth only

@@ -109,10 +109,9 @@ class _SignedProjectDialogState extends State<SignedProjectDialog> {
         photoUrls: urls,
       );
       if (!mounted) return;
-      AppFeedback.success(
-        context,
-        'Submitted for management approval. The lead becomes Signed once approved.',
-      );
+      await _showCelebration();
+      if (!mounted) return;
+      AppFeedback.success(context, 'Project Signed Request Submitted Successfully');
       Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;
@@ -120,6 +119,22 @@ class _SignedProjectDialogState extends State<SignedProjectDialog> {
       AppFeedback.error(
           context, 'Could not submit: ${e.toString().replaceFirst('Exception: ', '')}');
     }
+  }
+
+  Future<void> _showCelebration() async {
+    if (!mounted) return;
+    await showGeneralDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      barrierLabel: 'Project signed celebration',
+      barrierColor: Colors.black.withValues(alpha: 0.22),
+      transitionDuration: const Duration(milliseconds: 220),
+      pageBuilder: (ctx, _, __) => const _SignedCelebrationDialog(),
+      transitionBuilder: (ctx, anim, sec, child) {
+        final fade = CurvedAnimation(parent: anim, curve: Curves.easeOut);
+        return FadeTransition(opacity: fade, child: child);
+      },
+    );
   }
 
   @override
@@ -327,4 +342,133 @@ class _SignedProjectDialogState extends State<SignedProjectDialog> {
       ),
     );
   }
+}
+
+class _SignedCelebrationDialog extends StatefulWidget {
+  const _SignedCelebrationDialog();
+
+  @override
+  State<_SignedCelebrationDialog> createState() => _SignedCelebrationDialogState();
+}
+
+class _SignedCelebrationDialogState extends State<_SignedCelebrationDialog>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1200),
+  )..forward();
+
+  @override
+  void initState() {
+    super.initState();
+    Future<void>.delayed(const Duration(milliseconds: 1200), () {
+      if (mounted) Navigator.of(context).pop();
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: Center(
+        child: AnimatedBuilder(
+          animation: _controller,
+          builder: (context, _) {
+            return CustomPaint(
+              painter: _ConfettiPainter(progress: _controller.value),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 22),
+                decoration: BoxDecoration(
+                  color: context.fomraSurface,
+                  borderRadius: BorderRadius.circular(22),
+                  boxShadow: AppColors.elevatedShadow,
+                  border: Border.all(color: context.fomraBorder),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 58,
+                      height: 58,
+                      decoration: BoxDecoration(
+                        color: LeadStatus.signed.color.withValues(alpha: 0.14),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.celebration_rounded,
+                        color: LeadStatus.signed.color,
+                        size: 30,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Text(
+                      'Project Signed Request Submitted Successfully',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: context.fomraTextPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Awaiting management approval',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: context.fomraTextSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _ConfettiPainter extends CustomPainter {
+  final double progress;
+
+  _ConfettiPainter({required this.progress});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..style = PaintingStyle.fill;
+    final colors = const [
+      Color(0xFF2563EB),
+      Color(0xFF10B981),
+      Color(0xFFF59E0B),
+      Color(0xFFEC4899),
+    ];
+    final count = 22;
+    for (var i = 0; i < count; i++) {
+      final seed = i * 37;
+      final x = ((seed % 100) / 100.0) * size.width;
+      final y = (progress * size.height) + ((seed % 70) - 35);
+      final sizeFactor = 4 + (seed % 4).toDouble();
+      paint.color = colors[i % colors.length].withValues(
+        alpha: (1 - progress).clamp(0.0, 1.0),
+      );
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromCenter(center: Offset(x, y), width: sizeFactor, height: sizeFactor * 0.8),
+          const Radius.circular(2),
+        ),
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _ConfettiPainter oldDelegate) =>
+      oldDelegate.progress != progress;
 }

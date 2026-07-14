@@ -32,7 +32,7 @@ class BiSectionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = accent ?? AppColors.primary;
     return AppCard(
-      padding: const EdgeInsets.all(AppSpacing.lg),
+      padding: const EdgeInsets.all(14),
       radius: _kBiCardRadius,
       interactive: false,
       child: Column(
@@ -127,7 +127,7 @@ class BiPipelineSection extends StatelessWidget {
     final tappable = leads.isNotEmpty;
 
     final tiles = [
-      _PipeTile('Total Leads', '${summary.totalLeads}', Icons.hub_outlined,
+        _PipeTile('Total Leads', '${summary.totalLeads}', Icons.hub_outlined,
           AppColors.primary,
           onTap: tappable
               ? () => _open(context, 'Total Leads', 'Every lead', leads)
@@ -167,15 +167,15 @@ class BiPipelineSection extends StatelessWidget {
             return Row(
               children: [
                 for (var i = 0; i < tiles.length; i++) ...[
-                  if (i > 0) const SizedBox(width: 10),
+                  if (i > 0) const SizedBox(width: 8),
                   Expanded(child: tiles[i]),
                 ],
               ],
             );
           }
           return Wrap(
-            spacing: 10,
-            runSpacing: 10,
+            spacing: 8,
+            runSpacing: 8,
             children: [
               for (final t in tiles)
                 SizedBox(
@@ -206,52 +206,60 @@ class _PipeTile extends StatelessWidget {
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: context.fomraSurfaceVar.withValues(alpha: 0.55),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: context.fomraBorder),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 26,
-                height: 26,
-                decoration: BoxDecoration(
-                  color: accent.withValues(alpha: 0.14),
-                  borderRadius: BorderRadius.circular(8),
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: context.fomraSurfaceVar.withValues(alpha: 0.55),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: context.fomraBorder),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 24,
+                  height: 24,
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  alignment: Alignment.center,
+                  child: Icon(icon, size: 14, color: accent),
                 ),
-                alignment: Alignment.center,
-                child: Icon(icon, size: 15, color: accent),
-              ),
-              const Spacer(),
-              Text(
-                value,
-                style: TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w800,
-                  color: context.fomraTextPrimary,
-                  height: 1.1,
+                const Spacer(),
+                Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    color: context.fomraTextPrimary,
+                    height: 1.1,
+                  ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: context.fomraTextSecondary,
+              ],
             ),
-          ),
-        ],
-      ),
+            const SizedBox(height: 6),
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w700,
+                color: context.fomraTextPrimary,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              'Tap for leads',
+              style: TextStyle(
+                fontSize: 10.5,
+                color: context.fomraTextSecondary,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -263,7 +271,6 @@ class BiFunnelSection extends StatelessWidget {
   final List<BiFunnelStageRow> rows;
 
   const BiFunnelSection({super.key, required this.rows});
-
   @override
   Widget build(BuildContext context) {
     final maxCount =

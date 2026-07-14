@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../models/lead_drop_reason.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_theme_context.dart';
+import '../../services/lead_drop_reason_catalog_service.dart';
 
 class LeadDropReasonResult {
   final LeadDropReason reason;
@@ -84,7 +85,7 @@ class _LeadDropReasonDialogState extends State<LeadDropReasonDialog> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Drop lead',
+                          'Request drop approval',
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w800,
@@ -92,7 +93,7 @@ class _LeadDropReasonDialogState extends State<LeadDropReasonDialog> {
                           ),
                         ),
                         Text(
-                          'Select a reason and add notes',
+                          'Select a reason and add notes for management review',
                           style: TextStyle(
                             fontSize: 12,
                             color: context.fomraTextSecondary,
@@ -118,40 +119,55 @@ class _LeadDropReasonDialogState extends State<LeadDropReasonDialog> {
                 ),
               ),
               const SizedBox(height: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                decoration: BoxDecoration(
-                  border: Border.all(color: context.fomraBorder),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<LeadDropReason>(
-                    value: _reason,
-                    isExpanded: true,
-                    hint: Text(
-                      'Select drop reason…',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: context.fomraTextSecondary,
+              AnimatedBuilder(
+                animation: LeadDropReasonCatalogService.instance,
+                builder: (context, _) {
+                  final reasons = LeadDropReasonCatalogService.instance.current;
+                  LeadDropReason? selected;
+                  if (_reason != null) {
+                    for (final reason in reasons) {
+                      if (reason.id == _reason!.id) {
+                        selected = reason;
+                        break;
+                      }
+                    }
+                  }
+                  return Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: context.fomraBorder),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<LeadDropReason>(
+                        value: selected,
+                        isExpanded: true,
+                        hint: Text(
+                          'Select drop reason…',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: context.fomraTextSecondary,
+                          ),
+                        ),
+                        items: reasons
+                            .map(
+                              (r) => DropdownMenuItem(
+                                value: r,
+                                child: Text(
+                                  r.label,
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: context.fomraTextPrimary,
+                                  ),
+                                ),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (value) => setState(() => _reason = value),
                       ),
                     ),
-                    items: leadDropReasonOptions
-                        .map(
-                          (r) => DropdownMenuItem(
-                            value: r,
-                            child: Text(
-                              r.label,
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: context.fomraTextPrimary,
-                              ),
-                            ),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (value) => setState(() => _reason = value),
-                  ),
-                ),
+                  );
+                },
               ),
               if (_reason != null) ...[
                 const SizedBox(height: 14),
@@ -160,9 +176,7 @@ class _LeadDropReasonDialogState extends State<LeadDropReasonDialog> {
                   maxLines: 4,
                   decoration: InputDecoration(
                     labelText: 'Notes',
-                    hintText: _reason == LeadDropReason.other
-                        ? 'Please describe why this lead was dropped…'
-                        : 'Add details about this drop reason…',
+                    hintText: 'Add details for management review…',
                     alignLabelWithHint: true,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
@@ -184,7 +198,7 @@ class _LeadDropReasonDialogState extends State<LeadDropReasonDialog> {
                     style: FilledButton.styleFrom(
                       backgroundColor: AppColors.error,
                     ),
-                    child: const Text('Mark as dropped'),
+                    child: const Text('Submit for approval'),
                   ),
                 ],
               ),

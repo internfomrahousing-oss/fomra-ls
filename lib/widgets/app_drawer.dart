@@ -36,6 +36,13 @@ class AppDrawer extends StatelessWidget {
       _baseMenuItems[0],
       if (AuthService.instance.isManagement) _managementMenuItem,
       _baseMenuItems[1],
+      if (AuthService.instance.isManagement)
+        const _MenuItem(
+          'Settings',
+          Icons.settings_outlined,
+          '/settings',
+          Color(0xFF64748B),
+        ),
     ];
 
     return Drawer(

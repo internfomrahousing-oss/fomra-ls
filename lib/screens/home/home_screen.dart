@@ -12,6 +12,7 @@ import '../../services/auth_service.dart';
 import '../../services/app_store.dart';
 import '../../services/employee_service.dart';
 import '../../services/land_lead_service.dart';
+import '../../services/lead_drop_approval_service.dart';
 import '../../services/land_lead_signed_service.dart';
 import '../../services/land_lead_site_visit_service.dart';
 import '../../services/notification_center_service.dart';
@@ -59,6 +60,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   List<LandLeadSiteVisit> _pendingApprovals = [];
   List<LandLeadSignedRequest> _pendingSigned = [];
+  List<LeadDropApprovalRequest> _pendingDropApprovals = [];
   bool _loadingApprovals = false;
   Timer? _reminderSyncTimer;
 
@@ -378,12 +380,51 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     try {
       signed = await LandLeadSignedService.getPending();
     } catch (_) {/* table may not exist yet */}
+    List<LeadDropApprovalRequest> dropRequests = const [];
+    try {
+      dropRequests = await LeadDropApprovalService.getPending();
+    } catch (_) {/* notification storage may not exist yet */}
     if (mounted) {
       setState(() {
         _pendingApprovals = visits;
         _pendingSigned = signed;
+        _pendingDropApprovals = dropRequests;
         _loadingApprovals = false;
       });
+    }
+  }
+
+  Future<void> _approveDropRequest(LeadDropApprovalRequest request) async {
+    if (!RoleAccess.canApprove) {
+      if (!mounted) return;
+      AppFeedback.error(context, RoleAccess.deniedMessage('approve requests'));
+      return;
+    }
+    try {
+      await LeadDropApprovalService.review(request: request, approve: true);
+      if (!mounted) return;
+      AppFeedback.success(context, 'Drop request approved and lead dropped');
+      await _loadPendingApprovals();
+    } catch (e) {
+      if (!mounted) return;
+      AppFeedback.error(context, 'Could not approve drop request: $e');
+    }
+  }
+
+  Future<void> _rejectDropRequest(LeadDropApprovalRequest request) async {
+    if (!RoleAccess.canApprove) {
+      if (!mounted) return;
+      AppFeedback.error(context, RoleAccess.deniedMessage('approve requests'));
+      return;
+    }
+    try {
+      await LeadDropApprovalService.review(request: request, approve: false);
+      if (!mounted) return;
+      AppFeedback.info(context, 'Drop request rejected');
+      await _loadPendingApprovals();
+    } catch (e) {
+      if (!mounted) return;
+      AppFeedback.error(context, 'Could not reject drop request: $e');
     }
   }
 
@@ -531,6 +572,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 PortalApprovalsSection(
                   visits: _pendingApprovals,
                   signedRequests: _pendingSigned,
+                  dropRequests: _pendingDropApprovals,
                   leads: AppStore.instance.leads,
                   loading: _loadingApprovals,
                   onReview: (v) => wrap(() => _reviewPendingVisit(v)),
@@ -538,6 +580,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   onReject: (v) => wrap(() => _rejectPendingVisit(v)),
                   onApproveSigned: (r) => wrap(() => _approveSignedRequest(r)),
                   onRejectSigned: (r) => wrap(() => _rejectSignedRequest(r)),
+                  onApproveDrop: (r) => wrap(() => _approveDropRequest(r)),
+                  onRejectDrop: (r) => wrap(() => _rejectDropRequest(r)),
                 ),
               ],
             ),
@@ -565,7 +609,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         .length;
     final teamRows = buildPortalTeamPerformance(leads);
 
-    final approvalPending = _pendingApprovals.length + _pendingSigned.length;
+    final dropApprovalPending = _pendingDropApprovals.length;
+    final approvalCount =
+      _pendingApprovals.length + _pendingSigned.length + dropApprovalPending;
 
     final quickActions = [
       if (!_isManagement)
@@ -576,19 +622,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           onTap: _openAddLead,
         ),
       PortalQuickAction(
-        label: 'Show all projects',
+        label: 'Show All Projects',
         icon: Icons.map_outlined,
         accent: AppColors.info,
         onTap: () => _openAllProjectsMap(leads),
       ),
       PortalQuickAction(
-        label: 'Owner details',
+        label: 'Owner Details',
         icon: Icons.person_outline,
         accent: AppColors.success,
         onTap: () => _goTo('/owner-history'),
       ),
       PortalQuickAction(
-        label: 'Broker details',
+        label: 'Broker Details',
         icon: Icons.handshake_outlined,
         accent: AppColors.secondary,
         onTap: () => _goTo('/broker-management'),
@@ -657,13 +703,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   totalLeads: totalLeads,
                   activeLeads: _activeLeads,
                   thirdLabel:
-                      _isManagement ? 'Approval pending' : 'Owner meeting pending',
+                      _isManagement ? 'Approval Pending' : 'Owner meeting pending',
                   thirdValue:
-                      _isManagement ? approvalPending : ownerMeetingPending,
+                      _isManagement ? approvalCount : ownerMeetingPending,
                   thirdIcon: _isManagement
                       ? Icons.approval_outlined
                       : Icons.event_available_outlined,
-                  onThirdTap: _isManagement
+                    onThirdTap: _isManagement
                       ? _openApprovalsList
                       : () => FilteredLeadsScreen.open(
                           context, LeadListFilter.ownerMeetingPending),
@@ -758,44 +804,44 @@ class _EmployeePerformanceCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AppCard(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       radius: AppColors.radiusMd,
       interactive: onTap != null,
       onTap: onTap,
       child: Row(
         children: [
           Container(
-            width: 38,
-            height: 38,
+            width: 32,
+            height: 32,
             decoration: BoxDecoration(
               color: AppColors.primary.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(11),
+              borderRadius: BorderRadius.circular(10),
             ),
             alignment: Alignment.center,
             child: const Icon(
               Icons.emoji_events_outlined,
-              size: 20,
+              size: 17,
               color: AppColors.primary,
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Sites added',
+                  'Sites Added',
                   style: TextStyle(
-                    fontSize: 14,
+                    fontSize: 13,
                     fontWeight: FontWeight.w700,
                     color: context.fomraTextPrimary,
                   ),
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 1),
                 Text(
                   'Your total contribution to the pipeline',
                   style: TextStyle(
-                    fontSize: 11,
+                    fontSize: 10.5,
                     color: context.fomraTextSecondary,
                   ),
                 ),
@@ -807,6 +853,7 @@ class _EmployeePerformanceCard extends StatelessWidget {
             style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                   fontWeight: FontWeight.w800,
                   color: AppColors.primary,
+                  fontSize: 18,
                 ),
           ),
         ],
@@ -841,116 +888,11 @@ class _EmployeeTodayTasksSection extends StatelessWidget {
     List<LandLead> leads,
   ) {
     if (leads.isEmpty) return;
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: context.fomraSurface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => DraggableScrollableSheet(
-        expand: false,
-        initialChildSize: 0.6,
-        maxChildSize: 0.9,
-        minChildSize: 0.35,
-        builder: (ctx, controller) => Column(
-          children: [
-            const SizedBox(height: 10),
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: context.fomraBorder,
-                borderRadius: BorderRadius.circular(999),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 12, 8),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      '$title · ${leads.length}',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                        color: context.fomraTextPrimary,
-                      ),
-                    ),
-                  ),
-                  IconButton(
-                    onPressed: () => Navigator.pop(ctx),
-                    icon: const Icon(Icons.close_rounded),
-                  ),
-                ],
-              ),
-            ),
-            const Divider(height: 1),
-            Expanded(
-              child: ListView.separated(
-                controller: controller,
-                padding: const EdgeInsets.all(16),
-                itemCount: leads.length,
-                separatorBuilder: (_, __) =>
-                    const SizedBox(height: AppSpacing.sm),
-                itemBuilder: (_, i) {
-                  final lead = leads[i];
-                  return AppCard(
-                    padding: const EdgeInsets.all(14),
-                    radius: AppColors.radiusMd,
-                    interactive: true,
-                    onTap: () {
-                      Navigator.pop(ctx);
-                      onOpenLead(lead);
-                    },
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            color: color.withValues(alpha: 0.14),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          alignment: Alignment.center,
-                          child: Icon(Icons.person_pin_circle_outlined,
-                              color: color, size: 20),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                _leadLabel(lead),
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w800,
-                                  color: context.fomraTextPrimary,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                'Site #${lead.leadId} · ${lead.status.shortLabel}',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: context.fomraTextSecondary,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Icon(Icons.chevron_right_rounded,
-                            color: context.fomraTextTertiary),
-                      ],
-                    ),
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
+    FilteredLeadsScreen.openList(
+      context,
+      title: title,
+      subtitle: '$title follow-up queue',
+      leads: leads,
     );
   }
 
@@ -994,7 +936,7 @@ class _EmployeeTodayTasksSection extends StatelessWidget {
 
     return PortalSectionCard(
       title: "Today's tasks",
-      subtitle: 'Pending follow-ups by category',
+      subtitle: 'Compact follow-up cards',
       icon: Icons.today_rounded,
       child: total == 0
           ? const EmptyState(
@@ -1021,10 +963,15 @@ class _EmployeeTodayTasksSection extends StatelessWidget {
                           count: c.leads.length,
                           icon: c.icon,
                           color: c.color,
+                          subtitle: switch (c.label) {
+                            'Call Pending' => 'Follow up by call',
+                            'Meeting Pending' => 'Land owner meeting due',
+                            'Site Visit Pending' => 'Schedule the site visit',
+                            _ => 'Legal verification pending',
+                          },
                           onTap: c.leads.isEmpty
                               ? null
-                              : () => _openCategory(
-                                  context, c.label, c.color, c.leads),
+                              : () => _openCategory(context, c.label, c.color, c.leads),
                         ),
                       ),
                   ],
@@ -1037,6 +984,7 @@ class _EmployeeTodayTasksSection extends StatelessWidget {
 
 class _TaskSummaryCard extends StatelessWidget {
   final String label;
+  final String subtitle;
   final int count;
   final IconData icon;
   final Color color;
@@ -1044,6 +992,7 @@ class _TaskSummaryCard extends StatelessWidget {
 
   const _TaskSummaryCard({
     required this.label,
+    required this.subtitle,
     required this.count,
     required this.icon,
     required this.color,
@@ -1053,7 +1002,7 @@ class _TaskSummaryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AppCard(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(12),
       radius: AppColors.radiusMd,
       interactive: onTap != null,
       onTap: onTap,
@@ -1063,20 +1012,20 @@ class _TaskSummaryCard extends StatelessWidget {
           Row(
             children: [
               Container(
-                width: 38,
-                height: 38,
+                width: 34,
+                height: 34,
                 decoration: BoxDecoration(
                   color: color.withValues(alpha: 0.14),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(11),
                 ),
                 alignment: Alignment.center,
-                child: Icon(icon, color: color, size: 19),
+                child: Icon(icon, color: color, size: 18),
               ),
               const Spacer(),
               Text(
                 '$count',
                 style: TextStyle(
-                  fontSize: 24,
+                  fontSize: 22,
                   fontWeight: FontWeight.w800,
                   color: color,
                   height: 1,
@@ -1084,27 +1033,18 @@ class _TaskSummaryCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           Text(
             label,
             style: TextStyle(
-              fontSize: 13,
+              fontSize: 12.5,
               fontWeight: FontWeight.w700,
               color: context.fomraTextPrimary,
             ),
           ),
           const SizedBox(height: 2),
-          Text(
-            count == 0
-                ? 'None pending'
-                : count == 1
-                    ? '1 lead to action'
-                    : '$count leads to action',
-            style: TextStyle(
-              fontSize: 11,
-              color: context.fomraTextSecondary,
-            ),
-          ),
+          Text(subtitle,
+              style: TextStyle(fontSize: 10.5, color: context.fomraTextSecondary)),
         ],
       ),
     );

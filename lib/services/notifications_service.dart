@@ -31,14 +31,33 @@ class NotificationsService {
     String? leadId,
     String? referenceId,
   }) async {
-    await _db.from('notifications').insert({
+    await createAndReturn(
+      audience: audience,
+      title: title,
+      message: message,
+      type: type,
+      leadId: leadId,
+      referenceId: referenceId,
+    );
+  }
+
+  static Future<AppNotification> createAndReturn({
+    required String audience,
+    required String title,
+    String message = '',
+    String type = 'alert',
+    String? leadId,
+    String? referenceId,
+  }) async {
+    final row = await _db.from('notifications').insert({
       'audience': audience,
       'type': type,
       'title': title,
       'message': message,
       if (leadId != null) 'lead_id': leadId,
       if (referenceId != null) 'reference_id': referenceId,
-    });
+    }).select().single();
+    return AppNotification.fromRow(row as Map<String, dynamic>);
   }
 
   static Future<void> markRead(String id) async {

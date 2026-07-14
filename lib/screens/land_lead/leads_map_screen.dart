@@ -749,9 +749,9 @@ class _PropertyPopupState extends State<_PropertyPopup> {
       backgroundColor: context.fomraSurface,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 400),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+        constraints: const BoxConstraints(maxWidth: 400, maxHeight: 460),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,

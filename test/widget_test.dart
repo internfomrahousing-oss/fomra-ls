@@ -10,6 +10,9 @@ void main() {
   testWidgets('App smoke test', (WidgetTester tester) async {
     SharedPreferences.setMockInitialValues({});
     ThemeController.instance.mode.value = ThemeMode.light;
+    tester.view.physicalSize = const Size(1200, 2000);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
 
     await tester.pumpWidget(
       ValueListenableBuilder<ThemeMode>(
@@ -25,6 +28,6 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Reset Password'), findsOneWidget);
-    expect(find.text('Manage account and workspace options.'), findsOneWidget);
+    expect(find.text('Manage account options.'), findsOneWidget);
   });
 }
