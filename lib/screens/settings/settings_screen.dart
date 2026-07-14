@@ -1,3 +1,7 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../../models/lead_drop_reason.dart';
@@ -11,10 +15,14 @@ import '../../widgets/fomra_app_bar.dart';
 import '../../widgets/fomra_app_shell.dart';
 import '../../widgets/fomra_breadcrumb.dart';
 import '../../widgets/ui/app_components.dart';
+import '../../widgets/ui/app_feedback.dart';
 import '../../widgets/change_password_section.dart';
 import '../../widgets/portal_page_layout.dart';
 import '../audit/audit_trail_screen.dart';
 import '../employee_management/employee_management_screen.dart';
+import '../../services/csv_saver_stub.dart'
+    if (dart.library.html) '../../services/csv_saver_web.dart'
+    if (dart.library.io) '../../services/csv_saver_io.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -377,8 +385,86 @@ class _DroppedReasonsPageState extends State<_DroppedReasonsPage> {
   }
 }
 
-class _BulkLeadImportPage extends StatelessWidget {
+/// Columns for the downloadable bulk-import template. Latitude/Longitude are
+/// intentionally omitted — coordinates are derived from the Google Maps Link
+/// during import (backend pipeline, not built here).
+const _bulkImportColumns = <String>[
+  'Owner',
+  'Mobile',
+  'Broker',
+  'Village',
+  'District',
+  'Survey No',
+  'Google Maps Link',
+  'Land Extent',
+  'Unit',
+  'Terms',
+  'Stage',
+];
+
+class _BulkLeadImportPage extends StatefulWidget {
   const _BulkLeadImportPage();
+
+  @override
+  State<_BulkLeadImportPage> createState() => _BulkLeadImportPageState();
+}
+
+class _BulkLeadImportPageState extends State<_BulkLeadImportPage> {
+  String? _pickedFileName;
+
+  String _csvField(String value) {
+    if (value.contains(',') || value.contains('"') || value.contains('\n')) {
+      return '"${value.replaceAll('"', '""')}"';
+    }
+    return value;
+  }
+
+  String _csvRow(List<String> cells) => cells.map(_csvField).join(',');
+
+  Future<void> _downloadTemplate() async {
+    final example = [
+      'John Doe',
+      '9876543210',
+      'Broker Name',
+      'Village Name',
+      'District Name',
+      '123/4A',
+      'https://maps.google.com/?q=13.0827,80.2707',
+      '2.5',
+      'Acre',
+      'Outright Purchase',
+      'Negotiation',
+    ];
+    final csv = '${_csvRow(_bulkImportColumns)}\r\n${_csvRow(example)}\r\n';
+    final bytes = Uint8List.fromList(utf8.encode(csv));
+    try {
+      await saveCsv(bytes, 'FomraLS_Bulk_Lead_Import_Template.csv');
+      if (mounted) {
+        AppFeedback.success(context, 'Template downloaded');
+      }
+    } catch (e) {
+      if (mounted) {
+        AppFeedback.error(context, 'Could not download template: $e');
+      }
+    }
+  }
+
+  Future<void> _uploadFile() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['xlsx', 'xls', 'csv'],
+      allowMultiple: false,
+      withData: true,
+    );
+    if (result == null || result.files.isEmpty) return;
+    setState(() => _pickedFileName = result.files.first.name);
+    if (mounted) {
+      AppFeedback.info(
+        context,
+        'File selected. Parsing & import will be enabled with the backend pipeline.',
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -392,32 +478,285 @@ class _BulkLeadImportPage extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
         children: [
-          AppCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SectionHeader(
-                  title: 'Bulk Lead Import',
-                  subtitle: 'Navigation entry and UI placeholder for the future import pipeline.',
-                  icon: Icons.file_upload_outlined,
+          const SectionHeader(
+            title: 'Bulk Lead Import',
+            subtitle:
+                'Download the template, fill it in, and upload to import leads in bulk.',
+            icon: Icons.file_upload_outlined,
+          ),
+          const SizedBox(height: 12),
+          _actionsCard(context),
+          const SizedBox(height: 12),
+          _previewCard(context),
+          const SizedBox(height: 12),
+          _infoCard(context),
+          const SizedBox(height: 12),
+          _guidelinesCard(context),
+        ],
+      ),
+    );
+  }
+
+  Widget _actionsCard(BuildContext context) {
+    return AppCard(
+      interactive: false,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Get started',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+              color: context.fomraTextPrimary,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Use the official template so every column maps to the right field.',
+            style: TextStyle(fontSize: 12, color: context.fomraTextSecondary),
+          ),
+          const SizedBox(height: 14),
+          LayoutBuilder(
+            builder: (context, c) {
+              final download = OutlinedButton.icon(
+                onPressed: _downloadTemplate,
+                icon: const Icon(Icons.download_outlined, size: 18),
+                label: const Text('Download Excel Template'),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
-                const SizedBox(height: 12),
+              );
+              final upload = FilledButton.icon(
+                onPressed: _uploadFile,
+                icon: const Icon(Icons.upload_file_outlined, size: 18),
+                label: const Text('Upload Excel File'),
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+              );
+              if (c.maxWidth < 460) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [download, const SizedBox(height: 10), upload],
+                );
+              }
+              return Row(
+                children: [
+                  Expanded(child: download),
+                  const SizedBox(width: 12),
+                  Expanded(child: upload),
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _previewCard(BuildContext context) {
+    return AppCard(
+      interactive: false,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.visibility_outlined,
+                  size: 18, color: AppColors.primary),
+              const SizedBox(width: 8),
+              Text(
+                'Preview',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                  color: context.fomraTextPrimary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: context.fomraSurfaceVar.withValues(alpha: 0.45),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: context.fomraBorder,
+                style: BorderStyle.solid,
+              ),
+            ),
+            child: Column(
+              children: [
+                Icon(
+                  _pickedFileName == null
+                      ? Icons.table_chart_outlined
+                      : Icons.description_outlined,
+                  size: 32,
+                  color: context.fomraTextSecondary,
+                ),
+                const SizedBox(height: 10),
                 Text(
-                  'This screen is reserved for the upcoming import workflow. The backend import pipeline will be connected later without changing this entry point.',
+                  _pickedFileName == null
+                      ? 'No file selected yet'
+                      : _pickedFileName!,
+                  textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 13,
-                    color: context.fomraTextSecondary,
+                    fontWeight: FontWeight.w700,
+                    color: context.fomraTextPrimary,
                   ),
                 ),
-                const SizedBox(height: 16),
-                FilledButton.icon(
-                  onPressed: null,
-                  icon: const Icon(Icons.file_upload_outlined, size: 18),
-                  label: const Text('Import leads (coming soon)'),
+                const SizedBox(height: 4),
+                Text(
+                  _pickedFileName == null
+                      ? 'Upload a completed template to see a row-by-row preview here.'
+                      : 'Row-by-row validation and preview will appear here once the import pipeline is connected.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: context.fomraTextSecondary,
+                  ),
                 ),
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _infoCard(BuildContext context) {
+    final rows = <(IconData, String, String)>[
+      (
+        Icons.link_rounded,
+        'Google Maps Link',
+        'Paste only the Google Maps property link — latitude & longitude are extracted automatically into the existing coordinate fields.'
+      ),
+      (
+        Icons.place_outlined,
+        'No Lat/Long columns',
+        'You never type coordinates. The template deliberately omits Latitude & Longitude.'
+      ),
+      (
+        Icons.tag_rounded,
+        'Automatic Lead IDs',
+        'Lead IDs are generated on import — imported leads appear across Project Map, Land Workspace, Search, Reports, Dashboard and Analytics.'
+      ),
+    ];
+    return AppCard(
+      interactive: false,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.info_outline_rounded,
+                  size: 18, color: AppColors.info),
+              const SizedBox(width: 8),
+              Text(
+                'Import information',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                  color: context.fomraTextPrimary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          for (final r in rows)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(r.$1, size: 18, color: context.fomraTextSecondary),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          r.$2,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: context.fomraTextPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          r.$3,
+                          style: TextStyle(
+                            fontSize: 12,
+                            height: 1.35,
+                            color: context.fomraTextSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _guidelinesCard(BuildContext context) {
+    final guidelines = <String>[
+      'Use the downloaded template columns exactly: ${_bulkImportColumns.join(', ')}.',
+      'Land Extent must be a number only; put the unit (Acre / Ground / Cent / Sq Ft) in the Unit column.',
+      'Terms must be one of: Outright Purchase, Joint Venture, Marketing, Deferred Payment.',
+      'Google Maps Link must be a valid property link — rows with an invalid or unreadable link are marked Invalid and skipped.',
+      'Do not add Latitude or Longitude columns — coordinates are extracted from the link automatically.',
+    ];
+    return AppCard(
+      interactive: false,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.rule_rounded, size: 18, color: AppColors.warning),
+              const SizedBox(width: 8),
+              Text(
+                'Import guidelines',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                  color: context.fomraTextPrimary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          for (final g in guidelines)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.check_circle_outline_rounded,
+                      size: 16, color: AppColors.success),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      g,
+                      style: TextStyle(
+                        fontSize: 12,
+                        height: 1.4,
+                        color: context.fomraTextPrimary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
         ],
       ),
     );
