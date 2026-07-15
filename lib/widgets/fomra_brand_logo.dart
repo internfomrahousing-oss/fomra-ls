@@ -13,14 +13,14 @@ class FomraBrandLogo extends StatelessWidget {
     this.showBackground = true,
   });
 
-  static const _assetPath = 'assets/images/fomra_logo.png';
+  static const assetPath = 'assets/images/fomra_logo.png';
 
   @override
   Widget build(BuildContext context) {
     final h = height ?? (compact ? 48.0 : 52.0);
 
     final logo = Image.asset(
-      _assetPath,
+      assetPath,
       fit: BoxFit.contain,
       alignment: compact ? Alignment.center : Alignment.centerLeft,
       filterQuality: FilterQuality.high,
@@ -61,6 +61,42 @@ class FomraBrandLogo extends StatelessWidget {
       ),
       alignment: compact ? Alignment.center : Alignment.centerLeft,
       child: logo,
+    );
+  }
+}
+
+/// Compact circular brand mark — a small white badge holding the Fomra logo.
+/// Used for the sidebar header so the mark stays legible on the blue
+/// background in both collapsed and expanded modes.
+class FomraBrandMark extends StatelessWidget {
+  final double size;
+
+  const FomraBrandMark({super.key, this.size = 38});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.12),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      padding: EdgeInsets.all(size * 0.18),
+      alignment: Alignment.center,
+      child: Image.asset(
+        FomraBrandLogo.assetPath,
+        fit: BoxFit.contain,
+        filterQuality: FilterQuality.high,
+        errorBuilder: (_, __, ___) => const _VectorFallback(compact: true),
+      ),
     );
   }
 }

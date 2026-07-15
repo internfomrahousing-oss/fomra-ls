@@ -125,6 +125,17 @@ class ProfilePhotoService extends ChangeNotifier {
   String? get currentUserUrl =>
       urlFor(AuthService.instance.currentUser?.email);
 
+  /// Whether a stored photo is known for [email] (populated by [load] /
+  /// [reconcileWithBucket] and set immediately after an upload).
+  bool hasPhotoFor(String? email) {
+    final e = (email ?? '').trim().toLowerCase();
+    if (e.isEmpty) return false;
+    return _versions.containsKey(_sanitize(e));
+  }
+
+  bool get currentUserHasPhoto =>
+      hasPhotoFor(AuthService.instance.currentUser?.email);
+
   /// Compresses [bytes] and uploads them as the current account's photo.
   Future<void> uploadForCurrentUser(Uint8List bytes) async {
     final email =

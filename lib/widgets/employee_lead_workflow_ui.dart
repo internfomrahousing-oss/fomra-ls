@@ -1,16 +1,10 @@
-import 'dart:typed_data';
-
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../models/land_lead.dart';
-import '../services/land_lead_legal_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/fomra_theme_context.dart';
-import 'ui/app_feedback.dart';
 import '../utils/employee_lead_next_action.dart';
-import '../utils/image_compressor.dart';
 
 String _fmtDate(DateTime d) => DateFormat('d MMM yyyy').format(d.toLocal());
 
@@ -348,89 +342,6 @@ class _EmployeeLeadQuickFabState extends State<EmployeeLeadQuickFab>
     }
   }
 
-  Future<void> _captureDocument(LegalDocCaptureKind kind) async {
-    // Open the OS file chooser directly. On web the picker must be triggered
-    // as close to the user gesture as possible, so we avoid an intermediate
-    // Camera/Gallery sheet here (that extra hop stops the dialog opening).
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: const ['pdf', 'png', 'jpg', 'jpeg', 'doc', 'docx'],
-      withData: true,
-    );
-    if (result == null || result.files.isEmpty || !mounted) return;
-
-    final file = result.files.first;
-    final bytes = file.bytes;
-    if (bytes == null) {
-      AppFeedback.error(context, 'Could not read the selected file');
-      return;
-    }
-
-    final lowerName = file.name.toLowerCase();
-    final isImage = lowerName.endsWith('.jpg') ||
-        lowerName.endsWith('.jpeg') ||
-        lowerName.endsWith('.png');
-
-    Uint8List uploadBytes = bytes;
-    String fileName = file.name;
-    if (isImage) {
-      uploadBytes = await ImageCompressor.compressTo1Mb(bytes);
-      final dot = fileName.lastIndexOf('.');
-      fileName = '${dot > 0 ? fileName.substring(0, dot) : fileName}.jpg';
-    } else if (bytes.length > ImageCompressor.maxBytes1Mb) {
-      AppFeedback.error(
-        context,
-        '${kind.label} exceeds 1 MB. Use a smaller file or a JPG/PNG image.',
-      );
-      return;
-    }
-
-    final name = kind.filePrefix(fileName);
-
-    try {
-      await LandLeadLegalService.uploadDocument(
-        leadId: widget.lead.leadId,
-        bytes: uploadBytes,
-        fileName: name,
-      );
-    } catch (e) {
-      if (mounted) {
-        AppFeedback.error(context, '${kind.label} upload failed: $e');
-      }
-      return;
-    }
-    if (!mounted) return;
-    AppFeedback.success(context, '${kind.label} uploaded');
-    widget.onActivityChanged?.call();
-  }
-
-  Future<void> _showDocCaptureSheet() async {
-    final kind = await showModalBottomSheet<LegalDocCaptureKind>(
-      context: context,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const ListTile(
-              title: Text(
-                'Capture document',
-                style: TextStyle(fontWeight: FontWeight.w800),
-              ),
-              subtitle: Text('Images are compressed before upload'),
-            ),
-            for (final k in LegalDocCaptureKind.values)
-              ListTile(
-                leading: const Icon(Icons.document_scanner_outlined),
-                title: Text(k.label),
-                onTap: () => Navigator.pop(ctx, k),
-              ),
-          ],
-        ),
-      ),
-    );
-    if (kind == null) return;
-    await _captureDocument(kind);
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -448,12 +359,6 @@ class _EmployeeLeadQuickFabState extends State<EmployeeLeadQuickFab>
         onTap: () => _run(() async {
           widget.onDetailAction('Site visit');
         }),
-      ),
-      (
-        icon: Icons.upload_file_outlined,
-        label: 'Upload Document',
-        color: AppColors.info,
-        onTap: () => _run(_showDocCaptureSheet),
       ),
       (
         icon: Icons.chat_rounded,

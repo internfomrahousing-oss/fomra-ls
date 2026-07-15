@@ -37,8 +37,29 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^3.0.0
+  flutter_launcher_icons: ^0.14.1
 
 flutter:
   uses-material-design: true
   assets:
     - assets/images/
+
+# App icon generation (Fomra logo) for every platform.
+# Source icons are produced by: dart run tool/generate_app_icon.dart
+# Regenerate icons with:        dart run flutter_launcher_icons
+flutter_launcher_icons:
+  image_path: "assets/images/app_icon.png"
+  android: true
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/images/app_icon_foreground.png"
+  ios: true
+  remove_alpha_ios: true
+  web:
+    generate: true
+    image_path: "assets/images/app_icon.png"
+    background_color: "#FFFFFF"
+    theme_color: "#2563EB"
+# NOTE: this project only targets android / ios / web — there are no
+# windows/ or macos/ platform folders, so those icons are not generated.
+# If those platforms are added later, add `windows:` / `macos:` blocks here
+# and re-run `dart run flutter_launcher_icons`.

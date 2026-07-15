@@ -8,6 +8,7 @@ import '../models/land_lead_site_visit.dart';
 import '../models/lead_list_filter.dart';
 import '../services/lead_drop_approval_service.dart';
 import '../services/app_store.dart';
+import '../services/profile_photo_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/fomra_layout.dart';
 import '../theme/fomra_theme_context.dart';
@@ -2020,11 +2021,23 @@ class _PortalProfileMenuPanel extends StatelessWidget {
               Divider(height: 1, color: context.fomraBorder),
               Padding(
                 padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
-                child: _PortalProfileMenuItem(
-                  icon: Icons.add_a_photo_outlined,
-                  label: 'Upload Profile Photo',
-                  subtitle: 'Set your account picture',
-                  onTap: () => onSelect('upload_photo'),
+                child: Builder(
+                  builder: (context) {
+                    final hasPhoto =
+                        ProfilePhotoService.instance.hasPhotoFor(email);
+                    return _PortalProfileMenuItem(
+                      icon: hasPhoto
+                          ? Icons.account_circle_outlined
+                          : Icons.add_a_photo_outlined,
+                      label: hasPhoto
+                          ? 'View / Edit Profile Photo'
+                          : 'Upload Profile Photo',
+                      subtitle: hasPhoto
+                          ? 'Preview, re-crop or replace it'
+                          : 'Set your account picture',
+                      onTap: () => onSelect('upload_photo'),
+                    );
+                  },
                 ),
               ),
               Padding(

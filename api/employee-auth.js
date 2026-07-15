@@ -45,6 +45,29 @@ async function readBody(req) {
   });
 }
 
+// Turn GoTrue's opaque email failures into something management can act on.
+// These are the real-world causes of "employee created but invite failed":
+// Supabase's built-in email service is rate-limited (a few per hour) and is
+// not meant for production — a custom SMTP provider must be configured.
+function explainEmailError(status, msg) {
+  if (status === 429 || msg.includes('rate limit') || msg.includes('too many')) {
+    return 'Email rate limit reached. Supabase\'s built-in email service only ' +
+      'allows a few messages per hour — configure a custom SMTP provider in ' +
+      'Supabase → Authentication → Emails → SMTP Settings, then re-send.';
+  }
+  if (
+    msg.includes('error sending') ||
+    msg.includes('smtp') ||
+    msg.includes('send email') ||
+    msg.includes('mail')
+  ) {
+    return 'Supabase could not send the invite email. Configure SMTP in ' +
+      'Supabase → Authentication → Emails → SMTP Settings (and make sure the ' +
+      '"Invite user" template + Site URL / redirect URLs are set), then re-send.';
+  }
+  return null;
+}
+
 async function findUserIdByEmail(base, headers, email) {
   for (let page = 1; page <= 10; page++) {
     const r = await fetch(`${base}?page=${page}&per_page=200`, { headers });
@@ -121,6 +144,8 @@ module.exports = async (req, res) => {
       if (r.ok) return res.status(200).json({ ok: true, invited: true });
       const err = await r.json().catch(() => ({}));
       const msg = `${err.msg || err.error_description || err.message || ''}`.toLowerCase();
+      const mapped = explainEmailError(r.status, msg);
+      if (mapped) return res.status(r.status).json({ error: mapped });
       if (r.status === 422 || msg.includes('already') || msg.includes('registered') || msg.includes('exists')) {
         // The user already exists → an invite won't re-send. Send a password
         // recovery email instead; its link also lands on /set-password (the app
@@ -137,8 +162,10 @@ module.exports = async (req, res) => {
           return res.status(200).json({ ok: true, invited: false, recovered: true });
         }
         const rerr = await rec.json().catch(() => ({}));
+        const rmsg = `${rerr.msg || rerr.error_description || rerr.message || ''}`.toLowerCase();
         return res.status(rec.status).json({
-          error: rerr.msg || rerr.message || 'could not send password email',
+          error: explainEmailError(rec.status, rmsg) ||
+            rerr.msg || rerr.message || 'could not send password email',
         });
       }
       return res.status(r.status).json({ error: err.msg || err.message || 'invite failed' });

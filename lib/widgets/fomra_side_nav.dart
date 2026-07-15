@@ -150,7 +150,7 @@ class _FomraSideNavState extends State<FomraSideNav> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _BrandHeader(expanded: _expanded),
+            const _BrandHeader(),
             Expanded(
               child: Padding(
                 padding: EdgeInsets.symmetric(
@@ -183,32 +183,15 @@ class _FomraSideNavState extends State<FomraSideNav> {
 }
 
 class _BrandHeader extends StatelessWidget {
-  final bool expanded;
-
-  const _BrandHeader({required this.expanded});
+  const _BrandHeader();
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: kToolbarHeight,
-      child: AnimatedPadding(
-        duration: _SideNavTokens.animDuration,
-        curve: _SideNavTokens.animCurve,
-        padding: EdgeInsets.fromLTRB(
-          expanded ? 10 : 6,
-          3,
-          expanded ? 10 : 6,
-          3,
-        ),
-        child: Align(
-          alignment: expanded ? Alignment.centerLeft : Alignment.center,
-          child: FomraBrandLogo(
-            compact: !expanded,
-            showBackground: true,
-            height: kToolbarHeight - 6,
-          ),
-        ),
-      ),
+    // Compact, centred brand mark — no full-width white panel — so the blue
+    // sidebar stays clean in both collapsed and expanded modes.
+    return const Padding(
+      padding: EdgeInsets.only(top: 14, bottom: 10),
+      child: Center(child: FomraBrandMark(size: 38)),
     );
   }
 }
