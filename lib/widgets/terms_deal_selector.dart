@@ -155,41 +155,8 @@ const kDealTypeConfigs = <DealTypeConfig>[
       ),
     ],
   ),
-  DealTypeConfig(
-    id: 'others',
-    title: 'Others',
-    description: 'Custom or specialized agreement types',
-    icon: Icons.more_horiz_rounded,
-    fields: [
-      DealFieldConfig(
-        id: 'agreement_name',
-        label: 'Agreement Name',
-        hint: 'Name of the agreement',
-        icon: Icons.description_outlined,
-      ),
-      DealFieldConfig(
-        id: 'description',
-        label: 'Description',
-        hint: 'Brief description of terms',
-        icon: Icons.notes_outlined,
-        maxLines: 2,
-      ),
-      DealFieldConfig(
-        id: 'special_clauses',
-        label: 'Special Clauses',
-        hint: 'Notable clauses or conditions',
-        icon: Icons.gavel_outlined,
-        maxLines: 2,
-      ),
-      DealFieldConfig(
-        id: 'remarks',
-        label: 'Remarks',
-        hint: 'Additional notes',
-        icon: Icons.chat_bubble_outline_rounded,
-        maxLines: 2,
-      ),
-    ],
-  ),
+  // "Others" was removed as a selectable Term. Leads saved against it still
+  // resolve via _kLegacyPrimaryMap below.
 ];
 
 const _kFieldMotion = Duration(milliseconds: 260);

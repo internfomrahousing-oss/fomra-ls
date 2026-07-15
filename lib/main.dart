@@ -56,6 +56,21 @@ class FomraLSApp extends StatelessWidget {
         theme: appTheme(),
         darkTheme: appThemeDark(),
         themeMode: themeMode,
+        // Slightly larger global type (~8%) without touching per-widget sizes,
+        // so existing spacing/layout is preserved. Still honours the OS
+        // accessibility setting, just with a raised floor.
+        builder: (context, child) {
+          final mq = MediaQuery.of(context);
+          return MediaQuery(
+            data: mq.copyWith(
+              textScaler: mq.textScaler.clamp(
+                minScaleFactor: 1.08,
+                maxScaleFactor: 1.3,
+              ),
+            ),
+            child: child ?? const SizedBox.shrink(),
+          );
+        },
         home: const _StartupScreen(),
         routes: {
           '/login':               (_) => const LoginScreen(),

@@ -2166,6 +2166,7 @@ class _SitePhotosTab extends StatelessWidget {
               url: urls[i],
               size: _thumbSize,
               onTap: () => _showSitePhotoLightbox(context, urls[i]),
+              onDownload: () => _downloadSitePhoto(context, urls[i]),
             ),
         ],
       ),
@@ -2177,43 +2178,88 @@ class _SitePhotoThumbnail extends StatelessWidget {
   final String url;
   final double size;
   final VoidCallback onTap;
+  final VoidCallback onDownload;
 
   const _SitePhotoThumbnail({
     required this.url,
     required this.size,
     required this.onTap,
+    required this.onDownload,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Container(
-          width: size,
-          height: size,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: context.fomraBorder),
-            boxShadow: context.fomraCardShadow,
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: Image.network(
-            url,
-            fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => ColoredBox(
-              color: context.fomraSurfaceVar,
-              child: Icon(
-                Icons.broken_image_outlined,
-                color: context.fomraTextSecondary,
+    return SizedBox(
+      width: size,
+      height: size,
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: onTap,
+                borderRadius: BorderRadius.circular(14),
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: context.fomraBorder),
+                    boxShadow: context.fomraCardShadow,
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: Image.network(
+                    url,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => ColoredBox(
+                      color: context.fomraSurfaceVar,
+                      child: Icon(
+                        Icons.broken_image_outlined,
+                        color: context.fomraTextSecondary,
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ),
           ),
-        ),
+          Positioned(
+            right: 4,
+            bottom: 4,
+            child: Material(
+              color: Colors.black54,
+              borderRadius: BorderRadius.circular(8),
+              child: InkWell(
+                onTap: onDownload,
+                borderRadius: BorderRadius.circular(8),
+                child: const Padding(
+                  padding: EdgeInsets.all(5),
+                  child: Icon(
+                    Icons.download_rounded,
+                    size: 15,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
+  }
+}
+
+/// Downloads a site photo. Supabase Storage honours a `download` query param
+/// by serving the file as an attachment, so the existing public URL is reused
+/// rather than re-fetching the bytes.
+Future<void> _downloadSitePhoto(BuildContext context, String url) async {
+  final uri = Uri.tryParse(url);
+  if (uri == null) return;
+  final withDownload = uri.replace(
+    queryParameters: {...uri.queryParameters, 'download': ''},
+  );
+  final ok = await launchUrl(withDownload, mode: LaunchMode.externalApplication);
+  if (!ok && context.mounted) {
+    AppFeedback.error(context, 'Could not download this photo');
   }
 }
 
@@ -2251,21 +2297,43 @@ Future<void> _showSitePhotoLightbox(BuildContext context, String url) {
             Positioned(
               top: 8,
               right: 8,
-              child: Material(
-                color: Colors.black54,
-                borderRadius: BorderRadius.circular(8),
-                child: InkWell(
-                  onTap: () => Navigator.pop(ctx),
-                  borderRadius: BorderRadius.circular(8),
-                  child: const Padding(
-                    padding: EdgeInsets.all(6),
-                    child: Icon(
-                      Icons.close_rounded,
-                      size: 18,
-                      color: Colors.white,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Material(
+                    color: Colors.black54,
+                    borderRadius: BorderRadius.circular(8),
+                    child: InkWell(
+                      onTap: () => _downloadSitePhoto(ctx, url),
+                      borderRadius: BorderRadius.circular(8),
+                      child: const Padding(
+                        padding: EdgeInsets.all(6),
+                        child: Icon(
+                          Icons.download_rounded,
+                          size: 18,
+                          color: Colors.white,
+                        ),
+                      ),
                     ),
                   ),
-                ),
+                  const SizedBox(width: 6),
+                  Material(
+                    color: Colors.black54,
+                    borderRadius: BorderRadius.circular(8),
+                    child: InkWell(
+                      onTap: () => Navigator.pop(ctx),
+                      borderRadius: BorderRadius.circular(8),
+                      child: const Padding(
+                        padding: EdgeInsets.all(6),
+                        child: Icon(
+                          Icons.close_rounded,
+                          size: 18,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],

@@ -180,7 +180,6 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
     'Data Captured',
     'Terms',
     'Site Photos',
-    'Notes',
   ];
 
   @override
@@ -794,8 +793,6 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
         return (_termsType ?? '').isNotEmpty;
       case 3:
         return _photos.isNotEmpty || _keptPhotoUrls.isNotEmpty;
-      case 4:
-        return _notesCtrl.text.trim().isNotEmpty;
       default:
         return false;
     }
@@ -1281,23 +1278,6 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
                         _buildSitePhotosSection('4'),
                       ),
                       const SizedBox(height: AddLeadUi.sectionGap),
-                      _sectionAnchor(
-                        4,
-                        AddLeadSectionCard(
-                          number: '5',
-                          title: 'Notes',
-                          subtitle: 'Any additional observations',
-                          icon: Icons.sticky_note_2_outlined,
-                          child: _Field(
-                            ctrl: _notesCtrl,
-                            label: 'Notes',
-                            hint: 'Any additional observations',
-                            icon: Icons.notes_outlined,
-                            maxLines: 3,
-                            maxLength: 500,
-                          ),
-                        ),
-                      ),
                       const SizedBox(height: 8),
                     ],
                   ),

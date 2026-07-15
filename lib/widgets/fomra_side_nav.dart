@@ -2,7 +2,6 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
-import 'fomra_brand_logo.dart';
 
 import '../services/auth_service.dart';
 import '../screens/home/home_screen.dart';
@@ -28,8 +27,9 @@ class FomraSideNav extends StatefulWidget {
 
   const FomraSideNav({super.key, required this.currentRoute});
 
-  static const collapsedWidth = 88.0;
-  static const expandedWidth = 248.0;
+  // Narrowed ~12% from 88 / 248 while keeping the nav comfortable to hit.
+  static const collapsedWidth = 76.0;
+  static const expandedWidth = 218.0;
 
   static List<FomraSideNavItem> itemsForUser() {
     final items = <FomraSideNavItem>[
@@ -70,12 +70,13 @@ class FomraSideNav extends StatefulWidget {
 }
 
 class _SideNavTokens {
-  static const navButtonSize = 54.0;
-  static const navButtonRadius = 15.0;
-  static const navIconSize = 24.0;
-  static const navItemGap = 14.0;
-  static const horizontalPad = 14.0;
-  static const collapsedHorizontalPad = 10.0;
+  // Sized to the narrower rail while keeping a comfortable tap target.
+  static const navButtonSize = 48.0;
+  static const navButtonRadius = 14.0;
+  static const navIconSize = 22.0;
+  static const navItemGap = 10.0;
+  static const horizontalPad = 12.0;
+  static const collapsedHorizontalPad = 8.0;
   static const animDuration = Duration(milliseconds: 250);
   static const animCurve = Curves.easeOutCubic;
 
@@ -150,7 +151,10 @@ class _FomraSideNavState extends State<FomraSideNav> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const _BrandHeader(),
+            // No brand logo here — the app header already carries the brand,
+            // so the sidebar starts straight into navigation with minimal
+            // top padding.
+            const SizedBox(height: 8),
             Expanded(
               child: Padding(
                 padding: EdgeInsets.symmetric(
@@ -182,19 +186,6 @@ class _FomraSideNavState extends State<FomraSideNav> {
   }
 }
 
-class _BrandHeader extends StatelessWidget {
-  const _BrandHeader();
-
-  @override
-  Widget build(BuildContext context) {
-    // Compact, centred brand mark — no full-width white panel — so the blue
-    // sidebar stays clean in both collapsed and expanded modes.
-    return const Padding(
-      padding: EdgeInsets.only(top: 14, bottom: 10),
-      child: Center(child: FomraBrandMark(size: 38)),
-    );
-  }
-}
 
 class _NavTile extends StatefulWidget {
   final FomraSideNavItem item;
