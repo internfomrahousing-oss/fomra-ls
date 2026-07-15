@@ -1744,6 +1744,7 @@ Color _crmStatusColor(LeadStatus status) {
   return switch (status) {
     LeadStatus.signed => AppColors.success,
     LeadStatus.prospectMeetingCompleted => AppColors.success,
+    LeadStatus.managementMeetingCompleted => AppColors.info,
     LeadStatus.prospectMeetingPending => AppColors.warning,
     LeadStatus.negotiation => AppColors.primary,
     LeadStatus.legal => AppColors.purple,

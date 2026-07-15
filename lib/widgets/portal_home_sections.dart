@@ -1238,6 +1238,9 @@ int _leadStatusPerformanceWeight(LeadStatus status) {
     LeadStatus.signed => 100,
     LeadStatus.legal => 80,
     LeadStatus.negotiation => 65,
+    // Management meeting completed sits between the owner meeting and
+    // negotiation in the pipeline.
+    LeadStatus.managementMeetingCompleted => 55,
     LeadStatus.prospectMeetingCompleted => 45,
     LeadStatus.prospectMeetingPending => 25,
     LeadStatus.dropped => 0,
@@ -1600,6 +1603,7 @@ StatusTone _statusTone(LeadStatus status) {
   return switch (status) {
     LeadStatus.prospectMeetingPending => StatusTone.primary,
     LeadStatus.prospectMeetingCompleted => StatusTone.warning,
+    LeadStatus.managementMeetingCompleted => StatusTone.primary,
     LeadStatus.negotiation => StatusTone.danger,
     LeadStatus.legal => StatusTone.warning,
     LeadStatus.signed => StatusTone.success,

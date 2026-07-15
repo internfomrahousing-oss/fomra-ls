@@ -266,6 +266,7 @@ class _ManagementExecutiveDashboardState
               rows: snap.ageing,
               onViewLead: widget.onViewLead,
             );
+            final pendingStages = _PendingStagesCard(leads: widget.leads);
             if (c.maxWidth < 900) {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -273,6 +274,8 @@ class _ManagementExecutiveDashboardState
                   pipeline,
                   const SizedBox(height: AppSpacing.md),
                   donut,
+                  const SizedBox(height: AppSpacing.md),
+                  pendingStages,
                   const SizedBox(height: AppSpacing.md),
                   ageing,
                 ],
@@ -295,7 +298,17 @@ class _ManagementExecutiveDashboardState
                   ),
                 ),
                 const SizedBox(width: AppSpacing.md),
-                Expanded(flex: 3, child: donut),
+                Expanded(
+                  flex: 3,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      donut,
+                      const SizedBox(height: AppSpacing.md),
+                      pendingStages,
+                    ],
+                  ),
+                ),
               ],
             );
           },
@@ -1033,63 +1046,68 @@ class _DealTermsDonutCardState extends State<_DealTermsDonutCard> {
                 Expanded(child: legend),
               ],
             )
-          : Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+          // The donut card is Deal Terms Distribution only — the pending
+          // stages live in their own card (see _PendingStagesCard).
+          : Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                // Donut on the left, legend stacked vertically on the right.
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    chart,
-                    const SizedBox(width: AppSpacing.sm),
-                    Expanded(child: legend),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.md),
-                _stageSummaryRow(context),
+                chart,
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(child: legend),
               ],
             ),
     );
   }
+}
 
-  /// Compact clickable stage cards under the donut — each opens the leads in
-  /// that stage.
-  Widget _stageSummaryRow(BuildContext context) {
-    final negotiation =
-        _leadsWithStatus(widget.leads, LeadStatus.negotiation);
-    final legal = _leadsWithStatus(widget.leads, LeadStatus.legal);
-    return Row(
-      children: [
-        Expanded(
-          child: _StageMiniCard(
-            label: 'Negotiation',
-            count: negotiation.length,
-            icon: Icons.handshake_outlined,
-            color: LeadStatus.negotiation.color,
-            onTap: () => _openLeadsList(
-              context,
-              'Negotiation',
-              'Leads currently in negotiation',
-              negotiation,
+/// Compact "Pending Stages" card: Negotiation + Legal Progress counts, each
+/// opening that stage's lead list.
+class _PendingStagesCard extends StatelessWidget {
+  final List<LandLead> leads;
+
+  const _PendingStagesCard({required this.leads});
+
+  @override
+  Widget build(BuildContext context) {
+    final negotiation = _leadsWithStatus(leads, LeadStatus.negotiation);
+    final legal = _leadsWithStatus(leads, LeadStatus.legal);
+    return _DashboardCard(
+      title: 'Pending Stages',
+      subtitle: 'Open deals awaiting progress',
+      icon: Icons.pending_actions_outlined,
+      child: Row(
+        children: [
+          Expanded(
+            child: _StageMiniCard(
+              label: 'Negotiation',
+              count: negotiation.length,
+              icon: Icons.handshake_outlined,
+              color: LeadStatus.negotiation.color,
+              onTap: () => _openLeadsList(
+                context,
+                'Negotiation',
+                'Leads currently in negotiation',
+                negotiation,
+              ),
             ),
           ),
-        ),
-        const SizedBox(width: AppSpacing.sm),
-        Expanded(
-          child: _StageMiniCard(
-            label: 'Legal Progress',
-            count: legal.length,
-            icon: Icons.gavel_outlined,
-            color: LeadStatus.legal.color,
-            onTap: () => _openLeadsList(
-              context,
-              'Legal Progress',
-              'Leads currently in legal',
-              legal,
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: _StageMiniCard(
+              label: 'Legal Progress',
+              count: legal.length,
+              icon: Icons.gavel_outlined,
+              color: LeadStatus.legal.color,
+              onTap: () => _openLeadsList(
+                context,
+                'Legal Progress',
+                'Leads currently in legal',
+                legal,
+              ),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
