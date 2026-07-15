@@ -55,16 +55,25 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
       // Send the "set your password" invite email. If it fails, the profile is
       // still created — surface the reason so management can re-send.
       String? inviteError;
+      var kind = 'invite';
       try {
-        await EmployeeService.inviteEmployee(profile.email);
+        kind = await EmployeeService.inviteEmployee(profile.email);
       } catch (e) {
         inviteError = e.toString().replaceFirst('Exception: ', '');
       }
       if (!mounted) return;
       Navigator.pop(context, profile);
       if (inviteError == null) {
-        AppFeedback.success(context,
-            'Invitation sent to ${profile.email} to set their password.');
+        // Say which email went out: a brand-new address gets the "Invite user"
+        // template, an address that already had a login gets the "Reset
+        // Password" one. Naming it makes a blank email traceable to the right
+        // Supabase template.
+        AppFeedback.success(
+          context,
+          kind == 'recovery'
+              ? '${profile.email} already had a login — a set-password (recovery) email was sent.'
+              : 'Invitation sent to ${profile.email} to set their password.',
+        );
       } else {
         AppFeedback.error(context,
             'Profile created, but the invite could not be sent: $inviteError');

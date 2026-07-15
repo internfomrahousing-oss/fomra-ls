@@ -47,7 +47,13 @@ class EmployeeService {
   /// Supabase Auth login. Management only (uses the caller's session token).
   /// Best-effort: if there's no management session the profile is still created,
   /// and management can re-send the invite later.
-  static Future<void> inviteEmployee(String email) async {
+  ///
+  /// Returns `'invite'` when a fresh invite email was sent, or `'recovery'`
+  /// when the address already had a login so a set-password (recovery) email
+  /// was sent instead. These use DIFFERENT Supabase email templates
+  /// ("Invite user" vs "Reset Password"), which matters when one of them is
+  /// misconfigured and arrives blank.
+  static Future<String> inviteEmployee(String email) async {
     final token = _db.auth.currentSession?.accessToken;
     if (token == null) {
       throw Exception(
@@ -72,6 +78,11 @@ class EmployeeService {
       } catch (_) {}
       throw Exception(msg);
     }
+    try {
+      final j = jsonDecode(res.body);
+      if (j is Map && j['recovered'] == true) return 'recovery';
+    } catch (_) {}
+    return 'invite';
   }
 
   /// Reset an employee's login password (management only).

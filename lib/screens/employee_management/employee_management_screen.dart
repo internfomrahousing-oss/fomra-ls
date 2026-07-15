@@ -128,9 +128,14 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
     );
     if (confirm != true || !mounted) return;
     try {
-      await EmployeeService.inviteEmployee(employee.email);
+      final kind = await EmployeeService.inviteEmployee(employee.email);
       if (!mounted) return;
-      AppFeedback.success(context, 'Invitation re-sent to ${employee.email}');
+      AppFeedback.success(
+        context,
+        kind == 'recovery'
+            ? '${employee.email} already had a login — a set-password (recovery) email was sent.'
+            : 'Invitation re-sent to ${employee.email}',
+      );
     } catch (e) {
       if (!mounted) return;
       AppFeedback.error(context, e.toString().replaceFirst('Exception: ', ''));
