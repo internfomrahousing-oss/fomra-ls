@@ -1,3 +1,5 @@
+import '../services/approval_chain.dart';
+
 enum LandLeadSiteVisitType {
   employee,
   management;
@@ -41,6 +43,11 @@ class LandLeadSiteVisit {
   final DateTime? reviewedAt;
   final String reviewedByName;
 
+  /// Approval-chain routing (Reporting Manager -> Head -> Management).
+  final ApprovalLevel approvalLevel;
+  final String pendingWith;
+  final String requestedByEmail;
+
   const LandLeadSiteVisit({
     required this.id,
     required this.leadId,
@@ -51,6 +58,9 @@ class LandLeadSiteVisit {
     this.managementNotes = '',
     this.reviewedAt,
     this.reviewedByName = '',
+    this.approvalLevel = ApprovalLevel.management,
+    this.pendingWith = '',
+    this.requestedByEmail = '',
   });
 
   bool get needsApproval =>
@@ -77,6 +87,9 @@ class LandLeadSiteVisit {
           ? null
           : DateTime.tryParse(reviewedRaw as String),
       reviewedByName: j['reviewed_by_name'] as String? ?? '',
+      approvalLevel: ApprovalLevel.parse(j['approval_level'] as String?),
+      pendingWith: j['pending_with'] as String? ?? '',
+      requestedByEmail: j['requested_by_email'] as String? ?? '',
     );
   }
 }

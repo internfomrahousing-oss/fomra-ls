@@ -8,6 +8,7 @@ import '../land_lead/filtered_leads_screen.dart';
 import '../land_lead/lead_detail_screen.dart';
 import '../land_lead/leads_map_screen.dart';
 import '../land_lead/management_visit_review_dialog.dart';
+import '../../services/approval_chain.dart';
 import '../../services/auth_service.dart';
 import '../../services/app_store.dart';
 import '../../models/employee_profile.dart';
@@ -21,7 +22,6 @@ import '../../services/land_lead_site_visit_service.dart';
 import '../../services/notification_center_service.dart';
 import '../../services/notifications_service.dart';
 import '../../services/push_service.dart';
-import '../../services/role_access.dart';
 import '../../services/universal_search_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_layout.dart';
@@ -77,6 +77,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   bool get _isManagement => AuthService.instance.isManagement;
 
+  /// Management plus Reporting Managers / Heads have an approvals queue: each
+  /// sees only the requests currently waiting on them in the approval chain.
+  bool get _canApprove {
+    if (_isManagement) return true;
+    final d = TeamHierarchy.currentDesignation;
+    return d == EmployeeDesignations.reportingManager ||
+        d == EmployeeDesignations.head;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -86,7 +95,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     PushService.syncToken();
     _loadNotifications();
     _loadPerformanceData();
-    if (_isManagement) _loadPendingApprovals();
+    if (_canApprove) _loadPendingApprovals();
     UniversalSearchService.warmDocumentIndex();
     NotificationCenterService.syncAlerts().then((_) {
       if (mounted) _loadNotifications();
@@ -172,7 +181,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Future<void> _loadNotifications() async {
     try {
-      final list = await NotificationsService.getAll(audience: _notifAudience);
+      final list = await NotificationsService.getAllForCurrentUser();
       final filtered = list
           .where((n) =>
               !_isManagementLeadNotification(n) &&
@@ -183,7 +192,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         _emitNewNotificationToasts(filtered);
         setState(() => _notifications = filtered);
         _notifOverlay?.markNeedsBuild(); // refresh the open dropdown live
-        if (_isManagement) _loadPendingApprovals();
+        if (_canApprove) _loadPendingApprovals();
       }
     } catch (_) {
       // Keep the current list if the fetch fails (e.g. table not created yet).
@@ -207,6 +216,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   /// and all non-assignment notifications are shown as-is.
   bool _isForMe(AppNotification n) {
     if (_isManagement) return true;
+    // Approval routing addresses a specific Reporting Manager / Head /
+    // Executive by using their email as the audience. Those are already
+    // personally targeted, so they bypass the name/lead-ownership heuristics
+    // below (an approver's queue is about their team's leads, not their own).
+    final myEmail =
+        (AuthService.instance.currentUser?.email ?? '').trim().toLowerCase();
+    if (myEmail.isNotEmpty &&
+        n.audience.trim().toLowerCase() == myEmail) {
+      return true;
+    }
     const marker = 'assigned to ';
     final msg = n.message.toLowerCase();
     final idx = msg.lastIndexOf(marker);
@@ -335,7 +354,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             for (final n in _notifications) { n.isRead = true; }
           });
           _notifOverlay?.markNeedsBuild();
-          NotificationsService.markAllRead(audience: _notifAudience)
+          NotificationsService.markAllReadForCurrentUser()
               .catchError((_) {});
         },
         onViewAll: () {
@@ -389,7 +408,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _loadPendingApprovals() async {
-    if (!_isManagement) return;
+    if (!_canApprove) return;
     setState(() => _loadingApprovals = true);
     List<LandLeadSiteVisit> visits = const [];
     try {
@@ -414,9 +433,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _approveDropRequest(LeadDropApprovalRequest request) async {
-    if (!RoleAccess.canApprove) {
+    if (!ApprovalChain.canActOn(
+        level: request.approvalLevel, pendingWith: request.pendingWith)) {
       if (!mounted) return;
-      AppFeedback.error(context, RoleAccess.deniedMessage('approve requests'));
+      AppFeedback.error(context, 'This request is not waiting on you.');
       return;
     }
     try {
@@ -431,9 +451,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _rejectDropRequest(LeadDropApprovalRequest request) async {
-    if (!RoleAccess.canApprove) {
+    if (!ApprovalChain.canActOn(
+        level: request.approvalLevel, pendingWith: request.pendingWith)) {
       if (!mounted) return;
-      AppFeedback.error(context, RoleAccess.deniedMessage('approve requests'));
+      AppFeedback.error(context, 'This request is not waiting on you.');
       return;
     }
     try {
@@ -448,9 +469,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _approveSignedRequest(LandLeadSignedRequest request) async {
-    if (!RoleAccess.canApprove) {
+    if (!ApprovalChain.canActOn(
+        level: request.approvalLevel, pendingWith: request.pendingWith)) {
       if (!mounted) return;
-      AppFeedback.error(context, RoleAccess.deniedMessage('approve requests'));
+      AppFeedback.error(context, 'This request is not waiting on you.');
       return;
     }
     try {
@@ -465,9 +487,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _rejectSignedRequest(LandLeadSignedRequest request) async {
-    if (!RoleAccess.canApprove) {
+    if (!ApprovalChain.canActOn(
+        level: request.approvalLevel, pendingWith: request.pendingWith)) {
       if (!mounted) return;
-      AppFeedback.error(context, RoleAccess.deniedMessage('approve requests'));
+      AppFeedback.error(context, 'This request is not waiting on you.');
       return;
     }
     try {
@@ -491,9 +514,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _approvePendingVisit(LandLeadSiteVisit visit) async {
-    if (!RoleAccess.canApprove) {
+    if (!ApprovalChain.canActOn(
+        level: visit.approvalLevel, pendingWith: visit.pendingWith)) {
       if (!mounted) return;
-      AppFeedback.error(context, RoleAccess.deniedMessage('approve visits'));
+      AppFeedback.error(context, 'This request is not waiting on you.');
       return;
     }
     try {
@@ -757,14 +781,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   dateLabel: dateLabel,
                   totalLeads: totalLeads,
                   activeLeads: _activeLeads,
+                  // Management, Reporting Managers and Heads all get an
+                  // "Approval Pending" queue — each scoped to what is waiting
+                  // on them in the approval chain.
                   thirdLabel:
-                      _isManagement ? 'Approval Pending' : 'Owner meeting pending',
+                      _canApprove ? 'Approval Pending' : 'Owner meeting pending',
                   thirdValue:
-                      _isManagement ? approvalCount : ownerMeetingPending,
-                  thirdIcon: _isManagement
+                      _canApprove ? approvalCount : ownerMeetingPending,
+                  thirdIcon: _canApprove
                       ? Icons.approval_outlined
                       : Icons.event_available_outlined,
-                    onThirdTap: _isManagement
+                  onThirdTap: _canApprove
                       ? _openApprovalsList
                       : () => FilteredLeadsScreen.open(
                           context, LeadListFilter.ownerMeetingPending),
@@ -966,11 +993,6 @@ class _EmployeeTodayTasksSection extends StatelessWidget {
     required this.employeeName,
     required this.onOpenLead,
   });
-
-  String _leadLabel(LandLead lead) {
-    if (lead.ownerName.trim().isNotEmpty) return lead.ownerName.trim();
-    return 'Site #${lead.leadId}';
-  }
 
   List<LandLead> get _myActiveLeads => AppStore.instance.leads
       .where((l) =>

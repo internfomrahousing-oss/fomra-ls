@@ -446,57 +446,72 @@ class _AgeTile extends StatelessWidget {
         onTap: row.leads.isEmpty || onViewLead == null
             ? null
             : () => onViewLead!(row.leads.first),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         child: Ink(
           decoration: BoxDecoration(
             color: accent.withValues(alpha: overdue ? 0.12 : 0.07),
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(12),
             border: Border.all(
               color: accent.withValues(alpha: overdue ? 0.45 : 0.22),
             ),
           ),
-          padding: const EdgeInsets.all(14),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
               Row(
                 children: [
-                  Text(
-                    row.bucket.label,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: context.fomraTextSecondary,
+                  Expanded(
+                    child: Text(
+                      row.bucket.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: context.fomraTextSecondary,
+                      ),
                     ),
                   ),
-                  if (overdue) ...[
-                    const Spacer(),
+                  if (overdue)
                     const Text(
                       'OVERDUE',
                       style: TextStyle(
-                        fontSize: 10,
+                        fontSize: 9,
                         fontWeight: FontWeight.w800,
                         color: AppColors.error,
                       ),
                     ),
-                  ],
                 ],
               ),
-              const SizedBox(height: 8),
-              Text(
-                '${row.leadCount}',
-                style: TextStyle(
-                  fontSize: 26,
-                  fontWeight: FontWeight.w800,
-                  color: context.fomraTextPrimary,
-                ),
-              ),
-              Text(
-                '${biFormatAcres(row.acres)} acres',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: context.fomraTextSecondary,
-                ),
+              const SizedBox(height: 4),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.baseline,
+                textBaseline: TextBaseline.alphabetic,
+                children: [
+                  Text(
+                    '${row.leadCount}',
+                    style: TextStyle(
+                      fontSize: 19,
+                      fontWeight: FontWeight.w800,
+                      height: 1.1,
+                      color: context.fomraTextPrimary,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      '${biFormatAcres(row.acres)} ac',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: context.fomraTextSecondary,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

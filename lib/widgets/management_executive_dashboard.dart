@@ -281,8 +281,10 @@ class _ManagementExecutiveDashboardState
             return Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // The shorter Site Ageing card and the smaller donut free up
+                // room, so the Pipeline Dashboard takes a wider share.
                 Expanded(
-                  flex: 6,
+                  flex: 7,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
@@ -293,7 +295,7 @@ class _ManagementExecutiveDashboardState
                   ),
                 ),
                 const SizedBox(width: AppSpacing.md),
-                Expanded(flex: 4, child: donut),
+                Expanded(flex: 3, child: donut),
               ],
             );
           },
@@ -914,10 +916,10 @@ class _DealTermsDonutCardState extends State<_DealTermsDonutCard> {
     // when zero-count categories are skipped.
     final sectionCats = <int>[];
 
-    final chartSize = widget.inline ? 120.0 : 180.0;
-    final pieRadius = widget.inline ? 36.0 : 46.0;
-    final touchedRadius = widget.inline ? 40.0 : 52.0;
-    final centerRadius = widget.inline ? 28.0 : 42.0;
+    final chartSize = widget.inline ? 120.0 : 132.0;
+    final pieRadius = widget.inline ? 36.0 : 34.0;
+    final touchedRadius = widget.inline ? 40.0 : 39.0;
+    final centerRadius = widget.inline ? 28.0 : 30.0;
 
     for (var i = 0; i < _kDealCategories.length; i++) {
       final cat = _kDealCategories[i];
@@ -953,33 +955,44 @@ class _DealTermsDonutCardState extends State<_DealTermsDonutCard> {
       );
     }
 
-    final legend = Wrap(
-      spacing: widget.inline ? 6 : 8,
-      runSpacing: widget.inline ? 4 : 6,
-      children: List.generate(_kDealCategories.length, (i) {
-        final cat = _kDealCategories[i];
-        final count = dist[cat] ?? 0;
-        final pct = total == 0 ? 0 : ((count / total) * 100).round();
-        return GestureDetector(
-          onTap: () => _openLeadsList(
-            context,
-            cat,
-            'Leads with "$cat" deal terms',
-            _leadsWithDealTerm(widget.leads, cat),
-          ),
-          child: _LegendChip(
-            color: _colors[i % _colors.length],
-            label: cat,
-            value: '$pct%',
-            selected: i == _touchedIndex,
-            compact: widget.inline,
-          ),
-        );
-      }),
-    );
+    final legendItems = List.generate(_kDealCategories.length, (i) {
+      final cat = _kDealCategories[i];
+      final count = dist[cat] ?? 0;
+      final pct = total == 0 ? 0 : ((count / total) * 100).round();
+      return GestureDetector(
+        onTap: () => _openLeadsList(
+          context,
+          cat,
+          'Leads with "$cat" deal terms',
+          _leadsWithDealTerm(widget.leads, cat),
+        ),
+        child: _LegendChip(
+          color: _colors[i % _colors.length],
+          label: cat,
+          value: '$pct%',
+          selected: i == _touchedIndex,
+          compact: true,
+        ),
+      );
+    });
+
+    // Inline keeps the wrapped chips; the dashboard card stacks the legend
+    // vertically down the right-hand side of the chart.
+    final legend = widget.inline
+        ? Wrap(spacing: 6, runSpacing: 4, children: legendItems)
+        : Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (var i = 0; i < legendItems.length; i++) ...[
+                if (i > 0) const SizedBox(height: 6),
+                Align(alignment: Alignment.centerLeft, child: legendItems[i]),
+              ],
+            ],
+          );
 
     final chart = SizedBox(
-      width: widget.inline ? chartSize : null,
+      width: chartSize,
       height: chartSize,
       child: PieChart(
         PieChartData(
@@ -1021,12 +1034,132 @@ class _DealTermsDonutCardState extends State<_DealTermsDonutCard> {
               ],
             )
           : Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                chart,
-                const SizedBox(height: AppSpacing.sm),
-                legend,
+                // Donut on the left, legend stacked vertically on the right.
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    chart,
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(child: legend),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.md),
+                _stageSummaryRow(context),
               ],
             ),
+    );
+  }
+
+  /// Compact clickable stage cards under the donut — each opens the leads in
+  /// that stage.
+  Widget _stageSummaryRow(BuildContext context) {
+    final negotiation =
+        _leadsWithStatus(widget.leads, LeadStatus.negotiation);
+    final legal = _leadsWithStatus(widget.leads, LeadStatus.legal);
+    return Row(
+      children: [
+        Expanded(
+          child: _StageMiniCard(
+            label: 'Negotiation',
+            count: negotiation.length,
+            icon: Icons.handshake_outlined,
+            color: LeadStatus.negotiation.color,
+            onTap: () => _openLeadsList(
+              context,
+              'Negotiation',
+              'Leads currently in negotiation',
+              negotiation,
+            ),
+          ),
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(
+          child: _StageMiniCard(
+            label: 'Legal Progress',
+            count: legal.length,
+            icon: Icons.gavel_outlined,
+            color: LeadStatus.legal.color,
+            onTap: () => _openLeadsList(
+              context,
+              'Legal Progress',
+              'Leads currently in legal',
+              legal,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _StageMiniCard extends StatelessWidget {
+  final String label;
+  final int count;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _StageMiniCard({
+    required this.label,
+    required this.count,
+    required this.icon,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.07),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: color.withValues(alpha: 0.24)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 26,
+                height: 26,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.16),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                alignment: Alignment.center,
+                child: Icon(icon, size: 14, color: color),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: context.fomraTextSecondary,
+                  ),
+                ),
+              ),
+              Text(
+                '$count',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                  color: color,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

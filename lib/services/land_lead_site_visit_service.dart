@@ -2,6 +2,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/land_lead_site_visit.dart';
 import 'app_store.dart';
+import 'approval_chain.dart';
 import 'audit_log_service.dart';
 import 'auth_service.dart';
 import 'notifications_service.dart';
@@ -45,13 +46,27 @@ class LandLeadSiteVisitService {
     return LandLeadSiteVisit.fromJson(row);
   }
 
+  /// Pending management-visit requests the signed-in user may act on:
+  /// Management sees the management-level queue; a Reporting Manager / Head
+  /// sees the ones currently waiting on them.
   static Future<List<LandLeadSiteVisit>> getPendingManagementVisits() async {
-    final rows = await _db
+    final query = _db
         .from('land_lead_site_visits')
         .select()
         .eq('visit_type', LandLeadSiteVisitType.management.dbValue)
-        .eq('approval_status', SiteVisitApprovalStatus.pending.dbValue)
-        .order('visited_at', ascending: false);
+        .eq('approval_status', SiteVisitApprovalStatus.pending.dbValue);
+
+    final rows = AuthService.instance.isManagement
+        ? await query
+            .eq('approval_level', ApprovalLevel.management.dbValue)
+            .order('visited_at', ascending: false)
+        : await query
+            .eq('pending_with',
+                (AuthService.instance.currentUser?.email ?? '')
+                    .trim()
+                    .toLowerCase())
+            .order('visited_at', ascending: false);
+
     return (rows as List)
         .map((r) => LandLeadSiteVisit.fromJson(r as Map<String, dynamic>))
         .toList();
@@ -77,9 +92,15 @@ class LandLeadSiteVisitService {
   }) async {
     final userId = _db.auth.currentUser?.id;
     final loggedByName = AuthService.instance.currentUser?.fullName ?? '';
+    final loggedByEmail =
+        (AuthService.instance.currentUser?.email ?? '').trim().toLowerCase();
     final isEmployee = AuthService.instance.isEmployee;
     final needsApproval =
         visitType == LandLeadSiteVisitType.management && isEmployee;
+
+    // Route to the first approver in the submitter's chain (Management when
+    // they have no reporting line — the original behaviour).
+    final step = ApprovalChain.firstStepFor(loggedByEmail);
 
     final row = await _db
         .from('land_lead_site_visits')
@@ -90,6 +111,11 @@ class LandLeadSiteVisitService {
           'approval_status': needsApproval ? 'pending' : 'approved',
           if (loggedByName.isNotEmpty) 'logged_by_name': loggedByName,
           if (userId != null) 'logged_by': userId,
+          if (needsApproval) ...{
+            'approval_level': step.level.dbValue,
+            'pending_with': step.approverEmail,
+            'requested_by_email': loggedByEmail,
+          },
         })
         .select()
         .single();
@@ -100,7 +126,7 @@ class LandLeadSiteVisitService {
       final who = loggedByName.isNotEmpty ? loggedByName : 'An employee';
       try {
         await NotificationsService.create(
-          audience: 'management',
+          audience: ApprovalChain.audienceFor(step),
           type: 'site_visit',
           title: 'Management site visit requested',
           message: '$who requested a management site visit for Lead #$leadId',
@@ -115,12 +141,60 @@ class LandLeadSiteVisitService {
     return visit;
   }
 
+  /// Approving hands the request to the next approver in the chain; only the
+  /// final (Management) approval settles it. Rejecting at any level ends it and
+  /// notifies the executive who raised it.
   static Future<LandLeadSiteVisit> review({
     required String visitId,
     required SiteVisitApprovalStatus status,
     required String notes,
   }) async {
     final reviewer = AuthService.instance.currentUser?.fullName ?? 'Management';
+    final approved = status == SiteVisitApprovalStatus.approved;
+
+    final current = LandLeadSiteVisit.fromJson(
+      await _db
+          .from('land_lead_site_visits')
+          .select()
+          .eq('id', visitId)
+          .single(),
+    );
+
+    final next = approved
+        ? ApprovalChain.nextStepAfter(
+            current.requestedByEmail, current.approvalLevel)
+        : null;
+
+    if (approved && next != null) {
+      final row = await _db
+          .from('land_lead_site_visits')
+          .update({
+            'approval_level': next.level.dbValue,
+            'pending_with': next.approverEmail,
+          })
+          .eq('id', visitId)
+          .select()
+          .single();
+
+      NotificationsService.create(
+        audience: ApprovalChain.audienceFor(next),
+        type: 'site_visit',
+        title: 'Management site visit requested',
+        message:
+            'Lead #${current.leadId} site visit approved by $reviewer — awaiting ${next.level.label}',
+        leadId: current.leadId,
+        referenceId: visitId,
+      ).catchError((_) {});
+
+      _notifyRequester(
+        current,
+        title: 'Site visit request progressed',
+        message:
+            'Lead #${current.leadId} site visit was approved by $reviewer and is now with ${next.level.label}',
+      );
+      return LandLeadSiteVisit.fromJson(row);
+    }
+
     final row = await _db
         .from('land_lead_site_visits')
         .update({
@@ -134,7 +208,6 @@ class LandLeadSiteVisitService {
         .single();
 
     final visit = LandLeadSiteVisit.fromJson(row);
-    final approved = status == SiteVisitApprovalStatus.approved;
 
     ({String owner, String broker, String executive}) ctx =
         (owner: '', broker: '', executive: '');
@@ -159,7 +232,9 @@ class LandLeadSiteVisitService {
     ).catchError((_) {});
 
     NotificationsService.create(
-      audience: 'employee',
+      audience: visit.requestedByEmail.trim().isEmpty
+          ? 'employee'
+          : visit.requestedByEmail.trim().toLowerCase(),
       type: 'site_visit',
       title: approved
           ? 'Management visit approved'
@@ -167,12 +242,30 @@ class LandLeadSiteVisitService {
       message: approved
           ? 'Lead #${visit.leadId} management site visit was approved'
               '${notes.trim().isNotEmpty ? ' — $notes' : ''}'
-          : 'Lead #${visit.leadId} management site visit was rejected'
+          : 'Lead #${visit.leadId} management site visit was rejected by $reviewer'
               '${notes.trim().isNotEmpty ? ' — $notes' : ''}',
       leadId: visit.leadId,
       referenceId: visit.id,
     ).catchError((_) {});
 
     return visit;
+  }
+
+  /// Notifies the executive who raised the request (personally when we know
+  /// their email, otherwise the shared employee audience).
+  static void _notifyRequester(
+    LandLeadSiteVisit visit, {
+    required String title,
+    required String message,
+  }) {
+    final to = visit.requestedByEmail.trim().toLowerCase();
+    NotificationsService.create(
+      audience: to.isEmpty ? 'employee' : to,
+      type: 'site_visit',
+      title: title,
+      message: message,
+      leadId: visit.leadId,
+      referenceId: visit.id,
+    ).catchError((_) {});
   }
 }

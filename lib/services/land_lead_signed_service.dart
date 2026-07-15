@@ -4,6 +4,7 @@ import '../models/land_lead.dart';
 import '../models/land_lead_signed_request.dart';
 import '../models/land_lead_site_visit.dart' show SiteVisitApprovalStatus;
 import 'app_store.dart';
+import 'approval_chain.dart';
 import 'auth_service.dart';
 import 'land_lead_service.dart';
 import 'notifications_service.dart';
@@ -25,16 +26,25 @@ class LandLeadSignedService {
   }) async {
     final userId = _db.auth.currentUser?.id;
     final by = AuthService.instance.currentUser?.fullName ?? '';
+    final byEmail =
+        (AuthService.instance.currentUser?.email ?? '').trim().toLowerCase();
+
+    // Route to the first approver in the submitter's chain. With no reporting
+    // line this is Management — i.e. the original single-step behaviour.
+    final step = ApprovalChain.firstStepFor(byEmail);
 
     final row = await _db
         .from(_table)
         .insert({
           'lead_id': leadId,
           'requested_by_name': by,
+          'requested_by_email': byEmail,
           if (userId != null) 'requested_by': userId,
           'note': note.trim(),
           'photo_urls': photoUrls,
           'status': SiteVisitApprovalStatus.pending.dbValue,
+          'approval_level': step.level.dbValue,
+          'pending_with': step.approverEmail,
         })
         .select()
         .single();
@@ -44,7 +54,7 @@ class LandLeadSignedService {
     final who = by.isNotEmpty ? by : 'An employee';
     try {
       await NotificationsService.create(
-        audience: 'management',
+        audience: ApprovalChain.audienceFor(step),
         type: 'signed',
         title: 'Project Signed approval requested',
         message: '$who submitted Lead #$leadId to be marked as Signed',
@@ -58,12 +68,26 @@ class LandLeadSignedService {
     return request;
   }
 
+  /// Pending requests the signed-in user may act on: Management sees the
+  /// management-level queue; a Reporting Manager / Head sees the ones waiting
+  /// on them.
   static Future<List<LandLeadSignedRequest>> getPending() async {
-    final rows = await _db
+    final query = _db
         .from(_table)
         .select()
-        .eq('status', SiteVisitApprovalStatus.pending.dbValue)
-        .order('created_at', ascending: false);
+        .eq('status', SiteVisitApprovalStatus.pending.dbValue);
+
+    final rows = AuthService.instance.isManagement
+        ? await query
+            .eq('approval_level', ApprovalLevel.management.dbValue)
+            .order('created_at', ascending: false)
+        : await query
+            .eq('pending_with',
+                (AuthService.instance.currentUser?.email ?? '')
+                    .trim()
+                    .toLowerCase())
+            .order('created_at', ascending: false);
+
     return (rows as List)
         .map((r) => LandLeadSignedRequest.fromJson(r as Map<String, dynamic>))
         .toList();
@@ -77,12 +101,59 @@ class LandLeadSignedService {
     }
   }
 
+  /// Approving advances the request to the next approver in the chain; only the
+  /// final (Management) approval marks the lead Signed. Rejecting at ANY level
+  /// ends the request and notifies the executive who raised it.
   static Future<LandLeadSignedRequest> review({
     required String id,
     required bool approve,
     String notes = '',
   }) async {
     final reviewer = AuthService.instance.currentUser?.fullName ?? 'Management';
+
+    // Read the current state so we know where it sits in the chain.
+    final current = LandLeadSignedRequest.fromJson(
+      await _db.from(_table).select().eq('id', id).single(),
+    );
+
+    final next = approve
+        ? ApprovalChain.nextStepAfter(current.requestedByEmail, current.approvalLevel)
+        : null;
+
+    if (approve && next != null) {
+      // Hand off to the next level — still pending, not yet Signed.
+      final row = await _db
+          .from(_table)
+          .update({
+            'approval_level': next.level.dbValue,
+            'pending_with': next.approverEmail,
+          })
+          .eq('id', id)
+          .select()
+          .single();
+      final advanced = LandLeadSignedRequest.fromJson(row);
+
+      NotificationsService.create(
+        audience: ApprovalChain.audienceFor(next),
+        type: 'signed',
+        title: 'Project Signed approval requested',
+        message:
+            '${current.requestedByName.isEmpty ? 'An executive' : current.requestedByName} · '
+            'Lead #${current.leadId} approved by $reviewer — awaiting ${next.level.label}',
+        leadId: current.leadId,
+        referenceId: id,
+      ).catchError((_) {});
+
+      _notifySubmitter(
+        current,
+        title: 'Signed request progressed',
+        message:
+            'Lead #${current.leadId} was approved by $reviewer and is now with ${next.level.label}',
+      );
+      return advanced;
+    }
+
+    // Final approval, or a rejection at any level.
     final row = await _db
         .from(_table)
         .update({
@@ -108,19 +179,34 @@ class LandLeadSignedService {
       }
     }
 
-    NotificationsService.create(
-      audience: 'employee',
-      type: 'signed',
+    _notifySubmitter(
+      request,
       title: approve ? 'Project approved & signed' : 'Signed request rejected',
       message: approve
           ? 'Lead #${request.leadId} was approved and marked as Signed'
               '${notes.trim().isNotEmpty ? ' — $notes' : ''}'
-          : 'Lead #${request.leadId} signed request was rejected'
+          : 'Lead #${request.leadId} signed request was rejected by $reviewer'
               '${notes.trim().isNotEmpty ? ' — $notes' : ''}',
+    );
+
+    return request;
+  }
+
+  /// Notifies the executive who raised the request (personally when we know
+  /// their email, otherwise the shared employee audience).
+  static void _notifySubmitter(
+    LandLeadSignedRequest request, {
+    required String title,
+    required String message,
+  }) {
+    final to = request.requestedByEmail.trim().toLowerCase();
+    NotificationsService.create(
+      audience: to.isEmpty ? 'employee' : to,
+      type: 'signed',
+      title: title,
+      message: message,
       leadId: request.leadId,
       referenceId: request.id,
     ).catchError((_) {});
-
-    return request;
   }
 }
