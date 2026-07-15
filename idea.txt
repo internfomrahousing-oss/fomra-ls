@@ -1,246 +1,56 @@
-Analyze the entire application and implement the following UI, UX, navigation, and functionality improvements without changing existing APIs, database schema, authentication, business logic, permissions, routing, or responsive behavior unless explicitly mentioned.
-
-========================
-HOME DASHBOARD
-========================
-
-MANAGEMENT LOGIN
-
-1. Rename the "Land Owner Meeting Pending" KPI card to "Approval Pending".
-2. Remove the separate Approvals section completely from the dashboard.
-3. Clicking the "Approval Pending" KPI should open the pending approvals list directly.
-4. Remove the "View Sites" quick action.
-5. Keep Quick Actions as:
-   • Show All Projects
-   • Owner Details
-   • Broker Details
-6. Add a notification bell in the header with unread notification count.
-7. Replace the large Pipeline Dashboard KPI cards with smaller compact cards.
-8. Restore the donut chart for Deal Terms (Outright Purchase, Joint Venture, Marketing, Deferred Payment) beside the KPI cards.
-9. Make the KPI section more compact to reduce vertical scrolling.
-
-EMPLOYEE LOGIN
-
-1. Reorder sections:
-   • Greeting
-   • Today's Tasks
-   • Quick Actions
-   • My Performance
-2. Add "Show All Projects" to Quick Actions.
-3. Keep:
-   • Add Lead
-   • Show All Projects
-   • Owner Details
-   • Broker Details
-4. Add notification bell in the header with unread notification count.
-5. Reduce the height of the My Performance widget by around 40%.
-6. Keep only the essential KPI:
-   • Sites Added
-7. Clicking "Sites Added" should open Land Workspace.
-
-========================
-TODAY'S TASKS
-========================
-
-Replace list view with compact task cards:
-
-• Call Pending
-• Meeting Pending
-• Site Visit Pending
-• Legal Pending
-
-Each card should display:
-• Icon
-• Pending Count
-• Short subtitle
-
-Clicking any card should open the filtered follow-up list.
-
-========================
-LAND LEAD DETAILS
-========================
-
-MANAGEMENT
-
-Management should have full access to every Land Lead Details page.
-
-If the management user is the original creator of the lead:
-• Show Edit Lead
-• Show all workflow actions
-• Allow complete modifications
-
-If the lead belongs to another executive:
-• Show complete information
-• Allow management review
-• Hide only employee-specific editing actions where appropriate.
-
-========================
-PROJECT MAP POPUP
-========================
-
-Reduce popup height.
-
-Replace:
-
-AI Score
-
-with
-
-Terms
-
-Example:
-
-Terms
-Deferred Payment
-
-Keep:
-
-• Village
-• Acres
-• Current Stage
-• Executive
-• Owner
-• Broker
-• Last Activity
-
-Buttons:
-
-Open Site
-Navigate
-
-========================
-EMPLOYEE PERFORMANCE
-========================
-
-Reduce card height significantly.
-
-Compress:
-
-• Avatar
-• Name
-• KPIs
-• Progress bars
-
-into a compact enterprise layout.
-
-Reduce vertical spacing while keeping readability.
-
-========================
-REPORTS MODULE
-========================
-
-Completely redesign the Reports page into a premium enterprise reporting experience.
-
-1. Replace the long list of report chips with categorized report cards.
-
-Categories:
-
-Performance
-• Employee Performance
-• Broker Performance
-• District Performance
-• Village Performance
-
-Acquisition
-• Pipeline
-• Conversion
-• Site Ageing
-• Acquisition Summary
-
-Operations
-• Site Visits
-• Pending Approvals
-• Legal
-• Documents
-• Survey
-
-Time Reports
-• Daily
-• Weekly
-• Monthly
-
-2. Remove permanently visible filters.
-
-Replace them with a compact "Filters" button beside the Reports title.
-
-Opening Filters should slide in a right-side drawer containing:
-
-• Date Range
-• Executive
-• District
-• Village
-• Broker
-• Owner
-• Stage
-• Status
-
-3. Replace report chips with premium selectable report cards.
-
-Each card should contain:
-
-• Icon
-• Report Name
-• Short Description
-
-Selected card state:
-
-• Blue border
-• Blue background tint
-• Checkmark
-• Soft shadow
-
-Remove the eye icon completely.
-
-4. Add Quick Reports section at the top.
-
-Include:
-
-• Today's Report
-• Weekly Report
-• Monthly Report
-• Employee Performance
-• Pipeline Report
-
-Selecting one should automatically prepare the report.
-
-5. Add Live Summary panel displaying:
-
-• Records Found
-• Executives
-• Villages
-• Selected Reports
-• Date Range
-• Estimated Pages
-
-Update dynamically based on filters.
-
-6. Add Report Preview section.
-
-Display sample tables, KPIs, charts, and summaries before export.
-
-7. Redesign Export section.
-
-Supported formats:
-
-• PDF
-• Excel
-• CSV
-
-Buttons:
-
-• Preview Report
-• Generate Report
-
-Generate Report should remain the primary CTA.
-
-========================
-GENERAL UI IMPROVEMENTS
-========================
-
-• Maintain consistent spacing and alignment across all pages.
-• Use compact enterprise card layouts.
-• Reduce unnecessary whitespace.
-• Preserve responsive behavior.
-• Maintain all existing APIs and backend logic.
-• Improve visual hierarchy using subtle shadows, premium typography, rounded corners, and smooth hover animations.
-• Ensure navigation, permissions, and functionality continue to work exactly as before while applying the redesigned UI.
+Review the existing implementation before making any changes. Do NOT recreate completed functionality. Identify what is already implemented and complete only the missing or broken parts. Preserve the existing APIs, authentication, permissions, routing, database schema, business logic, and enterprise UI.
+
+1. Home Dashboard
+- Reduce the Site Ageing card height by ~35%.
+- Increase the width of the Pipeline Dashboard using the freed space.
+- Reduce the Deal Terms Distribution donut chart size.
+- Move the donut chart to the left.
+- Place the legend vertically on the right side of the chart.
+- Below the donut chart add two compact clickable summary cards:
+  • Negotiation
+  • Legal Progress
+- Clicking either card should open the list of leads in that stage.
+
+2. Profile Photo
+- If no profile photo exists, show "Upload Profile Photo".
+- If a profile photo already exists, change the action to "View / Edit Profile Photo".
+- While selecting an image, open a circular photo cropper before upload.
+- Save the cropped image using the existing storage/backend.
+- Ensure the profile picture persists after refresh, logout/login, and app restart.
+- Show the profile picture consistently everywhere avatars are displayed.
+
+3. Add Lead
+- After successfully fetching GPS coordinates, automatically display the captured location as a pinned marker on the embedded map.
+- Ensure the displayed marker always matches the captured GPS coordinates.
+
+4. Quick Actions
+- Remove the "Upload Document" floating quick action.
+- Do not affect the remaining quick actions.
+
+5. Add Employee
+- Fix the employee invitation flow.
+- Employees are created successfully, but invitation emails fail with the current error.
+- Investigate the existing invite implementation and repair it without changing authentication or user creation logic.
+
+6. Application Icon
+Replace the default Flutter application icon with the provided Fomra logo everywhere:
+- Android launcher icon
+- iOS app icon
+- Windows executable/taskbar icon
+- Web favicon
+- macOS/Linux icon (if supported)
+Use the existing launcher icon configuration (flutter_launcher_icons if already configured). Ensure the icon updates after rebuilding.
+
+7. Sidebar Branding
+- Remove the large white Fomra logo container from the top of the sidebar.
+- Replace it with a clean, compact logo/header similar to modern enterprise applications.
+- Show only a small centered Fomra logo/icon.
+- Reduce unnecessary top spacing.
+- Keep the blue sidebar background unchanged.
+- Maintain correct appearance in both collapsed and expanded sidebar modes.
+
+8. General
+- Reuse existing components wherever possible.
+- Do not duplicate widgets, routes, or logic.
+- Preserve responsiveness and the current enterprise design language.
+- Implement only the missing or broken functionality.

@@ -37,6 +37,8 @@ String followUpLabelForLead(LandLead lead) => switch (lead.status) {
         'Schedule and complete land owner meeting',
       LeadStatus.prospectMeetingCompleted =>
         'Conduct site visit or log next meeting',
+      LeadStatus.managementMeetingCompleted =>
+        'Schedule site visit or continue negotiation prep',
       LeadStatus.negotiation =>
         'Continue negotiation — log calls and meetings',
       LeadStatus.legal => 'Complete legal verification and documents',

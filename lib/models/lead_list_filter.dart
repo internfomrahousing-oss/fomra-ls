@@ -12,6 +12,7 @@ enum LeadListFilter {
   managementSiteVisit,
   meeting,
   prospect,
+  managementMeetingCompleted,
   negotiation,
   legal,
   signed,
@@ -20,6 +21,7 @@ enum LeadListFilter {
 
 bool leadHasSiteVisitProgress(LandLead lead) =>
     lead.status == LeadStatus.prospectMeetingCompleted ||
+    lead.status == LeadStatus.managementMeetingCompleted ||
     lead.status == LeadStatus.negotiation ||
     lead.status == LeadStatus.legal ||
     lead.status == LeadStatus.signed;
@@ -36,6 +38,8 @@ extension LeadListFilterX on LeadListFilter {
         LeadListFilter.managementSiteVisit => 'Management site visit',
         LeadListFilter.meeting => 'Meeting',
         LeadListFilter.prospect => 'Prospect',
+        LeadListFilter.managementMeetingCompleted =>
+          'Management Meeting Completed',
         LeadListFilter.negotiation => 'Negotiation',
         LeadListFilter.legal => 'Legal',
         LeadListFilter.signed => 'Signed',
@@ -55,6 +59,8 @@ extension LeadListFilterX on LeadListFilter {
           'Management-assigned leads with site visit progress',
         LeadListFilter.meeting => 'Prospect meeting stage',
         LeadListFilter.prospect => 'Prospect pipeline leads',
+        LeadListFilter.managementMeetingCompleted =>
+          'Management meeting completed stage leads',
         LeadListFilter.negotiation => 'Negotiation stage leads',
         LeadListFilter.legal => 'Leads in legal review',
         LeadListFilter.signed => 'Signed leads',
@@ -75,6 +81,8 @@ extension LeadListFilterX on LeadListFilter {
               leadHasSiteVisitProgress(lead),
         LeadListFilter.meeting => lead.status.isProspect,
         LeadListFilter.prospect => lead.status.isProspect,
+        LeadListFilter.managementMeetingCompleted =>
+          lead.status == LeadStatus.managementMeetingCompleted,
         LeadListFilter.negotiation => lead.status == LeadStatus.negotiation,
         LeadListFilter.legal => lead.status == LeadStatus.legal,
         LeadListFilter.signed => lead.status == LeadStatus.signed,
@@ -88,6 +96,8 @@ extension LeadListFilterX on LeadListFilter {
         'Management site visit' => LeadListFilter.managementSiteVisit,
         'Meeting' => LeadListFilter.meeting,
         'Prospect' => LeadListFilter.prospect,
+        'Management Meeting Completed' =>
+          LeadListFilter.managementMeetingCompleted,
         'Negotiation' => LeadListFilter.negotiation,
         'Legal' => LeadListFilter.legal,
         'Signed' => LeadListFilter.signed,

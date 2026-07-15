@@ -26,6 +26,7 @@ enum BiFunnelStage {
   newLead,
   contacted,
   meeting,
+  managementMeeting,
   siteVisit,
   negotiation,
   survey,
@@ -40,6 +41,7 @@ extension BiFunnelStageX on BiFunnelStage {
         BiFunnelStage.newLead => 'New',
         BiFunnelStage.contacted => 'Contacted',
         BiFunnelStage.meeting => 'Meeting',
+        BiFunnelStage.managementMeeting => 'Management Meeting Completed',
         BiFunnelStage.siteVisit => 'Site Visit',
         BiFunnelStage.negotiation => 'Negotiation',
         BiFunnelStage.survey => 'Survey',
@@ -383,6 +385,8 @@ class ManagementBiMetrics {
         return BiFunnelStage.legal;
       case LeadStatus.negotiation:
         return BiFunnelStage.negotiation;
+      case LeadStatus.managementMeetingCompleted:
+        return BiFunnelStage.managementMeeting;
       case LeadStatus.prospectMeetingCompleted:
         if (index.hasVisit(lead.leadId)) return BiFunnelStage.siteVisit;
         return BiFunnelStage.meeting;
@@ -410,6 +414,7 @@ class ManagementBiMetrics {
       BiFunnelStage.newLead,
       BiFunnelStage.contacted,
       BiFunnelStage.meeting,
+      BiFunnelStage.managementMeeting,
       BiFunnelStage.siteVisit,
       BiFunnelStage.negotiation,
       BiFunnelStage.legal,

@@ -99,6 +99,7 @@ abstract final class AiLeadScore {
       LeadStatus.dropped => 0.0,
       LeadStatus.prospectMeetingPending => 20.0,
       LeadStatus.prospectMeetingCompleted => 40.0,
+      LeadStatus.managementMeetingCompleted => 50.0,
       LeadStatus.negotiation => 60.0,
       LeadStatus.legal => 82.0,
       LeadStatus.signed => 100.0,

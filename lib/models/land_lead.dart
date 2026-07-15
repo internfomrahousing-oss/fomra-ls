@@ -11,6 +11,7 @@ enum LeadStatus {
   dropped,
   prospectMeetingPending,
   prospectMeetingCompleted,
+  managementMeetingCompleted,
 }
 
 /// Parses status from Supabase, including legacy values saved before the
@@ -202,12 +203,15 @@ extension LeadStatusLabel on LeadStatus {
         LeadStatus.dropped => 'Dropped',
         LeadStatus.prospectMeetingPending => 'Land owner meeting pending',
         LeadStatus.prospectMeetingCompleted => 'Land owner meeting completed',
+        LeadStatus.managementMeetingCompleted =>
+          'Management Meeting Completed',
       };
 
   /// Short label for compact chips and KPI cards.
   String get shortLabel => switch (this) {
         LeadStatus.prospectMeetingPending => 'Meeting pending',
         LeadStatus.prospectMeetingCompleted => 'Meeting completed',
+        LeadStatus.managementMeetingCompleted => 'Mgmt meeting done',
         _ => label,
       };
 
@@ -230,6 +234,7 @@ const leadStatusPipelineOrder = <LeadStatus>[
   LeadStatus.dropped,
   LeadStatus.prospectMeetingPending,
   LeadStatus.prospectMeetingCompleted,
+  LeadStatus.managementMeetingCompleted,
 ];
 
 extension LeadStatusColor on LeadStatus {
@@ -240,5 +245,6 @@ extension LeadStatusColor on LeadStatus {
         LeadStatus.dropped => const Color(0xFFDC2626),
         LeadStatus.prospectMeetingPending => const Color(0xFFDB2777),
         LeadStatus.prospectMeetingCompleted => const Color(0xFF0891B2),
+        LeadStatus.managementMeetingCompleted => const Color(0xFF4F46E5),
       };
 }
