@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../screens/home/home_screen.dart';
+import '../services/fomra_trail.dart';
 import '../theme/fomra_theme_context.dart';
 
 enum FomraBreadcrumbAction { home, pop, namedRoute }
@@ -214,6 +215,89 @@ class FomraBreadcrumbStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return FomraBreadcrumbBar(items: items);
+  }
+}
+
+/// Breadcrumbs built from the pages actually visited ([FomraTrail]) rather than
+/// a per-screen hardcoded trail.
+///
+/// Names its own page [label], then renders `Home > …ancestors… > label`. Each
+/// ancestor pops back exactly as far as it sits in the Navigator stack, so the
+/// stack — and with it browser Back/Forward — stays consistent.
+class FomraTrailBreadcrumbBar extends StatefulWidget
+    implements PreferredSizeWidget {
+  /// What this page calls itself in the trail.
+  final String label;
+
+  const FomraTrailBreadcrumbBar({super.key, required this.label});
+
+  /// Fixed: every page that shows this bar has at least `Home > itself`, so the
+  /// height never depends on trail state the Scaffold can't see.
+  @override
+  Size get preferredSize => const Size.fromHeight(40);
+
+  @override
+  State<FomraTrailBreadcrumbBar> createState() =>
+      _FomraTrailBreadcrumbBarState();
+}
+
+class _FomraTrailBreadcrumbBarState extends State<FomraTrailBreadcrumbBar> {
+  @override
+  void initState() {
+    super.initState();
+    FomraTrail.instance.addListener(_onTrailChanged);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // ModalRoute is only reachable once dependencies are available.
+    FomraTrail.instance.nameCurrentPage(context, widget.label);
+  }
+
+  @override
+  void didUpdateWidget(covariant FomraTrailBreadcrumbBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.label != widget.label) {
+      FomraTrail.instance.nameCurrentPage(context, widget.label);
+    }
+  }
+
+  @override
+  void dispose() {
+    FomraTrail.instance.removeListener(_onTrailChanged);
+    super.dispose();
+  }
+
+  void _onTrailChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final steps = FomraTrail.instance.steps();
+
+    // Always begin with Home, and never twice — the home page names itself too.
+    final items = <FomraBreadcrumbItem>[const FomraBreadcrumbItem.home()];
+    for (final step in steps) {
+      if (step.label == 'Home') continue;
+      items.add(
+        step.depthFromTop == 0
+            ? FomraBreadcrumbItem.current(step.label)
+            : FomraBreadcrumbItem(
+                label: step.label,
+                action: FomraBreadcrumbAction.pop,
+                popCount: step.depthFromTop,
+              ),
+      );
+    }
+
+    // Before this page is registered (first frame) fall back to naming it, so
+    // the bar never flashes as just "Home".
+    if (items.length == 1) {
+      items.add(FomraBreadcrumbItem.current(widget.label));
+    }
     return FomraBreadcrumbBar(items: items);
   }
 }

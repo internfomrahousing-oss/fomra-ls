@@ -15,6 +15,9 @@ import '../../services/lead_drop_reason_catalog_service.dart';
 import '../../services/land_lead_legal_service.dart';
 import '../../services/land_lead_meeting_service.dart';
 import '../../services/land_lead_service.dart';
+import '../../services/nearby_features_service.dart';
+import '../../utils/lead_auto_notes.dart';
+import '../../utils/lead_location_parser.dart';
 import '../../services/land_lead_site_visit_service.dart';
 import '../../services/lead_call_log_service.dart';
 import '../../services/voice_note_service.dart';
@@ -23,6 +26,7 @@ import '../../theme/fomra_theme_context.dart';
 import '../../widgets/ui/app_feedback.dart';
 import '../../utils/employee_lead_next_action.dart';
 import '../../utils/maps_navigation.dart';
+import '../../widgets/contact_call_whatsapp.dart';
 import '../../widgets/employee_lead_workflow_ui.dart';
 import '../../widgets/fomra_app_shell.dart';
 import '../../widgets/offline_status_banner.dart';
@@ -92,6 +96,38 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
     _tabController = TabController(length: _tabs.length, vsync: this);
     _tabController.addListener(_onTabChanged);
     _loadActivityData();
+    _refreshAutoNotes();
+  }
+
+  /// Fetches what's around the site's GPS and folds it into the lead's notes as
+  /// an auto-generated block, leaving manual notes untouched.
+  ///
+  /// Best-effort and silent: the site GPS may be missing, the device offline, or
+  /// Overpass unavailable — none of which should interrupt viewing the lead. The
+  /// write is skipped entirely when the surroundings haven't changed, so simply
+  /// opening a lead repeatedly costs nothing.
+  Future<void> _refreshAutoNotes() async {
+    final at = parseLeadGps(lead.gpsCoordinates);
+    if (at == null) return;
+    try {
+      final nearby = await NearbyFeaturesService.fetch(at);
+      if (!mounted) return;
+      final merged = LeadAutoNotes.mergeInto(
+        lead.notes,
+        LeadAutoNotes.generate(
+          nearby,
+          radiusKm: NearbyFeaturesService.notesRadiusKm,
+        ),
+      );
+      if (identical(merged, lead.notes)) return;
+
+      final saved = await LandLeadService.update(lead.copyWith(notes: merged));
+      if (!mounted) return;
+      AppStore.instance.replaceLead(saved);
+      setState(() => lead = saved);
+    } catch (_) {
+      // Leave the existing notes as they are.
+    }
   }
 
   Future<void> _loadActivityData() async {
@@ -467,9 +503,11 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
     );
   }
 
-  List<FomraBreadcrumbItem> get _breadcrumbs =>
-      widget.breadcrumbs ??
-      FomraBreadcrumbs.fromWorkspace('Lead ${lead.leadId}');
+  /// This page names itself; the path in front of it comes from the pages the
+  /// user actually came through. A caller can still force a fixed trail.
+  Widget get _breadcrumbBar => widget.breadcrumbs != null
+      ? FomraBreadcrumbStrip(items: widget.breadcrumbs!)
+      : FomraTrailBreadcrumbBar(label: 'Lead ${lead.leadId}');
 
   @override
   Widget build(BuildContext context) {
@@ -484,7 +522,6 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
       siteVisits: _siteVisits,
       meetings: _meetings,
       legalDocs: _legalDocs,
-      onLaunchContact: _launchContact,
       onDetailAction: _handleDetailAction,
       shouldLoadMiTab: _shouldLoadMiTab,
       guidanceBanner: _readOnly
@@ -523,7 +560,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
                   onBack: () => Navigator.pop(context),
                   onEdit: _canEditSite ? _openEdit : null,
                 ),
-                FomraBreadcrumbStrip(items: _breadcrumbs),
+                _breadcrumbBar,
                 Expanded(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
@@ -1272,7 +1309,6 @@ class _WorkspacePanel extends StatelessWidget {
   final List<LandLeadSiteVisit> siteVisits;
   final List<LandLeadMeeting> meetings;
   final List<LandLeadLegalDocument> legalDocs;
-  final Future<void> Function(String scheme) onLaunchContact;
   final ValueChanged<String> onDetailAction;
   final bool Function(int tabIndex) shouldLoadMiTab;
   final Widget? guidanceBanner;
@@ -1288,7 +1324,6 @@ class _WorkspacePanel extends StatelessWidget {
     required this.siteVisits,
     this.meetings = const [],
     this.legalDocs = const [],
-    required this.onLaunchContact,
     required this.onDetailAction,
     required this.shouldLoadMiTab,
     this.guidanceBanner,
@@ -1313,14 +1348,23 @@ class _WorkspacePanel extends StatelessWidget {
               const SizedBox(height: 12),
             ],
             if (!readOnly) ...[
-              Text(
-                'QUICK ACTIONS',
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.6,
-                  color: context.fomraTextSecondary,
-                ),
+              Row(
+                children: [
+                  Text(
+                    'QUICK ACTIONS',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.6,
+                      color: context.fomraTextSecondary,
+                    ),
+                  ),
+                  const Spacer(),
+                  ContactCallWhatsApp(
+                    contact: lead.contactDetails,
+                    accent: AppColors.purple,
+                  ),
+                ],
               ),
               const SizedBox(height: 10),
               _ActionToolbar(onAction: onDetailAction),

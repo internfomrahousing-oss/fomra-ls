@@ -29,6 +29,12 @@ const POI_CATEGORIES = [
   { name: 'Petrol Stations',  tag: 'amenity', value: 'fuel',            groups: ['amenity'] },
   { name: 'Govt. Offices',    tag: 'amenity', value: 'townhall',        groups: ['amenity'] },
   { name: 'Worship Places',   tag: 'amenity', value: 'place_of_worship', groups: ['amenity'] },
+  // Site-context features behind the lead's automatic nearby notes. Scores are
+  // computed from named categories only, so these never affect them.
+  { name: 'Water Bodies',     tag: 'natural', value: 'water',           groups: ['siteContext'] },
+  { name: 'Rivers & Canals',  tag: 'waterway', value: 'river',          groups: ['siteContext'] },
+  { name: 'Cemeteries',       tag: 'landuse', value: 'cemetery',        groups: ['siteContext'] },
+  { name: 'Graveyards',       tag: 'amenity', value: 'grave_yard',      groups: ['siteContext'] },
 ];
 
 const HIGHWAY_TYPES = [

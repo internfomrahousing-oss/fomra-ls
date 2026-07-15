@@ -4,6 +4,7 @@ import '../models/land_lead.dart';
 import '../services/app_store.dart';
 import '../theme/app_theme.dart';
 import '../theme/fomra_theme_context.dart';
+import '../utils/lead_location_parser.dart';
 import 'ui/app_components.dart';
 
 /// Compact stat pill for the workspace header.
@@ -284,6 +285,63 @@ class LandWorkspaceFilters {
 
   bool get hasActive => activeCount > 0;
 
+  /// Whether [lead] passes every applied filter. Free-text search is deliberately
+  /// not part of this — each screen searches the fields that make sense for it.
+  ///
+  /// Shared so every list that filters leads (workspace, brokers, …) agrees on
+  /// what a filter means.
+  bool matches(LandLead lead) {
+    bool matchesText(String? filter, String value) {
+      final f = filter?.trim().toLowerCase();
+      if (f == null || f.isEmpty) return true;
+      return value.trim().toLowerCase() == f;
+    }
+
+    if (status != null && lead.status != status) return false;
+    if (landTypes.isNotEmpty && !landTypes.contains(lead.landType)) return false;
+    if (sources.isNotEmpty && !sources.contains(lead.inputSource)) return false;
+    if (highPriority &&
+        lead.status != LeadStatus.negotiation &&
+        lead.status != LeadStatus.prospectMeetingPending) {
+      return false;
+    }
+    if (!matchesText(assignedEmployee, lead.createdByName)) return false;
+    final added = lead.addedOn.toLocal();
+    if (createdFrom != null && added.isBefore(createdFrom!)) return false;
+    if (createdTo != null && added.isAfter(createdTo!)) return false;
+    if (!matchesText(district, lead.district)) return false;
+    if (!matchesText(taluk, lead.taluk)) return false;
+    if (!matchesText(village, lead.village)) return false;
+    if (!matchesText(broker, lead.brokerName)) return false;
+    final acres = leadAcres(lead);
+    if (acresMin != null && acres < acresMin!) return false;
+    if (acresMax != null && acres > acresMax!) return false;
+    return _matchesPending(lead);
+  }
+
+  static double leadAcres(LandLead lead) {
+    final sqft = parseLandExtentSqft(lead.landExtent);
+    if (sqft == null || sqft <= 0) return 0;
+    return sqft / 43560;
+  }
+
+  bool _matchesPending(LandLead l) {
+    final pending = pendingStatus;
+    if (pending == null || pending.isEmpty) return true;
+    final age = DateTime.now().difference(l.addedOn).inDays;
+    return switch (pending) {
+      'meeting' => l.status == LeadStatus.prospectMeetingPending,
+      'negotiation' => l.status == LeadStatus.negotiation,
+      'survey' => l.status == LeadStatus.prospectMeetingCompleted &&
+          l.surveyNumber.trim().isEmpty,
+      'legal' => l.status == LeadStatus.legal,
+      'overdue' => age >= 14 &&
+          l.status != LeadStatus.signed &&
+          l.status != LeadStatus.dropped,
+      _ => true,
+    };
+  }
+
   List<({String label, VoidCallback onRemove})> activeChips(
     VoidCallback notify,
   ) {
@@ -398,11 +456,15 @@ class LandWorkspaceSearchBar extends StatefulWidget {
   final int activeFilterCount;
   final VoidCallback? onFilterTap;
 
+  /// Defaults to the lead-workspace wording; other lists pass their own.
+  final String hintText;
+
   const LandWorkspaceSearchBar({
     super.key,
     required this.onChanged,
     this.activeFilterCount = 0,
     this.onFilterTap,
+    this.hintText = 'Search by owner, survey number, location...',
   });
 
   @override
@@ -459,8 +521,7 @@ class _LandWorkspaceSearchBarState extends State<LandWorkspaceSearchBar> {
                 focusNode: _focus,
                 style: TextStyle(color: context.fomraTextPrimary),
                 decoration: InputDecoration(
-                  hintText:
-                      'Search by owner, survey number, location...',
+                  hintText: widget.hintText,
                   hintStyle: TextStyle(
                     color: context.fomraTextSecondary,
                     fontSize: 13,

@@ -1,6 +1,46 @@
 import '../models/land_lead.dart';
+import '../models/land_lead_meeting.dart';
 import '../utils/lead_location_parser.dart';
 import '../widgets/terms_deal_selector.dart';
+
+/// Active sites that have gone quiet: nothing on the calendar ahead and no Land
+/// Owner Meeting for [staleDays] days.
+///
+/// A lead counts as stalled when it has no Land Owner Meeting scheduled in the
+/// future AND its most recent meeting was over [staleDays] days ago — for a lead
+/// that never had one, the clock runs from when it was added. Signed and Dropped
+/// leads are excluded, since [LeadStatusX.isActive] already covers both.
+abstract final class NoFutureActivityAnalytics {
+  static const staleDays = 60;
+
+  static List<LandLead> select(
+    List<LandLead> leads,
+    List<LandLeadMeeting> meetings, {
+    int days = staleDays,
+    DateTime? now,
+  }) {
+    final at = now ?? DateTime.now();
+    final cutoff = at.subtract(Duration(days: days));
+
+    final byLead = <String, List<LandLeadMeeting>>{};
+    for (final m in meetings) {
+      (byLead[m.leadId] ??= []).add(m);
+    }
+
+    return leads.where((lead) {
+      if (!lead.status.isActive) return false;
+      final own = byLead[lead.leadId] ?? const <LandLeadMeeting>[];
+      // Anything booked ahead means the site does have future activity.
+      if (own.any((m) => m.metAt.toLocal().isAfter(at))) return false;
+      final lastMeeting = own.isEmpty
+          ? null
+          : own
+              .map((m) => m.metAt.toLocal())
+              .reduce((a, b) => a.isAfter(b) ? a : b);
+      return (lastMeeting ?? lead.addedOn.toLocal()).isBefore(cutoff);
+    }).toList();
+  }
+}
 
 class BrokerPerformanceRow {
   final String name;

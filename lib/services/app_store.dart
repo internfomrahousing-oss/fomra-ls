@@ -1,29 +1,29 @@
 import 'package:flutter/foundation.dart';
 import '../models/employee_profile.dart';
 import '../models/land_lead.dart';
-import 'auth_service.dart';
+import 'lead_visibility.dart';
+import 'view_scope.dart';
 
 class AppStore extends ChangeNotifier {
   static final AppStore instance = AppStore._();
-  AppStore._();
+
+  AppStore._() {
+    // Switching between Team and Individual changes what every screen may see,
+    // and screens already listen here — so re-notify them off the same signal.
+    ViewScope.instance.addListener(notifyListeners);
+  }
 
   final List<LandLead> leads = [];
   final List<EmployeeProfile> employees = [];
 
   /// Role-scoped leads: Management sees every site; an Executive only sees
-  /// the sites (leads) assigned to / created by them. Every screen that
-  /// lists sites, owners, brokers, tasks, activities, documents, reports,
-  /// or map markers should read from this instead of [leads] directly so
-  /// access control is enforced consistently across the whole app.
-  List<LandLead> get visibleLeads {
-    if (AuthService.instance.isManagement) return leads;
-    final me =
-        (AuthService.instance.currentUser?.fullName ?? '').trim().toLowerCase();
-    if (me.isEmpty) return leads;
-    return leads
-        .where((l) => l.createdByName.trim().toLowerCase() == me)
-        .toList();
-  }
+  /// the sites (leads) assigned to / created by them; a Reporting Manager /
+  /// Head sees their team or just themselves per the header's Team /
+  /// Individual toggle. Every screen that lists sites, owners, brokers, tasks,
+  /// activities, documents, reports, or map markers should read from this
+  /// instead of [leads] directly so access control is enforced consistently
+  /// across the whole app. See [LeadVisibility] for the rule itself.
+  List<LandLead> get visibleLeads => LeadVisibility.scope(leads);
 
   void addLead(LandLead lead) {
     leads.insert(0, lead);
@@ -84,8 +84,17 @@ class AppStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Retires an employee from every in-memory list. Anyone who reported to them
+  /// is unassigned to match [EmployeeService.deleteEmployee], so the team tree
+  /// never points at someone who no longer exists.
   void removeEmployee(String id) {
-    employees.removeWhere((e) => e.id == id);
+    final normalized = id.trim().toLowerCase();
+    employees.removeWhere((e) => e.id.trim().toLowerCase() == normalized);
+    for (var i = 0; i < employees.length; i++) {
+      if (employees[i].reportsTo.trim().toLowerCase() == normalized) {
+        employees[i] = employees[i].copyWith(reportsTo: '');
+      }
+    }
     notifyListeners();
   }
 }

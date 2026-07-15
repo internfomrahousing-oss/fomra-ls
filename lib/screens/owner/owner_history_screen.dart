@@ -1,14 +1,15 @@
 import 'package:flutter/material.dart';
 
 import '../../models/land_lead.dart';
+import '../../models/land_lead_meeting.dart';
 import '../../services/app_store.dart';
+import '../../services/land_lead_meeting_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_layout.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../widgets/contact_call_whatsapp.dart';
 import '../../widgets/fomra_app_bar.dart';
-import '../../widgets/fomra_app_shell.dart';
-import '../../widgets/fomra_breadcrumb.dart';
+import '../../widgets/fomra_app_shell.dart';
 import '../../widgets/lead_portfolio_breakdown.dart';
 import '../../widgets/ui/app_components.dart';
 import '../land_lead/lead_detail_screen.dart';
@@ -95,9 +96,8 @@ class _OwnerHistoryScreenState extends State<OwnerHistoryScreen> {
 
     return FomraAppShell(
       currentRoute: '/owner-history',
-      appBar: FomraAppBar(
-        moduleName: 'Owner History',
-        breadcrumbs: FomraBreadcrumbs.module('Owner History'),
+      appBar: const FomraAppBar(
+        moduleName: 'Owner History',
       ),
       body: ListView(
         padding: FomraLayout.pagePadding(context),
@@ -193,15 +193,7 @@ class _OwnerHistoryScreenState extends State<OwnerHistoryScreen> {
                       ),
                       if (expanded) ...[
                         const SizedBox(height: 14),
-                        LeadPortfolioBreakdown(
-                          leads: g.leads,
-                          onOpenLead: (lead) => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => LeadDetailScreen(lead: lead),
-                            ),
-                          ),
-                        ),
+                        _OwnerPortfolioSection(leads: g.leads),
                       ],
                     ],
                   ),
@@ -221,4 +213,65 @@ class _OwnerHistoryScreenState extends State<OwnerHistoryScreen> {
         ),
         child: Text(text, style: const TextStyle(fontSize: 11)),
       );
+}
+
+/// An owner's linked leads, plus — when any of them were dropped — the total
+/// Land Owner Meetings that were conducted on those dropped leads.
+class _OwnerPortfolioSection extends StatefulWidget {
+  final List<LandLead> leads;
+
+  const _OwnerPortfolioSection({required this.leads});
+
+  @override
+  State<_OwnerPortfolioSection> createState() => _OwnerPortfolioSectionState();
+}
+
+class _OwnerPortfolioSectionState extends State<_OwnerPortfolioSection> {
+  int? _droppedMeetings;
+
+  List<LandLead> get _dropped =>
+      widget.leads.where((l) => l.status.isDropped).toList();
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant _OwnerPortfolioSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.leads != widget.leads) _load();
+  }
+
+  Future<void> _load() async {
+    final dropped = _dropped;
+    if (dropped.isEmpty) {
+      if (mounted) setState(() => _droppedMeetings = null);
+      return;
+    }
+    try {
+      final lists = await Future.wait<List<LandLeadMeeting>>(
+        dropped.map((l) => LandLeadMeetingService.getForLead(l.leadId)),
+      );
+      if (!mounted) return;
+      setState(() =>
+          _droppedMeetings = lists.fold<int>(0, (s, m) => s + m.length));
+    } catch (_) {
+      // Leave the card off rather than show a wrong count.
+      if (mounted) setState(() => _droppedMeetings = null);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LeadPortfolioBreakdown(
+      leads: widget.leads,
+      droppedMeetingsConducted: _droppedMeetings,
+      onOpenLead: (lead) => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => LeadDetailScreen(lead: lead)),
+      ),
+    );
+  }
 }

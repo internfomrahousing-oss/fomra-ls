@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../analytics/business_module_metrics.dart';
 import '../../models/land_lead.dart';
+import '../../models/land_lead_meeting.dart';
+import '../../services/management_bi_activity_service.dart';
 import '../land_lead/add_lead_screen.dart';
 import '../../models/lead_list_filter.dart';
 import '../land_lead/filtered_leads_screen.dart';
@@ -19,10 +21,10 @@ import '../../services/land_lead_service.dart';
 import '../../services/lead_drop_approval_service.dart';
 import '../../services/land_lead_signed_service.dart';
 import '../../services/land_lead_site_visit_service.dart';
-import '../../services/notification_center_service.dart';
-import '../../services/notifications_service.dart';
+import '../../services/notification_hub.dart';
 import '../../services/push_service.dart';
 import '../../services/universal_search_service.dart';
+import '../../services/view_scope.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_layout.dart';
 import '../../theme/fomra_theme_context.dart';
@@ -45,35 +47,29 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
-  List<AppNotification> _notifications = [];
-  RealtimeChannel? _notifChannel;
-  // Ids we've already surfaced, so a realtime refresh only toasts genuinely new
-  // notifications. Primed on the first load so history doesn't toast at once.
-  final Set<String> _seenNotifIds = {};
-  bool _notifPrimed = false;
-  // Top-right toast overlay (SnackBars can't anchor to the top).
-  final GlobalKey<_ToastStackState> _toastStackKey = GlobalKey();
-  OverlayEntry? _toastHost;
   DateTime _clock = DateTime.now();
 
-  // Anchored notification dropdown (opens under the bell on click).
-  final LayerLink _notifLink = LayerLink();
-  OverlayEntry? _notifOverlay;
-  bool get _notifOpen => _notifOverlay != null;
+  /// Read-only view of the shared notification state the header bell owns —
+  /// the management dashboard renders the same list the bell does.
+  List<AppNotification> get _notifications =>
+      NotificationHub.instance.notifications;
 
   List<LandLeadSiteVisit> _pendingApprovals = [];
   List<LandLeadSignedRequest> _pendingSigned = [];
   List<LeadDropApprovalRequest> _pendingDropApprovals = [];
   bool _loadingApprovals = false;
-  Timer? _reminderSyncTimer;
 
-  String get _notifAudience =>
-      AuthService.instance.isManagement ? 'management' : 'employee';
+  /// Meeting history behind the management "No Future Activity" quick action.
+  List<LandLeadMeeting> _meetings = const [];
+
+  List<LandLead> get _noFutureActivityLeads => NoFutureActivityAnalytics.select(
+        AppStore.instance.visibleLeads,
+        _meetings,
+      );
 
   int get _activeLeads =>
       _homeSummaryLeads.where((l) => l.status.isActive).length;
 
-  int get _unreadCount => _notifications.where((n) => !n.isRead).length;
 
   bool get _isManagement => AuthService.instance.isManagement;
 
@@ -93,24 +89,26 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     AppStore.instance.addListener(_onStoreUpdate);
     // Register this device for push under the signed-in audience (guarded).
     PushService.syncToken();
-    _loadNotifications();
+    // Loading, realtime and reminder-sync all live in the hub behind the header
+    // bell; the dashboard just follows it.
+    NotificationHub.instance.addListener(_onNotificationsChanged);
     _loadPerformanceData();
     if (_canApprove) _loadPendingApprovals();
+    if (_isManagement) _loadMeetings();
     UniversalSearchService.warmDocumentIndex();
-    NotificationCenterService.syncAlerts().then((_) {
-      if (mounted) _loadNotifications();
-    });
-    _notifChannel = NotificationsService.subscribe(
-      audience: _notifAudience,
-      onChange: _loadNotifications,
-    );
-    // Keep Field Calendar (and other) reminders flowing into the Notification
-    // Center while the app stays open, not just on screen load.
-    _reminderSyncTimer = Timer.periodic(const Duration(minutes: 5), (_) {
-      NotificationCenterService.syncAlerts().then((_) {
-        if (mounted) _loadNotifications();
-      });
-    });
+  }
+
+  /// Only management gets the "No Future Activity" quick action, so only
+  /// management pays for the meeting history it needs.
+  Future<void> _loadMeetings() async {
+    final meetings = await ManagementBiActivityService.loadMeetings();
+    if (mounted) setState(() => _meetings = meetings);
+  }
+
+  void _onNotificationsChanged() {
+    if (!mounted) return;
+    setState(() {});
+    if (_canApprove) _loadPendingApprovals();
   }
 
   /// Make sure leads are loaded so both the management leaderboard and an
@@ -136,36 +134,22 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
-  /// Leads added by the currently signed-in user (matched by creator name).
+  /// Leads the signed-in user may currently see. For a Reporting Manager / Head
+  /// this is already their whole team or just themselves, depending on the
+  /// header's Team / Individual toggle — see [LeadVisibility].
   List<LandLead> get _myLeads => AppStore.instance.visibleLeads;
 
-  /// Summary tiles on home — all leads for management, own leads for employees.
+  /// Summary tiles on home — all leads for management, scoped leads otherwise.
   List<LandLead> get _homeSummaryLeads =>
       _isManagement ? AppStore.instance.leads : _myLeads;
 
   int get _myLeadCount => _myLeads.length;
 
-  /// Leads across the current Reporting Manager / Head's whole team (recursively
-  /// down the reporting line, including their own).
-  int get _teamLeadCount {
-    final me = TeamHierarchy.currentProfile;
-    if (me == null) return _myLeadCount;
-    final names = TeamHierarchy.teamMemberNames(me);
-    return AppStore.instance.leads
-        .where((l) => names.contains(l.createdByName.trim().toLowerCase()))
-        .length;
-  }
-
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     AppStore.instance.removeListener(_onStoreUpdate);
-    _reminderSyncTimer?.cancel();
-    _notifChannel?.unsubscribe();
-    _notifOverlay?.remove();
-    _notifOverlay = null;
-    _toastHost?.remove();
-    _toastHost = null;
+    NotificationHub.instance.removeListener(_onNotificationsChanged);
     super.dispose();
   }
 
@@ -176,235 +160,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (state == AppLifecycleState.resumed) {
       setState(() => _clock = DateTime.now());
     }
-  }
-
-
-  Future<void> _loadNotifications() async {
-    try {
-      final list = await NotificationsService.getAllForCurrentUser();
-      final filtered = list
-          .where((n) =>
-              !_isManagementLeadNotification(n) &&
-              !_isNewLeadUploadNotification(n) &&
-              _isForMe(n))
-          .toList();
-      if (mounted) {
-        _emitNewNotificationToasts(filtered);
-        setState(() => _notifications = filtered);
-        _notifOverlay?.markNeedsBuild(); // refresh the open dropdown live
-        if (_canApprove) _loadPendingApprovals();
-      }
-    } catch (_) {
-      // Keep the current list if the fetch fails (e.g. table not created yet).
-    }
-  }
-
-  // Don't surface lead notifications for leads management uploaded itself.
-  bool _isManagementLeadNotification(AppNotification n) =>
-      (n.type == NotificationType.lead ||
-          n.type == NotificationType.assignedLead) &&
-      n.title.toLowerCase().contains('by management');
-
-  bool _isNewLeadUploadNotification(AppNotification n) =>
-      (n.type == NotificationType.lead ||
-          n.type == NotificationType.assignedLead) &&
-      n.title.toLowerCase().contains('new lead uploaded');
-
-  /// An assignment notification is only for the employees it was assigned to.
-  /// The assignees are named in the message ("… — assigned to pooja, vijay"),
-  /// so an employee only sees it when their own name is in that list. Management
-  /// and all non-assignment notifications are shown as-is.
-  bool _isForMe(AppNotification n) {
-    if (_isManagement) return true;
-    // Approval routing addresses a specific Reporting Manager / Head /
-    // Executive by using their email as the audience. Those are already
-    // personally targeted, so they bypass the name/lead-ownership heuristics
-    // below (an approver's queue is about their team's leads, not their own).
-    final myEmail =
-        (AuthService.instance.currentUser?.email ?? '').trim().toLowerCase();
-    if (myEmail.isNotEmpty &&
-        n.audience.trim().toLowerCase() == myEmail) {
-      return true;
-    }
-    const marker = 'assigned to ';
-    final msg = n.message.toLowerCase();
-    final idx = msg.lastIndexOf(marker);
-    final me = (AuthService.instance.currentUser?.fullName ?? '')
-        .trim()
-        .toLowerCase();
-    if (idx != -1 && me.isNotEmpty) {
-      final assignees =
-          msg.substring(idx + marker.length).split(',').map((s) => s.trim());
-      if (!assignees.contains(me)) return false;
-    }
-    // Notifications are stored in a shared 'employee' audience bucket (no
-    // per-user column in the schema), so any notification tied to a specific
-    // lead only belongs to this Executive if that lead is one of theirs.
-    final leadId = (n.leadId ?? '').trim();
-    if (leadId.isNotEmpty) {
-      final myLeadIds =
-          AppStore.instance.visibleLeads.map((l) => l.leadId).toSet();
-      if (!myLeadIds.contains(leadId)) return false;
-    }
-    return true;
-  }
-
-  /// On the first refresh we only record the existing ids (so the whole history
-  /// doesn't toast at once). After that, any id we haven't seen before is a live
-  /// insert and pops a toast — newest last so it's the one left on screen.
-  void _emitNewNotificationToasts(List<AppNotification> latest) {
-    final fresh =
-        latest.where((n) => !_seenNotifIds.contains(n.id)).toList();
-    for (final n in latest) {
-      _seenNotifIds.add(n.id);
-    }
-    if (!_notifPrimed) {
-      _notifPrimed = true;
-      return;
-    }
-    for (final n in fresh.take(3).toList().reversed) {
-      _showNotificationToast(n);
-    }
-  }
-
-  void _showNotificationToast(AppNotification n) {
-    _ensureToastHost();
-    // The stack may not be mounted on the frame the host is first inserted.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _toastStackKey.currentState?.push(_ToastData(
-        title: n.title,
-        message: n.message,
-        color: _notifTypeColor(n.type),
-        icon: _notifTypeIcon(n.type),
-      ));
-    });
-  }
-
-  void _ensureToastHost() {
-    if (_toastHost != null) return;
-    _toastHost = OverlayEntry(builder: (_) => _ToastStack(key: _toastStackKey));
-    Overlay.of(context, rootOverlay: true).insert(_toastHost!);
-  }
-
-  Color _notifTypeColor(NotificationType t) => switch (t) {
-        NotificationType.lead ||
-        NotificationType.assignedLead =>
-          AppColors.info,
-        NotificationType.pendingLead => AppColors.warning,
-        NotificationType.pendingApproval => AppColors.secondary,
-        NotificationType.slaBreach ||
-        NotificationType.overdueTask ||
-        NotificationType.alert =>
-          AppColors.error,
-        NotificationType.reminder || NotificationType.siteVisit =>
-          AppColors.primary,
-        NotificationType.task => AppColors.warning,
-        NotificationType.document => AppColors.success,
-        NotificationType.verification => AppColors.secondary,
-      };
-
-  IconData _notifTypeIcon(NotificationType t) => switch (t) {
-        NotificationType.lead ||
-        NotificationType.assignedLead =>
-          Icons.person_add_alt_1_outlined,
-        NotificationType.pendingLead => Icons.hourglass_top_rounded,
-        NotificationType.pendingApproval => Icons.approval_outlined,
-        NotificationType.slaBreach => Icons.timer_off_outlined,
-        NotificationType.overdueTask => Icons.warning_amber_rounded,
-        NotificationType.reminder => Icons.notifications_active_outlined,
-        NotificationType.task => Icons.task_alt,
-        NotificationType.document => Icons.description,
-        NotificationType.alert => Icons.warning_amber,
-        NotificationType.verification => Icons.verified,
-        NotificationType.siteVisit => Icons.apartment_outlined,
-      };
-
-  void _toggleNotifications() {
-    // Tapping the bell is a user gesture — use it to request push permission
-    // (browsers suppress the auto prompt on page load) and register the token.
-    PushService.promptAndSync();
-    if (_notifOpen) {
-      _hideNotifications();
-    } else {
-      _openNotifications();
-    }
-  }
-
-  void _hideNotifications() {
-    _notifOverlay?.remove();
-    _notifOverlay = null;
-    if (mounted) setState(() {}); // repaint the bell (pressed state / badge)
-  }
-
-  void _openNotifications() {
-    _notifOverlay = OverlayEntry(
-      builder: (_) => _NotificationsDropdown(
-        link: _notifLink,
-        notifications: _notifications,
-        onDismiss: _hideNotifications,
-        onMarkRead: (id) {
-          setState(() {
-            _notifications.firstWhere((n) => n.id == id).isRead = true;
-          });
-          _notifOverlay?.markNeedsBuild();
-          NotificationsService.markRead(id).catchError((_) {});
-        },
-        onMarkAllRead: () {
-          setState(() {
-            for (final n in _notifications) { n.isRead = true; }
-          });
-          _notifOverlay?.markNeedsBuild();
-          NotificationsService.markAllReadForCurrentUser()
-              .catchError((_) {});
-        },
-        onViewAll: () {
-          _hideNotifications();
-          Navigator.pushNamed(context, '/notifications');
-        },
-        onOpen: (n) async {
-          _hideNotifications();
-          if ((n.type == NotificationType.siteVisit ||
-                  n.type == NotificationType.pendingApproval) &&
-              _isManagement) {
-            var visitId = n.referenceId;
-            if (visitId == null && n.leadId != null) {
-              visitId = await LandLeadSiteVisitService.findPendingManagementVisitId(
-                n.leadId!,
-              );
-            }
-            if (!mounted) return;
-            if (visitId != null) {
-              await showManagementVisitReviewDialog(
-                context,
-                visitId: visitId,
-                leadId: n.leadId,
-              );
-              return;
-            }
-          }
-          if (n.type != NotificationType.lead && n.type != NotificationType.siteVisit) {
-            return;
-          }
-          LandLead? lead;
-          for (final l in AppStore.instance.leads) {
-            if (l.leadId == n.leadId) {
-              lead = l;
-              break;
-            }
-          }
-          if (lead != null) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => LeadDetailScreen(lead: lead!)),
-            );
-          } else if (n.leadId != null) {
-            Navigator.pushNamed(context, '/land-lead');
-          }
-        },
-      ),
-    );
-    Overlay.of(context).insert(_notifOverlay!);
-    setState(() {}); // repaint the bell in its active state
   }
 
   Future<void> _loadPendingApprovals() async {
@@ -718,50 +473,29 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         accent: AppColors.secondary,
         onTap: () => _goTo('/broker-management'),
       ),
+      if (_isManagement)
+        PortalQuickAction(
+          label: 'No Future Activity',
+          subtitle: '${_noFutureActivityLeads.length} '
+              'site${_noFutureActivityLeads.length == 1 ? '' : 's'} · no meeting '
+              '${NoFutureActivityAnalytics.staleDays}+ days',
+          icon: Icons.event_busy_outlined,
+          accent: AppColors.error,
+          onTap: () => FilteredLeadsScreen.openList(
+            context,
+            title: 'No Future Activity',
+            subtitle:
+                'Active sites with no Land Owner Meeting scheduled and none in '
+                'the last ${NoFutureActivityAnalytics.staleDays} days',
+            leads: _noFutureActivityLeads,
+          ),
+        ),
     ];
 
     return FomraAppShell(
       currentRoute: '/home',
-      appBar: FomraAppBar(
-        actions: [
-          CompositedTransformTarget(
-            link: _notifLink,
-            child: Stack(clipBehavior: Clip.none, children: [
-            IconButton(
-              icon: Icon(
-                _notifOpen
-                    ? Icons.notifications
-                    : Icons.notifications_outlined,
-                size: 22,
-              ),
-              onPressed: _toggleNotifications,
-            ),
-            if (_unreadCount > 0)
-              Positioned(
-                right: 6,
-                top: 6,
-                child: Container(
-                  constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  decoration: const BoxDecoration(
-                    color: AppColors.accent,
-                    shape: BoxShape.circle,
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    _unreadCount > 9 ? '9+' : '$_unreadCount',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-              ),
-          ]),
-          ),
-        ],
-      ),
+      // The notification bell now lives in the shared header for every page.
+      appBar: const FomraAppBar(),
       backgroundColor: context.fomraPageBg,
       body: Column(
         children: [
@@ -856,13 +590,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   child: PortalSectionCard(
                     title: canManageTeam ? 'Performance' : 'My performance',
                     subtitle: canManageTeam
-                        ? 'Switch between your team and your own contribution'
+                        ? 'Use the Team / Individual switch in the header to '
+                            'change what this covers'
                         : 'Your site contribution this period',
                     icon: Icons.groups_rounded,
                     child: _RolePerformanceCard(
                       isTeamLead: canManageTeam,
-                      ownCount: _myLeadCount,
-                      teamCount: _teamLeadCount,
+                      count: _myLeadCount,
                       onTap: () => _goTo('/land-lead'),
                     ),
                   ),
@@ -880,54 +614,29 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 }
 
-class _RolePerformanceCard extends StatefulWidget {
+/// Sites added, for whatever the header's Team / Individual toggle currently
+/// covers — [count] is already scoped by [LeadVisibility], so this only picks
+/// the wording.
+class _RolePerformanceCard extends StatelessWidget {
   final bool isTeamLead;
-  final int ownCount;
-  final int teamCount;
+  final int count;
   final VoidCallback? onTap;
 
   const _RolePerformanceCard({
     required this.isTeamLead,
-    required this.ownCount,
-    required this.teamCount,
+    required this.count,
     this.onTap,
   });
 
   @override
-  State<_RolePerformanceCard> createState() => _RolePerformanceCardState();
-}
-
-class _RolePerformanceCardState extends State<_RolePerformanceCard> {
-  bool _team = true;
-
-  @override
   Widget build(BuildContext context) {
-    final showTeam = widget.isTeamLead && _team;
-    final count = showTeam ? widget.teamCount : widget.ownCount;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (widget.isTeamLead) ...[
-          Align(
-            alignment: Alignment.centerLeft,
-            child: SegmentedButton<bool>(
-              segments: const [
-                ButtonSegment(value: true, label: Text('Team')),
-                ButtonSegment(value: false, label: Text('Individual')),
-              ],
-              selected: {_team},
-              onSelectionChanged: (s) => setState(() => _team = s.first),
-              showSelectedIcon: false,
-            ),
-          ),
-          const SizedBox(height: 10),
-        ],
-        AppCard(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          radius: AppColors.radiusMd,
-          interactive: widget.onTap != null,
-          onTap: widget.onTap,
-          child: Row(
+    final showTeam = isTeamLead && ViewScope.instance.isTeam;
+    return AppCard(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      radius: AppColors.radiusMd,
+      interactive: onTap != null,
+      onTap: onTap,
+      child: Row(
             children: [
               Container(
                 width: 32,
@@ -978,9 +687,7 @@ class _RolePerformanceCardState extends State<_RolePerformanceCard> {
                     ),
               ),
             ],
-          ),
-        ),
-      ],
+      ),
     );
   }
 }
@@ -1164,390 +871,6 @@ class _TaskSummaryCard extends StatelessWidget {
           Text(subtitle,
               style: TextStyle(fontSize: 10.5, color: context.fomraTextSecondary)),
         ],
-      ),
-    );
-  }
-}
-
-// ── Notifications Dropdown ────────────────────────────────────────────────────
-
-/// An anchored dropdown panel that opens under the notification bell on click.
-class _NotificationsDropdown extends StatelessWidget {
-  final LayerLink link;
-  final List<AppNotification> notifications;
-  final VoidCallback onDismiss;
-  final void Function(String id) onMarkRead;
-  final VoidCallback onMarkAllRead;
-  final void Function(AppNotification n) onOpen;
-  final VoidCallback? onViewAll;
-  const _NotificationsDropdown({
-    required this.link,
-    required this.notifications,
-    required this.onDismiss,
-    required this.onMarkRead,
-    required this.onMarkAllRead,
-    required this.onOpen,
-    this.onViewAll,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final screen = MediaQuery.of(context).size;
-    final width = screen.width < 400 ? screen.width - 24 : 380.0;
-    final maxHeight = (screen.height * 0.6).clamp(240.0, 520.0);
-
-    return Stack(
-      children: [
-        // Tap outside to close.
-        Positioned.fill(
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: onDismiss,
-          ),
-        ),
-        CompositedTransformFollower(
-          link: link,
-          targetAnchor: Alignment.bottomRight,
-          followerAnchor: Alignment.topRight,
-          offset: const Offset(8, 10),
-          child: Align(
-            alignment: Alignment.topRight,
-            child: Material(
-              color: Colors.transparent,
-              child: Container(
-                width: width,
-                constraints: BoxConstraints(maxHeight: maxHeight),
-                decoration: BoxDecoration(
-                  color: context.fomraSurface,
-                  borderRadius: BorderRadius.circular(AppColors.radiusLg),
-                  border: Border.all(color: context.fomraBorder),
-                  boxShadow: AppColors.elevatedShadow,
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Padding(
-                      padding:
-                          const EdgeInsets.fromLTRB(18, 14, 10, 10),
-                      child: Row(children: [
-                        const Text('Notifications',
-                            style: TextStyle(
-                                fontSize: 16, fontWeight: FontWeight.w700)),
-                        const Spacer(),
-                        if (notifications.isNotEmpty)
-                          TextButton(
-                            onPressed: onMarkAllRead,
-                            style: TextButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 4),
-                              minimumSize: Size.zero,
-                              tapTargetSize:
-                                  MaterialTapTargetSize.shrinkWrap,
-                            ),
-                            child: const Text('Mark all read',
-                                style: TextStyle(fontSize: 12)),
-                          ),
-                        IconButton(
-                          icon: const Icon(Icons.close, size: 18),
-                          visualDensity: VisualDensity.compact,
-                          onPressed: onDismiss,
-                        ),
-                      ]),
-                    ),
-                    const Divider(height: 1),
-                    Flexible(
-                      child: notifications.isEmpty
-                          ? const Padding(
-                              padding: EdgeInsets.symmetric(
-                                  horizontal: 20, vertical: 36),
-                              child: EmptyState(
-                                icon: Icons.notifications_none_rounded,
-                                title: 'No notifications yet',
-                                message:
-                                    'Updates about leads, tasks, and assignments will show up here.',
-                              ),
-                            )
-                          : ListView.separated(
-                              shrinkWrap: true,
-                              padding: EdgeInsets.zero,
-                              itemCount: notifications.length,
-                              separatorBuilder: (_, __) =>
-                                  const Divider(height: 1),
-                              itemBuilder: (_, i) {
-                                final n = notifications[i];
-                                return ListTile(
-                                  dense: true,
-                                  leading: CircleAvatar(
-                                    radius: 16,
-                                    backgroundColor: _typeColor(n.type)
-                                        .withValues(alpha: 0.1),
-                                    child: Icon(_typeIcon(n.type),
-                                        color: _typeColor(n.type), size: 15),
-                                  ),
-                                  title: Text(n.title,
-                                      style: TextStyle(
-                                          fontWeight: n.isRead
-                                              ? FontWeight.normal
-                                              : FontWeight.w600,
-                                          fontSize: 13.5)),
-                                  subtitle: Text(n.message,
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(fontSize: 12)),
-                                  trailing: n.isRead
-                                      ? null
-                                      : Container(
-                                          width: 7, height: 7,
-                                          decoration: const BoxDecoration(
-                                              color: AppColors.primary,
-                                              shape: BoxShape.circle),
-                                        ),
-                                  onTap: () {
-                                    onMarkRead(n.id);
-                                    onOpen(n);
-                                  },
-                                  tileColor: n.isRead
-                                      ? null
-                                      : AppColors.primary
-                                          .withValues(alpha: 0.03),
-                                );
-                              },
-                            ),
-                    ),
-                    const Divider(height: 1),
-                    if (onViewAll != null)
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(10, 4, 10, 8),
-                        child: TextButton.icon(
-                          onPressed: onViewAll,
-                          icon: const Icon(Icons.open_in_new_rounded, size: 16),
-                          label: const Text('Open Notification Center'),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Color _typeColor(NotificationType t) => switch (t) {
-        NotificationType.lead ||
-        NotificationType.assignedLead =>
-          AppColors.info,
-        NotificationType.pendingLead => AppColors.warning,
-        NotificationType.pendingApproval => AppColors.secondary,
-        NotificationType.slaBreach ||
-        NotificationType.overdueTask ||
-        NotificationType.alert =>
-          AppColors.error,
-        NotificationType.reminder || NotificationType.siteVisit =>
-          AppColors.primary,
-        NotificationType.task => AppColors.warning,
-        NotificationType.document => AppColors.success,
-        NotificationType.verification => AppColors.secondary,
-      };
-
-  IconData _typeIcon(NotificationType t) => switch (t) {
-        NotificationType.lead ||
-        NotificationType.assignedLead =>
-          Icons.person_add_alt_1_outlined,
-        NotificationType.pendingLead => Icons.hourglass_top_rounded,
-        NotificationType.pendingApproval => Icons.approval_outlined,
-        NotificationType.slaBreach => Icons.timer_off_outlined,
-        NotificationType.overdueTask => Icons.warning_amber_rounded,
-        NotificationType.reminder => Icons.notifications_active_outlined,
-        NotificationType.task => Icons.task_alt,
-        NotificationType.document => Icons.description,
-        NotificationType.alert => Icons.warning_amber,
-        NotificationType.verification => Icons.verified,
-        NotificationType.siteVisit => Icons.apartment_outlined,
-      };
-}
-
-// ── Top-right toast overlay ───────────────────────────────────────────────────
-
-class _ToastData {
-  final String title;
-  final String message;
-  final Color color;
-  final IconData icon;
-  _ToastData({
-    required this.title,
-    required this.message,
-    required this.color,
-    required this.icon,
-  });
-}
-
-/// Hosts a top-right column of stacked toasts. New toasts slide in from the
-/// right, auto-dismiss after 4s, and can be swiped right to close.
-class _ToastStack extends StatefulWidget {
-  const _ToastStack({super.key});
-
-  @override
-  State<_ToastStack> createState() => _ToastStackState();
-}
-
-class _ToastStackState extends State<_ToastStack> {
-  final List<({int id, _ToastData data})> _toasts = [];
-  int _seq = 0;
-
-  void push(_ToastData data) {
-    final id = _seq++;
-    setState(() => _toasts.add((id: id, data: data)));
-    Future.delayed(const Duration(seconds: 4), () => _remove(id));
-  }
-
-  void _remove(int id) {
-    if (!mounted) return;
-    setState(() => _toasts.removeWhere((t) => t.id == id));
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final media = MediaQuery.of(context);
-    // Anchor bottom-right, clearing the floating bottom nav bar (~72px + inset).
-    return Positioned(
-      bottom: media.padding.bottom + 88,
-      right: 16,
-      child: Material(
-        color: Colors.transparent,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 360),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              for (final t in _toasts)
-                _ToastCard(
-                  key: ValueKey(t.id),
-                  data: t.data,
-                  onDismiss: () => _remove(t.id),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ToastCard extends StatefulWidget {
-  final _ToastData data;
-  final VoidCallback onDismiss;
-  const _ToastCard({
-    super.key,
-    required this.data,
-    required this.onDismiss,
-  });
-
-  @override
-  State<_ToastCard> createState() => _ToastCardState();
-}
-
-class _ToastCardState extends State<_ToastCard>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 240),
-  )..forward();
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final curve = CurvedAnimation(parent: _controller, curve: Curves.easeOut);
-    final d = widget.data;
-    // Slide the whole card in from off the right edge.
-    return FadeTransition(
-      opacity: curve,
-      child: SlideTransition(
-        position: Tween<Offset>(
-          begin: const Offset(1.15, 0),
-          end: Offset.zero,
-        ).animate(curve),
-        child: Padding(
-          padding: const EdgeInsets.only(bottom: 10),
-          child: Dismissible(
-            key: ValueKey('toast-${widget.key}'),
-            direction: DismissDirection.startToEnd, // swipe right to close
-            onDismissed: (_) => widget.onDismiss(),
-            child: Container(
-              padding: const EdgeInsets.fromLTRB(12, 12, 8, 12),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(AppColors.radiusMd),
-                border: Border.all(color: AppColors.border),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Color(0x1F000000),
-                    blurRadius: 16,
-                    offset: Offset(0, 6),
-                  ),
-                ],
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Colored icon chip keeps the type accent on the white card.
-                  Container(
-                    width: 34,
-                    height: 34,
-                    decoration: BoxDecoration(
-                      color: d.color.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(9),
-                    ),
-                    child: Icon(d.icon, color: d.color, size: 20),
-                  ),
-                  const SizedBox(width: 12),
-                  Flexible(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          d.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: AppColors.textPrimary,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        if (d.message.isNotEmpty)
-                          Text(
-                            d.message,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(color: AppColors.textSecondary),
-                          ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  // Close (X) button — tap to dismiss.
-                  InkWell(
-                    onTap: widget.onDismiss,
-                    borderRadius: BorderRadius.circular(999),
-                    child: const Padding(
-                      padding: EdgeInsets.all(4),
-                      child: Icon(Icons.close,
-                          color: AppColors.textSecondary, size: 18),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
       ),
     );
   }

@@ -8,8 +8,8 @@ import '../../models/land_lead.dart';
 import '../../models/land_lead_meeting.dart';
 import '../../models/land_lead_site_visit.dart';
 import '../../models/lead_call_log.dart';
-import '../../services/auth_service.dart';
 import '../../services/land_lead_meeting_service.dart';
+import '../../services/lead_visibility.dart';
 import '../../services/land_lead_site_visit_service.dart';
 import '../../services/lead_call_log_service.dart';
 import '../../theme/app_theme.dart';
@@ -63,18 +63,11 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
   }
 
   /// Role-scoped source leads: an executive only ever sees the sites assigned
-  /// to / created by them, even if the caller passed a broader list. Management
-  /// sees everything. This enforces the access rule at the map itself.
-  List<LandLead> get _scopedLeads {
-    if (AuthService.instance.isManagement) return widget.leads;
-    final me = (AuthService.instance.currentUser?.fullName ?? '')
-        .trim()
-        .toLowerCase();
-    if (me.isEmpty) return widget.leads;
-    return widget.leads
-        .where((l) => l.createdByName.trim().toLowerCase() == me)
-        .toList();
-  }
+  /// to / created by them, and a Reporting Manager / Head sees their team or
+  /// just themselves per the header toggle — even if the caller passed a
+  /// broader list. Management sees everything. This enforces the access rule at
+  /// the map itself.
+  List<LandLead> get _scopedLeads => LeadVisibility.scope(widget.leads);
 
   List<String> _distinct(String Function(LandLead) selector) {
     final set = <String>{};

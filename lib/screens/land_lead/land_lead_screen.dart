@@ -12,11 +12,9 @@ import '../../services/role_access.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_layout.dart';
 import '../../theme/fomra_theme_context.dart';
-import '../../utils/lead_location_parser.dart';
 import '../../utils/legal_document_catalog.dart';
 import '../../widgets/fomra_app_bar.dart';
-import '../../widgets/fomra_app_shell.dart';
-import '../../widgets/fomra_breadcrumb.dart';
+import '../../widgets/fomra_app_shell.dart';
 import '../../widgets/ui/app_feedback.dart';
 import '../../widgets/land_workspace_ui.dart';
 import '../../widgets/management_executive_dashboard.dart';
@@ -117,11 +115,7 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
   void _openSummaryFilter(LeadStatus? status, String title) {
     final filter = _summaryFilterFor(status);
     if (filter == null) return;
-    FilteredLeadsScreen.open(
-      context,
-      filter,
-      breadcrumbs: FomraBreadcrumbs.fromWorkspaceFilter(title),
-    );
+    FilteredLeadsScreen.open(context, filter);
   }
 
   /// Ask which employee to assign the selected leads to, confirm, then assign.
@@ -269,77 +263,23 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
   /// Management sees every lead; an employee sees only the leads they added.
   List<LandLead> get _leads => AppStore.instance.visibleLeads;
 
-  List<LandLead> get _filtered => _leads.where((l) {
-        final matchStatus =
-            _filters.status == null || l.status == _filters.status;
-        final q = _search.toLowerCase();
-        final matchSearch = q.isEmpty ||
-            l.ownerName.toLowerCase().contains(q) ||
-            l.location.toLowerCase().contains(q) ||
-            l.surveyNumber.toLowerCase().contains(q) ||
-            l.leadId.toLowerCase().contains(q) ||
-            l.contactDetails.toLowerCase().contains(q) ||
-            l.village.toLowerCase().contains(q) ||
-            l.taluk.toLowerCase().contains(q) ||
-            l.district.toLowerCase().contains(q) ||
-            l.brokerName.toLowerCase().contains(q) ||
-            l.brokerContact.toLowerCase().contains(q) ||
-            _docNumberMatches(l.leadId, q);
-        final matchLandType = _filters.landTypes.isEmpty ||
-            _filters.landTypes.contains(l.landType);
-        final matchSource = _filters.sources.isEmpty ||
-            _filters.sources.contains(l.inputSource);
-        final matchPriority = !_filters.highPriority ||
-            l.status == LeadStatus.negotiation ||
-            l.status == LeadStatus.prospectMeetingPending;
-        final emp = _filters.assignedEmployee?.trim().toLowerCase();
-        final matchEmployee = emp == null ||
-            emp.isEmpty ||
-            l.createdByName.trim().toLowerCase() == emp;
-        final added = l.addedOn.toLocal();
-        final matchFrom = _filters.createdFrom == null ||
-            !added.isBefore(_filters.createdFrom!);
-        final matchTo = _filters.createdTo == null ||
-            !added.isAfter(_filters.createdTo!);
-        final matchDistrict = _filters.district == null ||
-            l.district.trim().toLowerCase() ==
-                _filters.district!.trim().toLowerCase();
-        final matchTaluk = _filters.taluk == null ||
-            l.taluk.trim().toLowerCase() ==
-                _filters.taluk!.trim().toLowerCase();
-        final matchVillage = _filters.village == null ||
-            l.village.trim().toLowerCase() ==
-                _filters.village!.trim().toLowerCase();
-        final matchBroker = _filters.broker == null ||
-            l.brokerName.trim().toLowerCase() ==
-                _filters.broker!.trim().toLowerCase();
-        final acres = _leadAcres(l);
-        final matchAcresMin =
-            _filters.acresMin == null || acres >= _filters.acresMin!;
-        final matchAcresMax =
-            _filters.acresMax == null || acres <= _filters.acresMax!;
-        final matchPending = _matchesPending(l, _filters.pendingStatus);
-        return matchStatus &&
-            matchSearch &&
-            matchLandType &&
-            matchSource &&
-            matchPriority &&
-            matchEmployee &&
-            matchFrom &&
-            matchTo &&
-            matchDistrict &&
-            matchTaluk &&
-            matchVillage &&
-            matchBroker &&
-            matchAcresMin &&
-            matchAcresMax &&
-            matchPending;
-      }).toList();
+  List<LandLead> get _filtered =>
+      _leads.where((l) => _filters.matches(l) && _matchesSearch(l)).toList();
 
-  double _leadAcres(LandLead lead) {
-    final sqft = parseLandExtentSqft(lead.landExtent);
-    if (sqft == null || sqft <= 0) return 0;
-    return sqft / 43560;
+  bool _matchesSearch(LandLead l) {
+    final q = _search.toLowerCase();
+    if (q.isEmpty) return true;
+    return l.ownerName.toLowerCase().contains(q) ||
+        l.location.toLowerCase().contains(q) ||
+        l.surveyNumber.toLowerCase().contains(q) ||
+        l.leadId.toLowerCase().contains(q) ||
+        l.contactDetails.toLowerCase().contains(q) ||
+        l.village.toLowerCase().contains(q) ||
+        l.taluk.toLowerCase().contains(q) ||
+        l.district.toLowerCase().contains(q) ||
+        l.brokerName.toLowerCase().contains(q) ||
+        l.brokerContact.toLowerCase().contains(q) ||
+        _docNumberMatches(l.leadId, q);
   }
 
   bool _docNumberMatches(String leadId, String q) {
@@ -350,24 +290,6 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
       if (num != null && num.toLowerCase().contains(q)) return true;
     }
     return false;
-  }
-
-  bool _matchesPending(LandLead l, String? pending) {
-    if (pending == null || pending.isEmpty) return true;
-    final age = DateTime.now().difference(l.addedOn).inDays;
-    return switch (pending) {
-      'meeting' => l.status == LeadStatus.prospectMeetingPending,
-      'negotiation' => l.status == LeadStatus.negotiation,
-      'survey' =>
-        l.status == LeadStatus.prospectMeetingCompleted &&
-            l.surveyNumber.trim().isEmpty,
-      'legal' => l.status == LeadStatus.legal,
-      'overdue' =>
-        age >= 14 &&
-            l.status != LeadStatus.signed &&
-            l.status != LeadStatus.dropped,
-      _ => true,
-    };
   }
 
   int get _activeFilterCount => _filters.activeCount;

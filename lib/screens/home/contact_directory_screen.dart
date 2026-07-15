@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../utils/contact_directory.dart';
 import '../../models/land_lead.dart';
@@ -7,8 +6,8 @@ import '../../services/app_store.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_layout.dart';
 import '../../theme/fomra_theme_context.dart';
+import '../../widgets/contact_call_whatsapp.dart';
 import '../../widgets/fomra_app_bar.dart';
-import '../../widgets/ui/app_feedback.dart';
 import '../../widgets/fomra_app_shell.dart';
 import '../../widgets/fomra_breadcrumb.dart';
 import '../../widgets/ui/app_components.dart';
@@ -76,25 +75,6 @@ class _ContactDirectoryScreenState extends State<ContactDirectoryScreen> {
               e.contact.toLowerCase().contains(q),
         )
         .toList();
-  }
-
-  Future<void> _launchContact(String contact, String scheme) async {
-    final raw = contact.replaceAll(RegExp(r'[^\d+]'), '');
-    if (raw.isEmpty) {
-      AppFeedback.warning(context, 'No contact number available');
-      return;
-    }
-    final Uri uri;
-    if (scheme.startsWith('https://wa.me')) {
-      uri = Uri.parse('https://wa.me/$raw');
-    } else {
-      uri = Uri.parse('$scheme:$raw');
-    }
-    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-      if (mounted) {
-        AppFeedback.error(context, 'Could not open contact action');
-      }
-    }
   }
 
   void _openLead(LandLead lead) {
@@ -205,8 +185,7 @@ class _ContactDirectoryScreenState extends State<ContactDirectoryScreen> {
     return FomraAppShell(
       currentRoute: '/home',
       appBar: FomraAppBar(
-        moduleName: _title,
-        breadcrumbs: FomraBreadcrumbs.module(_title),
+        moduleName: _title,
       ),
       backgroundColor: context.fomraPageBg,
       body: Column(
@@ -276,15 +255,6 @@ class _ContactDirectoryScreenState extends State<ContactDirectoryScreen> {
                             ? AppColors.success
                             : AppColors.secondary,
                         onTap: () => _onEntryTap(entry),
-                        onCall: entry.contact.isEmpty
-                            ? null
-                            : () => _launchContact(entry.contact, 'tel'),
-                        onWhatsApp: entry.contact.isEmpty
-                            ? null
-                            : () => _launchContact(
-                                  entry.contact,
-                                  'https://wa.me',
-                                ),
                       );
                     },
                   ),
@@ -299,15 +269,11 @@ class _ContactDirectoryRow extends StatelessWidget {
   final ContactDirectoryEntry entry;
   final Color accent;
   final VoidCallback onTap;
-  final VoidCallback? onCall;
-  final VoidCallback? onWhatsApp;
 
   const _ContactDirectoryRow({
     required this.entry,
     required this.accent,
     required this.onTap,
-    this.onCall,
-    this.onWhatsApp,
   });
 
   @override
@@ -370,20 +336,8 @@ class _ContactDirectoryRow extends StatelessWidget {
                   ],
                 ),
               ),
-              if (onCall != null)
-                IconButton(
-                  visualDensity: VisualDensity.compact,
-                  tooltip: 'Call',
-                  onPressed: onCall,
-                  icon: Icon(Icons.call_outlined, size: 20, color: accent),
-                ),
-              if (onWhatsApp != null)
-                IconButton(
-                  visualDensity: VisualDensity.compact,
-                  tooltip: 'WhatsApp',
-                  onPressed: onWhatsApp,
-                  icon: Icon(Icons.chat_outlined, size: 20, color: accent),
-                ),
+              ContactCallWhatsAppCompact(contact: entry.contact, accent: accent),
+              const SizedBox(width: 4),
               Icon(
                 Icons.chevron_right_rounded,
                 color: context.fomraTextSecondary,

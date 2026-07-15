@@ -174,38 +174,6 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen> {
     );
   }
 
-  Color _color(NotificationType t) => switch (t) {
-        NotificationType.lead ||
-        NotificationType.assignedLead =>
-          AppColors.info,
-        NotificationType.pendingLead => AppColors.warning,
-        NotificationType.pendingApproval => AppColors.secondary,
-        NotificationType.slaBreach => AppColors.error,
-        NotificationType.overdueTask => AppColors.error,
-        NotificationType.reminder => AppColors.primary,
-        NotificationType.task => AppColors.warning,
-        NotificationType.document => AppColors.success,
-        NotificationType.alert => AppColors.error,
-        NotificationType.verification => AppColors.secondary,
-        NotificationType.siteVisit => AppColors.primary,
-      };
-
-  IconData _icon(NotificationType t) => switch (t) {
-        NotificationType.lead ||
-        NotificationType.assignedLead =>
-          Icons.person_add_alt_1_outlined,
-        NotificationType.pendingLead => Icons.hourglass_top_rounded,
-        NotificationType.pendingApproval => Icons.approval_outlined,
-        NotificationType.slaBreach => Icons.timer_off_outlined,
-        NotificationType.overdueTask => Icons.warning_amber_rounded,
-        NotificationType.reminder => Icons.notifications_active_outlined,
-        NotificationType.task => Icons.task_alt,
-        NotificationType.document => Icons.description,
-        NotificationType.alert => Icons.warning_amber,
-        NotificationType.verification => Icons.verified,
-        NotificationType.siteVisit => Icons.apartment_outlined,
-      };
-
   @override
   Widget build(BuildContext context) {
     final pad = FomraLayout.pagePadding(context);
@@ -296,7 +264,7 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen> {
             )
           else
             ..._filtered.map((n) {
-              final accent = _color(n.type);
+              final accent = n.type.color;
               return Padding(
                 padding: const EdgeInsets.only(bottom: 10),
                 child: AppCard(
@@ -307,7 +275,7 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen> {
                       CircleAvatar(
                         radius: 20,
                         backgroundColor: accent.withValues(alpha: 0.12),
-                        child: Icon(_icon(n.type), color: accent, size: 18),
+                        child: Icon(n.type.icon, color: accent, size: 18),
                       ),
                       const SizedBox(width: 12),
                       Expanded(

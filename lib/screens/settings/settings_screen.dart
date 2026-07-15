@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import '../../models/lead_drop_reason.dart';
 import '../../services/auth_service.dart';
 import '../../services/lead_drop_reason_catalog_service.dart';
+import '../../widgets/drop_reason_catalog_grid.dart';
 import '../../services/role_access.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_layout.dart';
@@ -305,14 +306,41 @@ class _DroppedReasonsPageState extends State<_DroppedReasonsPage> {
     }
   }
 
+  /// Delete used to sit behind a two-step popup menu; on a card it's a single
+  /// tap, so confirm before removing a reason leads may already reference.
+  Future<void> _confirmDelete(LeadDropReason reason) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Delete drop reason?'),
+        content: Text(
+          '"${reason.label}" will no longer be offered when dropping a lead. '
+          'Leads already dropped for this reason keep it on their record.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) await _catalog.deleteReason(reason.id);
+  }
+
   @override
   Widget build(BuildContext context) {
     final reasons = _catalog.current;
     return FomraAppShell(
       currentRoute: '/settings',
-      appBar: FomraAppBar(
+      appBar: const FomraAppBar(
         moduleName: 'Dropped Reasons',
-        breadcrumbs: FomraBreadcrumbs.module('Dropped Reasons'),
       ),
       backgroundColor: context.fomraPageBg,
       body: ListView(
@@ -328,56 +356,12 @@ class _DroppedReasonsPageState extends State<_DroppedReasonsPage> {
               label: const Text('Add reason'),
             ),
           ),
-          const SizedBox(height: 12),
-          AppCard(
-            interactive: false,
-            child: ReorderableListView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: reasons.length,
-              onReorder: (oldIndex, newIndex) =>
-                  _catalog.reorder(oldIndex, newIndex),
-              itemBuilder: (context, index) {
-                final reason = reasons[index];
-                return Container(
-                  key: ValueKey(reason.id),
-                  margin: const EdgeInsets.only(bottom: 10),
-                  decoration: BoxDecoration(
-                    color: context.fomraSurfaceVar.withValues(alpha: 0.45),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: context.fomraBorder),
-                  ),
-                  child: ListTile(
-                    leading: Icon(Icons.drag_indicator_rounded,
-                        color: context.fomraTextSecondary),
-                    title: Text(
-                      reason.label,
-                      style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        color: context.fomraTextPrimary,
-                      ),
-                    ),
-                    subtitle: Text(
-                      reason.id,
-                      style: TextStyle(color: context.fomraTextSecondary),
-                    ),
-                    trailing: PopupMenuButton<String>(
-                      onSelected: (value) async {
-                        if (value == 'edit') {
-                          await _editReason(reason: reason);
-                        } else if (value == 'delete') {
-                          await _catalog.deleteReason(reason.id);
-                        }
-                      },
-                      itemBuilder: (_) => const [
-                        PopupMenuItem(value: 'edit', child: Text('Edit')),
-                        PopupMenuItem(value: 'delete', child: Text('Delete')),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
+          const SizedBox(height: 16),
+          DropReasonCatalogGrid(
+            reasons: reasons,
+            onReorder: _catalog.reorder,
+            onEdit: (reason) => _editReason(reason: reason),
+            onDelete: _confirmDelete,
           ),
         ],
       ),
@@ -470,9 +454,8 @@ class _BulkLeadImportPageState extends State<_BulkLeadImportPage> {
   Widget build(BuildContext context) {
     return FomraAppShell(
       currentRoute: '/settings',
-      appBar: FomraAppBar(
+      appBar: const FomraAppBar(
         moduleName: 'Bulk Lead Import',
-        breadcrumbs: FomraBreadcrumbs.module('Bulk Lead Import'),
       ),
       backgroundColor: context.fomraPageBg,
       body: ListView(
@@ -563,7 +546,7 @@ class _BulkLeadImportPageState extends State<_BulkLeadImportPage> {
         children: [
           Row(
             children: [
-              Icon(Icons.visibility_outlined,
+              const Icon(Icons.visibility_outlined,
                   size: 18, color: AppColors.primary),
               const SizedBox(width: 8),
               Text(
@@ -653,7 +636,7 @@ class _BulkLeadImportPageState extends State<_BulkLeadImportPage> {
         children: [
           Row(
             children: [
-              Icon(Icons.info_outline_rounded,
+              const Icon(Icons.info_outline_rounded,
                   size: 18, color: AppColors.info),
               const SizedBox(width: 8),
               Text(
@@ -722,7 +705,7 @@ class _BulkLeadImportPageState extends State<_BulkLeadImportPage> {
         children: [
           Row(
             children: [
-              Icon(Icons.rule_rounded, size: 18, color: AppColors.warning),
+              const Icon(Icons.rule_rounded, size: 18, color: AppColors.warning),
               const SizedBox(width: 8),
               Text(
                 'Import guidelines',
@@ -741,7 +724,7 @@ class _BulkLeadImportPageState extends State<_BulkLeadImportPage> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.check_circle_outline_rounded,
+                  const Icon(Icons.check_circle_outline_rounded,
                       size: 16, color: AppColors.success),
                   const SizedBox(width: 8),
                   Expanded(

@@ -28,12 +28,18 @@ class LeadPortfolioBreakdown extends StatelessWidget {
   /// (0-30/31-60/61-90/90+ days) instead of the Active/Closed/Dropped status.
   final bool useLeadAgeColumn;
 
+  /// Total Land Owner Meetings conducted on the dropped leads in [leads].
+  /// Shown as an extra card *beside* Dropped Leads (not instead of it), and
+  /// only when there are dropped leads to account for.
+  final int? droppedMeetingsConducted;
+
   const LeadPortfolioBreakdown({
     super.key,
     required this.leads,
     required this.onOpenLead,
     this.meetingsConducted,
     this.useLeadAgeColumn = false,
+    this.droppedMeetingsConducted,
   });
 
   @override
@@ -85,13 +91,21 @@ class LeadPortfolioBreakdown extends StatelessWidget {
                 icon: Icons.groups_outlined,
                 color: AppColors.secondary,
               )
-            else
+            else ...[
               _SummaryCard(
                 label: 'Dropped Leads',
                 value: '$dropped',
                 icon: Icons.cancel_outlined,
                 color: AppColors.error,
               ),
+              if (droppedMeetingsConducted != null && dropped > 0)
+                _SummaryCard(
+                  label: 'Owner Meetings (Dropped)',
+                  value: '$droppedMeetingsConducted',
+                  icon: Icons.groups_outlined,
+                  color: AppColors.secondary,
+                ),
+            ],
           ],
         ),
         const SizedBox(height: 14),

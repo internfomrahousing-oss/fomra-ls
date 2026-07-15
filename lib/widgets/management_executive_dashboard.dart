@@ -431,7 +431,7 @@ class _ManagementExecutiveDashboardState
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           for (var i = 0; i < fixed.length; i++) ...[
-            if (i > 0) SizedBox(height: gap),
+            if (i > 0) const SizedBox(height: gap),
             _buildWidget(fixed[i], snap, intel, isDesktop),
           ],
         ],
@@ -444,16 +444,16 @@ class _ManagementExecutiveDashboardState
         _BiToolbar(
           loading: _loadingActivity,
         ),
-        SizedBox(height: gap),
+        const SizedBox(height: gap),
         // Keep classic KPI strip as a fixed executive snapshot.
         _ExecutiveTopRow(
           leads: widget.leads,
           isDesktop: isDesktop,
           isTablet: MediaQuery.sizeOf(context).width >= 640,
         ),
-        SizedBox(height: gap),
+        const SizedBox(height: gap),
         for (var i = 0; i < _order.length; i++) ...[
-          if (i > 0) SizedBox(height: gap),
+          if (i > 0) const SizedBox(height: gap),
           _buildWidget(_order[i], snap, intel, isDesktop),
         ],
       ],
@@ -562,7 +562,7 @@ class _ExecutiveTopRow extends StatelessWidget {
             isTablet: isTablet,
             inRow: false,
           ),
-          SizedBox(height: gap),
+          const SizedBox(height: gap),
           _DealTermsDonutCard(leads: leads),
         ],
       );
@@ -580,7 +580,7 @@ class _ExecutiveTopRow extends StatelessWidget {
             inRow: true,
           ),
         ),
-        SizedBox(width: gap),
+        const SizedBox(width: gap),
         Expanded(
           flex: isDesktop ? 4 : 5,
           child: _DealTermsDonutCard(leads: leads, inline: true),
@@ -1037,25 +1037,16 @@ class _DealTermsDonutCardState extends State<_DealTermsDonutCard> {
       title: 'Deal Terms Distribution',
       subtitle: widget.inline ? null : 'Parsed from access details',
       icon: Icons.pie_chart_outline_rounded,
-      child: widget.inline
-          ? Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                chart,
-                const SizedBox(width: AppSpacing.sm),
-                Expanded(child: legend),
-              ],
-            )
-          // The donut card is Deal Terms Distribution only — the pending
-          // stages live in their own card (see _PendingStagesCard).
-          : Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                chart,
-                const SizedBox(width: AppSpacing.sm),
-                Expanded(child: legend),
-              ],
-            ),
+      // The donut card is Deal Terms Distribution only — the pending stages
+      // live in their own card (see _PendingStagesCard).
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          chart,
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(child: legend),
+        ],
+      ),
     );
   }
 }

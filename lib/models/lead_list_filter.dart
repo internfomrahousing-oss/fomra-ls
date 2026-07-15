@@ -1,5 +1,5 @@
 import 'land_lead.dart';
-import '../services/auth_service.dart';
+import '../services/lead_visibility.dart';
 
 enum LeadListFilter {
   totalLeads,
@@ -106,12 +106,8 @@ extension LeadListFilterX on LeadListFilter {
       };
 }
 
-List<LandLead> leadsVisibleToCurrentUser(List<LandLead> leads) {
-  if (AuthService.instance.isManagement) return leads;
-  final me = (AuthService.instance.currentUser?.fullName ?? '').trim();
-  if (me.isEmpty) return leads;
-  return leads.where((l) => l.createdByName.trim() == me).toList();
-}
+List<LandLead> leadsVisibleToCurrentUser(List<LandLead> leads) =>
+    LeadVisibility.scope(leads);
 
 List<LandLead> filterLeads(List<LandLead> leads, LeadListFilter filter) =>
     leadsVisibleToCurrentUser(leads).where(filter.matches).toList();

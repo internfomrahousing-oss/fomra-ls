@@ -11,8 +11,7 @@ import '../../theme/fomra_theme_context.dart';
 import '../../widgets/ui/app_feedback.dart';
 import '../../utils/legal_document_catalog.dart';
 import '../../widgets/fomra_app_bar.dart';
-import '../../widgets/fomra_app_shell.dart';
-import '../../widgets/fomra_breadcrumb.dart';
+import '../../widgets/fomra_app_shell.dart';
 import '../../widgets/ui/app_components.dart';
 import '../../widgets/ui/app_loader.dart';
 import '../land_lead/lead_detail_screen.dart';
@@ -153,9 +152,8 @@ class _SurveyTrackerScreenState extends State<SurveyTrackerScreen> {
 
     return FomraAppShell(
       currentRoute: '/survey-tracker',
-      appBar: FomraAppBar(
-        moduleName: 'Survey Tracker',
-        breadcrumbs: FomraBreadcrumbs.module('Survey Tracker'),
+      appBar: const FomraAppBar(
+        moduleName: 'Survey Tracker',
       ),
       body: RefreshIndicator(
         onRefresh: _load,

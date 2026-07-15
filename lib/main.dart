@@ -9,8 +9,10 @@ import 'services/offline_sync_service.dart';
 import 'services/lead_drop_reason_catalog_service.dart';
 import 'services/profile_photo_service.dart';
 import 'services/supabase_config.dart';
+import 'services/fomra_trail.dart';
 import 'services/theme_controller.dart';
 import 'services/role_access.dart';
+import 'services/view_scope.dart';
 import 'theme/app_theme.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/set_password_screen.dart';
@@ -37,6 +39,9 @@ void main() {
     WidgetsFlutterBinding.ensureInitialized();
     FlutterError.onError = FlutterError.presentError;
     await ThemeController.instance.load();
+    // Restore the Reporting Manager / Head Team-vs-Individual selection before
+    // the first frame so their view doesn't flip after load.
+    await ViewScope.instance.load();
     runApp(const FomraLSApp());
   }, (error, stack) {
     debugPrint('ZONE ERROR: $error\n$stack');
@@ -53,6 +58,8 @@ class FomraLSApp extends StatelessWidget {
       builder: (context, themeMode, _) => MaterialApp(
         title: 'FomraLS',
         debugShowCheckedModeBanner: false,
+        // Feeds the contextual breadcrumbs off real navigation.
+        navigatorObservers: [FomraTrailObserver()],
         theme: appTheme(),
         darkTheme: appThemeDark(),
         themeMode: themeMode,

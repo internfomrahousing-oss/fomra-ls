@@ -187,6 +187,26 @@ module.exports = async (req, res) => {
       return res.status(r.status).json({ error: err.msg || err.message || 'create failed' });
     }
 
+    if (action === 'delete') {
+      // Permanently remove the Supabase Auth user so the address can never sign
+      // in again. Deleting only the employee_profiles row leaves the login
+      // intact, which is why this exists.
+      //
+      // Refuse the management account outright — deleting it would lock every
+      // admin action (including this endpoint) out of the project.
+      if (email === MGMT_EMAIL) {
+        return res.status(403).json({ error: 'the management account cannot be deleted' });
+      }
+      const id = await findUserIdByEmail(base, headers, email);
+      // Idempotent: no auth user (never provisioned, or already deleted) is
+      // success — the caller's goal is "this address cannot sign in".
+      if (!id) return res.status(200).json({ ok: true, deleted: false, existed: false });
+      const r = await fetch(`${base}/${id}`, { method: 'DELETE', headers });
+      if (r.ok) return res.status(200).json({ ok: true, deleted: true });
+      const err = await r.json().catch(() => ({}));
+      return res.status(r.status).json({ error: err.msg || err.message || 'delete failed' });
+    }
+
     if (action === 'reset') {
       const id = await findUserIdByEmail(base, headers, email);
       if (!id) return res.status(404).json({ error: 'no auth user for that email' });
@@ -200,7 +220,7 @@ module.exports = async (req, res) => {
       return res.status(r.status).json({ error: err.msg || err.message || 'reset failed' });
     }
 
-    return res.status(400).json({ error: 'unknown action (use "invite", "provision" or "reset")' });
+    return res.status(400).json({ error: 'unknown action (use "invite", "provision", "reset" or "delete")' });
   } catch (e) {
     return res.status(500).json({ error: String(e && e.message ? e.message : e) });
   }

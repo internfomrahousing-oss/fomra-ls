@@ -1007,23 +1007,23 @@ class ReportCatalogService {
         maxPages: 80,
         footer: (ctx) => pw.Text(
           'Page ${ctx.pageNumber} of ${ctx.pagesCount}',
-          style: pw.TextStyle(fontSize: 8, color: _muted),
+          style: const pw.TextStyle(fontSize: 8, color: _muted),
           textAlign: pw.TextAlign.right,
         ),
         build: (ctx) => [
           pw.Text(
             'Fomra Housing & Infrastructure Pvt. Ltd.',
-            style: pw.TextStyle(
+            style: const pw.TextStyle(
               fontSize: 16,
               fontWeight: pw.FontWeight.bold,
               color: _brand,
             ),
           ),
           pw.Text(title,
-              style: pw.TextStyle(fontSize: 12, color: _ink)),
+              style: const pw.TextStyle(fontSize: 12, color: _ink)),
           pw.Text(
             'Generated ${_stamp.format(preview.generatedAt)}',
-            style: pw.TextStyle(fontSize: 9, color: _muted),
+            style: const pw.TextStyle(fontSize: 9, color: _muted),
           ),
           pw.SizedBox(height: 10),
           pw.Wrap(
@@ -1043,7 +1043,7 @@ class ReportCatalogService {
                     ),
                     child: pw.Text(
                       '${s.label}: ${s.value}',
-                      style: pw.TextStyle(
+                      style: const pw.TextStyle(
                         fontSize: 10,
                         fontWeight: pw.FontWeight.bold,
                         color: _ink,
@@ -1057,7 +1057,7 @@ class ReportCatalogService {
           for (final section in preview.sections) ...[
             pw.Text(
               '${section.title} (${section.count})',
-              style: pw.TextStyle(
+              style: const pw.TextStyle(
                 fontSize: 12,
                 fontWeight: pw.FontWeight.bold,
                 color: _ink,
@@ -1067,7 +1067,7 @@ class ReportCatalogService {
             if (section.rows.isEmpty)
               pw.Text(
                 section.emptyMessage,
-                style: pw.TextStyle(fontSize: 10, color: _muted),
+                style: const pw.TextStyle(fontSize: 10, color: _muted),
               )
             else
               _table(section),
@@ -1084,12 +1084,12 @@ class ReportCatalogService {
     return pw.TableHelper.fromTextArray(
       headers: section.headers,
       data: section.rows,
-      headerStyle: pw.TextStyle(
+      headerStyle: const pw.TextStyle(
         fontSize: 8,
         fontWeight: pw.FontWeight.bold,
         color: _ink,
       ),
-      cellStyle: pw.TextStyle(fontSize: 7.5, color: _ink),
+      cellStyle: const pw.TextStyle(fontSize: 7.5, color: _ink),
       headerDecoration: const pw.BoxDecoration(color: _tileBg),
       oddRowDecoration: const pw.BoxDecoration(color: _zebra),
       border: pw.TableBorder.all(color: _border, width: 0.4),

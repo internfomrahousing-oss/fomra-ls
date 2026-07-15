@@ -16,7 +16,10 @@ class FilteredLeadsScreen extends StatefulWidget {
   final List<LandLead>? presetLeads;
   final String? presetTitle;
   final String? presetSubtitle;
-  final List<FomraBreadcrumbItem> breadcrumbs;
+
+  /// Optional fixed trail. Normally left null so the breadcrumbs follow the
+  /// route the user actually took to get here.
+  final List<FomraBreadcrumbItem>? breadcrumbs;
 
   const FilteredLeadsScreen({
     super.key,
@@ -24,7 +27,7 @@ class FilteredLeadsScreen extends StatefulWidget {
     this.presetLeads,
     this.presetTitle,
     this.presetSubtitle,
-    required this.breadcrumbs,
+    this.breadcrumbs,
   });
 
   static void open(
@@ -37,8 +40,7 @@ class FilteredLeadsScreen extends StatefulWidget {
       MaterialPageRoute(
         builder: (_) => FilteredLeadsScreen(
           filter: filter,
-          breadcrumbs:
-              breadcrumbs ?? FomraBreadcrumbs.fromWorkspaceFilter(filter.title),
+          breadcrumbs: breadcrumbs,
         ),
       ),
     );
@@ -60,8 +62,7 @@ class FilteredLeadsScreen extends StatefulWidget {
           presetLeads: List<LandLead>.from(leads),
           presetTitle: title,
           presetSubtitle: subtitle,
-          breadcrumbs:
-              breadcrumbs ?? FomraBreadcrumbs.fromWorkspaceFilter(title),
+          breadcrumbs: breadcrumbs,
         ),
       ),
     );
@@ -134,17 +135,12 @@ class _FilteredLeadsScreenState extends State<FilteredLeadsScreen> {
                       final lead = leads[index];
                       return _FilteredLeadRow(
                         lead: lead,
+                        // No trail passed: the lead detail names itself and the
+                        // path (… > this filter > Lead X) comes from the stack.
                         onTap: () => Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => LeadDetailScreen(
-                              lead: lead,
-                              breadcrumbs:
-                                  FomraBreadcrumbs.fromFilteredLeadDetail(
-                                filterLabel: title,
-                                leadId: lead.leadId,
-                              ),
-                            ),
+                            builder: (_) => LeadDetailScreen(lead: lead),
                           ),
                         ),
                       );

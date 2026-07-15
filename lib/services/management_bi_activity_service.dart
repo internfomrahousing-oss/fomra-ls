@@ -56,6 +56,10 @@ class ManagementBiActivityService {
     }
   }
 
+  /// Meetings only — for callers that need meeting history without paying for
+  /// the call and site-visit queries. Degrades to an empty list on failure.
+  static Future<List<LandLeadMeeting>> loadMeetings() => _safeMeetings();
+
   static Future<List<LandLeadMeeting>> _safeMeetings() async {
     try {
       final rows = await _db

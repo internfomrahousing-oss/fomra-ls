@@ -4,6 +4,7 @@ import '../../models/employee_profile.dart';
 import '../../services/app_store.dart';
 import '../../services/auth_service.dart';
 import '../../services/employee_service.dart';
+import '../../services/team_hierarchy.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_layout.dart';
 import '../../theme/fomra_theme_context.dart';
@@ -143,13 +144,37 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
   }
 
   Future<void> _confirmRemoveAccess(EmployeeProfile employee) async {
+    final reports = TeamHierarchy.directReports(employee.email).length;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Remove access?'),
-        content: Text(
-          '${employee.fullName} (${employee.email}) will no longer be able to sign in.',
+        title: const Text('Delete user?'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '${employee.fullName} (${employee.email}) will be permanently '
+              'deleted — their login, their profile, and their place in every '
+              'dropdown, team, report and dashboard. They will not be able to '
+              'sign in again.',
+            ),
+            if (reports > 0) ...[
+              const SizedBox(height: 12),
+              Text(
+                '$reports team member${reports == 1 ? '' : 's'} reporting to '
+                'them will become unassigned, ready to move to another manager '
+                'in Team Management.',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ],
+            const SizedBox(height: 12),
+            const Text(
+              'Sites they added are kept for the record.',
+              style: TextStyle(fontSize: 12),
+            ),
+          ],
         ),
         actions: [
           TextButton(
@@ -159,7 +184,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: FilledButton.styleFrom(backgroundColor: AppColors.error),
-            child: const Text('Remove access'),
+            child: const Text('Delete user'),
           ),
         ],
       ),
@@ -167,10 +192,10 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
     if (confirmed != true || !mounted) return;
 
     try {
-      await EmployeeService.removeAccess(employee.id);
+      await EmployeeService.deleteEmployee(employee.id);
       AppStore.instance.removeEmployee(employee.id);
       if (!mounted) return;
-      AppFeedback.success(context, 'Access removed for ${employee.fullName}');
+      AppFeedback.success(context, '${employee.fullName} deleted');
     } catch (e) {
       if (!mounted) return;
       AppFeedback.error(context, e.toString().replaceFirst('Exception: ', ''));

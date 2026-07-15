@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../analytics/business_module_metrics.dart';
+import '../../models/employee_profile.dart';
 import '../../models/land_lead.dart';
 import '../../models/land_lead_meeting.dart';
 import '../../services/app_store.dart';
@@ -9,13 +10,62 @@ import '../../services/land_lead_meeting_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_layout.dart';
 import '../../theme/fomra_theme_context.dart';
+import '../../services/auth_service.dart';
 import '../../widgets/contact_call_whatsapp.dart';
 import '../../widgets/fomra_app_bar.dart';
-import '../../widgets/fomra_app_shell.dart';
-import '../../widgets/fomra_breadcrumb.dart';
+import '../../widgets/fomra_app_shell.dart';
+import '../../widgets/land_workspace_ui.dart';
 import '../../widgets/lead_portfolio_breakdown.dart';
 import '../../widgets/ui/app_components.dart';
 import '../land_lead/lead_detail_screen.dart';
+
+/// Derived from a broker's own leads — brokers have no stored status.
+enum BrokerStatus { active, converted, dormant }
+
+extension BrokerStatusX on BrokerStatus {
+  String get label => switch (this) {
+        BrokerStatus.active => 'Active',
+        BrokerStatus.converted => 'Converted',
+        BrokerStatus.dormant => 'Dormant',
+      };
+
+  String get description => switch (this) {
+        BrokerStatus.active => 'Has leads still in the pipeline',
+        BrokerStatus.converted => 'No active leads, but has closed sites',
+        BrokerStatus.dormant => 'No active leads and no conversions',
+      };
+
+  Color get color => switch (this) {
+        BrokerStatus.active => AppColors.info,
+        BrokerStatus.converted => AppColors.success,
+        BrokerStatus.dormant => AppColors.warning,
+      };
+}
+
+BrokerStatus brokerStatusOf(BrokerPerformanceRow row) {
+  if (row.active > 0) return BrokerStatus.active;
+  if (row.conversions > 0) return BrokerStatus.converted;
+  return BrokerStatus.dormant;
+}
+
+enum BrokerSort { leads, conversions, successRate, name }
+
+extension BrokerSortX on BrokerSort {
+  String get label => switch (this) {
+        BrokerSort.leads => 'Most leads',
+        BrokerSort.conversions => 'Most conversions',
+        BrokerSort.successRate => 'Success rate',
+        BrokerSort.name => 'Name (A–Z)',
+      };
+
+  int compare(BrokerPerformanceRow a, BrokerPerformanceRow b) => switch (this) {
+        BrokerSort.leads => b.leads.compareTo(a.leads),
+        BrokerSort.conversions => b.conversions.compareTo(a.conversions),
+        BrokerSort.successRate => b.successRate.compareTo(a.successRate),
+        BrokerSort.name =>
+          a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+      };
+}
 
 /// Broker performance: leads, conversions, success rate.
 class BrokerManagementScreen extends StatefulWidget {
@@ -28,6 +78,13 @@ class BrokerManagementScreen extends StatefulWidget {
 class _BrokerManagementScreenState extends State<BrokerManagementScreen> {
   String _query = '';
   String? _expandedBroker;
+
+  /// District / Village / Assigned Executive / Date Range all come from the
+  /// shared workspace filter panel, applied to the leads the broker rows are
+  /// aggregated from.
+  final LandWorkspaceFilters _filters = LandWorkspaceFilters();
+  BrokerStatus? _status;
+  BrokerSort _sort = BrokerSort.leads;
 
   @override
   void initState() {
@@ -43,14 +100,74 @@ class _BrokerManagementScreenState extends State<BrokerManagementScreen> {
 
   void _rebuild() => setState(() {});
 
+  bool get _isManagement => AuthService.instance.isManagement;
+
+  /// Active roster only, like the Land Workspace filter — a deleted user must
+  /// not come back via the leads they once added.
+  List<String> get _employeeNames {
+    final names = AppStore.instance.employees
+        .where((e) => e.status == EmployeeStatus.active)
+        .map((e) => e.fullName.trim())
+        .where((n) => n.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    return names;
+  }
+
+  /// Broker Status and Sort live on this screen; the rest are the shared
+  /// panel's, so the count in the Filter button reflects everything applied.
+  int get _activeFilterCount => _filters.activeCount + (_status == null ? 0 : 1);
+
+  Future<void> _openFilterPanel() async {
+    final applied = await showLandWorkspaceFilterPanel(
+      context: context,
+      initial: _filters,
+      employeeNames: _isManagement ? _employeeNames : const [],
+    );
+    if (applied == null || !mounted) return;
+    setState(() {
+      _filters.status = applied.status;
+      _filters.landTypes
+        ..clear()
+        ..addAll(applied.landTypes);
+      _filters.sources
+        ..clear()
+        ..addAll(applied.sources);
+      _filters.highPriority = applied.highPriority;
+      _filters.assignedEmployee = applied.assignedEmployee;
+      _filters.createdFrom = applied.createdFrom;
+      _filters.createdTo = applied.createdTo;
+      _filters.district = applied.district;
+      _filters.taluk = applied.taluk;
+      _filters.village = applied.village;
+      _filters.broker = applied.broker;
+      _filters.acresMin = applied.acresMin;
+      _filters.acresMax = applied.acresMax;
+      _filters.pendingStatus = applied.pendingStatus;
+    });
+  }
+
+  void _clearAllFilters() => setState(() {
+        _filters.clear();
+        _status = null;
+      });
+
+  /// Leads feeding the broker rows, narrowed by the shared filter panel.
+  List<LandLead> get _filteredLeads =>
+      AppStore.instance.visibleLeads.where(_filters.matches).toList();
+
   @override
   Widget build(BuildContext context) {
-    final rows = BrokerPerformanceAnalytics.compute(AppStore.instance.visibleLeads)
+    final q = _query.trim().toLowerCase();
+    final rows = BrokerPerformanceAnalytics.compute(_filteredLeads)
         .where((r) =>
-            _query.isEmpty ||
-            r.name.toLowerCase().contains(_query.toLowerCase()) ||
-            r.contact.contains(_query))
-        .toList();
+            q.isEmpty ||
+            r.name.toLowerCase().contains(q) ||
+            r.contact.toLowerCase().contains(q))
+        .where((r) => _status == null || brokerStatusOf(r) == _status)
+        .toList()
+      ..sort(_sort.compare);
     final totalLeads = rows.fold<int>(0, (s, r) => s + r.leads);
     final totalConv = rows.fold<int>(0, (s, r) => s + r.conversions);
     final rate = totalLeads == 0 ? 0.0 : (totalConv / totalLeads) * 100;
@@ -65,9 +182,8 @@ class _BrokerManagementScreenState extends State<BrokerManagementScreen> {
 
     return FomraAppShell(
       currentRoute: '/broker-management',
-      appBar: FomraAppBar(
-        moduleName: 'Broker Management',
-        breadcrumbs: FomraBreadcrumbs.module('Broker Management'),
+      appBar: const FomraAppBar(
+        moduleName: 'Broker Management',
       ),
       body: ListView(
         padding: FomraLayout.pagePadding(context),
@@ -98,31 +214,45 @@ class _BrokerManagementScreenState extends State<BrokerManagementScreen> {
             ],
           ),
           const SizedBox(height: 16),
-          TextField(
+          LandWorkspaceSearchBar(
+            hintText: 'Search broker by name or number…',
             onChanged: (v) => setState(() => _query = v),
-            decoration: InputDecoration(
-              hintText: 'Search broker…',
-              prefixIcon: const Icon(Icons.search),
-              filled: true,
-              fillColor: context.fomraSurfaceVar,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: BorderSide.none,
-              ),
-            ),
+            activeFilterCount: _activeFilterCount,
+            onFilterTap: _openFilterPanel,
           ),
+          const SizedBox(height: 10),
+          _BrokerFilterRow(
+            status: _status,
+            sort: _sort,
+            onStatusChanged: (s) => setState(() => _status = s),
+            onSortChanged: (s) => setState(() => _sort = s),
+          ),
+          if (_filters.hasActive) ...[
+            const SizedBox(height: 10),
+            LandWorkspaceActiveFilterChips(
+              filters: _filters,
+              onChanged: () => setState(() {}),
+              onClearAll: _clearAllFilters,
+            ),
+          ],
           const SizedBox(height: 16),
           if (rows.isEmpty)
-            const AppCard(
+            AppCard(
               child: EmptyState(
-                title: 'No broker leads yet',
-                message: 'Brokers appear when leads include a broker name.',
+                title: _activeFilterCount > 0 || _query.isNotEmpty
+                    ? 'No brokers match these filters'
+                    : 'No broker leads yet',
+                message: _activeFilterCount > 0 || _query.isNotEmpty
+                    ? 'Try clearing a filter or searching for a different broker.'
+                    : 'Brokers appear when leads include a broker name.',
               ),
             )
           else
             ...rows.map((r) {
               final expanded = _expandedBroker == r.name.toLowerCase();
-              final brokerLeads = AppStore.instance.visibleLeads
+              // Same filtered set the row's counts came from, so the expanded
+              // portfolio can't disagree with the numbers above it.
+              final brokerLeads = _filteredLeads
                   .where((l) =>
                       l.brokerName.trim().toLowerCase() == r.name.toLowerCase())
                   .toList();
@@ -147,10 +277,13 @@ class _BrokerManagementScreenState extends State<BrokerManagementScreen> {
                               ),
                             ),
                           ),
+                          _statusBadge(brokerStatusOf(r)),
+                          const SizedBox(width: 8),
                           ContactCallWhatsApp(
                             contact: r.contact,
                             accent: AppColors.secondary,
                           ),
+                          const SizedBox(width: 4),
                           Icon(
                             expanded ? Icons.expand_less : Icons.expand_more,
                             color: context.fomraTextSecondary,
@@ -280,6 +413,26 @@ class _BrokerManagementScreenState extends State<BrokerManagementScreen> {
     );
   }
 
+  Widget _statusBadge(BrokerStatus status) => Tooltip(
+        message: status.description,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          decoration: BoxDecoration(
+            color: status.color.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: status.color.withValues(alpha: 0.3)),
+          ),
+          child: Text(
+            status.label,
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w800,
+              color: status.color,
+            ),
+          ),
+        ),
+      );
+
   Widget _chip(String text) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
@@ -288,6 +441,141 @@ class _BrokerManagementScreenState extends State<BrokerManagementScreen> {
         ),
         child: Text(text, style: const TextStyle(fontSize: 11)),
       );
+}
+
+/// Broker Status + Sort — the two filters that are specific to this page and so
+/// aren't part of the shared lead filter panel.
+class _BrokerFilterRow extends StatelessWidget {
+  final BrokerStatus? status;
+  final BrokerSort sort;
+  final ValueChanged<BrokerStatus?> onStatusChanged;
+  final ValueChanged<BrokerSort> onSortChanged;
+
+  const _BrokerFilterRow({
+    required this.status,
+    required this.sort,
+    required this.onStatusChanged,
+    required this.onSortChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // Wrap so the two selectors stack instead of overflowing on narrow phones.
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        _BrokerFilterDropdown<BrokerStatus?>(
+          icon: Icons.flag_outlined,
+          value: status,
+          items: [
+            (value: null, label: 'All statuses', tooltip: null),
+            for (final s in BrokerStatus.values)
+              (value: s, label: s.label, tooltip: s.description),
+          ],
+          onChanged: onStatusChanged,
+        ),
+        _BrokerFilterDropdown<BrokerSort>(
+          icon: Icons.swap_vert_rounded,
+          value: sort,
+          items: [
+            for (final s in BrokerSort.values)
+              (value: s, label: s.label, tooltip: null),
+          ],
+          onChanged: onSortChanged,
+        ),
+      ],
+    );
+  }
+}
+
+class _BrokerFilterDropdown<T> extends StatelessWidget {
+  final IconData icon;
+  final T value;
+  final List<({T value, String label, String? tooltip})> items;
+  final ValueChanged<T> onChanged;
+
+  const _BrokerFilterDropdown({
+    required this.icon,
+    required this.value,
+    required this.items,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final selected = items.where((i) => i.value == value).firstOrNull;
+    final isDefault = value == null || value == items.first.value;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: BoxDecoration(
+        color: isDefault
+            ? context.fomraSurface
+            : AppColors.primary.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isDefault
+              ? context.fomraBorder
+              : AppColors.primary.withValues(alpha: 0.55),
+          width: isDefault ? 1 : 1.4,
+        ),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<T>(
+          value: value,
+          isDense: true,
+          borderRadius: BorderRadius.circular(12),
+          icon: const Icon(Icons.expand_more_rounded, size: 18),
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: context.fomraTextPrimary,
+          ),
+          selectedItemBuilder: (_) => [
+            for (final i in items)
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    icon,
+                    size: 16,
+                    color: isDefault
+                        ? context.fomraTextSecondary
+                        : AppColors.primary,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    selected?.label ?? i.label,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: isDefault
+                          ? context.fomraTextPrimary
+                          : AppColors.primary,
+                    ),
+                  ),
+                ],
+              ),
+          ],
+          items: [
+            for (final i in items)
+              DropdownMenuItem<T>(
+                value: i.value,
+                child: Tooltip(
+                  message: i.tooltip ?? '',
+                  waitDuration: const Duration(milliseconds: 500),
+                  child: Text(i.label),
+                ),
+              ),
+          ],
+          onChanged: (v) {
+            if (v != null || null is T) onChanged(v as T);
+          },
+        ),
+      ),
+    );
+  }
 }
 
 /// Loads the meetings-conducted count for a broker's leads, then renders the

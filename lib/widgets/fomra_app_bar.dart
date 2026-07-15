@@ -4,11 +4,15 @@ import 'package:flutter/material.dart';
 
 import '../screens/settings/change_password_screen.dart';
 import '../services/auth_service.dart';
+import '../services/notification_hub.dart';
+import '../services/view_scope.dart';
 import '../theme/fomra_layout.dart';
 import '../theme/app_theme.dart';
 import '../theme/fomra_theme_context.dart';
 import 'fomra_breadcrumb.dart';
+import 'fomra_notification_bell.dart';
 import 'fomra_theme_toggle.dart';
+import 'fomra_view_scope_toggle.dart';
 import 'fomra_universal_search.dart';
 import 'portal_home_sections.dart';
 import 'ui/app_components.dart';
@@ -30,18 +34,25 @@ class FomraAppBar extends StatelessWidget implements PreferredSizeWidget {
     this.showUniversalSearch = true,
   });
 
-  List<FomraBreadcrumbItem> _effectiveBreadcrumbs() {
-    if (breadcrumbs != null && breadcrumbs!.isNotEmpty) return breadcrumbs!;
-    if (moduleName != null && moduleName!.trim().isNotEmpty) {
-      return FomraBreadcrumbs.module(moduleName!);
+  /// The breadcrumb bar for this page, or null when there's nothing to show.
+  ///
+  /// An explicit [breadcrumbs] list still wins, for the few screens that need a
+  /// fixed trail. Otherwise the page names itself with [moduleName] and
+  /// [FomraTrailBreadcrumbBar] derives the path from where the user actually
+  /// came from.
+  PreferredSizeWidget? _breadcrumbBar() {
+    if (breadcrumbs != null && breadcrumbs!.isNotEmpty) {
+      return breadcrumbs!.length >= 2
+          ? FomraBreadcrumbBar(items: breadcrumbs!)
+          : null;
     }
-    return const [];
+    final label = moduleName?.trim() ?? '';
+    if (label.isEmpty) return null;
+    return FomraTrailBreadcrumbBar(label: label);
   }
 
   PreferredSizeWidget? _buildBottom() {
-    final trail = _effectiveBreadcrumbs();
-    final breadcrumbBar =
-        trail.length >= 2 ? FomraBreadcrumbBar(items: trail) : null;
+    final breadcrumbBar = _breadcrumbBar();
 
     if (breadcrumbBar == null) return bottom;
     if (bottom == null) return breadcrumbBar;
@@ -85,12 +96,12 @@ class FomraAppBar extends StatelessWidget implements PreferredSizeWidget {
     showDialog<void>(
       context: context,
       barrierColor: Colors.black.withValues(alpha: 0.4),
-      builder: (ctx) => Dialog(
+      builder: (ctx) => const Dialog(
         alignment: Alignment.topCenter,
-        insetPadding: const EdgeInsets.fromLTRB(12, 70, 12, 12),
+        insetPadding: EdgeInsets.fromLTRB(12, 70, 12, 12),
         backgroundColor: Colors.transparent,
         elevation: 0,
-        child: const SizedBox(
+        child: SizedBox(
           height: 52,
           child: FomraUniversalSearchBar(),
         ),
@@ -201,6 +212,8 @@ class FomraAppBar extends StatelessWidget implements PreferredSizeWidget {
             onPressed: () => _openMobileSearch(context),
           ),
         ...?actions,
+        const FomraViewScopeToggle(),
+        const FomraNotificationBell(),
         const FomraThemeToggle(),
         const Padding(
           padding: EdgeInsets.only(left: 2, right: 6),
@@ -270,6 +283,11 @@ class FomraHeaderProfile extends StatelessWidget {
     } else if (action == 'sign_out') {
       final confirmed = await confirmSignOut(context);
       if (!confirmed || !context.mounted) return;
+      // Drop the shared notification state so the next user to sign in never
+      // sees the previous one's badge or panel contents, and send the team
+      // scope back to its default.
+      NotificationHub.instance.stop();
+      ViewScope.instance.reset();
       AuthService.instance.logout();
       Navigator.pushNamedAndRemoveUntil(context, '/login', (_) => false);
     }

@@ -233,16 +233,81 @@ class EmployeeService {
     }
   }
 
-  static Future<void> removeAccess(String id) async {
+  /// Permanently deletes an employee: their Supabase Auth login, their profile
+  /// row, and their place in the team tree. Management only.
+  ///
+  /// The auth user goes FIRST and a failure aborts the whole thing — deleting
+  /// the profile while the login survives would leave someone who can still
+  /// sign in but has no roster entry, which is worse than not deleting at all.
+  ///
+  /// Everything that lists people (dropdowns, assignments, teams, reports,
+  /// dashboards, user lists) reads the roster, so removing the profile row plus
+  /// the [AppStore] entry retires them everywhere at once.
+  static Future<void> deleteEmployee(String id) async {
     final normalized = id.trim().toLowerCase();
+
+    await _deleteAuthUser(normalized);
+    // Their reports would otherwise keep pointing at a manager who no longer
+    // exists, which silently drops them out of their Head's team. Unassigning
+    // surfaces them in Team Management's "unassigned" list for reassignment.
+    await _unassignDirectReportsOf(normalized);
+
     try {
       await _db.from('employee_profiles').delete().eq('id', normalized);
     } catch (_) {
-      throw Exception('Could not remove employee access. Try again.');
+      throw Exception(
+        'Login removed, but the profile could not be deleted. Try again.',
+      );
     }
     final cached = await _loadCache();
     cached.removeWhere((e) => e.id.toLowerCase() == normalized);
     await _saveCache(cached);
+  }
+
+  /// Deletes the Supabase Auth user so [email] can never sign in again.
+  /// Succeeds when there was no auth user to begin with.
+  static Future<void> _deleteAuthUser(String email) async {
+    final token = _db.auth.currentSession?.accessToken;
+    if (token == null) {
+      throw Exception(
+        'Sign in as management (with your real password) to delete users.',
+      );
+    }
+    final res = await http.post(
+      Uri.parse('${ApiClient.baseUrl}/api/employee-auth'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+      body: jsonEncode({'action': 'delete', 'email': email}),
+    );
+    if (res.statusCode >= 400) {
+      String msg = 'Could not delete the login (${res.statusCode}).';
+      try {
+        final j = jsonDecode(res.body);
+        if (j is Map && j['error'] != null) msg = j['error'].toString();
+      } catch (_) {}
+      throw Exception(msg);
+    }
+  }
+
+  static Future<void> _unassignDirectReportsOf(String managerEmail) async {
+    try {
+      await _db
+          .from('employee_profiles')
+          .update({'reports_to': ''}).eq('reports_to', managerEmail);
+    } catch (_) {
+      // Column may not exist yet / offline — fall through to the cache below.
+    }
+    final cached = await _loadCache();
+    var touched = false;
+    for (var i = 0; i < cached.length; i++) {
+      if (cached[i].reportsTo.trim().toLowerCase() == managerEmail) {
+        cached[i] = cached[i].copyWith(reportsTo: '');
+        touched = true;
+      }
+    }
+    if (touched) await _saveCache(cached);
   }
 
   /// Assigns [employeeEmail] to report to [managerEmail] (empty to unassign).
