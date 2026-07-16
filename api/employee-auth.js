@@ -172,9 +172,18 @@ module.exports = async (req, res) => {
       );
       if (r.ok) return res.status(200).json({ ok: true, invited: true });
       const err = await r.json().catch(() => ({}));
-      const msg = `${err.msg || err.error_description || err.message || ''}`.toLowerCase();
+      const rawMsg = `${err.msg || err.error_description || err.message || ''}`.trim();
+      const msg = rawMsg.toLowerCase();
       const mapped = explainEmailError(r.status, msg);
-      if (mapped) return res.status(r.status).json({ error: mapped });
+      // Keep the friendly guidance, but append what Supabase/SMTP actually said
+      // so a stuck SMTP setup is diagnosable instead of a generic wall.
+      if (mapped) {
+        return res.status(r.status).json({
+          error: rawMsg
+              ? `${mapped}\n\nRaw error (HTTP ${r.status}): ${rawMsg}`
+              : mapped,
+        });
+      }
       if (r.status === 422 || msg.includes('already') || msg.includes('registered') || msg.includes('exists')) {
         // The user already exists → an invite won't re-send. Send a password
         // recovery email instead; its link also lands on /set-password (the app
