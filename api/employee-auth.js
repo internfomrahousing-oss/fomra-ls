@@ -88,27 +88,40 @@ module.exports = async (req, res) => {
 
   const SUPABASE_URL = process.env.SUPABASE_URL;
   const SERVICE_ROLE = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const MGMT_EMAIL = (process.env.MANAGEMENT_EMAIL || 'management@fomrahousing.in').toLowerCase();
+  // Accept the configured management email AND the app's built-in one, so a
+  // drifted MANAGEMENT_EMAIL env var can never lock every admin out.
+  const MGMT_EMAILS = new Set(
+    [process.env.MANAGEMENT_EMAIL, 'management@fomrahousing.in']
+      .filter(Boolean)
+      .map((s) => s.trim().toLowerCase())
+  );
   if (!SUPABASE_URL || !SERVICE_ROLE) {
     return res.status(500).json({ error: 'server not configured (missing SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY)' });
   }
 
   // 1) Authenticate the caller: their access token must be a valid session
-  //    belonging to the management account.
+  //    belonging to a management account.
   const authz = req.headers['authorization'] || '';
   const token = authz.startsWith('Bearer ') ? authz.slice(7) : '';
   if (!token) return res.status(401).json({ error: 'missing bearer token' });
+  let callerEmail = '';
   try {
     const who = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
       headers: { apikey: SERVICE_ROLE, Authorization: `Bearer ${token}` },
     });
     if (!who.ok) return res.status(401).json({ error: 'invalid session' });
     const user = await who.json();
-    if ((user.email || '').toLowerCase() !== MGMT_EMAIL) {
-      return res.status(403).json({ error: 'management only' });
-    }
+    callerEmail = (user.email || '').toLowerCase();
   } catch (e) {
     return res.status(401).json({ error: 'could not verify session' });
+  }
+  if (!MGMT_EMAILS.has(callerEmail)) {
+    return res.status(403).json({
+      error:
+        `Not authorised — signed in as ${callerEmail || 'an unknown account'}, ` +
+        'which is not the management account this server accepts. Sign in as the ' +
+        'management account. No changes were made.',
+    });
   }
 
   const body = await readBody(req);
@@ -210,7 +223,7 @@ module.exports = async (req, res) => {
       //
       // Refuse the management account outright — deleting it would lock every
       // admin action (including this endpoint) out of the project.
-      if (email === MGMT_EMAIL) {
+      if (MGMT_EMAILS.has(email)) {
         return res.status(403).json({ error: 'the management account cannot be deleted' });
       }
       const id = await findUserIdByEmail(base, headers, email);
