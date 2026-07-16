@@ -21,6 +21,7 @@ extension NotificationTypeX on NotificationType {
         NotificationType.task => AppColors.warning,
         NotificationType.document => AppColors.success,
         NotificationType.verification => AppColors.secondary,
+        NotificationType.signed => AppColors.success,
       };
 
   IconData get icon => switch (this) {
@@ -37,6 +38,7 @@ extension NotificationTypeX on NotificationType {
         NotificationType.alert => Icons.warning_amber,
         NotificationType.verification => Icons.verified,
         NotificationType.siteVisit => Icons.apartment_outlined,
+        NotificationType.signed => Icons.check_circle,
       };
 
   String get label => switch (this) {
@@ -52,6 +54,7 @@ extension NotificationTypeX on NotificationType {
         NotificationType.alert => 'Alert',
         NotificationType.verification => 'Verification',
         NotificationType.siteVisit => 'Site Visit',
+        NotificationType.signed => 'Signed',
       };
 
   String get dbValue => switch (this) {
@@ -67,5 +70,6 @@ extension NotificationTypeX on NotificationType {
         NotificationType.alert => 'alert',
         NotificationType.verification => 'verification',
         NotificationType.siteVisit => 'site_visit',
+        NotificationType.signed => 'signed',
       };
 }

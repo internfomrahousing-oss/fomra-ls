@@ -129,7 +129,11 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
     );
     if (confirm != true || !mounted) return;
     try {
-      final kind = await EmployeeService.inviteEmployee(employee.email);
+      final kind = await EmployeeService.inviteEmployee(
+        employee.email,
+        designation: employee.designation,
+        fullName: employee.fullName,
+      );
       if (!mounted) return;
       AppFeedback.success(
         context,
@@ -139,7 +143,13 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      AppFeedback.error(context, e.toString().replaceFirst('Exception: ', ''));
+      // Keep the reason on screen — it names what to fix.
+      AppFeedback.errorDetails(
+        context,
+        title: 'Invite email failed',
+        message: 'Supabase did not send the invite to ${employee.email}:\n\n'
+            '${e.toString().replaceFirst('Exception: ', '')}',
+      );
     }
   }
 

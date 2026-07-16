@@ -45,6 +45,7 @@ class AppNotification {
         'task' => NotificationType.task,
         'document' => NotificationType.document,
         'verification' => NotificationType.verification,
+        'signed' => NotificationType.signed,
         _ => NotificationType.alert,
       };
 }
@@ -62,4 +63,6 @@ enum NotificationType {
   alert,
   verification,
   siteVisit,
+  // A project reached Signed — a success, styled green, not an alert.
+  signed,
 }

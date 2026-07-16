@@ -186,6 +186,11 @@ class LandWorkspaceFilters {
   String? taluk;
   String? village;
   String? broker;
+
+  /// Multi-select brokers (OR). Used by the Broker page's filter; the Land
+  /// Workspace filter leaves this empty and uses [broker] instead, so its
+  /// behaviour is unchanged.
+  final Set<String> brokers;
   double? acresMin;
   double? acresMax;
   /// meeting | negotiation | survey | legal | overdue
@@ -203,11 +208,13 @@ class LandWorkspaceFilters {
     this.taluk,
     this.village,
     this.broker,
+    Set<String>? brokers,
     this.acresMin,
     this.acresMax,
     this.pendingStatus,
   })  : landTypes = landTypes ?? {},
-        sources = sources ?? {};
+        sources = sources ?? {},
+        brokers = brokers ?? {};
 
   static const propertyTypeOptions = [
     LandType.agricultural,
@@ -244,6 +251,7 @@ class LandWorkspaceFilters {
         taluk: taluk,
         village: village,
         broker: broker,
+        brokers: {...brokers},
         acresMin: acresMin,
         acresMax: acresMax,
         pendingStatus: pendingStatus,
@@ -261,6 +269,7 @@ class LandWorkspaceFilters {
     taluk = null;
     village = null;
     broker = null;
+    brokers.clear();
     acresMin = null;
     acresMax = null;
     pendingStatus = null;
@@ -278,6 +287,7 @@ class LandWorkspaceFilters {
     if (taluk != null && taluk!.trim().isNotEmpty) n++;
     if (village != null && village!.trim().isNotEmpty) n++;
     if (broker != null && broker!.trim().isNotEmpty) n++;
+    n += brokers.length;
     if (acresMin != null || acresMax != null) n++;
     if (pendingStatus != null && pendingStatus!.isNotEmpty) n++;
     return n;
@@ -313,6 +323,14 @@ class LandWorkspaceFilters {
     if (!matchesText(taluk, lead.taluk)) return false;
     if (!matchesText(village, lead.village)) return false;
     if (!matchesText(broker, lead.brokerName)) return false;
+    // Multi-select brokers: keep the lead if its broker is ANY of the selected
+    // (OR). Empty set means "no broker filter".
+    if (brokers.isNotEmpty) {
+      final name = lead.brokerName.trim().toLowerCase();
+      final anyMatch =
+          brokers.any((b) => b.trim().toLowerCase() == name);
+      if (!anyMatch) return false;
+    }
     final acres = leadAcres(lead);
     if (acresMin != null && acres < acresMin!) return false;
     if (acresMax != null && acres > acresMax!) return false;
@@ -421,6 +439,15 @@ class LandWorkspaceFilters {
     geoChip('Taluk', taluk, () => taluk = null);
     geoChip('Village', village, () => village = null);
     geoChip('Broker', broker, () => broker = null);
+    for (final b in [...brokers]) {
+      chips.add((
+        label: 'Broker: $b',
+        onRemove: () {
+          brokers.remove(b);
+          notify();
+        },
+      ));
+    }
     if (acresMin != null || acresMax != null) {
       final lo = acresMin?.toStringAsFixed(1) ?? '…';
       final hi = acresMax?.toStringAsFixed(1) ?? '…';
@@ -682,6 +709,9 @@ Future<LandWorkspaceFilters?> showLandWorkspaceFilterPanel({
   required BuildContext context,
   required LandWorkspaceFilters initial,
   List<String> employeeNames = const [],
+  bool showLeadSource = true,
+  bool showPendingStatus = true,
+  bool brokerMultiSelect = false,
 }) {
   return showGeneralDialog<LandWorkspaceFilters>(
     context: context,
@@ -695,6 +725,9 @@ Future<LandWorkspaceFilters?> showLandWorkspaceFilterPanel({
         child: _LandWorkspaceFilterPanel(
           initial: initial,
           employeeNames: employeeNames,
+          showLeadSource: showLeadSource,
+          showPendingStatus: showPendingStatus,
+          brokerMultiSelect: brokerMultiSelect,
         ),
       );
     },
@@ -717,10 +750,16 @@ Future<LandWorkspaceFilters?> showLandWorkspaceFilterPanel({
 class _LandWorkspaceFilterPanel extends StatefulWidget {
   final LandWorkspaceFilters initial;
   final List<String> employeeNames;
+  final bool showLeadSource;
+  final bool showPendingStatus;
+  final bool brokerMultiSelect;
 
   const _LandWorkspaceFilterPanel({
     required this.initial,
     required this.employeeNames,
+    this.showLeadSource = true,
+    this.showPendingStatus = true,
+    this.brokerMultiSelect = false,
   });
 
   @override
@@ -731,10 +770,93 @@ class _LandWorkspaceFilterPanel extends StatefulWidget {
 class _LandWorkspaceFilterPanelState extends State<_LandWorkspaceFilterPanel> {
   late LandWorkspaceFilters _draft;
 
+  /// Search text for the multi-select broker list.
+  String _brokerSearch = '';
+
   @override
   void initState() {
     super.initState();
     _draft = widget.initial.copy();
+  }
+
+  /// Multi-select broker picker: search box, removable chips for the chosen
+  /// brokers, then a checkable list of the rest. OR semantics live in
+  /// [LandWorkspaceFilters.matches].
+  Widget _brokerMultiSelect(BuildContext context) {
+    final all = _distinctField((l) => l.brokerName);
+    final q = _brokerSearch.trim().toLowerCase();
+    final options =
+        q.isEmpty ? all : all.where((b) => b.toLowerCase().contains(q)).toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (_draft.brokers.isNotEmpty) ...[
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (final b in _draft.brokers)
+                Chip(
+                  label: Text(b, style: const TextStyle(fontSize: 12)),
+                  onDeleted: () => setState(() => _draft.brokers.remove(b)),
+                  deleteIcon: const Icon(Icons.close_rounded, size: 15),
+                  visualDensity: VisualDensity.compact,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  backgroundColor: AppColors.primary.withValues(alpha: 0.10),
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+        ],
+        TextField(
+          decoration: InputDecoration(
+            hintText: 'Search brokers…',
+            prefixIcon: const Icon(Icons.search_rounded, size: 20),
+            isDense: true,
+            filled: true,
+            fillColor: context.fomraSurfaceVar,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+          ),
+          onChanged: (v) => setState(() => _brokerSearch = v),
+        ),
+        const SizedBox(height: 4),
+        if (options.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            child: Text(
+              all.isEmpty ? 'No brokers on any lead yet.' : 'No brokers match your search.',
+              style: TextStyle(fontSize: 12, color: context.fomraTextSecondary),
+            ),
+          )
+        else
+          ConstrainedBox(
+            // Cap the list so a long roster doesn't push Apply off-screen; it
+            // scrolls within the panel's own ListView.
+            constraints: const BoxConstraints(maxHeight: 220),
+            child: ListView(
+              shrinkWrap: true,
+              children: [
+                for (final b in options)
+                  _checkTile(
+                    label: b,
+                    checked: _draft.brokers.contains(b),
+                    onChanged: (v) => setState(() {
+                      if (v) {
+                        _draft.brokers.add(b);
+                      } else {
+                        _draft.brokers.remove(b);
+                      }
+                    }),
+                  ),
+              ],
+            ),
+          ),
+      ],
+    );
   }
 
   Future<void> _pickDate({required bool isFrom}) async {
@@ -887,6 +1009,14 @@ class _LandWorkspaceFilterPanelState extends State<_LandWorkspaceFilterPanel> {
                         );
                       }),
                       const SizedBox(height: 8),
+                      // Broker Name sits directly below Lead Status on the
+                      // Broker page (multi-select with search + chips).
+                      if (widget.brokerMultiSelect) ...[
+                        const Divider(height: 28),
+                        _sectionTitle('Broker Name'),
+                        const SizedBox(height: 8),
+                        _brokerMultiSelect(context),
+                      ],
                       const Divider(height: 28),
                       _sectionTitle('Property Type'),
                       const SizedBox(height: 4),
@@ -904,23 +1034,25 @@ class _LandWorkspaceFilterPanelState extends State<_LandWorkspaceFilterPanel> {
                           }),
                         );
                       }),
-                      const Divider(height: 28),
-                      _sectionTitle('Lead Source'),
-                      const SizedBox(height: 4),
-                      ...LandWorkspaceFilters.sourceOptions.map((s) {
-                        final checked = _draft.sources.contains(s);
-                        return _checkTile(
-                          label: s.label,
-                          checked: checked,
-                          onChanged: (v) => setState(() {
-                            if (v) {
-                              _draft.sources.add(s);
-                            } else {
-                              _draft.sources.remove(s);
-                            }
-                          }),
-                        );
-                      }),
+                      if (widget.showLeadSource) ...[
+                        const Divider(height: 28),
+                        _sectionTitle('Lead Source'),
+                        const SizedBox(height: 4),
+                        ...LandWorkspaceFilters.sourceOptions.map((s) {
+                          final checked = _draft.sources.contains(s);
+                          return _checkTile(
+                            label: s.label,
+                            checked: checked,
+                            onChanged: (v) => setState(() {
+                              if (v) {
+                                _draft.sources.add(s);
+                              } else {
+                                _draft.sources.remove(s);
+                              }
+                            }),
+                          );
+                        }),
+                      ],
                       const Divider(height: 28),
                       _sectionTitle('Priority'),
                       const SizedBox(height: 4),
@@ -966,16 +1098,20 @@ class _LandWorkspaceFilterPanelState extends State<_LandWorkspaceFilterPanel> {
                         options: _distinctField((l) => l.village),
                         onChanged: (v) => setState(() => _draft.village = v),
                       ),
-                      const Divider(height: 28),
-                      _sectionTitle('Broker'),
-                      const SizedBox(height: 8),
-                      _dropdownFilter(
-                        context: context,
-                        label: 'Broker',
-                        value: _draft.broker,
-                        options: _distinctField((l) => l.brokerName),
-                        onChanged: (v) => setState(() => _draft.broker = v),
-                      ),
+                      // Single-select broker for the workspace; the Broker page
+                      // shows the multi-select version below Lead Status above.
+                      if (!widget.brokerMultiSelect) ...[
+                        const Divider(height: 28),
+                        _sectionTitle('Broker'),
+                        const SizedBox(height: 8),
+                        _dropdownFilter(
+                          context: context,
+                          label: 'Broker',
+                          value: _draft.broker,
+                          options: _distinctField((l) => l.brokerName),
+                          onChanged: (v) => setState(() => _draft.broker = v),
+                        ),
+                      ],
                       if (widget.employeeNames.isNotEmpty) ...[
                         const Divider(height: 28),
                         _sectionTitle('Executive'),
@@ -1060,23 +1196,25 @@ class _LandWorkspaceFilterPanelState extends State<_LandWorkspaceFilterPanel> {
                           ),
                         ],
                       ),
-                      const Divider(height: 28),
-                      _sectionTitle('Pending Status'),
-                      const SizedBox(height: 8),
-                      _radioTile(
-                        label: 'Any',
-                        selected: _draft.pendingStatus == null,
-                        onTap: () =>
-                            setState(() => _draft.pendingStatus = null),
-                      ),
-                      ...LandWorkspaceFilters.pendingStatusOptions.map((o) {
-                        return _radioTile(
-                          label: o.label,
-                          selected: _draft.pendingStatus == o.value,
+                      if (widget.showPendingStatus) ...[
+                        const Divider(height: 28),
+                        _sectionTitle('Pending Status'),
+                        const SizedBox(height: 8),
+                        _radioTile(
+                          label: 'Any',
+                          selected: _draft.pendingStatus == null,
                           onTap: () =>
-                              setState(() => _draft.pendingStatus = o.value),
-                        );
-                      }),
+                              setState(() => _draft.pendingStatus = null),
+                        ),
+                        ...LandWorkspaceFilters.pendingStatusOptions.map((o) {
+                          return _radioTile(
+                            label: o.label,
+                            selected: _draft.pendingStatus == o.value,
+                            onTap: () =>
+                                setState(() => _draft.pendingStatus = o.value),
+                          );
+                        }),
+                      ],
                       const Divider(height: 28),
                       _sectionTitle('Created Date Range'),
                       const SizedBox(height: 10),

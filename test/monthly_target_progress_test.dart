@@ -148,6 +148,8 @@ void main() {
         'id': 'abc',
         'period': '2026-07',
         'target_count': 25,
+        'employee_email': '',
+        'employee_name': '',
         'updated_by_name': 'Manager',
         'updated_at': '2026-07-01T00:00:00.000Z',
       });
@@ -167,6 +169,118 @@ void main() {
       });
       expect(t.isActiveAt(DateTime(2026, 7, 20)), isTrue);
       expect(t.isActiveAt(DateTime(2026, 8, 1)), isFalse);
+    });
+
+    test('an empty employee_email is the common target for everyone', () {
+      final t = MonthlyTarget.fromJson({
+        'id': 'a',
+        'period': '2026-07',
+        'target_count': 30,
+        'employee_email': '',
+        'updated_at': '2026-07-01T00:00:00.000Z',
+      });
+      expect(t.isCommon, isTrue);
+      expect(t.appliesToLabel, 'All employees');
+    });
+
+    test('a named employee_email is a personal target', () {
+      final t = MonthlyTarget.fromJson({
+        'id': 'b',
+        'period': '2026-07',
+        'target_count': 12,
+        'employee_email': 'Sara@Fomrahousing.in',
+        'employee_name': 'Sara',
+        'updated_at': '2026-07-01T00:00:00.000Z',
+      });
+      expect(t.isCommon, isFalse);
+      // Stored lowercase so it matches the signed-in email.
+      expect(t.employeeEmail, 'sara@fomrahousing.in');
+      expect(t.appliesToLabel, 'Sara');
+    });
+
+    test('a personal target with no name falls back to the email label', () {
+      final t = MonthlyTarget.fromJson({
+        'id': 'c',
+        'period': '2026-07',
+        'target_count': 8,
+        'employee_email': 'x@y.in',
+        'updated_at': '2026-07-01T00:00:00.000Z',
+      });
+      expect(t.appliesToLabel, 'x@y.in');
+    });
+
+    test('an old row with no employee column reads as the common target', () {
+      // Pre per-employee rows have neither employee_email nor employee_name.
+      final t = MonthlyTarget.fromJson({
+        'id': 'd',
+        'period': '2026-06',
+        'target_count': 20,
+        'updated_at': '2026-06-01T00:00:00.000Z',
+      });
+      expect(t.isCommon, isTrue);
+    });
+  });
+
+  group('pickFor — the target an employee is measured against', () {
+    MonthlyTarget common(int target) => MonthlyTarget(
+          id: 'c',
+          year: 2026,
+          month: 7,
+          target: target,
+          updatedAt: DateTime(2026, 7, 1),
+        );
+    MonthlyTarget personal(String email, int target) => MonthlyTarget(
+          id: 'p-$email',
+          year: 2026,
+          month: 7,
+          target: target,
+          employeeEmail: email,
+          updatedAt: DateTime(2026, 7, 1),
+        );
+
+    test('a personal target overrides the common one', () {
+      final pick = MonthlyTarget.pickFor(
+        [common(30), personal('sara@fomrahousing.in', 12)],
+        'sara@fomrahousing.in',
+      );
+      expect(pick?.target, 12);
+    });
+
+    test('order does not matter', () {
+      final pick = MonthlyTarget.pickFor(
+        [personal('sara@fomrahousing.in', 12), common(30)],
+        'sara@fomrahousing.in',
+      );
+      expect(pick?.target, 12);
+    });
+
+    test('an employee with no personal target falls back to common', () {
+      final pick = MonthlyTarget.pickFor(
+        [common(30), personal('other@fomrahousing.in', 12)],
+        'sara@fomrahousing.in',
+      );
+      expect(pick?.target, 30);
+    });
+
+    test('matching is case-insensitive', () {
+      final pick = MonthlyTarget.pickFor(
+        [personal('sara@fomrahousing.in', 12)],
+        'SARA@Fomrahousing.IN',
+      );
+      expect(pick?.target, 12);
+    });
+
+    test('no common and no personal means nothing to measure against', () {
+      final pick = MonthlyTarget.pickFor(
+        [personal('other@fomrahousing.in', 12)],
+        'sara@fomrahousing.in',
+      );
+      expect(pick, isNull);
+    });
+
+    test('only a common target set applies to everyone', () {
+      final pick = MonthlyTarget.pickFor([common(30)], 'anyone@fomrahousing.in');
+      expect(pick?.target, 30);
     });
   });
 }

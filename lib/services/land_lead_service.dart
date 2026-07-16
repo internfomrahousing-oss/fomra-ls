@@ -226,6 +226,14 @@ class LandLeadService {
     LeadStatus status, {
     LeadStatus? previousStatus,
   }) async {
+    // A Signed/Dropped lead is terminal — reject any stage change server-side
+    // too, so the lock holds even if a UI guard is bypassed.
+    if (previousStatus != null && previousStatus.isTerminal) {
+      throw StateError(
+        'This lead is already ${previousStatus.label} and can no longer be modified.',
+      );
+    }
+
     final base = <String, dynamic>{
       'status': status.name,
       'updated_at': DateTime.now().toUtc().toIso8601String(),

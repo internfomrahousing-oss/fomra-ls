@@ -509,11 +509,16 @@ class _DashboardCard extends StatelessWidget {
   final IconData? icon;
   final Color? borderColor;
 
+  /// When set, the whole card becomes clickable — AppCard supplies the hover
+  /// lift and pointer cursor for free.
+  final VoidCallback? onTap;
+
   const _DashboardCard({
     required this.child,
     this.title,
     this.subtitle,
     this.icon,
+    this.onTap,
   }) : borderColor = null;
 
   @override
@@ -521,7 +526,8 @@ class _DashboardCard extends StatelessWidget {
     return AppCard(
       padding: const EdgeInsets.all(AppSpacing.lg),
       radius: _kCardRadius,
-      interactive: false,
+      onTap: onTap,
+      interactive: onTap != null,
       borderColor: borderColor,
       borderWidth: borderColor != null ? 1.5 : 1,
       child: Column(
@@ -1847,6 +1853,7 @@ class _RecentActivitiesCard extends StatelessWidget {
         (Icons.verified_outlined, AppColors.secondary),
       NotificationType.siteVisit =>
         (Icons.apartment_outlined, AppColors.primary),
+      NotificationType.signed => (Icons.check_circle, AppColors.success),
       NotificationType.alert => (Icons.warning_amber, AppColors.error),
     };
   }
@@ -2022,7 +2029,22 @@ class _LeaderboardRow extends StatelessWidget {
       }
     }
 
+    // The same attribution the leaderboard scores by, so the opened list holds
+    // exactly this employee's leads. Reuses the existing filtered-list screen.
+    final theirLeads = leads
+        .where((l) =>
+            l.createdByName.trim().toLowerCase() == row.name.trim().toLowerCase())
+        .toList();
+
     return _DashboardCard(
+      onTap: theirLeads.isEmpty
+          ? null
+          : () => _openLeadsList(
+                context,
+                row.name,
+                '${theirLeads.length} lead${theirLeads.length == 1 ? '' : 's'} assigned',
+                theirLeads,
+              ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

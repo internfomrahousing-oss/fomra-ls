@@ -92,6 +92,11 @@ void main() {
 
     // Remaining = 30 - 20.
     expect(find.text('10'), findsWidgets);
+
+    // Expected today is shown as a whole number, never a decimal. On day 15 of
+    // 31 with target 30 the precise value is 14.52, displayed rounded as 15.
+    expect(find.textContaining('.'), findsNothing);
+    expect(find.text('15'), findsWidgets);
   });
 
   testWidgets('with no target set it says so instead of dividing by zero',

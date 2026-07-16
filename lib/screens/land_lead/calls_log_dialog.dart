@@ -31,6 +31,9 @@ class _CallsLogDialogState extends State<CallsLogDialog> {
   late DateTime _calledAt = DateTime.now();
   CallDirection _direction = CallDirection.outgoing;
   CallOutcome _outcome = CallOutcome.answered;
+  bool _followUpRequired = false;
+  // Defaulted to tomorrow so an enabled follow-up starts on a sensible date.
+  late DateTime _followUpAt = DateTime.now().add(const Duration(days: 1));
   final _durationCtrl = TextEditingController();
   final _detailsCtrl = TextEditingController();
   bool _saving = false;
@@ -75,6 +78,18 @@ class _CallsLogDialogState extends State<CallsLogDialog> {
     setState(() => _calledAt = updated);
   }
 
+  Future<void> _editFollowUpDate() async {
+    final updated = await pickLogDate(context, _followUpAt);
+    if (updated == null || !mounted) return;
+    setState(() => _followUpAt = updated);
+  }
+
+  Future<void> _editFollowUpTime() async {
+    final updated = await pickLogTime(context, _followUpAt);
+    if (updated == null || !mounted) return;
+    setState(() => _followUpAt = updated);
+  }
+
   Future<void> _save() async {
     final duration = _durationCtrl.text.trim();
     final details = _detailsCtrl.text.trim();
@@ -100,6 +115,7 @@ class _CallsLogDialogState extends State<CallsLogDialog> {
         details: details,
         direction: _direction,
         outcome: _outcome,
+        followUpAt: _followUpRequired ? _followUpAt : null,
       );
       if (!mounted) return;
       AppFeedback.success(context, 'Call logged');
@@ -374,6 +390,44 @@ class _CallsLogDialogState extends State<CallsLogDialog> {
             ),
           ),
         ),
+        const SizedBox(height: 4),
+        // Follow-up: a toggle, and only when on do the date/time appear.
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          dense: true,
+          activeThumbColor: AppColors.purple,
+          title: Text(
+            'Follow-up Required',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: context.fomraTextPrimary,
+            ),
+          ),
+          subtitle: Text(
+            'Schedule a reminder to call back',
+            style: TextStyle(fontSize: 11, color: context.fomraTextSecondary),
+          ),
+          value: _followUpRequired,
+          onChanged: (v) => setState(() => _followUpRequired = v),
+        ),
+        if (_followUpRequired) ...[
+          const SizedBox(height: 8),
+          Text(
+            'Follow-up date & time',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: context.fomraTextSecondary,
+            ),
+          ),
+          const SizedBox(height: 8),
+          SeparateDateTimeFields(
+            value: _followUpAt,
+            onEditDate: _editFollowUpDate,
+            onEditTime: _editFollowUpTime,
+          ),
+        ],
       ],
     );
   }
@@ -543,6 +597,24 @@ class _PreviousCallTile extends StatelessWidget {
                 height: 1.35,
                 color: context.fomraTextSecondary,
               ),
+            ),
+          ],
+          if (log.followUpAt != null) ...[
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                const Icon(Icons.event_repeat_outlined,
+                    size: 13, color: AppColors.purple),
+                const SizedBox(width: 4),
+                Text(
+                  'Follow-up: ${formatCallDateTime(log.followUpAt!)}',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.purple,
+                  ),
+                ),
+              ],
             ),
           ],
         ],

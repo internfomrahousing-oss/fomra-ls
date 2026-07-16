@@ -298,7 +298,9 @@ class MonthlyTargetProgressCard extends StatelessWidget {
       ),
       (
         label: 'Expected today',
-        value: progress.expectedToday.toStringAsFixed(1),
+        // Display only — the underlying expectedToday stays a precise double
+        // and still drives isOnTrack/variance.
+        value: '${progress.expectedToday.round()}',
         color: context.fomraTextSecondary
       ),
     ];

@@ -24,6 +24,7 @@ class LeadCallLogService {
     required String details,
     required CallDirection direction,
     required CallOutcome outcome,
+    DateTime? followUpAt,
   }) async {
     final userId = _db.auth.currentUser?.id;
     final loggedByName = AuthService.instance.currentUser?.fullName ?? '';
@@ -37,6 +38,8 @@ class LeadCallLogService {
           'details': details.trim(),
           'direction': direction.dbValue,
           'outcome': outcome.dbValue,
+          if (followUpAt != null)
+            'follow_up_at': followUpAt.toUtc().toIso8601String(),
           if (loggedByName.isNotEmpty) 'logged_by_name': loggedByName,
           if (userId != null) 'logged_by': userId,
         })

@@ -13,7 +13,7 @@ import '../../theme/fomra_theme_context.dart';
 import '../../services/auth_service.dart';
 import '../../widgets/contact_call_whatsapp.dart';
 import '../../widgets/fomra_app_bar.dart';
-import '../../widgets/fomra_app_shell.dart';
+import '../../widgets/fomra_app_shell.dart';
 import '../../widgets/land_workspace_ui.dart';
 import '../../widgets/lead_portfolio_breakdown.dart';
 import '../../widgets/ui/app_components.dart';
@@ -124,6 +124,11 @@ class _BrokerManagementScreenState extends State<BrokerManagementScreen> {
       context: context,
       initial: _filters,
       employeeNames: _isManagement ? _employeeNames : const [],
+      // Broker page: no Lead Source / Pending Status, and a multi-select broker
+      // filter (with search + chips) directly below Lead Status.
+      showLeadSource: false,
+      showPendingStatus: false,
+      brokerMultiSelect: true,
     );
     if (applied == null || !mounted) return;
     setState(() {
@@ -142,6 +147,9 @@ class _BrokerManagementScreenState extends State<BrokerManagementScreen> {
       _filters.taluk = applied.taluk;
       _filters.village = applied.village;
       _filters.broker = applied.broker;
+      _filters.brokers
+        ..clear()
+        ..addAll(applied.brokers);
       _filters.acresMin = applied.acresMin;
       _filters.acresMax = applied.acresMax;
       _filters.pendingStatus = applied.pendingStatus;
@@ -183,7 +191,7 @@ class _BrokerManagementScreenState extends State<BrokerManagementScreen> {
     return FomraAppShell(
       currentRoute: '/broker-management',
       appBar: const FomraAppBar(
-        moduleName: 'Broker Management',
+        moduleName: 'Broker Management',
       ),
       body: ListView(
         padding: FomraLayout.pagePadding(context),

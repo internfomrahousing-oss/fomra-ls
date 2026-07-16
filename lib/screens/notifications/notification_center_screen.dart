@@ -7,7 +7,6 @@ import '../../models/land_lead.dart';
 import '../../models/notification_type_ext.dart';
 import '../../services/app_store.dart';
 import '../../services/auth_service.dart';
-import '../../services/fomra_trail.dart';
 import '../../services/notification_center_service.dart';
 import '../../services/notifications_service.dart';
 import '../../theme/app_theme.dart';
@@ -44,14 +43,6 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen> {
   void initState() {
     super.initState();
     _bootstrap();
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    // This page has no app bar to name it, so join the trail directly —
-    // otherwise a lead opened from here claims it came straight from Home.
-    FomraTrail.instance.nameCurrentPage(context, 'Notifications');
   }
 
   @override

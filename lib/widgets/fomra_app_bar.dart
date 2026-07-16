@@ -36,10 +36,8 @@ class FomraAppBar extends StatelessWidget implements PreferredSizeWidget {
 
   /// The breadcrumb bar for this page, or null when there's nothing to show.
   ///
-  /// An explicit [breadcrumbs] list still wins, for the few screens that need a
-  /// fixed trail. Otherwise the page names itself with [moduleName] and
-  /// [FomraTrailBreadcrumbBar] derives the path from where the user actually
-  /// came from.
+  /// An explicit [breadcrumbs] list wins, for pages whose title is dynamic.
+  /// Otherwise the page's fixed module hierarchy is derived from [moduleName].
   PreferredSizeWidget? _breadcrumbBar() {
     if (breadcrumbs != null && breadcrumbs!.isNotEmpty) {
       return breadcrumbs!.length >= 2
@@ -48,7 +46,7 @@ class FomraAppBar extends StatelessWidget implements PreferredSizeWidget {
     }
     final label = moduleName?.trim() ?? '';
     if (label.isEmpty) return null;
-    return FomraTrailBreadcrumbBar(label: label);
+    return FomraModuleBreadcrumbBar(label: label);
   }
 
   PreferredSizeWidget? _buildBottom() {

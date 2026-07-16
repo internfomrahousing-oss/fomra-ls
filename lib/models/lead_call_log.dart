@@ -54,6 +54,9 @@ class LeadCallLog {
   final CallOutcome outcome;
   final String loggedByName;
 
+  /// When a follow-up was scheduled for this call, or null if none.
+  final DateTime? followUpAt;
+
   const LeadCallLog({
     required this.id,
     required this.leadId,
@@ -63,6 +66,7 @@ class LeadCallLog {
     this.direction = CallDirection.outgoing,
     this.outcome = CallOutcome.answered,
     required this.loggedByName,
+    this.followUpAt,
   });
 
   factory LeadCallLog.fromJson(Map<String, dynamic> j) => LeadCallLog(
@@ -74,9 +78,15 @@ class LeadCallLog {
         direction: CallDirection.fromDb(j['direction'] as String?),
         outcome: CallOutcome.fromDb(j['outcome'] as String?),
         loggedByName: j['logged_by_name'] as String? ?? '',
+        followUpAt: (j['follow_up_at'] as String?) != null
+            ? DateTime.tryParse(j['follow_up_at'] as String)?.toLocal()
+            : null,
       );
 
   bool get isAnswered => outcome == CallOutcome.answered;
+
+  /// Whether a follow-up was scheduled for this call.
+  bool get needsFollowUp => followUpAt != null;
 }
 
 class CallActivityMetrics {

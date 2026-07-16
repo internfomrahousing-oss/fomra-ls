@@ -1018,7 +1018,7 @@ class _LeadSummary extends StatelessWidget {
     final kpis = [
       (LeadStatus.negotiation, Icons.handshake_outlined),
       (LeadStatus.legal, Icons.gavel_outlined),
-      (LeadStatus.signed, Icons.verified_outlined),
+      (LeadStatus.signed, Icons.check_circle),
       (LeadStatus.dropped, Icons.cancel_outlined),
       (null, Icons.person_search_outlined),
     ];

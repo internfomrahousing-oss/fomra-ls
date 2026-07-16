@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../models/employee_profile.dart';
 import '../../models/monthly_target.dart';
+import '../../services/employee_service.dart';
 import '../../services/monthly_target_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_input.dart';
@@ -23,19 +25,25 @@ class MonthlyTargetsPage extends StatefulWidget {
 class _MonthlyTargetsPageState extends State<MonthlyTargetsPage> {
   final _targetCtrl = TextEditingController();
 
-  late int _year;
+  /// Sentinel for the "All Employees" option — a common target has no email.
+  static const _allEmployees = '';
+
   late int _month;
+  String _employeeEmail = _allEmployees;
   List<MonthlyTarget> _targets = const [];
+  List<EmployeeProfile> _employees = const [];
   bool _loading = true;
   bool _saving = false;
   String? _error;
 
   DateTime get _now => DateTime.now();
 
+  /// The year is always the current one — management no longer picks it.
+  int get _year => _now.year;
+
   @override
   void initState() {
     super.initState();
-    _year = _now.year;
     _month = _now.month;
     _load();
   }
@@ -48,32 +56,68 @@ class _MonthlyTargetsPageState extends State<MonthlyTargetsPage> {
 
   Future<void> _load() async {
     setState(() => _loading = true);
-    final all = await MonthlyTargetService.getAll();
+    final results = await Future.wait([
+      MonthlyTargetService.getAll(),
+      EmployeeService.getAll(),
+    ]);
     if (!mounted) return;
     setState(() {
-      _targets = all;
+      _targets = results[0] as List<MonthlyTarget>;
+      _employees = (results[1] as List<EmployeeProfile>)
+          .where((e) => e.status == EmployeeStatus.active)
+          .toList()
+        ..sort((a, b) =>
+            a.fullName.toLowerCase().compareTo(b.fullName.toLowerCase()));
       _loading = false;
     });
     _syncFieldToSelection();
   }
 
-  /// The target already saved for the selected month, if any.
+  /// The target saved for the selected month AND employee, if any.
   MonthlyTarget? get _selected {
     for (final t in _targets) {
-      if (t.year == _year && t.month == _month) return t;
+      if (t.year == _year &&
+          t.month == _month &&
+          t.employeeEmail == _employeeEmail) {
+        return t;
+      }
     }
     return null;
   }
 
+  /// The common (all-employees) target for the current month, for the headline.
   MonthlyTarget? get _active {
     for (final t in _targets) {
-      if (t.isActiveAt(_now)) return t;
+      if (t.isActiveAt(_now) && t.isCommon) return t;
     }
     return null;
   }
 
-  /// Picking a month that already has a target loads it for editing; a month
-  /// without one starts empty, ready for a new target.
+  /// History order: newest month first, and within a month the common target
+  /// before the personal ones, then personal targets by name.
+  List<MonthlyTarget> get _sortedTargets {
+    final list = List<MonthlyTarget>.from(_targets);
+    list.sort((a, b) {
+      final byPeriod = b.period.compareTo(a.period);
+      if (byPeriod != 0) return byPeriod;
+      if (a.isCommon != b.isCommon) return a.isCommon ? -1 : 1;
+      return a.appliesToLabel.toLowerCase().compareTo(
+            b.appliesToLabel.toLowerCase(),
+          );
+    });
+    return list;
+  }
+
+  String get _employeeName {
+    if (_employeeEmail == _allEmployees) return '';
+    for (final e in _employees) {
+      if (e.email.trim().toLowerCase() == _employeeEmail) return e.fullName;
+    }
+    return '';
+  }
+
+  /// Picking a month + employee that already has a target loads it for editing;
+  /// a pair without one starts empty, ready for a new target.
   void _syncFieldToSelection() {
     final existing = _selected;
     _targetCtrl.text = existing == null ? '' : existing.target.toString();
@@ -92,19 +136,25 @@ class _MonthlyTargetsPageState extends State<MonthlyTargetsPage> {
       _saving = true;
     });
     try {
-      // Upserts on the month, so this creates July or edits it — earlier months
-      // are never touched.
+      // Upserts on (month, employee), so this creates or edits exactly that
+      // target — other months, other employees, and the common target are never
+      // touched.
       await MonthlyTargetService.save(
         year: _year,
         month: _month,
         target: value,
+        employeeEmail: _employeeEmail,
+        employeeName: _employeeName,
       );
       if (!mounted) return;
       await _load();
       if (!mounted) return;
+      final who = _employeeEmail == _allEmployees
+          ? 'all employees'
+          : (_employeeName.isNotEmpty ? _employeeName : _employeeEmail);
       AppFeedback.success(
         context,
-        'Target for ${MonthlyTarget.monthName(_month)} $_year saved.',
+        'Target for ${MonthlyTarget.monthName(_month)} $_year ($who) saved.',
       );
     } catch (e) {
       if (!mounted) return;
@@ -135,7 +185,8 @@ class _MonthlyTargetsPageState extends State<MonthlyTargetsPage> {
           const SectionHeader(
             title: 'Monthly Targets',
             subtitle:
-                'One common target per month — every employee is measured against it.',
+                'Set a common target for all employees, or a personal target for '
+                'one. A personal target overrides the common one for that person.',
             icon: Icons.flag_outlined,
           ),
           _activeCard(context),
@@ -227,17 +278,19 @@ class _MonthlyTargetsPageState extends State<MonthlyTargetsPage> {
           const SizedBox(height: 4),
           Text(
             isEdit
-                ? 'This month already has a target — saving updates it.'
-                : 'Pick a month and set its target. Earlier months are unaffected.',
+                ? 'This month + employee already has a target — saving updates it.'
+                : 'Pick a month and who it is for, then set the target. Other '
+                    'months and employees are unaffected.',
             style: TextStyle(fontSize: 12, color: context.fomraTextSecondary),
           ),
           const SizedBox(height: AppSpacing.md),
           LayoutBuilder(
             builder: (context, c) {
               final stacked = c.maxWidth < 620;
+              // Order per spec: Month, Employee, then Monthly Target.
               final fields = <Widget>[
                 _monthField(context),
-                _yearField(context),
+                _employeeField(context),
                 _countField(context),
               ];
               if (stacked) {
@@ -255,7 +308,7 @@ class _MonthlyTargetsPageState extends State<MonthlyTargetsPage> {
                 children: [
                   Expanded(flex: 3, child: fields[0]),
                   const SizedBox(width: AppSpacing.sm),
-                  Expanded(flex: 2, child: fields[1]),
+                  Expanded(flex: 4, child: fields[1]),
                   const SizedBox(width: AppSpacing.sm),
                   Expanded(flex: 3, child: fields[2]),
                 ],
@@ -310,24 +363,39 @@ class _MonthlyTargetsPageState extends State<MonthlyTargetsPage> {
         },
       );
 
-  Widget _yearField(BuildContext context) {
-    // A year either side covers setting next January in December.
-    final years = [_now.year - 1, _now.year, _now.year + 1];
-    return DropdownButtonFormField<int>(
-      initialValue: years.contains(_year) ? _year : _now.year,
+  /// All Employees (common target) plus every active employee. Selecting a
+  /// person scopes the target to them.
+  Widget _employeeField(BuildContext context) {
+    // Guard against a stale selection (e.g. an employee deactivated between
+    // loads) so the dropdown always has a matching item.
+    final emails = {_allEmployees, for (final e in _employees) e.email.trim().toLowerCase()};
+    final value = emails.contains(_employeeEmail) ? _employeeEmail : _allEmployees;
+
+    return DropdownButtonFormField<String>(
+      initialValue: value,
       isExpanded: true,
       decoration: FomraInput.decoration(
         context: context,
-        label: 'Year',
-        icon: Icons.event_outlined,
+        label: 'Employee',
+        icon: Icons.person_outline,
       ),
       items: [
-        for (final y in years)
-          DropdownMenuItem(value: y, child: Text('$y')),
+        const DropdownMenuItem(
+          value: _allEmployees,
+          child: Text('All Employees'),
+        ),
+        for (final e in _employees)
+          DropdownMenuItem(
+            value: e.email.trim().toLowerCase(),
+            child: Text(
+              e.fullName.trim().isEmpty ? e.email : e.fullName,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
       ],
       onChanged: (v) {
         if (v == null) return;
-        _year = v;
+        setState(() => _employeeEmail = v);
         _error = null;
         _syncFieldToSelection();
       },
@@ -398,14 +466,16 @@ class _MonthlyTargetsPageState extends State<MonthlyTargetsPage> {
                 headingRowColor: WidgetStateProperty.all(context.fomraSurfaceVar),
                 columns: const [
                   DataColumn(label: Text('Month')),
+                  DataColumn(label: Text('Applies to')),
                   DataColumn(label: Text('Target')),
                   DataColumn(label: Text('Status')),
                 ],
                 rows: [
-                  for (final t in _targets)
+                  for (final t in _sortedTargets)
                     DataRow(
                       cells: [
                         DataCell(Text(t.label)),
+                        DataCell(Text(t.appliesToLabel)),
                         DataCell(Text('${t.target}')),
                         DataCell(_statusChip(t)),
                       ],

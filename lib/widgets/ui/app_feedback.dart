@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_theme_context.dart';
@@ -64,6 +65,59 @@ class AppFeedback {
   }) =>
       _show(context, message, FeedbackTone.warning,
           actionLabel: actionLabel, onAction: onAction, duration: duration);
+
+  /// A failure the user has to read and act on, shown as a dialog rather than a
+  /// toast — a toast fades after ~4s and takes the reason with it, which is no
+  /// use when the reason is a paragraph explaining what to go and fix. The text
+  /// is selectable and copyable so it can be pasted into a bug report.
+  static Future<void> errorDetails(
+    BuildContext context, {
+    required String title,
+    required String message,
+  }) {
+    return showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: ctx.fomraSurface,
+        icon: const Icon(Icons.error_outline_rounded, color: AppColors.error),
+        title: Text(
+          title,
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w800,
+            color: ctx.fomraTextPrimary,
+          ),
+        ),
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
+          child: SingleChildScrollView(
+            child: SelectableText(
+              message,
+              style: TextStyle(
+                fontSize: 13,
+                height: 1.45,
+                color: ctx.fomraTextSecondary,
+              ),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton.icon(
+            onPressed: () async {
+              await Clipboard.setData(ClipboardData(text: message));
+              if (ctx.mounted) Navigator.pop(ctx);
+            },
+            icon: const Icon(Icons.copy_rounded, size: 16),
+            label: const Text('Copy'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
 
   static Color _color(FeedbackTone tone) {
     switch (tone) {

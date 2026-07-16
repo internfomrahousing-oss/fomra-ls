@@ -117,6 +117,14 @@ module.exports = async (req, res) => {
   const password = body.password || DEFAULT_PASSWORD;
   if (!email) return res.status(400).json({ error: 'email required' });
 
+  // Optional invite metadata. The app's permissions read the designation from
+  // employee_profiles, not from here — this carries it onto the auth user so
+  // the invited account knows its own role and the email template can greet
+  // them by name/role. Every designation is treated the same: Executive,
+  // Reporting Manager, Head and Management all take this identical path.
+  const designation = (body.designation || '').trim();
+  const fullName = (body.fullName || '').trim();
+
   const base = `${SUPABASE_URL}/auth/v1/admin/users`;
   const headers = {
     apikey: SERVICE_ROLE,
@@ -133,12 +141,20 @@ module.exports = async (req, res) => {
       // Send an invite email. The recipient clicks the link and sets their own
       // password (handled by the app's /set-password screen). No password is
       // ever set here. Idempotent-ish: an already-registered email returns ok.
+      const data = {};
+      if (fullName) data.full_name = fullName;
+      if (designation) data.designation = designation;
+
       const r = await fetch(
         `${SUPABASE_URL}/auth/v1/invite?redirect_to=${encodeURIComponent(REDIRECT_TO)}`,
         {
           method: 'POST',
           headers,
-          body: JSON.stringify({ email }),
+          body: JSON.stringify({
+            email,
+            // GoTrue stores `data` as the new user's user_metadata.
+            ...(Object.keys(data).length ? { data } : {}),
+          }),
         }
       );
       if (r.ok) return res.status(200).json({ ok: true, invited: true });

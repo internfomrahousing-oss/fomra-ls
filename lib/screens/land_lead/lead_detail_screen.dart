@@ -27,8 +27,8 @@ import '../../theme/fomra_theme_context.dart';
 import '../../widgets/ui/app_feedback.dart';
 import '../../utils/employee_lead_next_action.dart';
 import '../../utils/maps_navigation.dart';
-import '../../widgets/contact_call_whatsapp.dart';
 import '../../widgets/employee_lead_workflow_ui.dart';
+import '../../widgets/fomra_app_bar.dart';
 import '../../widgets/fomra_app_shell.dart';
 import '../../widgets/offline_status_banner.dart';
 import '../../widgets/fomra_breadcrumb.dart';
@@ -223,9 +223,15 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
   /// owner, so nothing on the lead detail is read-only.
   bool get _readOnly => false;
 
+  /// A Signed/Dropped lead is terminal — locked to view-only for everyone.
+  bool get _isLocked => lead.status.isTerminal;
+
+  /// Whether the page should render without any editing affordances.
+  bool get _viewOnly => _readOnly || _isLocked;
+
   /// Edit Lead + full modifications for employees on their own leads and
-  /// management on every lead.
-  bool get _canEditSite => RoleAccess.canEdit;
+  /// management on every lead — but never once the lead is locked.
+  bool get _canEditSite => RoleAccess.canEdit && !_isLocked;
 
   CallActivityMetrics get _callMetrics =>
       CallActivityMetrics.fromLogs(_callLogs);
@@ -247,6 +253,14 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
 
   Future<void> _changeStatus(LeadStatus? status) async {
     if (status == null || status == lead.status) return;
+    if (_isLocked) {
+      if (!mounted) return;
+      AppFeedback.info(
+        context,
+        'This lead is already ${lead.status.label} and can no longer be modified.',
+      );
+      return;
+    }
     if (_readOnly) {
       if (!mounted) return;
       AppFeedback.info(context,
@@ -361,8 +375,12 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
     }
   }
 
-  bool _isViewOnlyAction(String label) =>
-      _readOnly && label != 'Management site visit';
+  bool _isViewOnlyAction(String label) {
+    // A locked (Signed/Dropped) lead opens every activity dialog read-only —
+    // history stays visible, but nothing new can be logged.
+    if (_isLocked) return true;
+    return _readOnly && label != 'Management site visit';
+  }
 
   void _handleDetailAction(String label) {
     _showActionDialog(label);
@@ -501,16 +519,15 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
     );
   }
 
-  /// This page names itself; the path in front of it comes from the pages the
-  /// user actually came through.
-  Widget get _breadcrumbBar =>
-      FomraTrailBreadcrumbBar(label: 'Lead ${lead.leadId}');
-
   @override
   Widget build(BuildContext context) {
     final workspace = _WorkspacePanel(
       lead: lead,
-      readOnly: _readOnly,
+      readOnly: _viewOnly,
+      readOnlyNote: _isLocked
+          ? 'This lead is ${lead.status.label} and locked. Everything below is '
+              'view-only — open an activity to see its full history.'
+          : 'View-only for management. Tap an activity to open its full history.',
       tabController: _tabController,
       tabs: _tabs,
       siteVisitCount: _siteVisits.length,
@@ -521,7 +538,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
       legalDocs: _legalDocs,
       onDetailAction: _handleDetailAction,
       shouldLoadMiTab: _shouldLoadMiTab,
-      guidanceBanner: _readOnly
+      guidanceBanner: _viewOnly
           ? null
           : EmployeeLeadGuidanceBanners(
               insight: _workflowInsight,
@@ -544,6 +561,24 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
     return FomraAppShell(
       currentRoute: '/land-lead',
       backgroundColor: context.fomraPageBg,
+      // The standard app header (search, notification bell, view scope, theme,
+      // profile) with the module breadcrumb below it — the same one every other
+      // page uses. Editing the site moves into the header actions.
+      appBar: FomraAppBar(
+        moduleName: 'Lead Details',
+        breadcrumbs: FomraBreadcrumbs.under(
+          const [FomraBreadcrumbs.landWorkspace],
+          'Lead Details',
+        ),
+        actions: [
+          if (_canEditSite)
+            IconButton(
+              onPressed: _openEdit,
+              tooltip: 'Edit lead',
+              icon: const Icon(Icons.edit_outlined),
+            ),
+        ],
+      ),
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
@@ -552,12 +587,6 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 const OfflineStatusBanner(),
-                _TopBar(
-                  leadId: lead.leadId,
-                  onBack: () => Navigator.pop(context),
-                  onEdit: _canEditSite ? _openEdit : null,
-                ),
-                _breadcrumbBar,
                 Expanded(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
@@ -577,7 +606,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
                                         taskCount:
                                             taskCountForLead(lead.leadId),
                                         aiResult: aiResult,
-                                        readOnly: _readOnly,
+                                        readOnly: _viewOnly,
                                         onStatusChanged: _changeStatus,
                                         onCreateTask: _openCreateTask,
                                         onViewTasks: _openViewTasks,
@@ -603,7 +632,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
                                     leadAgeDays: _leadAgeDays,
                                     taskCount: taskCountForLead(lead.leadId),
                                     aiResult: aiResult,
-                                    readOnly: _readOnly,
+                                    readOnly: _viewOnly,
                                     onStatusChanged: _changeStatus,
                                     onCreateTask: _openCreateTask,
                                     onViewTasks: _openViewTasks,
@@ -612,7 +641,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
                                   workspace,
                                 ],
                               ),
-                        if (!_readOnly)
+                        if (!_viewOnly)
                           Positioned(
                             right: 8,
                             bottom: 8,
@@ -635,96 +664,6 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
             );
           },
         ),
-      ),
-    );
-  }
-}
-
-class _TopBar extends StatelessWidget {
-  final String leadId;
-  final VoidCallback onBack;
-  final VoidCallback? onEdit;
-
-  const _TopBar({
-    required this.leadId,
-    required this.onBack,
-    this.onEdit,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(8, 8, 12, 8),
-      decoration: BoxDecoration(
-        color: context.fomraSurface,
-        border: Border(bottom: BorderSide(color: context.fomraBorder)),
-        boxShadow: context.isDarkMode
-            ? null
-            : [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.04),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-      ),
-      child: Row(
-        children: [
-          IconButton(
-            onPressed: onBack,
-            icon: const Icon(Icons.arrow_back_rounded),
-          ),
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: AppColors.purple.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            alignment: Alignment.center,
-            child: const Icon(
-              Icons.person_pin_circle_outlined,
-              color: AppColors.purple,
-              size: 20,
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Lead #$leadId',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w800,
-                    color: context.fomraTextPrimary,
-                  ),
-                ),
-                Text(
-                  'Lead workspace',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: context.fomraTextSecondary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          if (onEdit != null)
-            FilledButton.icon(
-              onPressed: onEdit,
-              icon: const Icon(Icons.edit_outlined, size: 16),
-              label: const Text('Edit lead'),
-              style: FilledButton.styleFrom(
-                backgroundColor: AppColors.purple,
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-            ),
-        ],
       ),
     );
   }
@@ -1309,10 +1248,13 @@ class _WorkspacePanel extends StatelessWidget {
   final ValueChanged<String> onDetailAction;
   final bool Function(int tabIndex) shouldLoadMiTab;
   final Widget? guidanceBanner;
+  final String readOnlyNote;
 
   const _WorkspacePanel({
     required this.lead,
     this.readOnly = false,
+    this.readOnlyNote =
+        'View-only for management. Tap an activity to open its full history.',
     required this.tabController,
     required this.tabs,
     required this.siteVisitCount,
@@ -1345,23 +1287,16 @@ class _WorkspacePanel extends StatelessWidget {
               const SizedBox(height: 12),
             ],
             if (!readOnly) ...[
-              Row(
-                children: [
-                  Text(
-                    'QUICK ACTIONS',
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.6,
-                      color: context.fomraTextSecondary,
-                    ),
-                  ),
-                  const Spacer(),
-                  ContactCallWhatsApp(
-                    contact: lead.contactDetails,
-                    accent: AppColors.purple,
-                  ),
-                ],
+              // Call / WhatsApp live in the Quick Actions FAB only — the
+              // standalone header icons were removed to cut duplication.
+              Text(
+                'QUICK ACTIONS',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.6,
+                  color: context.fomraTextSecondary,
+                ),
               ),
               const SizedBox(height: 10),
               _ActionToolbar(onAction: onDetailAction),
@@ -1378,7 +1313,7 @@ class _WorkspacePanel extends StatelessWidget {
               ),
               const SizedBox(height: 10),
               Text(
-                'View-only for management. Tap an activity to open its full history.',
+                readOnlyNote,
                 style: TextStyle(
                   fontSize: 12,
                   color: context.fomraTextSecondary,

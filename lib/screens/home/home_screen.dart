@@ -125,9 +125,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final monthEnd = DateTime(now.year, now.month + 1)
         .subtract(const Duration(milliseconds: 1));
     final me = (AuthService.instance.currentUser?.fullName ?? '').trim();
+    final myEmail = (AuthService.instance.currentUser?.email ?? '').trim();
 
     final results = await Future.wait([
-      MonthlyTargetService.active(now: now),
+      // A personal target for this employee wins over the common one.
+      MonthlyTargetService.resolveForEmployee(myEmail, now: now),
       LandLeadSignedService.getApprovedBetween(from: monthStart, to: monthEnd),
     ]);
     if (!mounted) return;

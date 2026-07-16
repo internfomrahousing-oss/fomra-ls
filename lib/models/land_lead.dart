@@ -223,6 +223,11 @@ extension LeadStatusLabel on LeadStatus {
 
   bool get isDropped => this == LeadStatus.dropped;
 
+  /// Signed and Dropped are terminal: once finally approved into one of these,
+  /// the lead's stage is locked and can no longer change.
+  bool get isTerminal =>
+      this == LeadStatus.signed || this == LeadStatus.dropped;
+
   bool get isActive => !isAcquired && !isDropped;
 }
 

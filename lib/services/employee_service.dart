@@ -53,7 +53,17 @@ class EmployeeService {
   /// was sent instead. These use DIFFERENT Supabase email templates
   /// ("Invite user" vs "Reset Password"), which matters when one of them is
   /// misconfigured and arrives blank.
-  static Future<String> inviteEmployee(String email) async {
+  ///
+  /// [designation] and [fullName] ride along as the invited user's metadata.
+  /// Sending is identical for every designation — Executive, Reporting Manager,
+  /// Head and Management all take this one path — so a role can never change
+  /// whether the email goes out. If an invite doesn't arrive, the cause is on
+  /// the Supabase side (SMTP / rate limit), and the endpoint says which.
+  static Future<String> inviteEmployee(
+    String email, {
+    String designation = '',
+    String fullName = '',
+  }) async {
     final token = _db.auth.currentSession?.accessToken;
     if (token == null) {
       throw Exception(
@@ -68,6 +78,8 @@ class EmployeeService {
       body: jsonEncode({
         'action': 'invite',
         'email': email.trim().toLowerCase(),
+        if (designation.trim().isNotEmpty) 'designation': designation.trim(),
+        if (fullName.trim().isNotEmpty) 'fullName': fullName.trim(),
       }),
     );
     if (res.statusCode >= 400) {

@@ -25,6 +25,7 @@ import '../../services/offline_sync_service.dart';
 import '../../services/api_client.dart';
 import '../../utils/image_compressor.dart';
 import '../../utils/lead_location_parser.dart';
+import '../../utils/phone_validation.dart';
 import '../../utils/reverse_geocode.dart';
 import '../../utils/tngis_parcel_lookup.dart';
 
@@ -999,7 +1000,7 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          FomraTrailBreadcrumbBar(
+          FomraModuleBreadcrumbBar(
             label: _isEdit ? 'Edit Land Lead' : 'Add Land Lead',
           ),
           AddLeadProgressNav(
@@ -1050,11 +1051,16 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
                                   ),
                                   _Field(
                                     ctrl: _brokerContactCtrl,
-                                    label: 'Broker Contact Number',
-                                    hint: 'Phone number',
+                                    label: 'Broker Number',
+                                    hint: '10-digit phone number',
                                     icon: Icons.phone_outlined,
                                     keyboardType: TextInputType.phone,
                                     required: true,
+                                    inputFormatters: PhoneValidation.inputFormatters,
+                                    validator: PhoneValidation.validator(
+                                      'Broker Number',
+                                      required: true,
+                                    ),
                                   ),
                                 ),
                               ],
@@ -1398,6 +1404,9 @@ class _Field extends StatelessWidget {
   final bool readOnly;
   final ValueChanged<String>? onFieldSubmitted;
 
+  /// Overrides the default required-only validator when provided.
+  final FormFieldValidator<String>? validator;
+
   const _Field({
     required this.ctrl,
     required this.label,
@@ -1409,6 +1418,7 @@ class _Field extends StatelessWidget {
     this.keyboardType = TextInputType.text,
     this.inputFormatters,
     this.readOnly = false,
+    this.validator,
   }) : light = false, onFieldSubmitted = null;
 
   @override
@@ -1435,10 +1445,11 @@ class _Field extends StatelessWidget {
         color: context.fomraTextPrimary,
         fontWeight: light ? FontWeight.w400 : FontWeight.w500,
       ),
-      validator: required
-          ? (v) =>
-              (v == null || v.trim().isEmpty) ? '$label is required' : null
-          : null,
+      validator: validator ??
+          (required
+              ? (v) =>
+                  (v == null || v.trim().isEmpty) ? '$label is required' : null
+              : null),
       decoration: light
           ? decoration.copyWith(
               fillColor: const Color(0xFFFCFDFE),
@@ -1649,10 +1660,14 @@ class _OwnerFields extends StatelessWidget {
         hint: '10-digit mobile number',
         icon: Icons.phone_outlined,
         keyboardType: TextInputType.phone,
-        inputFormatters: [
-          FilteringTextInputFormatter.digitsOnly,
-          LengthLimitingTextInputFormatter(10),
-        ],
+        // The primary owner's number is required; extra owners are optional but
+        // must still be a full 10 digits if given.
+        required: index == 0,
+        inputFormatters: PhoneValidation.inputFormatters,
+        validator: PhoneValidation.validator(
+          index == 0 ? 'Contact Number' : 'Owner ${index + 1} Contact',
+          required: index == 0,
+        ),
       ),
     );
 

@@ -56,7 +56,11 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
       String? inviteError;
       var kind = 'invite';
       try {
-        kind = await EmployeeService.inviteEmployee(profile.email);
+        kind = await EmployeeService.inviteEmployee(
+          profile.email,
+          designation: profile.designation,
+          fullName: profile.fullName,
+        );
       } catch (e) {
         inviteError = e.toString().replaceFirst('Exception: ', '');
       }
@@ -74,8 +78,20 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
               : 'Invitation sent to ${profile.email} to set their password.',
         );
       } else {
-        AppFeedback.error(context,
-            'Profile created, but the invite could not be sent: $inviteError');
+        // A dialog, not a toast: the reason is usually a paragraph telling
+        // management exactly what to fix (SMTP, rate limit), and a toast fades
+        // before it can be read. The profile is already saved either way — the
+        // address is never created twice, and the invite can be re-sent from
+        // User Management.
+        AppFeedback.errorDetails(
+          context,
+          title: 'Employee saved, but the invite email failed',
+          message: '${profile.fullName} (${profile.email}) was created as '
+              '${profile.designation}, but Supabase did not send the invite:\n\n'
+              '$inviteError\n\n'
+              'Re-send it from User Management once that is fixed — no duplicate '
+              'user is created.',
+        );
       }
     } catch (e) {
       if (!mounted) return;

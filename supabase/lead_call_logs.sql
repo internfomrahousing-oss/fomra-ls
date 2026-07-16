@@ -23,6 +23,10 @@ ALTER TABLE lead_call_logs
 ALTER TABLE lead_call_logs
   ADD COLUMN IF NOT EXISTS outcome TEXT NOT NULL DEFAULT 'answered';
 
+-- Optional follow-up the caller scheduled during the call. NULL = none.
+ALTER TABLE lead_call_logs
+  ADD COLUMN IF NOT EXISTS follow_up_at TIMESTAMPTZ;
+
 ALTER TABLE lead_call_logs ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "anyone can manage lead_call_logs" ON lead_call_logs;
