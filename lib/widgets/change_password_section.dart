@@ -105,7 +105,16 @@ class _ChangePasswordSectionState extends State<ChangePasswordSection> {
   @override
   void initState() {
     super.initState();
-    final email = AuthService.instance.currentUser?.email.trim() ?? '';
+    // Prefill the signed-in user's email when we can. Guarded because reading
+    // currentUser touches Supabase.instance, which isn't initialized in widget
+    // tests (and shouldn't crash a dialog if auth isn't ready yet) — same
+    // tolerance the shared header profile already applies.
+    String email = '';
+    try {
+      email = AuthService.instance.currentUser?.email.trim() ?? '';
+    } catch (_) {
+      email = '';
+    }
     _emailCtrl = TextEditingController(text: email);
   }
 
