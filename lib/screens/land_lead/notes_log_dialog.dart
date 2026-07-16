@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../models/land_lead.dart';
 import '../../services/land_lead_service.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/lead_auto_notes.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../widgets/log_dialog_tabs.dart';
 import '../../widgets/ui/app_feedback.dart';
@@ -46,9 +47,11 @@ class _NotesLogDialogState extends State<NotesLogDialog> {
     super.dispose();
   }
 
+  /// Newest first. The auto-generated nearby block counts as one note, so it
+  /// doesn't bury the manual history under a tile per category.
   List<String> _parseNotes(String raw) {
     if (raw.trim().isEmpty) return [];
-    return raw.trim().split('\n').reversed.toList();
+    return LeadAutoNotes.splitEntries(raw).reversed.toList();
   }
 
   InputDecoration _fieldDecoration(BuildContext context, String label,

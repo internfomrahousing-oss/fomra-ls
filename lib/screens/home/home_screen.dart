@@ -2,7 +2,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../analytics/business_module_metrics.dart';
 import '../../models/land_lead.dart';
+import '../../analytics/monthly_target_progress.dart';
 import '../../models/land_lead_meeting.dart';
+import '../../models/monthly_target.dart';
 import '../../services/management_bi_activity_service.dart';
 import '../land_lead/add_lead_screen.dart';
 import '../../models/lead_list_filter.dart';
@@ -18,6 +20,7 @@ import '../../services/employee_service.dart';
 import '../../services/team_hierarchy.dart';
 import '../employee_management/team_management_screen.dart';
 import '../../services/land_lead_service.dart';
+import '../../services/monthly_target_service.dart';
 import '../../services/lead_drop_approval_service.dart';
 import '../../services/land_lead_signed_service.dart';
 import '../../services/land_lead_site_visit_service.dart';
@@ -36,6 +39,7 @@ import '../../widgets/fomra_app_shell.dart';
 import '../../widgets/ui/app_feedback.dart';
 import '../../widgets/management_executive_dashboard.dart';
 import '../../widgets/offline_status_banner.dart';
+import '../../widgets/monthly_target_progress_card.dart';
 import '../../widgets/portal_home_sections.dart';
 import '../../widgets/ui/app_components.dart';
 
@@ -61,6 +65,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   /// Meeting history behind the management "No Future Activity" quick action.
   List<LandLeadMeeting> _meetings = const [];
+
+  /// This employee's progress against the common monthly target. Null until the
+  /// first load lands; management never loads it.
+  MonthlyTargetProgress? _monthlyProgress;
 
   List<LandLead> get _noFutureActivityLeads => NoFutureActivityAnalytics.select(
         AppStore.instance.visibleLeads,
@@ -95,6 +103,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _loadPerformanceData();
     if (_canApprove) _loadPendingApprovals();
     if (_isManagement) _loadMeetings();
+    if (!_isManagement) _loadMonthlyTarget();
     UniversalSearchService.warmDocumentIndex();
   }
 
@@ -103,6 +112,41 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Future<void> _loadMeetings() async {
     final meetings = await ManagementBiActivityService.loadMeetings();
     if (mounted) setState(() => _meetings = meetings);
+  }
+
+  /// This employee's progress against the common monthly target.
+  ///
+  /// A site counts on the day its Signed request was approved — the same
+  /// workflow that marks a lead Signed — so the card follows completed work
+  /// without any new tracking. Both reads degrade to empty rather than throw.
+  Future<void> _loadMonthlyTarget() async {
+    final now = DateTime.now();
+    final monthStart = DateTime(now.year, now.month);
+    final monthEnd = DateTime(now.year, now.month + 1)
+        .subtract(const Duration(milliseconds: 1));
+    final me = (AuthService.instance.currentUser?.fullName ?? '').trim();
+
+    final results = await Future.wait([
+      MonthlyTargetService.active(now: now),
+      LandLeadSignedService.getApprovedBetween(from: monthStart, to: monthEnd),
+    ]);
+    if (!mounted) return;
+
+    final target = results[0] as MonthlyTarget?;
+    final approved = results[1] as List<LandLeadSignedRequest>;
+
+    setState(() {
+      _monthlyProgress = MonthlyTargetProgress.forMonth(
+        target: target?.target ?? 0,
+        now: now,
+        completedOn: [
+          for (final r in approved)
+            if (r.reviewedAt != null &&
+                r.requestedByName.trim().toLowerCase() == me.toLowerCase())
+              r.reviewedAt!.toLocal(),
+        ],
+      );
+    });
   }
 
   void _onNotificationsChanged() {
@@ -583,6 +627,22 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   ),
                 ),
                 const SizedBox(height: AppSpacing.lg),
+                if (_monthlyProgress != null) ...[
+                  PortalFadeSection(
+                    index: 2,
+                    child: PortalSectionCard(
+                      title: 'Monthly Target Progress',
+                      subtitle:
+                          'Your sites this month against the common target',
+                      icon: Icons.flag_outlined,
+                      child: MonthlyTargetProgressCard(
+                        progress: _monthlyProgress!,
+                        month: DateTime.now(),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                ],
                 _quickActionsSection(quickActions),
                 const SizedBox(height: AppSpacing.lg),
                 PortalFadeSection(

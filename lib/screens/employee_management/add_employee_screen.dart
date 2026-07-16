@@ -6,7 +6,6 @@ import '../../theme/fomra_input.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../widgets/fomra_app_shell.dart';
 import '../../widgets/ui/app_feedback.dart';
-import '../../widgets/fomra_breadcrumb.dart';
 import '../../widgets/portal_home_sections.dart';
 import '../../widgets/portal_page_layout.dart';
 import '../../widgets/ui/app_components.dart';
@@ -91,10 +90,7 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
     return FomraAppShell(
       currentRoute: '/settings',
       backgroundColor: context.fomraPageBg,
-      appBar: FomraSubPageAppBar(
-        title: 'Add Employee',
-        breadcrumbs: FomraBreadcrumbs.fromUserManagement('Add Employee'),
-      ),
+      appBar: const FomraSubPageAppBar(title: 'Add Employee'),
       body: portalScrollBody(
         context,
         ConstrainedBox(

@@ -34,60 +34,6 @@ class FomraBreadcrumbItem {
       : this(label: label, action: FomraBreadcrumbAction.namedRoute, route: route);
 }
 
-/// Common breadcrumb trails used across the app.
-class FomraBreadcrumbs {
-  static List<FomraBreadcrumbItem> module(String moduleLabel) => [
-        const FomraBreadcrumbItem.home(),
-        FomraBreadcrumbItem.current(moduleLabel),
-      ];
-
-  static List<FomraBreadcrumbItem> fromSettings(String pageLabel) => [
-        const FomraBreadcrumbItem.home(),
-        const FomraBreadcrumbItem.pop('Settings'),
-        FomraBreadcrumbItem.current(pageLabel),
-      ];
-
-  static List<FomraBreadcrumbItem> fromWorkspace(String pageLabel) => [
-        const FomraBreadcrumbItem.home(),
-        const FomraBreadcrumbItem.route('Land Workspace', '/land-lead'),
-        FomraBreadcrumbItem.current(pageLabel),
-      ];
-
-  /// Filtered lead list opened from home or workspace summaries.
-  static List<FomraBreadcrumbItem> fromWorkspaceFilter(String pageLabel) => [
-        const FomraBreadcrumbItem.home(),
-        const FomraBreadcrumbItem.route('Land Workspace', '/land-lead'),
-        FomraBreadcrumbItem.current(pageLabel),
-      ];
-
-  /// Lead detail opened from a filtered lead list.
-  static List<FomraBreadcrumbItem> fromFilteredLeadDetail({
-    required String filterLabel,
-    required String leadId,
-  }) =>
-      [
-        const FomraBreadcrumbItem.home(),
-        const FomraBreadcrumbItem.route('Land Workspace', '/land-lead'),
-        FomraBreadcrumbItem(
-          label: filterLabel,
-          action: FomraBreadcrumbAction.pop,
-          popCount: 1,
-        ),
-        FomraBreadcrumbItem.current('Lead $leadId'),
-      ];
-
-  static List<FomraBreadcrumbItem> fromUserManagement(String pageLabel) => [
-        const FomraBreadcrumbItem.home(),
-        const FomraBreadcrumbItem(
-          label: 'Settings',
-          action: FomraBreadcrumbAction.pop,
-          popCount: 2,
-        ),
-        const FomraBreadcrumbItem.pop('User Management'),
-        FomraBreadcrumbItem.current(pageLabel),
-      ];
-}
-
 void fomraNavigateHome(BuildContext context) {
   Navigator.of(context).pushAndRemoveUntil(
     PageRouteBuilder(
@@ -204,18 +150,6 @@ class FomraBreadcrumbBar extends StatelessWidget implements PreferredSizeWidget 
         ),
       ),
     );
-  }
-}
-
-/// Inline breadcrumb for screens with a custom header (e.g. add lead).
-class FomraBreadcrumbStrip extends StatelessWidget {
-  final List<FomraBreadcrumbItem> items;
-
-  const FomraBreadcrumbStrip({super.key, required this.items});
-
-  @override
-  Widget build(BuildContext context) {
-    return FomraBreadcrumbBar(items: items);
   }
 }
 

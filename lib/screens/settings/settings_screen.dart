@@ -14,13 +14,13 @@ import '../../theme/fomra_layout.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../widgets/fomra_app_bar.dart';
 import '../../widgets/fomra_app_shell.dart';
-import '../../widgets/fomra_breadcrumb.dart';
 import '../../widgets/ui/app_components.dart';
 import '../../widgets/ui/app_feedback.dart';
 import '../../widgets/change_password_section.dart';
 import '../../widgets/portal_page_layout.dart';
 import '../audit/audit_trail_screen.dart';
 import '../employee_management/employee_management_screen.dart';
+import 'monthly_targets_page.dart';
 import '../../services/csv_saver_stub.dart'
     if (dart.library.html) '../../services/csv_saver_web.dart'
     if (dart.library.io) '../../services/csv_saver_io.dart';
@@ -36,7 +36,7 @@ class SettingsScreen extends StatelessWidget {
     return FomraAppShell(
       currentRoute: '/settings',
       appBar: const FomraAppBar(
-        moduleName: 'Management Settings',
+        moduleName: 'Settings',
         showUniversalSearch: false,
       ),
       body: ListView(
@@ -108,6 +108,18 @@ class SettingsScreen extends StatelessWidget {
                     context,
                     MaterialPageRoute(
                       builder: (_) => const _DroppedReasonsPage(),
+                    ),
+                  ),
+                ),
+              if (isManagement)
+                _SettingsTile(
+                  icon: Icons.flag_outlined,
+                  label: 'Monthly Targets',
+                  accent: AppColors.warning,
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const MonthlyTargetsPage(),
                     ),
                   ),
                 ),
@@ -237,10 +249,7 @@ class _UserManagementPage extends StatelessWidget {
     return FomraAppShell(
       currentRoute: '/settings',
       backgroundColor: context.fomraPageBg,
-      appBar: FomraSubPageAppBar(
-        title: 'User Management',
-        breadcrumbs: FomraBreadcrumbs.fromSettings('User Management'),
-      ),
+      appBar: const FomraSubPageAppBar(title: 'User Management'),
       body: const EmployeeManagementScreen(isTab: true),
     );
   }

@@ -17,7 +17,6 @@ import '../../theme/fomra_theme_context.dart';
 import '../../utils/lead_location_parser.dart';
 import '../../utils/maps_navigation.dart';
 import '../../widgets/fomra_app_shell.dart';
-import '../../widgets/fomra_breadcrumb.dart';
 import '../../widgets/lead_portfolio_breakdown.dart';
 import '../../widgets/portal_page_layout.dart';
 import '../../widgets/terms_deal_selector.dart';
@@ -124,7 +123,6 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
         title: 'Project Map',
         subtitle:
             '${filtered.length} site${filtered.length == 1 ? '' : 's'} · ${totalAcres.toStringAsFixed(2)} acres',
-        breadcrumbs: FomraBreadcrumbs.fromWorkspace('Project Map'),
       ),
       body: allPlotted.isEmpty
           ? _buildEmpty(context)

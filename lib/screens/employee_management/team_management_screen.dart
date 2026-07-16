@@ -7,7 +7,6 @@ import '../../services/team_hierarchy.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../widgets/fomra_app_shell.dart';
-import '../../widgets/fomra_breadcrumb.dart';
 import '../../widgets/portal_page_layout.dart';
 import '../../widgets/ui/app_components.dart';
 import '../../widgets/ui/app_feedback.dart';
@@ -116,10 +115,7 @@ class _TeamManagementScreenState extends State<TeamManagementScreen> {
     return FomraAppShell(
       currentRoute: '/home',
       backgroundColor: context.fomraPageBg,
-      appBar: FomraSubPageAppBar(
-        title: 'Manage Team',
-        breadcrumbs: FomraBreadcrumbs.fromWorkspace('Manage Team'),
-      ),
+      appBar: const FomraSubPageAppBar(title: 'Manage Team'),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : ListView(

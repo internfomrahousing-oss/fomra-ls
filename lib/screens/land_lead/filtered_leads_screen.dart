@@ -7,7 +7,6 @@ import '../../theme/fomra_layout.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../widgets/fomra_app_bar.dart';
 import '../../widgets/fomra_app_shell.dart';
-import '../../widgets/fomra_breadcrumb.dart';
 import '../../widgets/ui/app_components.dart';
 import 'lead_detail_screen.dart';
 
@@ -17,31 +16,19 @@ class FilteredLeadsScreen extends StatefulWidget {
   final String? presetTitle;
   final String? presetSubtitle;
 
-  /// Optional fixed trail. Normally left null so the breadcrumbs follow the
-  /// route the user actually took to get here.
-  final List<FomraBreadcrumbItem>? breadcrumbs;
-
   const FilteredLeadsScreen({
     super.key,
     this.filter,
     this.presetLeads,
     this.presetTitle,
     this.presetSubtitle,
-    this.breadcrumbs,
   });
 
-  static void open(
-    BuildContext context,
-    LeadListFilter filter, {
-    List<FomraBreadcrumbItem>? breadcrumbs,
-  }) {
+  static void open(BuildContext context, LeadListFilter filter) {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => FilteredLeadsScreen(
-          filter: filter,
-          breadcrumbs: breadcrumbs,
-        ),
+        builder: (_) => FilteredLeadsScreen(filter: filter),
       ),
     );
   }
@@ -53,7 +40,6 @@ class FilteredLeadsScreen extends StatefulWidget {
     required String title,
     required String subtitle,
     required List<LandLead> leads,
-    List<FomraBreadcrumbItem>? breadcrumbs,
   }) {
     Navigator.push(
       context,
@@ -62,7 +48,6 @@ class FilteredLeadsScreen extends StatefulWidget {
           presetLeads: List<LandLead>.from(leads),
           presetTitle: title,
           presetSubtitle: subtitle,
-          breadcrumbs: breadcrumbs,
         ),
       ),
     );
@@ -99,10 +84,7 @@ class _FilteredLeadsScreenState extends State<FilteredLeadsScreen> {
 
     return FomraAppShell(
       currentRoute: '/land-lead',
-      appBar: FomraAppBar(
-        moduleName: title,
-        breadcrumbs: widget.breadcrumbs,
-      ),
+      appBar: FomraAppBar(moduleName: title),
       backgroundColor: context.fomraPageBg,
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,

@@ -999,10 +999,8 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          FomraBreadcrumbStrip(
-            items: FomraBreadcrumbs.fromWorkspace(
-              _isEdit ? 'Edit Land Lead' : 'Add Land Lead',
-            ),
+          FomraTrailBreadcrumbBar(
+            label: _isEdit ? 'Edit Land Lead' : 'Add Land Lead',
           ),
           AddLeadProgressNav(
             steps: progressSteps,
@@ -1106,6 +1104,24 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
                                     ? null
                                     : _fetchLiveLocation,
                               ),
+                              // The captured site, read-only. Tied to
+                              // _pinnedPoint, which is only ever set from live
+                              // GPS (or the saved coordinates when editing), so
+                              // the pin always matches what gets saved — and it
+                              // disappears with the pin if GPS is cleared.
+                              // Re-capturing moves this same map rather than
+                              // building another one.
+                              if (_pinnedPoint != null) ...[
+                                const SizedBox(height: AddLeadUi.fieldGap),
+                                AddLeadMapPicker(
+                                  mapController: _mapController,
+                                  tileUrl: _kMapTileUrl,
+                                  defaultCenter: _kDefaultMapCenter,
+                                  pinnedPoint: _pinnedPoint,
+                                  resolving: _resolvingPin,
+                                  onMapReady: _onMapReady,
+                                ),
+                              ],
                               if (_verifiedGps != null) ...[
                                 const SizedBox(height: 8),
                                 Text(

@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:fomra_ls/services/fomra_trail.dart';
 import 'package:fomra_ls/widgets/fomra_breadcrumb.dart';
+import 'package:fomra_ls/widgets/portal_page_layout.dart';
 
 /// A page that names itself in the trail, exactly like a real screen does via
 /// FomraAppBar's moduleName.
@@ -13,6 +14,19 @@ class _Page extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Scaffold(
         appBar: AppBar(bottom: FomraTrailBreadcrumbBar(label: label)),
+        body: const SizedBox.shrink(),
+      );
+}
+
+/// A page using the shared sub-page header (manage team, add employee, reset
+/// password …). It too only names itself.
+class _SubPage extends StatelessWidget {
+  final String title;
+  const _SubPage(this.title);
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        appBar: FomraSubPageAppBar(title: title),
         body: const SizedBox.shrink(),
       );
 }
@@ -100,6 +114,19 @@ void main() {
 
     expect(_crumbs(tester), ['Home', 'Land Workspace']);
     expect(find.text('Lead 12'), findsNothing);
+  });
+
+  testWidgets('a sub-page header joins the trail like any other page',
+      (tester) async {
+    await pumpApp(tester);
+    navKey.currentState!.push(
+      MaterialPageRoute<void>(builder: (_) => const _SubPage('Manage Team')),
+    );
+    await tester.pumpAndSettle();
+
+    // Manage Team is opened from Home, so it must not claim a Land Workspace
+    // ancestor it never came through.
+    expect(_crumbs(tester), ['Home', 'Manage Team']);
   });
 
   testWidgets('the current page is not a link', (tester) async {

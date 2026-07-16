@@ -4,57 +4,38 @@ import '../models/land_lead_site_visit.dart';
 import '../models/lead_call_log.dart';
 import '../screens/task_management/task_management_screen.dart';
 
+/// The activities a lead is worked through, in the order they happen. The card
+/// shows the first one that is still pending.
 enum EmployeeNextActionKind {
   callOwner,
-  scheduleVisit,
-  scheduleMeeting,
-  collectChitta,
-  collectFmb,
-  collectPatta,
-  uploadDocuments,
-  uploadSaleDeed,
-  followUpTask,
+  landOwnerMeeting,
+  siteVisit,
+  legalVerification,
+  managementSiteVisit,
+  projectSigning,
   none,
 }
 
-enum EmployeeActionPriority { low, medium, high, urgent }
-
+/// The single pending activity to put in front of the executive.
+///
+/// Carries no due date, priority or overdue flag on purpose: what matters is
+/// *what* to do next and *why*, and the pipeline itself decides the order.
 class EmployeeNextAction {
   final EmployeeNextActionKind kind;
-  final String label;
-  final DateTime dueDate;
-  final DateTime pendingSince;
-  final EmployeeActionPriority priority;
-  final bool isOverdue;
-  final String? taskId;
+
+  /// Short imperative title, e.g. "Call Owner".
+  final String title;
+
+  /// Why this is the next action, in one sentence.
+  final String description;
 
   const EmployeeNextAction({
     required this.kind,
-    required this.label,
-    required this.dueDate,
-    required this.pendingSince,
-    required this.priority,
-    required this.isOverdue,
-    this.taskId,
+    required this.title,
+    required this.description,
   });
 
-  String get priorityLabel => switch (priority) {
-        EmployeeActionPriority.low => 'Low',
-        EmployeeActionPriority.medium => 'Medium',
-        EmployeeActionPriority.high => 'High',
-        EmployeeActionPriority.urgent => 'Urgent',
-      };
-
-  int get pendingDays {
-    final a = DateTime(
-      pendingSince.year,
-      pendingSince.month,
-      pendingSince.day,
-    );
-    final n = DateTime.now();
-    final today = DateTime(n.year, n.month, n.day);
-    return today.difference(a).inDays;
-  }
+  bool get isPending => kind != EmployeeNextActionKind.none;
 }
 
 class EmployeePendingTaskSummary {
@@ -77,9 +58,13 @@ class EmployeeLeadWorkflowInsight {
   final EmployeeNextAction nextAction;
   final EmployeePendingTaskSummary tasks;
 
+  /// The lead's current stage, shown beside the action for context.
+  final LeadStatus stage;
+
   const EmployeeLeadWorkflowInsight({
     required this.nextAction,
     required this.tasks,
+    required this.stage,
   });
 }
 
@@ -95,14 +80,13 @@ class EmployeeLeadWorkflow {
     final clock = now ?? DateTime.now();
     final tasks = tasksForLead(lead.leadId);
     return EmployeeLeadWorkflowInsight(
+      stage: lead.status,
       nextAction: _nextAction(
         lead: lead,
         callLogs: callLogs,
         siteVisits: siteVisits,
         meetings: meetings,
         legalDocCount: legalDocCount,
-        tasks: tasks,
-        now: clock,
       ),
       tasks: _taskSummary(tasks, clock),
     );
@@ -144,199 +128,98 @@ class EmployeeLeadWorkflow {
     );
   }
 
+  /// The highest-priority activity still pending, in the order the pipeline is
+  /// actually worked: call -> land owner meeting -> site visit -> legal ->
+  /// management site visit -> signing.
+  ///
+  /// Read from the same call / meeting / visit / document data the Activity
+  /// Timeline shows, so completing an activity moves the card on by itself.
   static EmployeeNextAction _nextAction({
     required LandLead lead,
     required List<LeadCallLog> callLogs,
     required List<LandLeadSiteVisit> siteVisits,
     required List<LandLeadMeeting> meetings,
     required int legalDocCount,
-    required List<Task> tasks,
-    required DateTime now,
   }) {
-    // Prefer urgent/overdue linked tasks first.
-    final openTasks = tasks.where((t) => t.status != TaskStatus.done).toList()
-      ..sort((a, b) {
-        if (a.isOverdue != b.isOverdue) return a.isOverdue ? -1 : 1;
-        return a.dueDate.compareTo(b.dueDate);
-      });
-    if (openTasks.isNotEmpty &&
-        (openTasks.first.isOverdue ||
-            openTasks.first.priority == TaskPriority.urgent ||
-            openTasks.first.priority == TaskPriority.high)) {
-      final t = openTasks.first;
-      return EmployeeNextAction(
-        kind: EmployeeNextActionKind.followUpTask,
-        label: t.title.trim().isEmpty ? 'Complete task' : t.title.trim(),
-        dueDate: t.dueDate,
-        pendingSince: t.createdAt,
-        priority: _mapPriority(t.priority),
-        isOverdue: t.isOverdue,
-        taskId: t.id,
-      );
-    }
-
-    if (lead.status == LeadStatus.signed) {
-      return EmployeeNextAction(
-        kind: EmployeeNextActionKind.none,
-        label: 'Deal closed — no pending action',
-        dueDate: now,
-        pendingSince: lead.addedOn,
-        priority: EmployeeActionPriority.low,
-        isOverdue: false,
-      );
-    }
-
+    // A closed lead has no next step, whatever is missing behind it.
     if (lead.status == LeadStatus.dropped) {
-      return EmployeeNextAction(
+      return const EmployeeNextAction(
         kind: EmployeeNextActionKind.none,
-        label: 'Lead dropped',
-        dueDate: now,
-        pendingSince: lead.addedOn,
-        priority: EmployeeActionPriority.low,
-        isOverdue: false,
+        title: 'No Pending Action',
+        description: 'This lead was dropped, so nothing is left to do on it.',
+      );
+    }
+    if (lead.status == LeadStatus.signed) {
+      return const EmployeeNextAction(
+        kind: EmployeeNextActionKind.none,
+        title: 'No Pending Action',
+        description:
+            'The project is signed and every activity on this lead is complete.',
       );
     }
 
-    final ageDays = _ageDays(lead.addedOn, now);
-    final hasCall = callLogs.isNotEmpty;
-    final hasVisit = siteVisits.isNotEmpty;
-    final hasMeeting = meetings.isNotEmpty;
-
-    if (!hasCall) {
-      final due = lead.addedOn.add(const Duration(days: 1));
-      return EmployeeNextAction(
+    if (callLogs.isEmpty) {
+      return const EmployeeNextAction(
         kind: EmployeeNextActionKind.callOwner,
-        label: 'Call Owner',
-        dueDate: due,
-        pendingSince: lead.addedOn,
-        priority: ageDays >= 2
-            ? EmployeeActionPriority.urgent
-            : EmployeeActionPriority.high,
-        isOverdue: now.isAfter(due),
+        title: 'Call Owner',
+        description: 'No call has been logged yet. Contact the owner before '
+            'proceeding to the next stage.',
       );
     }
 
-    if (!hasVisit &&
-        (lead.status.isProspect || lead.status == LeadStatus.negotiation)) {
-      final due = lead.addedOn.add(const Duration(days: 7));
-      return EmployeeNextAction(
-        kind: EmployeeNextActionKind.scheduleVisit,
-        label: 'Schedule Visit',
-        dueDate: due,
-        pendingSince: callLogs.first.calledAt,
-        priority: ageDays >= 7
-            ? EmployeeActionPriority.urgent
-            : EmployeeActionPriority.high,
-        isOverdue: now.isAfter(due),
+    if (meetings.isEmpty) {
+      return const EmployeeNextAction(
+        kind: EmployeeNextActionKind.landOwnerMeeting,
+        title: 'Conduct Land Owner Meeting',
+        description: 'The owner has been called, but no land owner meeting is '
+            'logged yet. Meet them before visiting the site.',
       );
     }
 
-    if (!hasMeeting && lead.status == LeadStatus.prospectMeetingPending) {
-      final due = lead.addedOn.add(const Duration(days: 5));
-      return EmployeeNextAction(
-        kind: EmployeeNextActionKind.scheduleMeeting,
-        label: 'Schedule Meeting',
-        dueDate: due,
-        pendingSince: lead.addedOn,
-        priority: EmployeeActionPriority.medium,
-        isOverdue: now.isAfter(due),
+    if (!_hasVisit(siteVisits, LandLeadSiteVisitType.employee)) {
+      return const EmployeeNextAction(
+        kind: EmployeeNextActionKind.siteVisit,
+        title: 'Conduct Site Visit',
+        description: 'The land owner meeting is done. Visit the site and log '
+            'what you find before the legal check.',
       );
     }
 
-    if (lead.status == LeadStatus.negotiation ||
-        lead.status == LeadStatus.legal) {
-      // Document collection guidance (filename prefixes from camera capture).
-      // Without loaded names, use survey/legal heuristics.
-      if (lead.surveyNumber.trim().isEmpty &&
-          lead.status == LeadStatus.negotiation) {
-        final due = lead.addedOn.add(const Duration(days: 14));
-        return EmployeeNextAction(
-          kind: EmployeeNextActionKind.collectChitta,
-          label: 'Collect Chitta',
-          dueDate: due,
-          pendingSince: lead.addedOn,
-          priority: EmployeeActionPriority.high,
-          isOverdue: now.isAfter(due),
-        );
-      }
-      if (lead.status == LeadStatus.negotiation) {
-        final due = lead.addedOn.add(const Duration(days: 14));
-        return EmployeeNextAction(
-          kind: EmployeeNextActionKind.collectFmb,
-          label: 'Collect FMB',
-          dueDate: due,
-          pendingSince: lead.addedOn,
-          priority: EmployeeActionPriority.medium,
-          isOverdue: now.isAfter(due),
-        );
-      }
-      if (legalDocCount == 0) {
-        final due = lead.addedOn.add(const Duration(days: 21));
-        return EmployeeNextAction(
-          kind: EmployeeNextActionKind.uploadDocuments,
-          label: 'Upload Documents',
-          dueDate: due,
-          pendingSince: lead.addedOn,
-          priority: EmployeeActionPriority.high,
-          isOverdue: now.isAfter(due),
-        );
-      }
-      if (lead.status == LeadStatus.legal) {
-        final due = lead.addedOn.add(const Duration(days: 30));
-        return EmployeeNextAction(
-          kind: EmployeeNextActionKind.uploadSaleDeed,
-          label: 'Upload Sale Deed',
-          dueDate: due,
-          pendingSince: lead.addedOn,
-          priority: EmployeeActionPriority.medium,
-          isOverdue: now.isAfter(due),
-        );
-      }
-      return EmployeeNextAction(
-        kind: EmployeeNextActionKind.collectPatta,
-        label: 'Collect Patta',
-        dueDate: lead.addedOn.add(const Duration(days: 21)),
-        pendingSince: lead.addedOn,
-        priority: EmployeeActionPriority.medium,
-        isOverdue: ageDays > 21,
+    if (legalDocCount == 0) {
+      return const EmployeeNextAction(
+        kind: EmployeeNextActionKind.legalVerification,
+        title: 'Complete Legal Verification',
+        description: 'The site visit is done, but no legal document has been '
+            'collected yet.',
       );
     }
 
-    if (openTasks.isNotEmpty) {
-      final t = openTasks.first;
-      return EmployeeNextAction(
-        kind: EmployeeNextActionKind.followUpTask,
-        label: t.title.trim().isEmpty ? 'Complete task' : t.title.trim(),
-        dueDate: t.dueDate,
-        pendingSince: t.createdAt,
-        priority: _mapPriority(t.priority),
-        isOverdue: t.isOverdue,
-        taskId: t.id,
+    if (!_hasVisit(siteVisits, LandLeadSiteVisitType.management)) {
+      return const EmployeeNextAction(
+        kind: EmployeeNextActionKind.managementSiteVisit,
+        title: 'Management Site Visit',
+        description: 'Legal documents are in. Management still needs to see '
+            'the site before the project can be signed.',
       );
     }
 
-    return EmployeeNextAction(
-      kind: EmployeeNextActionKind.callOwner,
-      label: 'Follow up with owner',
-      dueDate: now.add(const Duration(days: 2)),
-      pendingSince: lead.addedOn,
-      priority: EmployeeActionPriority.medium,
-      isOverdue: false,
+    return const EmployeeNextAction(
+      kind: EmployeeNextActionKind.projectSigning,
+      title: 'Project Signing',
+      description: 'Every activity is complete. Close the deal and mark the '
+          'project as signed.',
     );
   }
 
-  static EmployeeActionPriority _mapPriority(TaskPriority p) => switch (p) {
-        TaskPriority.low => EmployeeActionPriority.low,
-        TaskPriority.medium => EmployeeActionPriority.medium,
-        TaskPriority.high => EmployeeActionPriority.high,
-        TaskPriority.urgent => EmployeeActionPriority.urgent,
-      };
-
-  static int _ageDays(DateTime from, DateTime now) {
-    final a = DateTime(from.year, from.month, from.day);
-    final b = DateTime(now.year, now.month, now.day);
-    return b.difference(a).inDays;
-  }
+  /// A visit counts as made unless it was rejected — one still awaiting
+  /// approval has already happened, so it is not pending on the executive.
+  static bool _hasVisit(
+    List<LandLeadSiteVisit> visits,
+    LandLeadSiteVisitType type,
+  ) =>
+      visits.any((v) =>
+          v.visitType == type &&
+          v.approvalStatus != SiteVisitApprovalStatus.rejected);
 }
 
 /// Legal document kinds for camera capture.

@@ -1,18 +1,18 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 
 import '../models/land_lead.dart';
 import '../theme/app_theme.dart';
 import '../theme/fomra_theme_context.dart';
 import '../utils/employee_lead_next_action.dart';
 
-String _fmtDate(DateTime d) => DateFormat('d MMM yyyy').format(d.toLocal());
-
-Color _priorityColor(EmployeeActionPriority p) => switch (p) {
-      EmployeeActionPriority.low => AppColors.success,
-      EmployeeActionPriority.medium => AppColors.info,
-      EmployeeActionPriority.high => AppColors.warning,
-      EmployeeActionPriority.urgent => AppColors.error,
+IconData _actionIcon(EmployeeNextActionKind kind) => switch (kind) {
+      EmployeeNextActionKind.callOwner => Icons.phone_in_talk_outlined,
+      EmployeeNextActionKind.landOwnerMeeting => Icons.handshake_outlined,
+      EmployeeNextActionKind.siteVisit => Icons.place_outlined,
+      EmployeeNextActionKind.legalVerification => Icons.balance_outlined,
+      EmployeeNextActionKind.managementSiteVisit => Icons.apartment_outlined,
+      EmployeeNextActionKind.projectSigning => Icons.task_alt_rounded,
+      EmployeeNextActionKind.none => Icons.check_circle_outline,
     };
 
 /// Next-action + pending-task banners for employee lead detail.
@@ -35,6 +35,7 @@ class EmployeeLeadGuidanceBanners extends StatelessWidget {
       children: [
         _NextActionBanner(
           action: insight.nextAction,
+          stage: insight.stage,
           onTap: onNextActionTap,
         ),
         const SizedBox(height: 8),
@@ -47,21 +48,29 @@ class EmployeeLeadGuidanceBanners extends StatelessWidget {
   }
 }
 
+/// The one activity the executive has to do next, why it is next, and the stage
+/// the lead is in. Deliberately carries no due date, pending count, priority or
+/// overdue badge — the pending activity itself is the message.
 class _NextActionBanner extends StatelessWidget {
   final EmployeeNextAction action;
+  final LeadStatus stage;
   final VoidCallback? onTap;
 
-  const _NextActionBanner({required this.action, this.onTap});
+  const _NextActionBanner({
+    required this.action,
+    required this.stage,
+    this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final overdue = action.isOverdue;
-    final accent = overdue ? AppColors.error : _priorityColor(action.priority);
+    final accent = action.isPending ? stage.color : AppColors.success;
 
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: onTap,
+        // Nothing to open once the pipeline is done.
+        onTap: action.isPending ? onTap : null,
         borderRadius: BorderRadius.circular(16),
         child: Ink(
           decoration: BoxDecoration(
@@ -86,74 +95,73 @@ class _NextActionBanner extends StatelessWidget {
                       color: accent,
                     ),
                   ),
-                  const Spacer(),
-                  if (overdue)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 3,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.error,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Text(
-                        'OVERDUE',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    )
-                  else
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 3,
-                      ),
-                      decoration: BoxDecoration(
-                        color: accent.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        action.priorityLabel.toUpperCase(),
-                        style: TextStyle(
-                          color: accent,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w800,
-                        ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: accent.withValues(alpha: 0.14),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(_actionIcon(action.kind), size: 20, color: accent),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      action.title,
+                      style: TextStyle(
+                        fontSize: 19,
+                        fontWeight: FontWeight.w800,
+                        color: context.fomraTextPrimary,
                       ),
                     ),
+                  ),
                 ],
               ),
               const SizedBox(height: 8),
               Text(
-                action.label,
+                action.description,
                 style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  color: context.fomraTextPrimary,
+                  fontSize: 12,
+                  height: 1.4,
+                  fontWeight: FontWeight.w500,
+                  color: context.fomraTextSecondary,
                 ),
               ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 12,
-                runSpacing: 4,
+              const SizedBox(height: 10),
+              Row(
                 children: [
-                  _Meta(
-                    icon: Icons.event_outlined,
-                    text: 'Due ${_fmtDate(action.dueDate)}',
+                  Text(
+                    'Current Stage:',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: context.fomraTextSecondary,
+                    ),
                   ),
-                  _Meta(
-                    icon: Icons.hourglass_bottom_rounded,
-                    text: action.pendingDays <= 0
-                        ? 'Pending since today'
-                        : 'Pending ${action.pendingDays}d',
-                  ),
-                  _Meta(
-                    icon: Icons.flag_outlined,
-                    text: 'Priority ${action.priorityLabel}',
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      color: stage.color.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      stage.label,
+                      style: TextStyle(
+                        color: stage.color,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -247,32 +255,6 @@ class _TaskStat extends StatelessWidget {
           label,
           style: TextStyle(
             fontSize: 10,
-            fontWeight: FontWeight.w600,
-            color: context.fomraTextSecondary,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _Meta extends StatelessWidget {
-  final IconData icon;
-  final String text;
-
-  const _Meta({required this.icon, required this.text});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 13, color: context.fomraTextSecondary),
-        const SizedBox(width: 4),
-        Text(
-          text,
-          style: TextStyle(
-            fontSize: 11,
             fontWeight: FontWeight.w600,
             color: context.fomraTextSecondary,
           ),

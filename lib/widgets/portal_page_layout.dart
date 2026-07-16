@@ -55,9 +55,17 @@ class FomraSubPageAppBar extends StatelessWidget implements PreferredSizeWidget 
     this.breadcrumbs,
   });
 
+  /// An explicit [breadcrumbs] list still wins, for the few screens that need a
+  /// fixed trail. Otherwise the page names itself with [title] and the path in
+  /// front of it comes from where the user actually came from — the same rule
+  /// [FomraAppBar] follows.
   PreferredSizeWidget? _breadcrumbBottom() {
-    if (breadcrumbs == null || breadcrumbs!.length < 2) return null;
-    return FomraBreadcrumbBar(items: breadcrumbs!);
+    if (breadcrumbs != null) {
+      return breadcrumbs!.length >= 2 ? FomraBreadcrumbBar(items: breadcrumbs!) : null;
+    }
+    final label = title.trim();
+    if (label.isEmpty) return null;
+    return FomraTrailBreadcrumbBar(label: label);
   }
 
   @override

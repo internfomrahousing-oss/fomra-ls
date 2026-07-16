@@ -9,7 +9,6 @@ import '../../theme/fomra_theme_context.dart';
 import '../../widgets/contact_call_whatsapp.dart';
 import '../../widgets/fomra_app_bar.dart';
 import '../../widgets/fomra_app_shell.dart';
-import '../../widgets/fomra_breadcrumb.dart';
 import '../../widgets/ui/app_components.dart';
 import '../land_lead/lead_detail_screen.dart';
 
@@ -81,14 +80,7 @@ class _ContactDirectoryScreenState extends State<ContactDirectoryScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => LeadDetailScreen(
-          lead: lead,
-          breadcrumbs: [
-            const FomraBreadcrumbItem.home(),
-            FomraBreadcrumbItem.pop(_title),
-            FomraBreadcrumbItem.current('Lead #${lead.leadId}'),
-          ],
-        ),
+        builder: (_) => LeadDetailScreen(lead: lead),
       ),
     );
   }

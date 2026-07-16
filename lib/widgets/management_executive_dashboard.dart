@@ -272,15 +272,22 @@ class _ManagementExecutiveDashboardState
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   pipeline,
-                  const SizedBox(height: AppSpacing.md),
+                  const SizedBox(height: AppSpacing.lg),
                   donut,
-                  const SizedBox(height: AppSpacing.md),
+                  const SizedBox(height: AppSpacing.lg),
                   pendingStages,
-                  const SizedBox(height: AppSpacing.md),
+                  const SizedBox(height: AppSpacing.lg),
                   ageing,
                 ],
               );
             }
+            // Both columns start on the same line and each card is exactly as
+            // wide as the one above it (7:3 of the row, minus one 24px gutter).
+            //
+            // The columns are NOT forced to a shared height: Pipeline Dashboard
+            // and Site Ageing each build through a LayoutBuilder, which cannot
+            // report intrinsic dimensions, so IntrinsicHeight — the usual way to
+            // level two columns — throws here. See dashboard_grid_alignment_test.
             return Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -292,19 +299,19 @@ class _ManagementExecutiveDashboardState
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       pipeline,
-                      const SizedBox(height: AppSpacing.md),
+                      const SizedBox(height: AppSpacing.lg),
                       ageing,
                     ],
                   ),
                 ),
-                const SizedBox(width: AppSpacing.md),
+                const SizedBox(width: AppSpacing.lg),
                 Expanded(
                   flex: 3,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       donut,
-                      const SizedBox(height: AppSpacing.md),
+                      const SizedBox(height: AppSpacing.lg),
                       pendingStages,
                     ],
                   ),

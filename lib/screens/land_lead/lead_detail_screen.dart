@@ -9,6 +9,7 @@ import '../../models/land_lead_meeting.dart';
 import '../../models/land_lead_site_visit.dart';
 import '../../models/lead_call_log.dart';
 import '../../services/app_store.dart';
+import '../../services/auth_service.dart';
 import '../../services/role_access.dart';
 import '../../services/lead_drop_approval_service.dart';
 import '../../services/lead_drop_reason_catalog_service.dart';
@@ -59,12 +60,10 @@ String _formatReceivedOn(DateTime receivedOn) {
 
 class LeadDetailScreen extends StatefulWidget {
   final LandLead lead;
-  final List<FomraBreadcrumbItem>? breadcrumbs;
 
   const LeadDetailScreen({
     super.key,
     required this.lead,
-    this.breadcrumbs,
   });
 
   @override
@@ -80,12 +79,15 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
   List<LandLeadMeeting> _meetings = [];
   List<LandLeadLegalDocument> _legalDocs = [];
 
-  static const _tabs = [
-    'Activity',
-    'Site Photos',
-    'Infrastructure',
-    'Land Records',
-  ];
+  /// Competitor Projects sits beside Land Records, but only management may see
+  /// it — an executive, RM or Head never gets the tab at all.
+  static List<String> get _tabs => [
+        'Activity',
+        'Site Photos',
+        'Infrastructure',
+        'Land Records',
+        if (AuthService.instance.isManagement) 'Competitor Projects',
+      ];
 
   static const _miTabStart = 2;
   final Set<int> _loadedMiTabs = {};
@@ -170,27 +172,23 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
         legalDocCount: _legalDocs.length,
       );
 
+  /// Opens the tab where the pending activity is logged, so the card is a
+  /// shortcut to doing the thing it asks for.
   void _onNextActionTap() {
-    final action = _workflowInsight.nextAction;
-    switch (action.kind) {
+    switch (_workflowInsight.nextAction.kind) {
       case EmployeeNextActionKind.callOwner:
         _handleDetailAction('Calls');
         break;
-      case EmployeeNextActionKind.scheduleVisit:
-        _handleDetailAction('Site visit');
-        break;
-      case EmployeeNextActionKind.scheduleMeeting:
+      case EmployeeNextActionKind.landOwnerMeeting:
         _handleDetailAction('Meeting');
         break;
-      case EmployeeNextActionKind.collectChitta:
-      case EmployeeNextActionKind.collectFmb:
-      case EmployeeNextActionKind.collectPatta:
-      case EmployeeNextActionKind.uploadDocuments:
-      case EmployeeNextActionKind.uploadSaleDeed:
-        _handleDetailAction('Legal');
+      case EmployeeNextActionKind.siteVisit:
+      case EmployeeNextActionKind.managementSiteVisit:
+        _handleDetailAction('Site visit');
         break;
-      case EmployeeNextActionKind.followUpTask:
-        _openViewTasks();
+      case EmployeeNextActionKind.legalVerification:
+      case EmployeeNextActionKind.projectSigning:
+        _handleDetailAction('Legal');
         break;
       case EmployeeNextActionKind.none:
         break;
@@ -504,10 +502,9 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
   }
 
   /// This page names itself; the path in front of it comes from the pages the
-  /// user actually came through. A caller can still force a fixed trail.
-  Widget get _breadcrumbBar => widget.breadcrumbs != null
-      ? FomraBreadcrumbStrip(items: widget.breadcrumbs!)
-      : FomraTrailBreadcrumbBar(label: 'Lead ${lead.leadId}');
+  /// user actually came through.
+  Widget get _breadcrumbBar =>
+      FomraTrailBreadcrumbBar(label: 'Lead ${lead.leadId}');
 
   @override
   Widget build(BuildContext context) {
@@ -1457,11 +1454,20 @@ class _WorkspacePanel extends StatelessWidget {
                         section: MarketIntelLeadSection.infrastructure,
                         scrollable: false,
                       );
-                    default:
+                    case 3:
                       return _LazyMarketIntelTab(
                         active: shouldLoadMiTab(3),
                         lead: lead,
                         section: MarketIntelLeadSection.landRecords,
+                        scrollable: false,
+                      );
+                    default:
+                      // Only reachable for management: the tab isn't built for
+                      // anyone else.
+                      return _LazyMarketIntelTab(
+                        active: shouldLoadMiTab(4),
+                        lead: lead,
+                        section: MarketIntelLeadSection.competitorProjects,
                         scrollable: false,
                       );
                   }
@@ -1816,24 +1822,30 @@ class _ActivityTimelineState extends State<_ActivityTimeline> {
       ));
     }
 
-    // Parse tagged notes (voice / GPS) into timeline entries.
-    for (final line in lead.notes.split('\n')) {
-      final trimmed = line.trim();
-      if (trimmed.isEmpty) continue;
-      final isVoice = trimmed.contains('[Voice Note]');
-      final isGps = trimmed.contains('[GPS Check-in]');
+    // Parse tagged notes (voice / GPS) into timeline entries. The nearby
+    // information block is one entry, however many categories it lists.
+    for (final entry in LeadAutoNotes.splitEntries(lead.notes)) {
+      final isAuto = LeadAutoNotes.isAutoEntry(entry);
+      final isVoice = entry.contains('[Voice Note]');
+      final isGps = entry.contains('[GPS Check-in]');
       final audioUrl = isVoice
-          ? VoiceNoteService.audioUrlFromNotesLine(trimmed)
+          ? VoiceNoteService.audioUrlFromNotesLine(entry)
           : null;
       events.add((
         at: lead.addedOn,
         title: isVoice
             ? 'Voice note'
-            : (isGps ? 'GPS check-in' : 'Note'),
-        subtitle: trimmed,
+            : (isGps
+                ? 'GPS check-in'
+                : (isAuto ? 'Nearby information' : 'Note')),
+        subtitle: entry,
         icon: isVoice
             ? Icons.mic_none_rounded
-            : (isGps ? Icons.my_location_rounded : Icons.notes_outlined),
+            : (isGps
+                ? Icons.my_location_rounded
+                : (isAuto
+                    ? Icons.travel_explore_outlined
+                    : Icons.notes_outlined)),
         audioUrl: audioUrl,
         category: _ActivityFilter.notes,
       ));

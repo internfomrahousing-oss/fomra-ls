@@ -101,6 +101,34 @@ class LandLeadSignedService {
     }
   }
 
+  /// Requests approved between [from] and [to] — the sites/deals actually closed
+  /// in that window, which is what monthly target progress counts. A lead only
+  /// reaches Signed through this workflow, so `reviewed_at` is the completion
+  /// date.
+  ///
+  /// Returns nothing rather than throwing if the table is missing, so a
+  /// dashboard never breaks on it.
+  static Future<List<LandLeadSignedRequest>> getApprovedBetween({
+    required DateTime from,
+    required DateTime to,
+  }) async {
+    try {
+      final rows = await _db
+          .from(_table)
+          .select()
+          .eq('status', SiteVisitApprovalStatus.approved.dbValue)
+          .gte('reviewed_at', from.toUtc().toIso8601String())
+          .lte('reviewed_at', to.toUtc().toIso8601String())
+          .order('reviewed_at', ascending: true);
+
+      return (rows as List)
+          .map((r) => LandLeadSignedRequest.fromJson(r as Map<String, dynamic>))
+          .toList();
+    } catch (_) {
+      return const [];
+    }
+  }
+
   /// Approving advances the request to the next approver in the chain; only the
   /// final (Management) approval marks the lead Signed. Rejecting at ANY level
   /// ends the request and notifies the executive who raised it.

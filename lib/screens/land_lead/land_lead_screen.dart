@@ -342,7 +342,7 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
     return FomraAppShell(
       currentRoute: '/land-lead',
       appBar: const FomraAppBar(
-        moduleName: 'Land Lead',
+        moduleName: 'Land Workspace',
       ),
       body: body,
       floatingActionButton: fab,

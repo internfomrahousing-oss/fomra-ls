@@ -906,8 +906,15 @@ class AddLeadMapPicker extends StatelessWidget {
   final bool fetchingMyLocation;
   final String? status;
   final VoidCallback onMapReady;
-  final Future<void> Function(LatLng) onTap;
-  final Future<void> Function() onMyLocation;
+
+  /// Leave null for a read-only map: the pin can then only be placed by the
+  /// caller (live GPS capture), never by tapping. Add Lead uses this — typed
+  /// coordinates and map pins are rejected there, so the displayed pin always
+  /// matches the captured GPS.
+  final Future<void> Function(LatLng)? onTap;
+
+  /// Leave null to hide the "My Location" button.
+  final Future<void> Function()? onMyLocation;
 
   const AddLeadMapPicker({
     super.key,
@@ -916,16 +923,19 @@ class AddLeadMapPicker extends StatelessWidget {
     required this.defaultCenter,
     required this.pinnedPoint,
     required this.resolving,
-    required this.fetchingMyLocation,
-    required this.status,
+    this.fetchingMyLocation = false,
+    this.status,
     required this.onMapReady,
-    required this.onTap,
-    required this.onMyLocation,
+    this.onTap,
+    this.onMyLocation,
   });
+
+  bool get _readOnly => onTap == null;
 
   @override
   Widget build(BuildContext context) {
-    final showHint = pinnedPoint == null && !resolving;
+    // The "tap to drop a pin" hint would be a lie on a read-only map.
+    final showHint = !_readOnly && pinnedPoint == null && !resolving;
 
     return Container(
       decoration: BoxDecoration(
@@ -944,7 +954,8 @@ class AddLeadMapPicker extends StatelessWidget {
                 initialCenter: pinnedPoint ?? defaultCenter,
                 initialZoom: pinnedPoint != null ? 16 : 11,
                 onMapReady: onMapReady,
-                onTap: (_, point) => onTap(point),
+                onTap: _readOnly ? null : (_, point) => onTap!(point),
+                // Still pan/zoom on a read-only map — only pin placement goes.
                 interactionOptions: const InteractionOptions(
                   flags: InteractiveFlag.all & ~InteractiveFlag.scrollWheelZoom,
                 ),
@@ -1000,6 +1011,7 @@ class AddLeadMapPicker extends StatelessWidget {
                   ),
                 ),
               ),
+            if (onMyLocation != null)
             Positioned(
               right: 12,
               bottom: 12,
