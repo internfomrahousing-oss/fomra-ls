@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -43,58 +44,13 @@ class EmployeeService {
     } catch (_) {/* endpoint not deployed / offline — profile still created */}
   }
 
-  /// Send an invite email so [email] can set their own password and get a real
-  /// Supabase Auth login. Management only (uses the caller's session token).
-  /// Best-effort: if there's no management session the profile is still created,
-  /// and management can re-send the invite later.
-  ///
-  /// Returns `'invite'` when a fresh invite email was sent, or `'recovery'`
-  /// when the address already had a login so a set-password (recovery) email
-  /// was sent instead. These use DIFFERENT Supabase email templates
-  /// ("Invite user" vs "Reset Password"), which matters when one of them is
-  /// misconfigured and arrives blank.
-  ///
-  /// [designation] and [fullName] ride along as the invited user's metadata.
-  /// Sending is identical for every designation — Executive, Reporting Manager,
-  /// Head and Management all take this one path — so a role can never change
-  /// whether the email goes out. If an invite doesn't arrive, the cause is on
-  /// the Supabase side (SMTP / rate limit), and the endpoint says which.
-  static Future<String> inviteEmployee(
-    String email, {
-    String designation = '',
-    String fullName = '',
-  }) async {
-    final token = _db.auth.currentSession?.accessToken;
-    if (token == null) {
-      throw Exception(
-          'Sign in as management (with your real password) to invite employees.');
-    }
-    final res = await http.post(
-      Uri.parse('${ApiClient.baseUrl}/api/employee-auth'),
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $token',
-      },
-      body: jsonEncode({
-        'action': 'invite',
-        'email': email.trim().toLowerCase(),
-        if (designation.trim().isNotEmpty) 'designation': designation.trim(),
-        if (fullName.trim().isNotEmpty) 'fullName': fullName.trim(),
-      }),
-    );
-    if (res.statusCode >= 400) {
-      String msg = 'Invite failed (${res.statusCode}).';
-      try {
-        final j = jsonDecode(res.body);
-        if (j is Map && j['error'] != null) msg = j['error'].toString();
-      } catch (_) {}
-      throw Exception(msg);
-    }
-    try {
-      final j = jsonDecode(res.body);
-      if (j is Map && j['recovered'] == true) return 'recovery';
-    } catch (_) {}
-    return 'invite';
+  /// A readable, reasonably strong temporary password to hand to a new employee.
+  /// Ambiguous characters (0/O, 1/l/I) are left out so it's easy to read aloud
+  /// or copy. They can change it after signing in.
+  static String generatePassword({int length = 10}) {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+    final rand = Random.secure();
+    return List.generate(length, (_) => chars[rand.nextInt(chars.length)]).join();
   }
 
   /// Reset an employee's login password (management only).
@@ -125,10 +81,10 @@ class EmployeeService {
     }
   }
 
-  /// Give an existing employee a ready-to-use login with a known [password]
-  /// (default 'fomra@2024'): create the Supabase Auth user if needed, then set
-  /// the password so it works whether or not the account already existed.
-  /// Management only. Used to migrate pre-invite employees.
+  /// Give an employee a ready-to-use login with a known [password]: create the
+  /// Supabase Auth user if needed, then set the password so it works whether or
+  /// not the account already existed. Management only. This is the whole
+  /// onboarding path now — management shares the password directly, no email.
   static Future<void> provisionLogin(String email,
       {String password = 'fomra@2024'}) async {
     final token = _db.auth.currentSession?.accessToken;
@@ -224,8 +180,8 @@ class EmployeeService {
         all.insert(0, profile);
         await _saveCache(all);
       }
-      // The invite email (so the employee sets their own password) is sent by
-      // the caller via [inviteEmployee], so its outcome can be surfaced.
+      // The login (so the employee can sign in) is provisioned by the caller
+      // via provisionLogin, so its outcome can be surfaced.
       return profile;
     } catch (e) {
       final profile = EmployeeProfile(

@@ -1413,13 +1413,11 @@ class _Field extends StatelessWidget {
     required this.hint,
     required this.icon,
     this.required = false,
-    this.maxLines = 1,
-    this.maxLength,
     this.keyboardType = TextInputType.text,
     this.inputFormatters,
     this.readOnly = false,
     this.validator,
-  }) : light = false, onFieldSubmitted = null;
+  }) : maxLines = 1, maxLength = null, light = false, onFieldSubmitted = null;
 
   @override
   Widget build(BuildContext context) {

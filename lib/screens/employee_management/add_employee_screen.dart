@@ -5,6 +5,7 @@ import '../../theme/app_theme.dart';
 import '../../theme/fomra_input.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../widgets/fomra_app_shell.dart';
+import '../../widgets/credentials_dialog.dart';
 import '../../widgets/ui/app_feedback.dart';
 import '../../widgets/portal_home_sections.dart';
 import '../../widgets/portal_page_layout.dart';
@@ -51,46 +52,34 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
         email: _emailCtrl.text,
         designation: _designation!,
       );
-      // Send the "set your password" invite email. If it fails, the profile is
-      // still created — surface the reason so management can re-send.
-      String? inviteError;
-      var kind = 'invite';
+      // Give them an immediate login with a generated password — no invite
+      // email, works for every role. If provisioning fails, the profile is
+      // still saved and a password can be set later from User Management.
+      final password = EmployeeService.generatePassword();
+      String? loginError;
       try {
-        kind = await EmployeeService.inviteEmployee(
-          profile.email,
-          designation: profile.designation,
-          fullName: profile.fullName,
-        );
+        await EmployeeService.provisionLogin(profile.email, password: password);
       } catch (e) {
-        inviteError = e.toString().replaceFirst('Exception: ', '');
+        loginError = e.toString().replaceFirst('Exception: ', '');
       }
       if (!mounted) return;
       Navigator.pop(context, profile);
-      if (inviteError == null) {
-        // Say which email went out: a brand-new address gets the "Invite user"
-        // template, an address that already had a login gets the "Reset
-        // Password" one. Naming it makes a blank email traceable to the right
-        // Supabase template.
-        AppFeedback.success(
+      if (loginError == null) {
+        // Show the credentials once so management can hand them over.
+        await showCredentialsDialog(
           context,
-          kind == 'recovery'
-              ? '${profile.email} already had a login — a set-password (recovery) email was sent.'
-              : 'Invitation sent to ${profile.email} to set their password.',
+          email: profile.email,
+          password: password,
+          title: '${profile.fullName} added',
         );
       } else {
-        // A dialog, not a toast: the reason is usually a paragraph telling
-        // management exactly what to fix (SMTP, rate limit), and a toast fades
-        // before it can be read. The profile is already saved either way — the
-        // address is never created twice, and the invite can be re-sent from
-        // User Management.
         AppFeedback.errorDetails(
           context,
-          title: 'Employee saved, but the invite email failed',
+          title: 'Employee saved, but the login could not be created',
           message: '${profile.fullName} (${profile.email}) was created as '
-              '${profile.designation}, but Supabase did not send the invite:\n\n'
-              '$inviteError\n\n'
-              'Re-send it from User Management once that is fixed — no duplicate '
-              'user is created.',
+              '${profile.designation}, but their login could not be set up:\n\n'
+              '$loginError\n\n'
+              'Set a password from User Management → Set password.',
         );
       }
     } catch (e) {

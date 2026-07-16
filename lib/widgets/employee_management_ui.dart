@@ -188,15 +188,13 @@ class EmployeeStatusBadge extends StatelessWidget {
 class EmployeeManagementCard extends StatelessWidget {
   final EmployeeProfile employee;
   final VoidCallback onRemoveAccess;
-  final VoidCallback onResetPassword;
-  final VoidCallback onProvisionLogin;
+  final VoidCallback onSetPassword;
 
   const EmployeeManagementCard({
     super.key,
     required this.employee,
     required this.onRemoveAccess,
-    required this.onResetPassword,
-    required this.onProvisionLogin,
+    required this.onSetPassword,
   });
 
   @override
@@ -285,25 +283,16 @@ class EmployeeManagementCard extends StatelessWidget {
               elevation: 8,
               shadowColor: Colors.black26,
               onSelected: (v) {
-                if (v == 'reset') onResetPassword();
-                if (v == 'provision') onProvisionLogin();
+                if (v == 'setpwd') onSetPassword();
                 if (v == 'remove') onRemoveAccess();
               },
               itemBuilder: (_) => [
                 const PopupMenuItem(
-                  value: 'reset',
-                  child: ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: Icon(Icons.mark_email_read_outlined, size: 20),
-                    title: Text('Resend invite'),
-                  ),
-                ),
-                const PopupMenuItem(
-                  value: 'provision',
+                  value: 'setpwd',
                   child: ListTile(
                     contentPadding: EdgeInsets.zero,
                     leading: Icon(Icons.password_outlined, size: 20),
-                    title: Text('Set login to fomra@2024'),
+                    title: Text('Set password'),
                   ),
                 ),
                 const PopupMenuItem(

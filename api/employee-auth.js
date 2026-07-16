@@ -1,10 +1,11 @@
-// Admin endpoint: provision / reset Supabase Auth users for employees.
+// Admin endpoint: provision / reset / delete Supabase Auth users for employees.
 //
-// Why this exists: creating an auth user (so an employee can get a REAL
-// authenticated session, which lets us lock RLS down to `authenticated`)
-// requires the service_role key, which must never live in the client. This
-// serverless function holds it server-side and is callable ONLY by a signed-in
-// management user (verified via their Supabase access token).
+// Onboarding is email-free: management creates an employee's login here with a
+// known password (provision) and hands it to them directly — there is no invite
+// email and no SMTP dependency. Creating an auth user requires the service_role
+// key, which must never live in the client, so this serverless function holds
+// it server-side and is callable ONLY by a signed-in management user (verified
+// via their Supabase access token).
 //
 // Required Vercel environment variables:
 //   SUPABASE_URL                 e.g. https://irjgtudyxzzvgbbrxmgq.supabase.co
@@ -43,31 +44,6 @@ async function readBody(req) {
     req.on('end', () => { try { resolve(JSON.parse(data || '{}')); } catch { resolve({}); } });
     req.on('error', () => resolve({}));
   });
-}
-
-// Turn GoTrue's opaque email failures into something management can act on.
-// These are the real-world causes of "employee created but invite failed":
-// Supabase's built-in email service is rate-limited (a few per hour) and is
-// not meant for production — a custom SMTP provider must be configured.
-function explainEmailError(status, msg) {
-  if (status === 429 || msg.includes('rate limit') || msg.includes('too many')) {
-    return 'Email rate limit reached. Supabase\'s built-in email service only ' +
-      'allows a few messages per hour — configure a custom SMTP provider in ' +
-      'Supabase → Authentication → Emails → SMTP Settings, then re-send.';
-  }
-  if (
-    msg.includes('error sending') ||
-    msg.includes('smtp') ||
-    msg.includes('send email') ||
-    msg.includes('sending email')
-  ) {
-    // NB: deliberately not matching a bare 'mail' — it also matches "email",
-    // which appears in unrelated errors like "email already registered".
-    return 'Supabase could not send the invite email. Configure SMTP in ' +
-      'Supabase → Authentication → Emails → SMTP Settings (and make sure the ' +
-      '"Invite user" template + Site URL / redirect URLs are set), then re-send.';
-  }
-  return null;
 }
 
 async function findUserIdByEmail(base, headers, email) {
@@ -132,13 +108,14 @@ module.exports = async (req, res) => {
   const password = body.password || DEFAULT_PASSWORD;
   if (!email) return res.status(400).json({ error: 'email required' });
 
-  // Optional invite metadata. The app's permissions read the designation from
-  // employee_profiles, not from here — this carries it onto the auth user so
-  // the invited account knows its own role and the email template can greet
-  // them by name/role. Every designation is treated the same: Executive,
-  // Reporting Manager, Head and Management all take this identical path.
+  // Optional profile metadata carried onto the auth user so the account knows
+  // its own name/role. The app reads permissions from employee_profiles, so
+  // this is informational only. Every role is treated identically.
   const designation = (body.designation || '').trim();
   const fullName = (body.fullName || '').trim();
+  const userMetadata = {};
+  if (fullName) userMetadata.full_name = fullName;
+  if (designation) userMetadata.designation = designation;
 
   const base = `${SUPABASE_URL}/auth/v1/admin/users`;
   const headers = {
@@ -147,79 +124,21 @@ module.exports = async (req, res) => {
     'Content-Type': 'application/json',
   };
 
-  // Where the invite email's "set password" link should land the user.
-  const APP_URL = (process.env.APP_URL || 'https://fomra-ls.vercel.app').replace(/\/$/, '');
-  const REDIRECT_TO = `${APP_URL}/set-password`;
-
   try {
-    if (action === 'invite') {
-      // Send an invite email. The recipient clicks the link and sets their own
-      // password (handled by the app's /set-password screen). No password is
-      // ever set here. Idempotent-ish: an already-registered email returns ok.
-      const data = {};
-      if (fullName) data.full_name = fullName;
-      if (designation) data.designation = designation;
-
-      const r = await fetch(
-        `${SUPABASE_URL}/auth/v1/invite?redirect_to=${encodeURIComponent(REDIRECT_TO)}`,
-        {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({
-            email,
-            // GoTrue stores `data` as the new user's user_metadata.
-            ...(Object.keys(data).length ? { data } : {}),
-          }),
-        }
-      );
-      if (r.ok) return res.status(200).json({ ok: true, invited: true });
-      const err = await r.json().catch(() => ({}));
-      const rawMsg = `${err.msg || err.error_description || err.message || ''}`.trim();
-      const msg = rawMsg.toLowerCase();
-      // Check "already registered" FIRST — an existing user is not an email
-      // failure, and its message ("email address ... already registered")
-      // would otherwise be misread as one. Send a password recovery email
-      // instead; its link also lands on /set-password (the app handles
-      // type=recovery), so they can (re)set their password.
-      if (r.status === 422 || msg.includes('already') || msg.includes('registered') || msg.includes('exists')) {
-        const rec = await fetch(
-          `${SUPABASE_URL}/auth/v1/recover?redirect_to=${encodeURIComponent(REDIRECT_TO)}`,
-          {
-            method: 'POST',
-            headers,
-            body: JSON.stringify({ email }),
-          }
-        );
-        if (rec.ok) {
-          return res.status(200).json({ ok: true, invited: false, recovered: true });
-        }
-        const rerr = await rec.json().catch(() => ({}));
-        const rrawMsg = `${rerr.msg || rerr.error_description || rerr.message || ''}`.trim();
-        const rmsg = rrawMsg.toLowerCase();
-        const rmapped = explainEmailError(rec.status, rmsg);
-        return res.status(rec.status).json({
-          error: rmapped
-              ? (rrawMsg ? `${rmapped}\n\nRaw error (HTTP ${rec.status}): ${rrawMsg}` : rmapped)
-              : (rrawMsg || 'could not send password email'),
-        });
-      }
-      // A genuine send failure (not an existing user) → explain SMTP, with the
-      // raw detail appended so a stuck setup is diagnosable.
-      const mapped = explainEmailError(r.status, msg);
-      if (mapped) {
-        return res.status(r.status).json({
-          error: rawMsg ? `${mapped}\n\nRaw error (HTTP ${r.status}): ${rawMsg}` : mapped,
-        });
-      }
-      return res.status(r.status).json({ error: rawMsg || 'invite failed' });
-    }
-
     if (action === 'provision') {
-      // Create a confirmed auth user. Idempotent: treat "already exists" as ok.
+      // Create a confirmed auth user with a known password so they can sign in
+      // immediately — no invite email, no email verification. Idempotent:
+      // "already exists" is treated as ok (the caller then sets the password
+      // via the reset action).
       const r = await fetch(base, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ email, password, email_confirm: true }),
+        body: JSON.stringify({
+          email,
+          password,
+          email_confirm: true,
+          ...(Object.keys(userMetadata).length ? { user_metadata: userMetadata } : {}),
+        }),
       });
       if (r.ok) return res.status(200).json({ ok: true, created: true });
       const err = await r.json().catch(() => ({}));
@@ -263,7 +182,7 @@ module.exports = async (req, res) => {
       return res.status(r.status).json({ error: err.msg || err.message || 'reset failed' });
     }
 
-    return res.status(400).json({ error: 'unknown action (use "invite", "provision", "reset" or "delete")' });
+    return res.status(400).json({ error: 'unknown action (use "provision", "reset" or "delete")' });
   } catch (e) {
     return res.status(500).json({ error: String(e && e.message ? e.message : e) });
   }

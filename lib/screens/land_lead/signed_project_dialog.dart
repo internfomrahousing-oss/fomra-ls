@@ -443,13 +443,13 @@ class _ConfettiPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()..style = PaintingStyle.fill;
-    final colors = const [
+    const colors = [
       Color(0xFF2563EB),
       Color(0xFF10B981),
       Color(0xFFF59E0B),
       Color(0xFFEC4899),
     ];
-    final count = 22;
+    const count = 22;
     for (var i = 0; i < count; i++) {
       final seed = i * 37;
       final x = ((seed % 100) / 100.0) * size.width;
