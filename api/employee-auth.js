@@ -59,8 +59,10 @@ function explainEmailError(status, msg) {
     msg.includes('error sending') ||
     msg.includes('smtp') ||
     msg.includes('send email') ||
-    msg.includes('mail')
+    msg.includes('sending email')
   ) {
+    // NB: deliberately not matching a bare 'mail' — it also matches "email",
+    // which appears in unrelated errors like "email already registered".
     return 'Supabase could not send the invite email. Configure SMTP in ' +
       'Supabase → Authentication → Emails → SMTP Settings (and make sure the ' +
       '"Invite user" template + Site URL / redirect URLs are set), then re-send.';
@@ -174,20 +176,12 @@ module.exports = async (req, res) => {
       const err = await r.json().catch(() => ({}));
       const rawMsg = `${err.msg || err.error_description || err.message || ''}`.trim();
       const msg = rawMsg.toLowerCase();
-      const mapped = explainEmailError(r.status, msg);
-      // Keep the friendly guidance, but append what Supabase/SMTP actually said
-      // so a stuck SMTP setup is diagnosable instead of a generic wall.
-      if (mapped) {
-        return res.status(r.status).json({
-          error: rawMsg
-              ? `${mapped}\n\nRaw error (HTTP ${r.status}): ${rawMsg}`
-              : mapped,
-        });
-      }
+      // Check "already registered" FIRST — an existing user is not an email
+      // failure, and its message ("email address ... already registered")
+      // would otherwise be misread as one. Send a password recovery email
+      // instead; its link also lands on /set-password (the app handles
+      // type=recovery), so they can (re)set their password.
       if (r.status === 422 || msg.includes('already') || msg.includes('registered') || msg.includes('exists')) {
-        // The user already exists → an invite won't re-send. Send a password
-        // recovery email instead; its link also lands on /set-password (the app
-        // handles type=recovery), so they can (re)set their password.
         const rec = await fetch(
           `${SUPABASE_URL}/auth/v1/recover?redirect_to=${encodeURIComponent(REDIRECT_TO)}`,
           {
@@ -200,13 +194,24 @@ module.exports = async (req, res) => {
           return res.status(200).json({ ok: true, invited: false, recovered: true });
         }
         const rerr = await rec.json().catch(() => ({}));
-        const rmsg = `${rerr.msg || rerr.error_description || rerr.message || ''}`.toLowerCase();
+        const rrawMsg = `${rerr.msg || rerr.error_description || rerr.message || ''}`.trim();
+        const rmsg = rrawMsg.toLowerCase();
+        const rmapped = explainEmailError(rec.status, rmsg);
         return res.status(rec.status).json({
-          error: explainEmailError(rec.status, rmsg) ||
-            rerr.msg || rerr.message || 'could not send password email',
+          error: rmapped
+              ? (rrawMsg ? `${rmapped}\n\nRaw error (HTTP ${rec.status}): ${rrawMsg}` : rmapped)
+              : (rrawMsg || 'could not send password email'),
         });
       }
-      return res.status(r.status).json({ error: err.msg || err.message || 'invite failed' });
+      // A genuine send failure (not an existing user) → explain SMTP, with the
+      // raw detail appended so a stuck setup is diagnosable.
+      const mapped = explainEmailError(r.status, msg);
+      if (mapped) {
+        return res.status(r.status).json({
+          error: rawMsg ? `${mapped}\n\nRaw error (HTTP ${r.status}): ${rawMsg}` : mapped,
+        });
+      }
+      return res.status(r.status).json({ error: rawMsg || 'invite failed' });
     }
 
     if (action === 'provision') {
