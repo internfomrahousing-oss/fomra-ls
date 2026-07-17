@@ -173,6 +173,7 @@ abstract final class FomraBreadcrumbs {
     'User Management': [settings],
     'Monthly Targets': [settings],
     'Reset Password': [settings],
+    'Access as User': [settings],
     'Audit': [settings],
     // Land Workspace section.
     'Add Land Lead': [landWorkspace],

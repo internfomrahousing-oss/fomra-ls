@@ -1430,7 +1430,7 @@ class _ActionToolbar extends StatelessWidget {
       (Icons.apartment_outlined, 'Management site visit', AppColors.purple),
       (Icons.groups_outlined, 'Meeting', AppColors.purple),
       (Icons.gavel_outlined, 'Legal', AppColors.purple),
-      (Icons.check_circle, 'Signed', AppColors.success),
+      (Icons.draw_outlined, 'Signed', AppColors.purple),
     ];
 
     return SingleChildScrollView(

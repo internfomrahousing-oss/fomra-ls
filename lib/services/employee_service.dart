@@ -308,18 +308,30 @@ class EmployeeService {
   ) async {
     final emp = employeeEmail.trim().toLowerCase();
     final mgr = managerEmail.trim().toLowerCase();
+    List rows;
     try {
-      await _db
+      // Match on the email column (stable) and read back the updated rows —
+      // a filter that matches nothing returns success with an empty list, which
+      // would otherwise persist nothing and make the assignment "vanish" on the
+      // next reload.
+      rows = await _db
           .from('employee_profiles')
-          .update({'reports_to': mgr}).eq('id', emp);
+          .update({'reports_to': mgr})
+          .eq('email', emp)
+          .select() as List;
     } catch (e) {
       throw Exception(
         'Could not save the team assignment. If this persists, run '
         'supabase/employee_reports_to.sql in Supabase. ($e)',
       );
     }
+    if (rows.isEmpty) {
+      throw Exception(
+        'That employee could not be found to update — refresh the page and try again.',
+      );
+    }
     final cached = await _loadCache();
-    final idx = cached.indexWhere((e) => e.id.toLowerCase() == emp);
+    final idx = cached.indexWhere((e) => e.email.trim().toLowerCase() == emp);
     if (idx != -1) {
       cached[idx] = cached[idx].copyWith(reportsTo: mgr);
       await _saveCache(cached);

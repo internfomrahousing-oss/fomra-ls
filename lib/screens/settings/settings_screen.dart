@@ -66,10 +66,13 @@ class SettingsScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 20),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: [
+          LayoutBuilder(
+            builder: (context, c) {
+              const gap = 12.0;
+              // Four tiles per row (two on a narrow phone).
+              final cols = c.maxWidth < 460 ? 2 : 4;
+              final tileW = (c.maxWidth - gap * (cols - 1)) / cols;
+              final tiles = <Widget>[
               _SettingsTile(
                 icon: Icons.lock_outline,
                 label: 'Reset Password',
@@ -148,7 +151,15 @@ class SettingsScreen extends StatelessWidget {
                     ),
                   ),
                 ),
-            ],
+              ];
+              return Wrap(
+                spacing: gap,
+                runSpacing: gap,
+                children: [
+                  for (final t in tiles) SizedBox(width: tileW, child: t),
+                ],
+              );
+            },
           ),
         ],
       ),
@@ -182,9 +193,8 @@ class _SettingsTileState extends State<_SettingsTile> {
         widget.accent.withValues(alpha: _hovered ? 0.45 : 0.25);
     final screenWidth = MediaQuery.sizeOf(context).width;
     final compact = screenWidth < 420;
-    final tileWidth = compact
-        ? ((screenWidth - 44) / 2).clamp(118.0, 148.0)
-        : 148.0;
+    // Width is controlled by the parent grid cell; fill it.
+    const tileWidth = double.infinity;
     final tileHeight = compact ? 84.0 : 118.0;
     final tilePadding = compact ? 8.0 : 14.0;
 
