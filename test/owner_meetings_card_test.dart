@@ -26,7 +26,12 @@ LandLead _lead(String id, {LeadStatus status = LeadStatus.legal}) => LandLead(
       status: status,
     );
 
-Future<void> _pump(WidgetTester tester, {int? meetings}) async {
+Future<void> _pump(
+  WidgetTester tester, {
+  int? meetings,
+  List<LandLead>? leads,
+  bool hideEmpty = false,
+}) async {
   tester.view.physicalSize = const Size(1400, 900);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
@@ -34,9 +39,10 @@ Future<void> _pump(WidgetTester tester, {int? meetings}) async {
     home: Scaffold(
       body: SingleChildScrollView(
         child: LeadPortfolioBreakdown(
-          leads: [_lead('13')],
+          leads: leads ?? [_lead('13')],
           onOpenLead: (_) {},
           meetingsBesideDropped: meetings,
+          hideEmptyStatusCards: hideEmpty,
         ),
       ),
     ),
@@ -77,5 +83,48 @@ void main() {
     ]) {
       expect(find.text(label), findsOneWidget);
     }
+  });
+
+  group('hideEmptyStatusCards — only the applicable status box', () {
+    testWidgets('a single closed lead shows only Closed Leads', (tester) async {
+      await _pump(
+        tester,
+        leads: [_lead('11', status: LeadStatus.signed)], // Signed => Closed
+        meetings: 1,
+        hideEmpty: true,
+      );
+      expect(tester.takeException(), isNull);
+      expect(find.text('Closed Leads'), findsOneWidget);
+      expect(find.text('Active Leads'), findsNothing);
+      expect(find.text('Dropped Leads'), findsNothing);
+      // Non-status cards remain.
+      expect(find.text('Total Properties'), findsOneWidget);
+      expect(find.text('Meetings Conducted'), findsOneWidget);
+    });
+
+    testWidgets('an active-only owner shows only Active Leads', (tester) async {
+      await _pump(
+        tester,
+        leads: [_lead('12', status: LeadStatus.legal)], // active stage
+        hideEmpty: true,
+      );
+      expect(find.text('Active Leads'), findsOneWidget);
+      expect(find.text('Closed Leads'), findsNothing);
+      expect(find.text('Dropped Leads'), findsNothing);
+    });
+
+    testWidgets('a mix shows every non-zero status', (tester) async {
+      await _pump(
+        tester,
+        leads: [
+          _lead('1', status: LeadStatus.legal), // active
+          _lead('2', status: LeadStatus.signed), // closed
+        ],
+        hideEmpty: true,
+      );
+      expect(find.text('Active Leads'), findsOneWidget);
+      expect(find.text('Closed Leads'), findsOneWidget);
+      expect(find.text('Dropped Leads'), findsNothing);
+    });
   });
 }

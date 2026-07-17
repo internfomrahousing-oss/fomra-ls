@@ -52,38 +52,48 @@ abstract final class TeamHierarchy {
   static List<EmployeeProfile> managersUnder(String headEmail) =>
       directReports(headEmail).where((p) => p.isReportingManager).toList();
 
-  /// Active Executives a Reporting Manager can add to their team: everyone
-  /// except those already on their team. Includes executives currently
-  /// unassigned or on another manager's team (assigning moves them), so the
-  /// picker is never mysteriously empty when executives exist.
+  /// Whether [p] is genuinely on someone's team — i.e. reports to an existing
+  /// ACTIVE manager. A reports_to pointing at a deleted / missing account is
+  /// treated as orphaned (available), so such members aren't stranded forever.
+  static bool _onRealTeam(EmployeeProfile p) {
+    if (p.reportsTo.trim().isEmpty) return false;
+    final mgr = byEmail(p.reportsTo);
+    return mgr != null && mgr.status == EmployeeStatus.active;
+  }
+
+  /// Active Executives a Reporting Manager can add: the unassigned ones (plus
+  /// any orphaned by a removed manager). Executives already on a real team are
+  /// hidden — they must be freed from that team first.
   static List<EmployeeProfile> assignableExecutivesFor(String rmEmail) {
     final me = _norm(rmEmail);
     return _all
         .where((p) =>
             p.status == EmployeeStatus.active &&
             p.isExecutive &&
-            _norm(p.reportsTo) != me)
+            _norm(p.reportsTo) != me &&
+            !_onRealTeam(p))
         .toList()
       ..sort((a, b) => a.fullName.compareTo(b.fullName));
   }
 
-  /// Active Reporting Managers a Head can add to their team (not already theirs).
+  /// Active Reporting Managers a Head can add (unassigned/orphaned only).
   static List<EmployeeProfile> assignableManagersFor(String headEmail) {
     final me = _norm(headEmail);
     return _all
         .where((p) =>
             p.status == EmployeeStatus.active &&
             p.isReportingManager &&
-            _norm(p.reportsTo) != me)
+            _norm(p.reportsTo) != me &&
+            !_onRealTeam(p))
         .toList()
       ..sort((a, b) => a.fullName.compareTo(b.fullName));
   }
 
   /// A short label for who a member currently reports to (for the add picker).
+  /// Orphaned members (manager missing/inactive) read as Unassigned.
   static String currentTeamLabel(EmployeeProfile p) {
-    if (p.reportsTo.trim().isEmpty) return 'Unassigned';
-    final mgr = byEmail(p.reportsTo);
-    return 'On ${mgr?.fullName ?? p.reportsTo}\'s team';
+    if (!_onRealTeam(p)) return 'Unassigned';
+    return 'On ${byEmail(p.reportsTo)!.fullName}\'s team';
   }
 
   /// All member NAMES in [manager]'s team (recursively down the chain),

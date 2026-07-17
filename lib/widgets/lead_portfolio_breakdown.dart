@@ -28,6 +28,11 @@ class LeadPortfolioBreakdown extends StatelessWidget {
   /// (0-30/31-60/61-90/90+ days) instead of the Active/Closed/Dropped status.
   final bool useLeadAgeColumn;
 
+  /// When true, an Active/Closed/Dropped summary card is shown only if its
+  /// count is > 0 — so a single-status owner sees just that one box, not all
+  /// three empty ones.
+  final bool hideEmptyStatusCards;
+
   /// Total Land Owner Meetings conducted across [leads]. Shown as an extra
   /// "Meetings Conducted" card *beside* Dropped Leads (not instead of it)
   /// whenever provided.
@@ -40,6 +45,7 @@ class LeadPortfolioBreakdown extends StatelessWidget {
     this.meetingsConducted,
     this.useLeadAgeColumn = false,
     this.meetingsBesideDropped,
+    this.hideEmptyStatusCards = false,
   });
 
   @override
@@ -72,18 +78,20 @@ class LeadPortfolioBreakdown extends StatelessWidget {
               icon: Icons.crop_square_outlined,
               color: AppColors.info,
             ),
-            _SummaryCard(
-              label: 'Active Leads',
-              value: '$active',
-              icon: Icons.trending_up_rounded,
-              color: AppColors.warning,
-            ),
-            _SummaryCard(
-              label: 'Closed Leads',
-              value: '$closed',
-              icon: Icons.verified_outlined,
-              color: AppColors.success,
-            ),
+            if (!hideEmptyStatusCards || active > 0)
+              _SummaryCard(
+                label: 'Active Leads',
+                value: '$active',
+                icon: Icons.trending_up_rounded,
+                color: AppColors.warning,
+              ),
+            if (!hideEmptyStatusCards || closed > 0)
+              _SummaryCard(
+                label: 'Closed Leads',
+                value: '$closed',
+                icon: Icons.verified_outlined,
+                color: AppColors.success,
+              ),
             if (meetingsConducted != null)
               _SummaryCard(
                 label: 'Meetings Conducted',
@@ -92,12 +100,13 @@ class LeadPortfolioBreakdown extends StatelessWidget {
                 color: AppColors.secondary,
               )
             else ...[
-              _SummaryCard(
-                label: 'Dropped Leads',
-                value: '$dropped',
-                icon: Icons.cancel_outlined,
-                color: AppColors.error,
-              ),
+              if (!hideEmptyStatusCards || dropped > 0)
+                _SummaryCard(
+                  label: 'Dropped Leads',
+                  value: '$dropped',
+                  icon: Icons.cancel_outlined,
+                  color: AppColors.error,
+                ),
               if (meetingsBesideDropped != null)
                 _SummaryCard(
                   label: 'Meetings Conducted',

@@ -264,7 +264,8 @@ class _OwnerPortfolioSectionState extends State<_OwnerPortfolioSection> {
   Widget build(BuildContext context) {
     return LeadPortfolioBreakdown(
       leads: widget.leads,
-      meetingsBesideDropped: _meetingsConducted,
+      meetingsBesideDropped: _meetingsConducted,
+      hideEmptyStatusCards: true,
       onOpenLead: (lead) => Navigator.push(
         context,
         MaterialPageRoute(builder: (_) => LeadDetailScreen(lead: lead)),

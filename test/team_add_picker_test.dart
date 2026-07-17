@@ -35,28 +35,37 @@ void main() {
   });
 
   group('assignableExecutivesFor', () {
-    test('offers every active exec not already on my team', () {
-      final list = TeamHierarchy.assignableExecutivesFor('me@f.com');
-      final emails = list.map((e) => e.email).toSet();
-      expect(emails, {'alice@f.com', 'carol@f.com'});
+    test('offers only unassigned execs — those on a real team are hidden', () {
+      // carol is on other@f.com's team; other@f.com is an active RM here, so
+      // carol is genuinely assigned and must not be offered.
+      AppStore.instance.setEmployees([
+        _emp('Alice', 'alice@f.com'),
+        _emp('Bob', 'bob@f.com', reportsTo: 'me@f.com'),
+        _emp('Carol', 'carol@f.com', reportsTo: 'other@f.com'),
+        _emp('Other', 'other@f.com',
+            designation: EmployeeDesignations.reportingManager),
+      ]);
+      final emails =
+          TeamHierarchy.assignableExecutivesFor('me@f.com').map((e) => e.email);
+      expect(emails, ['alice@f.com']);
     });
 
-    test('excludes execs already on my team', () {
-      final list = TeamHierarchy.assignableExecutivesFor('me@f.com');
-      expect(list.any((e) => e.email == 'bob@f.com'), isFalse);
+    test('still surfaces an exec orphaned by a missing manager', () {
+      // nirmal reports to sp7033 — who is NOT in the roster (deleted). He must
+      // still be offerable, or he is stranded forever.
+      AppStore.instance.setEmployees([
+        _emp('Nirmal', 'nirmal@f.com', reportsTo: 'sp7033@srmist.edu.in'),
+      ]);
+      final emails =
+          TeamHierarchy.assignableExecutivesFor('me@f.com').map((e) => e.email);
+      expect(emails, ['nirmal@f.com']);
     });
 
-    test('excludes inactive employees and non-executives', () {
+    test('excludes execs already on my team, inactive, and non-executives', () {
       final list = TeamHierarchy.assignableExecutivesFor('me@f.com');
-      expect(list.any((e) => e.email == 'dan@f.com'), isFalse);
-      expect(list.any((e) => e.email == 'rhea@f.com'), isFalse);
-    });
-
-    test('an unassigned exec is offered to a fresh manager', () {
-      final list = TeamHierarchy.assignableExecutivesFor('brand-new@f.com');
-      // Everyone active + executive (alice unassigned, bob & carol on teams).
-      expect(list.map((e) => e.email).toSet(),
-          {'alice@f.com', 'bob@f.com', 'carol@f.com'});
+      expect(list.any((e) => e.email == 'bob@f.com'), isFalse); // on my team
+      expect(list.any((e) => e.email == 'dan@f.com'), isFalse); // inactive
+      expect(list.any((e) => e.email == 'rhea@f.com'), isFalse); // an RM
     });
   });
 
@@ -64,6 +73,14 @@ void main() {
     test('reads Unassigned when nobody manages them', () {
       final alice = TeamHierarchy.byEmail('alice@f.com')!;
       expect(TeamHierarchy.currentTeamLabel(alice), 'Unassigned');
+    });
+
+    test('reads Unassigned when the manager no longer exists (orphaned)', () {
+      AppStore.instance.setEmployees([
+        _emp('Nirmal', 'nirmal@f.com', reportsTo: 'sp7033@srmist.edu.in'),
+      ]);
+      final nirmal = TeamHierarchy.byEmail('nirmal@f.com')!;
+      expect(TeamHierarchy.currentTeamLabel(nirmal), 'Unassigned');
     });
 
     test('names the current manager otherwise', () {
