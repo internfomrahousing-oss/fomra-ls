@@ -227,10 +227,7 @@ class _OwnerPortfolioSection extends StatefulWidget {
 }
 
 class _OwnerPortfolioSectionState extends State<_OwnerPortfolioSection> {
-  int? _droppedMeetings;
-
-  List<LandLead> get _dropped =>
-      widget.leads.where((l) => l.status.isDropped).toList();
+  int? _meetingsConducted;
 
   @override
   void initState() {
@@ -245,21 +242,21 @@ class _OwnerPortfolioSectionState extends State<_OwnerPortfolioSection> {
   }
 
   Future<void> _load() async {
-    final dropped = _dropped;
-    if (dropped.isEmpty) {
-      if (mounted) setState(() => _droppedMeetings = null);
+    final leads = widget.leads;
+    if (leads.isEmpty) {
+      if (mounted) setState(() => _meetingsConducted = null);
       return;
     }
     try {
       final lists = await Future.wait<List<LandLeadMeeting>>(
-        dropped.map((l) => LandLeadMeetingService.getForLead(l.leadId)),
+        leads.map((l) => LandLeadMeetingService.getForLead(l.leadId)),
       );
       if (!mounted) return;
       setState(() =>
-          _droppedMeetings = lists.fold<int>(0, (s, m) => s + m.length));
+          _meetingsConducted = lists.fold<int>(0, (s, m) => s + m.length));
     } catch (_) {
       // Leave the card off rather than show a wrong count.
-      if (mounted) setState(() => _droppedMeetings = null);
+      if (mounted) setState(() => _meetingsConducted = null);
     }
   }
 
@@ -267,7 +264,7 @@ class _OwnerPortfolioSectionState extends State<_OwnerPortfolioSection> {
   Widget build(BuildContext context) {
     return LeadPortfolioBreakdown(
       leads: widget.leads,
-      droppedMeetingsConducted: _droppedMeetings,
+      meetingsBesideDropped: _meetingsConducted,
       onOpenLead: (lead) => Navigator.push(
         context,
         MaterialPageRoute(builder: (_) => LeadDetailScreen(lead: lead)),
