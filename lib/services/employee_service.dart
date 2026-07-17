@@ -13,6 +13,23 @@ class EmployeeService {
 
   static SupabaseClient get _db => Supabase.instance.client;
 
+  /// A currently-valid access token for the admin endpoint, refreshing an
+  /// expired session first. The app keeps management "signed in" for a grace
+  /// window even after the Supabase access token expires, so admin actions must
+  /// refresh rather than assume the live token is still there.
+  static Future<String?> _adminToken() async {
+    var session = _db.auth.currentSession;
+    if (session == null || session.isExpired) {
+      try {
+        final res = await _db.auth.refreshSession();
+        session = res.session ?? _db.auth.currentSession;
+      } catch (_) {
+        // No/expired refresh token — the caller must sign in again.
+      }
+    }
+    return session?.accessToken;
+  }
+
   // ── Auth-user provisioning (real Supabase Auth for each employee) ────────────
   // These call the management-only admin endpoint (api/employee-auth), which
   // uses the server-side service_role key. They require a signed-in management
@@ -22,7 +39,7 @@ class EmployeeService {
   /// Create a real Supabase Auth user for [email] (default password) so the
   /// employee can get an authenticated session. Best-effort and non-fatal.
   static Future<void> provisionAuthUser(String email, {String? password}) async {
-    final token = _db.auth.currentSession?.accessToken;
+    final token = await _adminToken();
     if (token == null) return; // no management session → skip silently
     try {
       final res = await http.post(
@@ -55,9 +72,10 @@ class EmployeeService {
 
   /// Reset an employee's login password (management only).
   static Future<void> resetAuthPassword(String email, String password) async {
-    final token = _db.auth.currentSession?.accessToken;
+    final token = await _adminToken();
     if (token == null) {
-      throw Exception('Sign in as management to reset employee passwords.');
+      throw Exception(
+          'Your session expired. Sign out and sign in again as management, then retry.');
     }
     final res = await http.post(
       Uri.parse('${ApiClient.baseUrl}/api/employee-auth'),
@@ -87,10 +105,10 @@ class EmployeeService {
   /// onboarding path now — management shares the password directly, no email.
   static Future<void> provisionLogin(String email,
       {String password = 'fomra@2024'}) async {
-    final token = _db.auth.currentSession?.accessToken;
+    final token = await _adminToken();
     if (token == null) {
       throw Exception(
-          'Sign in as management (with your real password) to set up logins.');
+          'Your session expired. Sign out and sign in again as management, then retry.');
     }
     final normalized = email.trim().toLowerCase();
     await provisionAuthUser(normalized, password: password);
@@ -235,10 +253,10 @@ class EmployeeService {
   /// Deletes the Supabase Auth user so [email] can never sign in again.
   /// Succeeds when there was no auth user to begin with.
   static Future<void> _deleteAuthUser(String email) async {
-    final token = _db.auth.currentSession?.accessToken;
+    final token = await _adminToken();
     if (token == null) {
       throw Exception(
-        'Sign in as management (with your real password) to delete users.',
+        'Your session expired. Sign out and sign in again as management, then retry.',
       );
     }
     final res = await http.post(
