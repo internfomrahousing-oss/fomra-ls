@@ -52,23 +52,39 @@ abstract final class TeamHierarchy {
   static List<EmployeeProfile> managersUnder(String headEmail) =>
       directReports(headEmail).where((p) => p.isReportingManager).toList();
 
-  /// Unassigned executives (available to add to a Reporting Manager's team).
-  static List<EmployeeProfile> unassignedExecutives() => _all
-      .where((p) =>
-          p.status == EmployeeStatus.active &&
-          p.isExecutive &&
-          p.reportsTo.trim().isEmpty)
-      .toList()
-    ..sort((a, b) => a.fullName.compareTo(b.fullName));
+  /// Active Executives a Reporting Manager can add to their team: everyone
+  /// except those already on their team. Includes executives currently
+  /// unassigned or on another manager's team (assigning moves them), so the
+  /// picker is never mysteriously empty when executives exist.
+  static List<EmployeeProfile> assignableExecutivesFor(String rmEmail) {
+    final me = _norm(rmEmail);
+    return _all
+        .where((p) =>
+            p.status == EmployeeStatus.active &&
+            p.isExecutive &&
+            _norm(p.reportsTo) != me)
+        .toList()
+      ..sort((a, b) => a.fullName.compareTo(b.fullName));
+  }
 
-  /// Unassigned Reporting Managers (available to add to a Head's team).
-  static List<EmployeeProfile> unassignedManagers() => _all
-      .where((p) =>
-          p.status == EmployeeStatus.active &&
-          p.isReportingManager &&
-          p.reportsTo.trim().isEmpty)
-      .toList()
-    ..sort((a, b) => a.fullName.compareTo(b.fullName));
+  /// Active Reporting Managers a Head can add to their team (not already theirs).
+  static List<EmployeeProfile> assignableManagersFor(String headEmail) {
+    final me = _norm(headEmail);
+    return _all
+        .where((p) =>
+            p.status == EmployeeStatus.active &&
+            p.isReportingManager &&
+            _norm(p.reportsTo) != me)
+        .toList()
+      ..sort((a, b) => a.fullName.compareTo(b.fullName));
+  }
+
+  /// A short label for who a member currently reports to (for the add picker).
+  static String currentTeamLabel(EmployeeProfile p) {
+    if (p.reportsTo.trim().isEmpty) return 'Unassigned';
+    final mgr = byEmail(p.reportsTo);
+    return 'On ${mgr?.fullName ?? p.reportsTo}\'s team';
+  }
 
   /// All member NAMES in [manager]'s team (recursively down the chain),
   /// including the manager — used to scope performance/leads by team.

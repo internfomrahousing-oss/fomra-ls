@@ -42,71 +42,53 @@ class _TeamManagementScreenState extends State<TeamManagementScreen> {
   EmployeeProfile? get _me => TeamHierarchy.currentProfile;
 
   Future<void> _assign(String employeeEmail, String managerEmail) async {
-    await EmployeeService.assignReportsTo(employeeEmail, managerEmail);
-    await _reload();
+    try {
+      await EmployeeService.assignReportsTo(employeeEmail, managerEmail);
+      await _reload();
+    } catch (e) {
+      if (!mounted) return;
+      AppFeedback.error(context, e.toString().replaceFirst('Exception: ', ''));
+    }
   }
 
-  Future<void> _pickAndAdd({
+  /// Open the searchable, multi-select picker and assign everyone chosen to
+  /// [managerEmail]'s team.
+  Future<void> _showAddSheet({
     required String title,
+    required String emptyMessage,
     required List<EmployeeProfile> options,
     required String managerEmail,
   }) async {
     if (options.isEmpty) {
-      AppFeedback.info(context, 'No unassigned members available to add.');
+      AppFeedback.info(context, emptyMessage);
       return;
     }
-    final picked = await showModalBottomSheet<EmployeeProfile>(
+    final picked = await showModalBottomSheet<List<EmployeeProfile>>(
       context: context,
+      isScrollControlled: true,
       backgroundColor: context.fomraSurface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-              child: Row(
-                children: [
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                      color: context.fomraTextPrimary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const Divider(height: 1),
-            Flexible(
-              child: ListView(
-                shrinkWrap: true,
-                children: [
-                  for (final e in options)
-                    ListTile(
-                      leading: ProfileAvatar(
-                        email: e.email,
-                        name: e.fullName,
-                        radius: 18,
-                      ),
-                      title: Text(e.fullName),
-                      subtitle: Text(e.designation.isEmpty
-                          ? EmployeeDesignations.executive
-                          : e.designation),
-                      onTap: () => Navigator.pop(ctx, e),
-                    ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
+      builder: (ctx) => _EmployeePickerSheet(title: title, options: options),
     );
-    if (picked != null) await _assign(picked.email, managerEmail);
+    if (picked == null || picked.isEmpty || !mounted) return;
+    try {
+      for (final e in picked) {
+        await EmployeeService.assignReportsTo(e.email, managerEmail);
+      }
+      await _reload();
+      if (!mounted) return;
+      AppFeedback.success(
+        context,
+        picked.length == 1
+            ? '${picked.first.fullName} added to your team'
+            : '${picked.length} members added to your team',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      AppFeedback.error(context, e.toString().replaceFirst('Exception: ', ''));
+    }
   }
 
   @override
@@ -159,9 +141,11 @@ class _TeamManagementScreenState extends State<TeamManagementScreen> {
           subtitle: '${execs.length} assigned',
           icon: Icons.groups_2_outlined,
           trailing: TextButton.icon(
-            onPressed: () => _pickAndAdd(
-              title: 'Add executive',
-              options: TeamHierarchy.unassignedExecutives(),
+            onPressed: () => _showAddSheet(
+              title: 'Add executives',
+              emptyMessage:
+                  'No executives to add. Ask management to add employees with the Executive role.',
+              options: TeamHierarchy.assignableExecutivesFor(me.email),
               managerEmail: me.email,
             ),
             icon: const Icon(Icons.person_add_alt_1_rounded, size: 18),
@@ -194,9 +178,11 @@ class _TeamManagementScreenState extends State<TeamManagementScreen> {
           subtitle: '${rms.length} assigned',
           icon: Icons.supervisor_account_outlined,
           trailing: TextButton.icon(
-            onPressed: () => _pickAndAdd(
-              title: 'Add reporting manager',
-              options: TeamHierarchy.unassignedManagers(),
+            onPressed: () => _showAddSheet(
+              title: 'Add reporting managers',
+              emptyMessage:
+                  'No reporting managers to add. Ask management to add employees with the Reporting Manager role.',
+              options: TeamHierarchy.assignableManagersFor(me.email),
               managerEmail: me.email,
             ),
             icon: const Icon(Icons.person_add_alt_1_rounded, size: 18),
@@ -262,6 +248,197 @@ class _TeamManagementScreenState extends State<TeamManagementScreen> {
               color: AppColors.error,
             ),
         ],
+      ),
+    );
+  }
+}
+
+/// Searchable, multi-select employee picker shown as a bottom sheet. Returns
+/// the chosen employees (or null if cancelled).
+class _EmployeePickerSheet extends StatefulWidget {
+  final String title;
+  final List<EmployeeProfile> options;
+
+  const _EmployeePickerSheet({required this.title, required this.options});
+
+  @override
+  State<_EmployeePickerSheet> createState() => _EmployeePickerSheetState();
+}
+
+class _EmployeePickerSheetState extends State<_EmployeePickerSheet> {
+  String _query = '';
+  final _selected = <String>{}; // emails
+
+  List<EmployeeProfile> get _filtered {
+    final q = _query.trim().toLowerCase();
+    if (q.isEmpty) return widget.options;
+    return widget.options
+        .where((e) =>
+            e.fullName.toLowerCase().contains(q) ||
+            e.email.toLowerCase().contains(q))
+        .toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final filtered = _filtered;
+    // Sheet grows with the keyboard and caps at ~80% height.
+    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+    final maxHeight = MediaQuery.sizeOf(context).height * 0.8;
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottomInset),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: maxHeight),
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 10),
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: context.fomraBorder,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        widget.title,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                          color: context.fomraTextPrimary,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      '${_selected.length} selected',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: context.fomraTextSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: TextField(
+                  autofocus: true,
+                  decoration: InputDecoration(
+                    hintText: 'Search by name or email…',
+                    prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                    isDense: true,
+                    filled: true,
+                    fillColor: context.fomraSurfaceVar,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                  onChanged: (v) => setState(() => _query = v),
+                ),
+              ),
+              const Divider(height: 1),
+              Flexible(
+                child: filtered.isEmpty
+                    ? Padding(
+                        padding: const EdgeInsets.all(28),
+                        child: Text(
+                          'No matches for "$_query".',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: context.fomraTextSecondary),
+                        ),
+                      )
+                    : ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: filtered.length,
+                        itemBuilder: (_, i) {
+                          final e = filtered[i];
+                          final checked = _selected.contains(e.email);
+                          return CheckboxListTile(
+                            value: checked,
+                            onChanged: (v) => setState(() {
+                              if (v == true) {
+                                _selected.add(e.email);
+                              } else {
+                                _selected.remove(e.email);
+                              }
+                            }),
+                            controlAffinity: ListTileControlAffinity.trailing,
+                            secondary: ProfileAvatar(
+                              email: e.email,
+                              name: e.fullName,
+                              radius: 18,
+                            ),
+                            title: Text(e.fullName),
+                            subtitle: Text(
+                              TeamHierarchy.currentTeamLabel(e),
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: context.fomraTextSecondary,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.pop(context),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: const Text('Cancel'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      flex: 2,
+                      child: FilledButton(
+                        onPressed: _selected.isEmpty
+                            ? null
+                            : () => Navigator.pop(
+                                  context,
+                                  widget.options
+                                      .where((e) => _selected.contains(e.email))
+                                      .toList(),
+                                ),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: Text(
+                          _selected.isEmpty
+                              ? 'Add'
+                              : 'Add ${_selected.length}',
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

@@ -297,7 +297,10 @@ class EmployeeService {
   }
 
   /// Assigns [employeeEmail] to report to [managerEmail] (empty to unassign).
-  /// Best-effort DB update with a graceful local-cache fallback.
+  ///
+  /// Persists to the DB and throws on failure — a silent cache-only "success"
+  /// would vanish on the next reload (which reads the DB), so the caller must
+  /// know. The usual cause is the `reports_to` column not being migrated yet.
   static Future<void> assignReportsTo(
     String employeeEmail,
     String managerEmail,
@@ -308,8 +311,11 @@ class EmployeeService {
       await _db
           .from('employee_profiles')
           .update({'reports_to': mgr}).eq('id', emp);
-    } catch (_) {
-      // Column may not exist yet / offline — update the cache anyway.
+    } catch (e) {
+      throw Exception(
+        'Could not save the team assignment. If this persists, run '
+        'supabase/employee_reports_to.sql in Supabase. ($e)',
+      );
     }
     final cached = await _loadCache();
     final idx = cached.indexWhere((e) => e.id.toLowerCase() == emp);
