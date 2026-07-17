@@ -4,6 +4,7 @@ import '../theme/fomra_layout.dart';
 import '../theme/fomra_theme_context.dart';
 import 'app_drawer.dart';
 import 'fomra_side_nav.dart';
+import 'impersonation_banner.dart';
 
 /// App layout with a persistent left navigation rail and main content area.
 class FomraAppShell extends StatelessWidget {
@@ -32,6 +33,15 @@ class FomraAppShell extends StatelessWidget {
     final pageGradient = context.fomraPageGradient;
     final bg = backgroundColor ?? context.fomraPageBg;
 
+    // While accessing the app as another user, a persistent banner sits above
+    // the page content on every screen (the banner hides itself otherwise).
+    final bodyWithBanner = Column(
+      children: [
+        const ImpersonationBanner(),
+        Expanded(child: body),
+      ],
+    );
+
     Widget shellBody(Widget child) {
       if (pageGradient != null) {
         return DecoratedBox(
@@ -59,7 +69,7 @@ class FomraAppShell extends StatelessWidget {
                       backgroundColor: Colors.transparent,
                       appBar: appBar,
                       primary: true,
-                      body: body,
+                      body: bodyWithBanner,
                       floatingActionButton: floatingActionButton,
                       floatingActionButtonLocation:
                           floatingActionButtonLocation,
@@ -72,7 +82,7 @@ class FomraAppShell extends StatelessWidget {
                 backgroundColor: Colors.transparent,
                 appBar: appBar,
                 primary: true,
-                body: body,
+                body: bodyWithBanner,
                 floatingActionButton: floatingActionButton,
                 floatingActionButtonLocation: floatingActionButtonLocation,
                 bottomNavigationBar: bottomNavigationBar,

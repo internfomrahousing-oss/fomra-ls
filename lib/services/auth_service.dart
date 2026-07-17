@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/employee_profile.dart';
 import '../models/user.dart';
@@ -30,10 +31,46 @@ class AuthService {
   String? _loginEmail;
   String? _loginDisplayName;
 
-  LoginPortal? get loginPortal => _portal;
+  // ── "Access as User" (management impersonation) ────────────────────────────
+  // While active, the app resolves currentUser/role/portal to the accessed
+  // employee — so every permission, scope and screen behaves as that user —
+  // while the REAL Supabase session stays management's. The banner and the
+  // whole app react to [impersonation].
+  EmployeeProfile? _impersonated;
+  DateTime? _impersonationStart;
 
-  bool get isManagement => _portal == LoginPortal.management;
-  bool get isEmployee => _portal == LoginPortal.employee;
+  /// Fires when access-as-user starts or ends, so the shell/banner rebuild.
+  final ValueNotifier<EmployeeProfile?> impersonation = ValueNotifier(null);
+
+  bool get isImpersonating => _impersonated != null;
+  EmployeeProfile? get impersonatedUser => _impersonated;
+  DateTime? get impersonationStart => _impersonationStart;
+
+  /// Begin accessing the app as [user]. No-op if already impersonating (nested
+  /// access is not allowed). The caller records the audit entry while still
+  /// management, then calls this.
+  void startImpersonation(EmployeeProfile user) {
+    if (_impersonated != null) return;
+    _impersonated = user;
+    _impersonationStart = DateTime.now();
+    impersonation.value = user;
+  }
+
+  /// Restore the original management session.
+  void stopImpersonation() {
+    if (_impersonated == null) return;
+    _impersonated = null;
+    _impersonationStart = null;
+    impersonation.value = null;
+  }
+
+  LoginPortal? get loginPortal =>
+      _impersonated != null ? LoginPortal.employee : _portal;
+
+  bool get isManagement =>
+      _impersonated == null && _portal == LoginPortal.management;
+  bool get isEmployee =>
+      _impersonated != null || _portal == LoginPortal.employee;
 
   static String emailForPortal(LoginPortal portal) => switch (portal) {
         LoginPortal.management => managementEmail,
@@ -41,6 +78,17 @@ class AuthService {
       };
 
   AppUser? get currentUser {
+    // Accessing as another user: the whole app sees them, not management.
+    final imp = _impersonated;
+    if (imp != null) {
+      return AppUser(
+        id: imp.email,
+        email: imp.email,
+        fullName: imp.fullName,
+        role: 'employee',
+        createdAt: imp.joinedOn,
+      );
+    }
     final u = _client.auth.currentUser;
     if (u != null) {
       final email = u.email ?? _loginEmail ?? '';
@@ -281,6 +329,7 @@ class AuthService {
   }
 
   Future<void> logout() async {
+    stopImpersonation();
     try {
       await _client.auth.signOut();
     } catch (_) {}

@@ -20,6 +20,7 @@ import '../../widgets/change_password_section.dart';
 import '../../widgets/portal_page_layout.dart';
 import '../audit/audit_trail_screen.dart';
 import '../employee_management/employee_management_screen.dart';
+import 'access_as_user_page.dart';
 import 'monthly_targets_page.dart';
 import '../../services/csv_saver_stub.dart'
     if (dart.library.html) '../../services/csv_saver_web.dart'
@@ -120,6 +121,18 @@ class SettingsScreen extends StatelessWidget {
                     context,
                     MaterialPageRoute(
                       builder: (_) => const MonthlyTargetsPage(),
+                    ),
+                  ),
+                ),
+              if (isManagement)
+                _SettingsTile(
+                  icon: Icons.visibility_outlined,
+                  label: 'Access as User',
+                  accent: AppColors.info,
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const AccessAsUserPage(),
                     ),
                   ),
                 ),
