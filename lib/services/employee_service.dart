@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/employee_profile.dart';
 import 'api_client.dart';
+import 'app_store.dart';
 
 class EmployeeService {
   static const _cacheKey = 'employee_profiles_v1';
@@ -322,6 +323,14 @@ class EmployeeService {
     if (idx != -1) {
       cached[idx] = cached[idx].copyWith(reportsTo: mgr);
       await _saveCache(cached);
+    }
+    // Reflect it in the in-memory roster the team screens read, so the change
+    // shows immediately without depending on a re-fetch that might lag.
+    final roster = List<EmployeeProfile>.from(AppStore.instance.employees);
+    final ri = roster.indexWhere((e) => e.email.trim().toLowerCase() == emp);
+    if (ri != -1) {
+      roster[ri] = roster[ri].copyWith(reportsTo: mgr);
+      AppStore.instance.setEmployees(roster);
     }
   }
 

@@ -44,7 +44,9 @@ class _TeamManagementScreenState extends State<TeamManagementScreen> {
   Future<void> _assign(String employeeEmail, String managerEmail) async {
     try {
       await EmployeeService.assignReportsTo(employeeEmail, managerEmail);
-      await _reload();
+      // assignReportsTo already updated the in-memory roster, so re-render from
+      // it directly rather than re-fetch (which could momentarily lag).
+      if (mounted) setState(() {});
     } catch (e) {
       if (!mounted) return;
       AppFeedback.error(context, e.toString().replaceFirst('Exception: ', ''));
@@ -77,8 +79,8 @@ class _TeamManagementScreenState extends State<TeamManagementScreen> {
       for (final e in picked) {
         await EmployeeService.assignReportsTo(e.email, managerEmail);
       }
-      await _reload();
       if (!mounted) return;
+      setState(() {});
       AppFeedback.success(
         context,
         picked.length == 1
