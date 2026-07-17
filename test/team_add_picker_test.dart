@@ -35,9 +35,9 @@ void main() {
   });
 
   group('assignableExecutivesFor', () {
-    test('offers only unassigned execs — those on a real team are hidden', () {
-      // carol is on other@f.com's team; other@f.com is an active RM here, so
-      // carol is genuinely assigned and must not be offered.
+    test('offers everyone not on my team — including other teams', () {
+      // carol is on other@f.com's team; she still appears so she can be
+      // reassigned. Only my own members (bob) are hidden.
       AppStore.instance.setEmployees([
         _emp('Alice', 'alice@f.com'),
         _emp('Bob', 'bob@f.com', reportsTo: 'me@f.com'),
@@ -47,12 +47,11 @@ void main() {
       ]);
       final emails =
           TeamHierarchy.assignableExecutivesFor('me@f.com').map((e) => e.email);
-      expect(emails, ['alice@f.com']);
+      expect(emails, containsAll(['alice@f.com', 'carol@f.com']));
+      expect(emails, isNot(contains('bob@f.com')));
     });
 
-    test('still surfaces an exec orphaned by a missing manager', () {
-      // nirmal reports to sp7033 — who is NOT in the roster (deleted). He must
-      // still be offerable, or he is stranded forever.
+    test('surfaces an exec orphaned by a missing manager', () {
       AppStore.instance.setEmployees([
         _emp('Nirmal', 'nirmal@f.com', reportsTo: 'sp7033@srmist.edu.in'),
       ]);
