@@ -284,39 +284,20 @@ class _ManagementExecutiveDashboardState
             // Both columns start on the same line and each card is exactly as
             // wide as the one above it (7:3 of the row, minus one 24px gutter).
             //
-            // The columns are NOT forced to a shared height: Pipeline Dashboard
-            // and Site Ageing each build through a LayoutBuilder, which cannot
-            // report intrinsic dimensions, so IntrinsicHeight — the usual way to
-            // level two columns — throws here. See dashboard_grid_alignment_test.
-            return Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // The shorter Site Ageing card and the smaller donut free up
-                // room, so the Pipeline Dashboard takes a wider share.
-                Expanded(
-                  flex: 7,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      pipeline,
-                      const SizedBox(height: AppSpacing.lg),
-                      ageing,
-                    ],
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.lg),
-                Expanded(
-                  flex: 3,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      donut,
-                      const SizedBox(height: AppSpacing.lg),
-                      pendingStages,
-                    ],
-                  ),
-                ),
-              ],
+            // The two columns are levelled to a shared height so the section
+            // reads as a clean rectangle. IntrinsicHeight can't do it — Pipeline
+            // Dashboard and Site Ageing build through a LayoutBuilder, which
+            // refuses intrinsics (see dashboard_grid_alignment_test) — so
+            // _LeveledPipelineColumns measures the columns' natural heights
+            // after layout and grows Pipeline + Site Ageing by an equal amount
+            // to meet the taller (right) column's bottom.
+            return _LeveledPipelineColumns(
+              pipeline: pipeline,
+              ageing: ageing,
+              donut: donut,
+              pendingStages: pendingStages,
+              // Re-measure when the width or the lead set changes.
+              signature: '${c.maxWidth.round()}|${widget.leads.length}',
             );
           },
         );
@@ -902,6 +883,132 @@ class _KpiMetaChip extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// The pipeline-vs-deal-terms grid, levelled to a shared height.
+///
+/// The left column (Pipeline Dashboard + Site Ageing) is usually shorter than
+/// the right (Deal Terms donut + Pending Stages), leaving whitespace under Site
+/// Ageing. IntrinsicHeight — the normal way to level two columns — throws here
+/// because both left cards build through a LayoutBuilder.
+///
+/// So we measure instead: render the columns at their natural height, read the
+/// three heights after layout, then grow Pipeline and Site Ageing by an EQUAL
+/// amount so the left column's bottom meets the right column's. When the left
+/// column is already the taller one, nothing is resized. Re-measures whenever
+/// [signature] (width + lead count) changes.
+class _LeveledPipelineColumns extends StatefulWidget {
+  final Widget pipeline;
+  final Widget ageing;
+  final Widget donut;
+  final Widget pendingStages;
+  final String signature;
+
+  const _LeveledPipelineColumns({
+    required this.pipeline,
+    required this.ageing,
+    required this.donut,
+    required this.pendingStages,
+    required this.signature,
+  });
+
+  @override
+  State<_LeveledPipelineColumns> createState() =>
+      _LeveledPipelineColumnsState();
+}
+
+class _LeveledPipelineColumnsState extends State<_LeveledPipelineColumns> {
+  static const double _gap = AppSpacing.lg;
+
+  final GlobalKey _pipeKey = GlobalKey();
+  final GlobalKey _ageKey = GlobalKey();
+  final GlobalKey _rightKey = GlobalKey();
+
+  // Target heights once measured; null means "render natural and measure".
+  double? _pipeHeight;
+  double? _ageHeight;
+
+  @override
+  void didUpdateWidget(covariant _LeveledPipelineColumns old) {
+    super.didUpdateWidget(old);
+    if (old.signature != widget.signature) {
+      // Width or data changed — drop back to natural size and re-measure so a
+      // stale height never sticks.
+      _pipeHeight = null;
+      _ageHeight = null;
+    }
+  }
+
+  double? _measuredHeight(GlobalKey key) {
+    final box = key.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) return null;
+    final h = box.size.height;
+    return h > 0 ? h : null;
+  }
+
+  void _measure() {
+    if (_pipeHeight != null) return; // already sized for these inputs
+    final p = _measuredHeight(_pipeKey);
+    final a = _measuredHeight(_ageKey);
+    final r = _measuredHeight(_rightKey);
+    if (p == null || a == null || r == null) return;
+
+    final leftNatural = p + _gap + a;
+    // Only ever grow the left column, never compress it.
+    final extra = (r - leftNatural) / 2;
+    if (extra <= 0.5) return; // right isn't taller — leave both cards natural
+    if (!mounted) return;
+    setState(() {
+      _pipeHeight = p + extra;
+      _ageHeight = a + extra;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    WidgetsBinding.instance.addPostFrameCallback((_) => _measure());
+
+    final pipeline = _pipeHeight == null
+        ? KeyedSubtree(key: _pipeKey, child: widget.pipeline)
+        : SizedBox(height: _pipeHeight, child: widget.pipeline);
+    final ageing = _ageHeight == null
+        ? KeyedSubtree(key: _ageKey, child: widget.ageing)
+        : SizedBox(height: _ageHeight, child: widget.ageing);
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // The shorter Site Ageing card and the smaller donut free up room, so
+        // the Pipeline Dashboard takes a wider share.
+        Expanded(
+          flex: 7,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              pipeline,
+              const SizedBox(height: _gap),
+              ageing,
+            ],
+          ),
+        ),
+        const SizedBox(width: _gap),
+        Expanded(
+          flex: 3,
+          child: KeyedSubtree(
+            key: _rightKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                widget.donut,
+                const SizedBox(height: _gap),
+                widget.pendingStages,
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
