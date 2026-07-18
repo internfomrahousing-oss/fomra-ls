@@ -24,6 +24,10 @@ EmployeeProfile _emp(
 void main() {
   setUp(() {
     AppStore.instance.setEmployees([
+      _emp('Me', 'me@f.com',
+          designation: EmployeeDesignations.reportingManager), // the adder
+      _emp('Other', 'other@f.com',
+          designation: EmployeeDesignations.reportingManager), // another RM
       _emp('Alice', 'alice@f.com'), // unassigned exec
       _emp('Bob', 'bob@f.com', reportsTo: 'me@f.com'), // already on my team
       _emp('Carol', 'carol@f.com', reportsTo: 'other@f.com'), // other team
@@ -35,20 +39,14 @@ void main() {
   });
 
   group('assignableExecutivesFor', () {
-    test('offers everyone not on my team — including other teams', () {
-      // carol is on other@f.com's team; she still appears so she can be
-      // reassigned. Only my own members (bob) are hidden.
-      AppStore.instance.setEmployees([
-        _emp('Alice', 'alice@f.com'),
-        _emp('Bob', 'bob@f.com', reportsTo: 'me@f.com'),
-        _emp('Carol', 'carol@f.com', reportsTo: 'other@f.com'),
-        _emp('Other', 'other@f.com',
-            designation: EmployeeDesignations.reportingManager),
-      ]);
+    test('offers only unassigned execs — not those on another RM team', () {
+      // carol reports to another active RM, so she belongs to that team and is
+      // left out; only the unassigned alice is offered.
       final emails =
           TeamHierarchy.assignableExecutivesFor('me@f.com').map((e) => e.email);
-      expect(emails, containsAll(['alice@f.com', 'carol@f.com']));
-      expect(emails, isNot(contains('bob@f.com')));
+      expect(emails, contains('alice@f.com'));
+      expect(emails, isNot(contains('carol@f.com'))); // on other@f.com's team
+      expect(emails, isNot(contains('bob@f.com'))); // on my team
     });
 
     test('surfaces an exec orphaned by a missing manager', () {

@@ -61,17 +61,17 @@ abstract final class TeamHierarchy {
     return mgr != null && mgr.status == EmployeeStatus.active;
   }
 
-  /// Active Executives a Reporting Manager can add: everyone except those
-  /// already on THEIR team. Executives on another manager's team still appear
-  /// (labelled with that team) so they can be reassigned; only the manager's
-  /// own current members are hidden as redundant.
+  /// Active Executives a Reporting Manager can add: only those NOT already on a
+  /// team. An executive who reports to another active manager is left out (they
+  /// belong to that RM's team); freeing them up means unassigning them there
+  /// first. Orphaned members (manager missing/inactive) count as unassigned and
+  /// so remain available.
   static List<EmployeeProfile> assignableExecutivesFor(String rmEmail) {
-    final me = _norm(rmEmail);
     return _all
         .where((p) =>
             p.status == EmployeeStatus.active &&
             p.isExecutive &&
-            _norm(p.reportsTo) != me)
+            !_onRealTeam(p))
         .toList()
       ..sort((a, b) => a.fullName.compareTo(b.fullName));
   }

@@ -29,12 +29,14 @@ const _kFocusDistricts = [
   'Thiruvallur',
 ];
 
+// The named deal terms shown in the donut. Leads whose term doesn't match one
+// of these fall into the 'Others' bucket, which is intentionally NOT charted —
+// see _dealTermsDistribution.
 const _kDealCategories = [
   'Outright Purchase',
   'Joint Venture',
   'Marketing',
   'Deferred Payment',
-  'Others',
 ];
 
 // ── Date / KPI helpers (from dashboard_screen patterns) ─────────────────────
@@ -104,7 +106,10 @@ Map<String, int> _dealTermsDistribution(List<LandLead> leads) {
   for (final lead in leads) {
     final parsed = parseTermsDeal(lead.accessDetails);
     final cat = _dealCategory(parsed.primary);
-    counts[cat] = (counts[cat] ?? 0) + 1;
+    // 'Others' is not charted, so those leads are left out of the totals — the
+    // percentages read against the named deal terms only.
+    if (!counts.containsKey(cat)) continue;
+    counts[cat] = counts[cat]! + 1;
   }
   return counts;
 }
