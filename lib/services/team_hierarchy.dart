@@ -108,4 +108,19 @@ abstract final class TeamHierarchy {
     collect(manager.email);
     return names;
   }
+
+  /// Emails of the manager and everyone under them, recursively. Email is a
+  /// stable identifier (display names drift), so attribution — e.g. monthly
+  /// target progress — should key off this rather than [teamMemberNames].
+  static Set<String> teamMemberEmails(EmployeeProfile manager) {
+    final emails = <String>{_norm(manager.email)};
+    void collect(String email) {
+      for (final r in directReports(email)) {
+        if (emails.add(_norm(r.email))) collect(r.email);
+      }
+    }
+
+    collect(manager.email);
+    return emails;
+  }
 }
