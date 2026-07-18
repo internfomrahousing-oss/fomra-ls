@@ -15,15 +15,16 @@ class _MenuItem {
   const _MenuItem(this.title, this.icon, this.route, this.accent);
 }
 
-const _baseMenuItems = [
+/// The mobile hamburger menu: Home, Workspace, Reports, Settings.
+const _menuItems = [
+  _MenuItem('Home', Icons.home_outlined, '/home', Color(0xFF5B7FFF)),
   _MenuItem('Land Workspace', Icons.space_dashboard_outlined, '/land-lead',
-      Color(0xFF5B7FFF)),
-  _MenuItem('Market Intelligence', Icons.insights_outlined,
-      '/market-intelligence', Color(0xFF22D3EE)),
+      Color(0xFF22D3EE)),
+  _MenuItem('Reports', Icons.assessment_outlined, '/reports',
+      Color(0xFF34D399)),
+  _MenuItem('Settings', Icons.settings_outlined, '/settings',
+      Color(0xFF64748B)),
 ];
-
-const _managementMenuItem = _MenuItem('Employee Management',
-    Icons.groups_outlined, '/employee-management', Color(0xFFA78BFA));
 
 class AppDrawer extends StatelessWidget {
   final String currentRoute;
@@ -32,18 +33,7 @@ class AppDrawer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final menuItems = [
-      _baseMenuItems[0],
-      if (AuthService.instance.isManagement) _managementMenuItem,
-      _baseMenuItems[1],
-      if (AuthService.instance.isManagement)
-        const _MenuItem(
-          'Settings',
-          Icons.settings_outlined,
-          '/settings',
-          Color(0xFF64748B),
-        ),
-    ];
+    const menuItems = _menuItems;
 
     return Drawer(
       child: Column(

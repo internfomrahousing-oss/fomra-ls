@@ -152,49 +152,31 @@ class FomraBreadcrumbBar extends StatelessWidget implements PreferredSizeWidget 
   }
 }
 
-/// The static, route-based breadcrumb hierarchy.
+/// The breadcrumb hierarchy.
 ///
-/// A page's path is fixed by where it sits in the module tree — `Home >
-/// …section… > page` — never by how it was reached. Each intermediate crumb
-/// carries the named route it navigates to, so tapping it works from anywhere.
+/// Every page shows a flat two-level trail — `Home > page` — so the crumb only
+/// ever names where you are, never a hardcoded section you may not have passed
+/// through (e.g. a page opened from Home no longer shows "Land Workspace"
+/// in-between). Tapping Home returns to the dashboard.
 abstract final class FomraBreadcrumbs {
   static const home = FomraBreadcrumbItem.home();
   static const landWorkspace =
       FomraBreadcrumbItem.route('Land Workspace', '/land-lead');
-  static const settings = FomraBreadcrumbItem.route('Settings', '/settings');
-  static const reports = FomraBreadcrumbItem.route('Reports', '/reports');
 
-  /// A page label → the crumbs between Home and that page. A label that isn't
-  /// listed is treated as a top-level module: `Home > label`.
-  static const _ancestors = <String, List<FomraBreadcrumbItem>>{
-    // Settings section.
-    'Dropped Reasons': [settings],
-    'Bulk Lead Import': [settings],
-    'User Management': [settings],
-    'Monthly Targets': [settings],
-    'Reset Password': [settings],
-    'Access as User': [settings],
-    'Audit': [settings],
-    // Land Workspace section.
-    'Add Land Lead': [landWorkspace],
-    'Edit Land Lead': [landWorkspace],
-    'Project Map': [landWorkspace],
-  };
-
-  /// `Home > …section… > [label]` for a module page.
+  /// `Home > [label]` for a module page.
   static List<FomraBreadcrumbItem> forModule(String label) => [
         home,
-        ...?_ancestors[label],
         FomraBreadcrumbItem.current(label),
       ];
 
-  /// `Home > …ancestors… > [label]` for a page whose title is dynamic (a lead,
-  /// a filtered list) and so can't be keyed by label.
+  /// `Home > [label]` for a page whose title is dynamic (a lead, a filtered
+  /// list). [ancestors] is accepted for call-site compatibility but no longer
+  /// inserted — the trail stays flat.
   static List<FomraBreadcrumbItem> under(
     List<FomraBreadcrumbItem> ancestors,
     String label,
   ) =>
-      [home, ...ancestors, FomraBreadcrumbItem.current(label)];
+      [home, FomraBreadcrumbItem.current(label)];
 }
 
 /// The breadcrumb bar shown under a page header. Renders the fixed module

@@ -8,8 +8,8 @@ List<String> _crumbs(List<FomraBreadcrumbItem> items) =>
     items.map((i) => i.label).toList();
 
 void main() {
-  group('static module hierarchy', () {
-    test('a top-level module is just Home > itself', () {
+  group('flat two-level breadcrumbs', () {
+    test('every module page is just Home > itself', () {
       expect(_crumbs(FomraBreadcrumbs.forModule('Land Workspace')),
           ['Home', 'Land Workspace']);
       expect(_crumbs(FomraBreadcrumbs.forModule('Reports')),
@@ -18,33 +18,29 @@ void main() {
           ['Home', 'Settings']);
     });
 
-    test('an unregistered module falls back to Home > itself', () {
-      expect(_crumbs(FomraBreadcrumbs.forModule('Cost Calculator')),
-          ['Home', 'Cost Calculator']);
-    });
-
-    test('a settings page reads Home > Settings > page', () {
+    test('pages that used to nest are now flat Home > page', () {
+      // No intermediate "Settings" / "Land Workspace" crumb anymore — a page
+      // opened from Home shows only where you are.
       expect(_crumbs(FomraBreadcrumbs.forModule('Dropped Reasons')),
-          ['Home', 'Settings', 'Dropped Reasons']);
+          ['Home', 'Dropped Reasons']);
       expect(_crumbs(FomraBreadcrumbs.forModule('Monthly Targets')),
-          ['Home', 'Settings', 'Monthly Targets']);
-    });
-
-    test('a land page reads Home > Land Workspace > page', () {
-      expect(_crumbs(FomraBreadcrumbs.forModule('Add Land Lead')),
-          ['Home', 'Land Workspace', 'Add Land Lead']);
+          ['Home', 'Monthly Targets']);
       expect(_crumbs(FomraBreadcrumbs.forModule('Project Map')),
-          ['Home', 'Land Workspace', 'Project Map']);
+          ['Home', 'Project Map']);
+      expect(_crumbs(FomraBreadcrumbs.forModule('Add Land Lead')),
+          ['Home', 'Add Land Lead']);
     });
 
-    test('always begins with Home', () {
+    test('always begins with Home and is exactly two crumbs', () {
       for (final label in [
         'Land Workspace',
         'Dropped Reasons',
         'Add Land Lead',
         'Anything Else',
       ]) {
-        expect(FomraBreadcrumbs.forModule(label).first.label, 'Home');
+        final items = FomraBreadcrumbs.forModule(label);
+        expect(items.first.label, 'Home');
+        expect(items.length, 2);
       }
     });
 
@@ -53,46 +49,28 @@ void main() {
       expect(items.last.isCurrent, isTrue);
       expect(items.last.label, 'Dropped Reasons');
     });
-
-    test('intermediate crumbs carry a route to navigate to', () {
-      final items = FomraBreadcrumbs.forModule('Dropped Reasons');
-      final settings = items[1];
-      expect(settings.label, 'Settings');
-      expect(settings.action, FomraBreadcrumbAction.namedRoute);
-      expect(settings.route, '/settings');
-    });
   });
 
-  group('dynamic titles via under()', () {
-    test('a filtered list sits under Land Workspace', () {
+  group('dynamic titles via under() are also flat', () {
+    test('a filtered list is Home > its title, ignoring passed ancestors', () {
       expect(
         _crumbs(FomraBreadcrumbs.under(
             const [FomraBreadcrumbs.landWorkspace], 'Negotiation')),
-        ['Home', 'Land Workspace', 'Negotiation'],
+        ['Home', 'Negotiation'],
       );
     });
 
-    test('a lead sits under Land Workspace', () {
+    test('a lead is Home > its title', () {
       expect(
         _crumbs(FomraBreadcrumbs.under(
             const [FomraBreadcrumbs.landWorkspace], 'Lead 12')),
-        ['Home', 'Land Workspace', 'Lead 12'],
+        ['Home', 'Lead 12'],
       );
-    });
-
-    test('the same lead reads the same path however it was opened', () {
-      // Route-based, not history-based: opening a lead from Reports or from a
-      // filtered list gives the identical module path.
-      final a = FomraBreadcrumbs.under(
-          const [FomraBreadcrumbs.landWorkspace], 'Lead 12');
-      final b = FomraBreadcrumbs.under(
-          const [FomraBreadcrumbs.landWorkspace], 'Lead 12');
-      expect(_crumbs(a), _crumbs(b));
     });
   });
 
-  group('the bar renders the hierarchy', () {
-    testWidgets('shows every crumb label', (tester) async {
+  group('the bar renders the flat trail', () {
+    testWidgets('shows Home > page only', (tester) async {
       await tester.pumpWidget(MaterialApp(
         home: Scaffold(
           appBar: AppBar(
@@ -102,11 +80,13 @@ void main() {
       ));
       expect(tester.takeException(), isNull);
       expect(find.text('Home'), findsOneWidget);
-      expect(find.text('Settings'), findsOneWidget);
       expect(find.text('Dropped Reasons'), findsOneWidget);
+      // The old intermediate "Settings" crumb is gone.
+      expect(find.text('Settings'), findsNothing);
     });
 
-    testWidgets('a dynamic title renders under its ancestors', (tester) async {
+    testWidgets('a dynamic title renders Home > title, no ancestor',
+        (tester) async {
       await tester.pumpWidget(MaterialApp(
         home: Scaffold(
           appBar: AppBar(
@@ -119,8 +99,8 @@ void main() {
       ));
       expect(tester.takeException(), isNull);
       expect(find.text('Home'), findsOneWidget);
-      expect(find.text('Land Workspace'), findsOneWidget);
       expect(find.text('Lead 12'), findsOneWidget);
+      expect(find.text('Land Workspace'), findsNothing);
     });
   });
 }
