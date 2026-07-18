@@ -62,6 +62,52 @@ class EmployeeService {
     } catch (_) {/* endpoint not deployed / offline — profile still created */}
   }
 
+  /// Email [email] a link to set their OWN password (real Supabase Auth login).
+  /// Management only. Returns `'invite'` when a fresh invite email was sent, or
+  /// `'recovery'` when the address already had a login so a set-password
+  /// (recovery) email went instead. Throws with a management-actionable message
+  /// (e.g. SMTP not configured) when the email couldn't be sent.
+  ///
+  /// [designation]/[fullName] ride along as the invited user's metadata. Sending
+  /// is identical for every role.
+  static Future<String> inviteEmployee(
+    String email, {
+    String designation = '',
+    String fullName = '',
+  }) async {
+    final token = await _adminToken();
+    if (token == null) {
+      throw Exception(
+          'Sign in as management (with your real password) to invite employees.');
+    }
+    final res = await http.post(
+      Uri.parse('${ApiClient.baseUrl}/api/employee-auth'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+      body: jsonEncode({
+        'action': 'invite',
+        'email': email.trim().toLowerCase(),
+        if (designation.trim().isNotEmpty) 'designation': designation.trim(),
+        if (fullName.trim().isNotEmpty) 'fullName': fullName.trim(),
+      }),
+    );
+    if (res.statusCode >= 400) {
+      String msg = 'Invite failed (${res.statusCode}).';
+      try {
+        final j = jsonDecode(res.body);
+        if (j is Map && j['error'] != null) msg = j['error'].toString();
+      } catch (_) {}
+      throw Exception(msg);
+    }
+    try {
+      final j = jsonDecode(res.body);
+      if (j is Map && j['recovered'] == true) return 'recovery';
+    } catch (_) {}
+    return 'invite';
+  }
+
   /// A readable, reasonably strong temporary password to hand to a new employee.
   /// Ambiguous characters (0/O, 1/l/I) are left out so it's easy to read aloud
   /// or copy. They can change it after signing in.

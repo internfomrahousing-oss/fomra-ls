@@ -1,16 +1,21 @@
-// Admin endpoint: provision / reset / delete Supabase Auth users for employees.
+// Admin endpoint: invite / provision / reset / delete Supabase Auth users.
 //
-// Onboarding is email-free: management creates an employee's login here with a
-// known password (provision) and hands it to them directly — there is no invite
-// email and no SMTP dependency. Creating an auth user requires the service_role
-// key, which must never live in the client, so this serverless function holds
-// it server-side and is callable ONLY by a signed-in management user (verified
-// via their Supabase access token).
+// Two onboarding paths, both driven from Add Employee:
+//   • invite    — email the employee a link to set their OWN password (needs
+//                 Supabase SMTP configured; falls back to a recovery email for
+//                 an address that already has a login).
+//   • provision — create the login here with a known password and hand it over
+//                 directly (no email, no SMTP dependency).
+// Creating an auth user requires the service_role key, which must never live in
+// the client, so this serverless function holds it server-side and is callable
+// ONLY by a signed-in management user (verified via their Supabase access token).
 //
 // Required Vercel environment variables:
 //   SUPABASE_URL                 e.g. https://irjgtudyxzzvgbbrxmgq.supabase.co
 //   SUPABASE_SERVICE_ROLE_KEY    Project Settings → API → service_role (secret!)
 //   MANAGEMENT_EMAIL             defaults to management@fomrahousing.in
+//   APP_URL                      base URL for the set-password link (invite);
+//                                defaults to https://fomra-ls.vercel.app
 //
 // Auth: caller must send `Authorization: Bearer <management access token>`.
 // The token is validated against Supabase and must belong to MANAGEMENT_EMAIL.
@@ -44,6 +49,31 @@ async function readBody(req) {
     req.on('end', () => { try { resolve(JSON.parse(data || '{}')); } catch { resolve({}); } });
     req.on('error', () => resolve({}));
   });
+}
+
+// Turn GoTrue's opaque email failures into something management can act on.
+// Supabase's built-in email service is rate-limited (a few per hour) and is not
+// meant for production — a custom SMTP provider must be configured for invites
+// to actually send.
+function explainEmailError(status, msg) {
+  if (status === 429 || msg.includes('rate limit') || msg.includes('too many')) {
+    return 'Email rate limit reached. Supabase\'s built-in email service only ' +
+      'allows a few messages per hour — configure a custom SMTP provider in ' +
+      'Supabase → Authentication → Emails → SMTP Settings, then re-send.';
+  }
+  if (
+    msg.includes('error sending') ||
+    msg.includes('smtp') ||
+    msg.includes('send email') ||
+    msg.includes('sending email')
+  ) {
+    // NB: deliberately not matching a bare 'mail' — it also matches "email",
+    // which appears in unrelated errors like "email already registered".
+    return 'Supabase could not send the set-password email. Configure SMTP in ' +
+      'Supabase → Authentication → Emails → SMTP Settings (and make sure the ' +
+      '"Invite user" template + Site URL / redirect URLs are set), then re-send.';
+  }
+  return null;
 }
 
 async function findUserIdByEmail(base, headers, email) {
@@ -124,7 +154,58 @@ module.exports = async (req, res) => {
     'Content-Type': 'application/json',
   };
 
+  // Where the invite / recovery email's "set password" link should land the
+  // user. Must be listed in Supabase → Authentication → URL Configuration.
+  const APP_URL = (process.env.APP_URL || 'https://fomra-ls.vercel.app').replace(/\/$/, '');
+  const REDIRECT_TO = `${APP_URL}/set-password`;
+
   try {
+    if (action === 'invite') {
+      // Send an invite email so the recipient sets their OWN password via the
+      // app's /set-password screen — no password is set here. If the address is
+      // already registered, fall back to a password-recovery email (its link
+      // also lands on /set-password), so re-inviting an existing user works.
+      const r = await fetch(
+        `${SUPABASE_URL}/auth/v1/invite?redirect_to=${encodeURIComponent(REDIRECT_TO)}`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            email,
+            ...(Object.keys(userMetadata).length ? { data: userMetadata } : {}),
+          }),
+        }
+      );
+      if (r.ok) return res.status(200).json({ ok: true, invited: true });
+      const err = await r.json().catch(() => ({}));
+      const rawMsg = `${err.msg || err.error_description || err.message || ''}`.trim();
+      const msg = rawMsg.toLowerCase();
+      // Existing user is NOT an email failure — its message ("... already
+      // registered") would be misread as one, so check it first.
+      if (r.status === 422 || msg.includes('already') || msg.includes('registered') || msg.includes('exists')) {
+        const rec = await fetch(
+          `${SUPABASE_URL}/auth/v1/recover?redirect_to=${encodeURIComponent(REDIRECT_TO)}`,
+          { method: 'POST', headers, body: JSON.stringify({ email }) }
+        );
+        if (rec.ok) return res.status(200).json({ ok: true, invited: false, recovered: true });
+        const rerr = await rec.json().catch(() => ({}));
+        const rrawMsg = `${rerr.msg || rerr.error_description || rerr.message || ''}`.trim();
+        const rmapped = explainEmailError(rec.status, rrawMsg.toLowerCase());
+        return res.status(rec.status).json({
+          error: rmapped
+            ? (rrawMsg ? `${rmapped}\n\nRaw error (HTTP ${rec.status}): ${rrawMsg}` : rmapped)
+            : (rrawMsg || 'could not send password email'),
+        });
+      }
+      const mapped = explainEmailError(r.status, msg);
+      if (mapped) {
+        return res.status(r.status).json({
+          error: rawMsg ? `${mapped}\n\nRaw error (HTTP ${r.status}): ${rawMsg}` : mapped,
+        });
+      }
+      return res.status(r.status).json({ error: rawMsg || 'invite failed' });
+    }
+
     if (action === 'provision') {
       // Create a confirmed auth user with a known password so they can sign in
       // immediately — no invite email, no email verification. Idempotent:
@@ -182,7 +263,7 @@ module.exports = async (req, res) => {
       return res.status(r.status).json({ error: err.msg || err.message || 'reset failed' });
     }
 
-    return res.status(400).json({ error: 'unknown action (use "provision", "reset" or "delete")' });
+    return res.status(400).json({ error: 'unknown action (use "invite", "provision", "reset" or "delete")' });
   } catch (e) {
     return res.status(500).json({ error: String(e && e.message ? e.message : e) });
   }
