@@ -109,21 +109,29 @@ class BiPipelineSection extends StatelessWidget {
     BuildContext context,
     String title,
     String subtitle,
-    List<LandLead> subset, {
-    bool hideMeetingPendingBadge = false,
-  }) {
+    List<LandLead> subset,
+  ) {
     FilteredLeadsScreen.openList(
       context,
       title: title,
       subtitle: subtitle,
       leads: subset,
-      hideMeetingPendingBadge: hideMeetingPendingBadge,
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final active = leads.where((l) => l.status.isActive).toList();
+    // Pipeline Acres lists only the mid/late pipeline stages — a lead whose land
+    // owner meeting is still pending isn't counted as being in the pipeline yet.
+    const pipelineStages = {
+      LeadStatus.prospectMeetingCompleted,
+      LeadStatus.negotiation,
+      LeadStatus.legal,
+      LeadStatus.managementMeetingCompleted,
+    };
+    final pipeline =
+        leads.where((l) => pipelineStages.contains(l.status)).toList();
     final signed =
         leads.where((l) => l.status == LeadStatus.signed).toList();
     final tappable = leads.isNotEmpty;
@@ -143,8 +151,7 @@ class BiPipelineSection extends StatelessWidget {
           Icons.stacked_bar_chart_rounded, AppColors.info,
           onTap: tappable
               ? () => _open(
-                  context, 'Pipeline Acres', 'Active pipeline leads', active,
-                  hideMeetingPendingBadge: true)
+                  context, 'Pipeline Acres', 'Active pipeline leads', pipeline)
               : null),
       _PipeTile('Active Deals', '${summary.activeDeals}',
           Icons.trending_up_rounded, AppColors.warning,
