@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/land_lead.dart';
 import '../theme/app_theme.dart';
+import '../theme/fomra_layout.dart';
 import '../theme/fomra_theme_context.dart';
 import '../utils/employee_lead_next_action.dart';
 
@@ -241,18 +242,28 @@ class _TaskStat extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Keep the number prominent on phones and stop the label from wrapping to
+    // an awkward second line in the narrow column.
+    final mobile = FomraLayout.isMobile(context);
     return Column(
       children: [
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w800,
-            color: color,
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            value,
+            maxLines: 1,
+            style: TextStyle(
+              fontSize: mobile ? 18 : 16,
+              fontWeight: FontWeight.w800,
+              color: color,
+            ),
           ),
         ),
         Text(
           label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
           style: TextStyle(
             fontSize: 10,
             fontWeight: FontWeight.w600,

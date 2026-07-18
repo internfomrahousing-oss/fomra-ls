@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../theme/app_theme.dart';
+import '../../theme/fomra_layout.dart';
 import '../../theme/fomra_theme_context.dart';
 
 /// Centered modal with the app's lighter scrim (avoids default black54 dullness).
@@ -532,10 +533,15 @@ class SectionHeader extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                        color: context.fomraTextPrimary,
-                        fontWeight: FontWeight.w700,
-                      ),
+                  // Smaller heading on phones so titles don't dominate the
+                  // narrow viewport (tablet/desktop keep headlineMedium).
+                  style: (FomraLayout.isMobile(context)
+                          ? Theme.of(context).textTheme.titleLarge
+                          : Theme.of(context).textTheme.headlineMedium)
+                      ?.copyWith(
+                    color: context.fomraTextPrimary,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
                 if (subtitle != null) ...[
                   const SizedBox(height: 2),

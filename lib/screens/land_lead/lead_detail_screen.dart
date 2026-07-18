@@ -572,7 +572,10 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
                 const OfflineStatusBanner(),
                 Expanded(
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+                    // Tighter gutters on phones so cards get more usable width.
+                    padding: FomraLayout.isMobile(context)
+                        ? const EdgeInsets.fromLTRB(8, 6, 8, 8)
+                        : const EdgeInsets.fromLTRB(12, 8, 12, 12),
                     child: Stack(
                       children: [
                         wide
@@ -627,8 +630,10 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
                               ),
                         if (!_viewOnly)
                           Positioned(
-                            right: 8,
-                            bottom: 8,
+                            // A roomier margin on phones keeps the FAB clear of
+                            // the bottom edge / gesture bar and page content.
+                            right: FomraLayout.isMobile(context) ? 16 : 8,
+                            bottom: FomraLayout.isMobile(context) ? 20 : 8,
                             child: EmployeeLeadQuickFab(
                               lead: lead,
                               onLaunchContact: _launchContact,
@@ -1185,6 +1190,46 @@ class _ActionToolbar extends StatelessWidget {
       (Icons.draw_outlined, 'Signed', AppColors.purple),
     ];
 
+    Widget pill((IconData, String, Color) action) {
+      return Material(
+        color: action.$3.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(24),
+        child: InkWell(
+          onTap: () =>
+              action.$2 == 'Tasks' ? onOpenTasks() : onAction(action.$2),
+          borderRadius: BorderRadius.circular(24),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(action.$1, size: 16, color: action.$3),
+                const SizedBox(width: 6),
+                Text(
+                  action.$2,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: context.fomraTextPrimary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Mobile: wrap the pills onto multiple rows instead of a single
+    // horizontally-scrolling strip.
+    if (FomraLayout.isMobile(context)) {
+      return Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [for (final action in actions) pill(action)],
+      );
+    }
+
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
@@ -1192,36 +1237,7 @@ class _ActionToolbar extends StatelessWidget {
           for (final action in actions)
             Padding(
               padding: const EdgeInsets.only(right: 8),
-              child: Material(
-                color: action.$3.withValues(alpha: 0.07),
-                borderRadius: BorderRadius.circular(24),
-                child: InkWell(
-                  onTap: () =>
-                      action.$2 == 'Tasks' ? onOpenTasks() : onAction(action.$2),
-                  borderRadius: BorderRadius.circular(24),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(action.$1, size: 16, color: action.$3),
-                        const SizedBox(width: 6),
-                        Text(
-                          action.$2,
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: context.fomraTextPrimary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
+              child: pill(action),
             ),
         ],
       ),

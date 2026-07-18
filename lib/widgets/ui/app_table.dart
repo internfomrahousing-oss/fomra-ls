@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../theme/app_theme.dart';
+import '../../theme/fomra_layout.dart';
 import '../../theme/fomra_theme_context.dart';
 import 'app_components.dart';
 
@@ -70,6 +71,20 @@ class AppDataTable extends StatelessWidget {
     final surface = context.fomraSurface;
     final surfaceVar = context.fomraSurfaceVar;
     final border = context.fomraBorder;
+
+    // On phones a wide table forces horizontal scrolling; render each row as a
+    // stacked label/value card instead so everything fits the viewport.
+    if (FomraLayout.isMobile(context)) {
+      return _MobileCardList(
+        columns: columns,
+        rows: rows,
+        emptyTitle: emptyTitle,
+        emptyMessage: emptyMessage,
+        emptyIcon: emptyIcon,
+        emptyAction: emptyAction,
+      );
+    }
+
     final container = Container(
       decoration: BoxDecoration(
         color: surface,
@@ -158,5 +173,119 @@ class AppDataTable extends StatelessWidget {
     );
 
     return container;
+  }
+}
+
+/// Phone rendering of [AppDataTable]: each row becomes a label/value card so the
+/// data fits the viewport without horizontal scrolling.
+class _MobileCardList extends StatelessWidget {
+  const _MobileCardList({
+    required this.columns,
+    required this.rows,
+    required this.emptyTitle,
+    required this.emptyMessage,
+    required this.emptyIcon,
+    required this.emptyAction,
+  });
+
+  final List<AppTableColumn> columns;
+  final List<AppTableRow> rows;
+  final String emptyTitle;
+  final String? emptyMessage;
+  final IconData emptyIcon;
+  final Widget? emptyAction;
+
+  @override
+  Widget build(BuildContext context) {
+    final border = context.fomraBorder;
+
+    if (rows.isEmpty) {
+      return Container(
+        decoration: BoxDecoration(
+          color: context.fomraSurface,
+          borderRadius: BorderRadius.circular(AppColors.radiusMd),
+          border: Border.all(color: border),
+        ),
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.xl),
+        child: EmptyState(
+          title: emptyTitle,
+          message: emptyMessage,
+          icon: emptyIcon,
+          action: emptyAction,
+        ),
+      );
+    }
+
+    return Column(
+      children: [
+        for (var i = 0; i < rows.length; i++) ...[
+          if (i > 0) const SizedBox(height: 10),
+          _card(context, rows[i]),
+        ],
+      ],
+    );
+  }
+
+  Widget _card(BuildContext context, AppTableRow row) {
+    final border = context.fomraBorder;
+    final cellCount = row.cells.length;
+    final card = Container(
+      decoration: BoxDecoration(
+        color: row.selected
+            ? AppColors.primary.withValues(alpha: 0.06)
+            : context.fomraSurface,
+        borderRadius: BorderRadius.circular(AppColors.radiusMd),
+        border: Border.all(
+          color: row.selected
+              ? AppColors.primary.withValues(alpha: 0.4)
+              : border,
+        ),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (var c = 0; c < columns.length && c < cellCount; c++)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 5),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    width: 116,
+                    child: Text(
+                      columns[c].label.toUpperCase(),
+                      style: Theme.of(context)
+                          .textTheme
+                          .labelSmall
+                          ?.copyWith(
+                            color: context.fomraTextSecondary,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.4,
+                          ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Align(
+                      alignment: columns[c].numeric
+                          ? Alignment.centerRight
+                          : Alignment.centerLeft,
+                      child: row.cells[c],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+
+    if (row.onTap == null) return card;
+    return InkWell(
+      onTap: row.onTap,
+      borderRadius: BorderRadius.circular(AppColors.radiusMd),
+      child: card,
+    );
   }
 }

@@ -175,12 +175,15 @@ class PortalWelcomeHeader extends StatelessWidget {
                       child: Text(
                         greeting,
                         key: ValueKey(greeting),
-                        style:
-                            Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                  fontWeight: FontWeight.w800,
-                                  color: context.fomraTextPrimary,
-                                  height: 1.2,
-                                ),
+                        // Slightly smaller greeting on phones.
+                        style: (FomraLayout.isMobile(context)
+                                ? Theme.of(context).textTheme.titleLarge
+                                : Theme.of(context).textTheme.headlineSmall)
+                            ?.copyWith(
+                          fontWeight: FontWeight.w800,
+                          color: context.fomraTextPrimary,
+                          height: 1.2,
+                        ),
                       ),
                     ),
                     const SizedBox(height: AppSpacing.xxs),

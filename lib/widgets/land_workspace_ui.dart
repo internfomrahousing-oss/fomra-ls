@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/land_lead.dart';
 import '../services/app_store.dart';
 import '../theme/app_theme.dart';
+import '../theme/fomra_layout.dart';
 import '../theme/fomra_theme_context.dart';
 import '../utils/lead_location_parser.dart';
 import 'ui/app_components.dart';
@@ -520,6 +521,124 @@ class _LandWorkspaceSearchBarState extends State<LandWorkspaceSearchBar> {
   Widget build(BuildContext context) {
     final count = widget.activeFilterCount;
     final filterLabel = count > 0 ? 'Filter ($count)' : 'Filter';
+    final isMobile = FomraLayout.isMobile(context);
+
+    final searchField = TextField(
+      controller: _ctrl,
+      focusNode: _focus,
+      style: TextStyle(color: context.fomraTextPrimary),
+      decoration: InputDecoration(
+        hintText: widget.hintText,
+        hintStyle: TextStyle(
+          color: context.fomraTextSecondary,
+          fontSize: 13,
+        ),
+        prefixIcon: Icon(
+          Icons.search_rounded,
+          size: 24,
+          color: _focused ? AppColors.primary : context.fomraTextSecondary,
+        ),
+        suffixIcon: _ctrl.text.isNotEmpty
+            ? IconButton(
+                icon: const Icon(Icons.close_rounded, size: 18),
+                onPressed: () {
+                  _ctrl.clear();
+                  widget.onChanged('');
+                  setState(() {});
+                },
+              )
+            : null,
+        filled: true,
+        fillColor: context.fomraSurfaceVar,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide.none,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(
+            color: _focused
+                ? AppColors.primary.withValues(alpha: 0.35)
+                : Colors.transparent,
+          ),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(
+            color: AppColors.primary.withValues(alpha: 0.45),
+          ),
+        ),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 12,
+        ),
+      ),
+      onChanged: (v) {
+        widget.onChanged(v);
+        setState(() {});
+      },
+    );
+
+    final filterButton = widget.onFilterTap == null
+        ? null
+        : OutlinedButton.icon(
+            onPressed: widget.onFilterTap,
+            icon: const Icon(Icons.tune_rounded, size: 18),
+            label: Text(
+              filterLabel,
+              style: const TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: 13,
+              ),
+            ),
+            style: OutlinedButton.styleFrom(
+              foregroundColor:
+                  count > 0 ? AppColors.primary : context.fomraTextPrimary,
+              side: BorderSide(
+                color: count > 0
+                    ? AppColors.primary.withValues(alpha: 0.55)
+                    : context.fomraBorder,
+                width: count > 0 ? 1.4 : 1,
+              ),
+              backgroundColor: count > 0
+                  ? AppColors.primary.withValues(alpha: 0.06)
+                  : context.fomraSurface,
+              padding: EdgeInsets.symmetric(
+                horizontal: 14,
+                // Taller tap target when stacked full-width on mobile.
+                vertical: isMobile ? 14 : 12,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+            ),
+          );
+
+    // Mobile: search takes the full width with the Filter button stacked
+    // full-width beneath it. Tablet/desktop keep them side by side.
+    final Widget content;
+    if (isMobile) {
+      content = Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          searchField,
+          if (filterButton != null) ...[
+            const SizedBox(height: 8),
+            SizedBox(width: double.infinity, child: filterButton),
+          ],
+        ],
+      );
+    } else {
+      content = Row(
+        children: [
+          Expanded(child: searchField),
+          if (filterButton != null) ...[
+            const SizedBox(width: 10),
+            filterButton,
+          ],
+        ],
+      );
+    }
 
     return AnimatedContainer(
       duration: AppMotion.normal,
@@ -540,104 +659,7 @@ class _LandWorkspaceSearchBarState extends State<LandWorkspaceSearchBar> {
         padding: const EdgeInsets.all(8),
         radius: 14,
         interactive: false,
-        child: Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: _ctrl,
-                focusNode: _focus,
-                style: TextStyle(color: context.fomraTextPrimary),
-                decoration: InputDecoration(
-                  hintText: widget.hintText,
-                  hintStyle: TextStyle(
-                    color: context.fomraTextSecondary,
-                    fontSize: 13,
-                  ),
-                  prefixIcon: Icon(
-                    Icons.search_rounded,
-                    size: 24,
-                    color: _focused
-                        ? AppColors.primary
-                        : context.fomraTextSecondary,
-                  ),
-                  suffixIcon: _ctrl.text.isNotEmpty
-                      ? IconButton(
-                          icon: const Icon(Icons.close_rounded, size: 18),
-                          onPressed: () {
-                            _ctrl.clear();
-                            widget.onChanged('');
-                            setState(() {});
-                          },
-                        )
-                      : null,
-                  filled: true,
-                  fillColor: context.fomraSurfaceVar,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: BorderSide.none,
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: BorderSide(
-                      color: _focused
-                          ? AppColors.primary.withValues(alpha: 0.35)
-                          : Colors.transparent,
-                    ),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: BorderSide(
-                      color: AppColors.primary.withValues(alpha: 0.45),
-                    ),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 12,
-                  ),
-                ),
-                onChanged: (v) {
-                  widget.onChanged(v);
-                  setState(() {});
-                },
-              ),
-            ),
-            if (widget.onFilterTap != null) ...[
-              const SizedBox(width: 10),
-              OutlinedButton.icon(
-                onPressed: widget.onFilterTap,
-                icon: const Icon(Icons.tune_rounded, size: 18),
-                label: Text(
-                  filterLabel,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13,
-                  ),
-                ),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: count > 0
-                      ? AppColors.primary
-                      : context.fomraTextPrimary,
-                  side: BorderSide(
-                    color: count > 0
-                        ? AppColors.primary.withValues(alpha: 0.55)
-                        : context.fomraBorder,
-                    width: count > 0 ? 1.4 : 1,
-                  ),
-                  backgroundColor: count > 0
-                      ? AppColors.primary.withValues(alpha: 0.06)
-                      : context.fomraSurface,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 12,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                ),
-              ),
-            ],
-          ],
-        ),
+        child: content,
       ),
     );
   }

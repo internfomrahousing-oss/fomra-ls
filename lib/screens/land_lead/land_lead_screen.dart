@@ -14,7 +14,7 @@ import '../../theme/fomra_layout.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../utils/legal_document_catalog.dart';
 import '../../widgets/fomra_app_bar.dart';
-import '../../widgets/fomra_app_shell.dart';
+import '../../widgets/fomra_app_shell.dart';
 import '../../widgets/ui/app_feedback.dart';
 import '../../widgets/land_workspace_ui.dart';
 import '../../widgets/management_executive_dashboard.dart';
@@ -353,6 +353,34 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
   /// Select (enter assign mode) and View all leads (open the leads map), with
   /// the District Performance toggle sitting directly below View all leads.
   Widget _buildIdleManagementActions() {
+    final select = _actionPill(
+      onTap: _toggleSelectMode,
+      icon: Icons.checklist_rtl,
+      label: 'Select',
+    );
+    final viewAll = _actionPill(
+      onTap: _openLeadsMap,
+      icon: Icons.map_outlined,
+      label: 'View all leads',
+      foreground: const Color(0xFF0F766E),
+      background: const Color(0xFF0F766E).withValues(alpha: 0.10),
+    );
+    final district = _actionPill(
+      onTap: () => setState(() => _showDistrict = !_showDistrict),
+      icon: _showDistrict ? Icons.list_alt_outlined : Icons.insights_outlined,
+      label: _showDistrict ? 'Back to Leads' : 'District Performance',
+      foreground: AppColors.purple,
+      background: AppColors.purple.withValues(alpha: 0.10),
+    );
+    // Mobile: let the pills flow and wrap (full width / two per row) instead of
+    // crowding to the right of the summary.
+    if (FomraLayout.isMobile(context)) {
+      return Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [select, viewAll, district],
+      );
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.end,
       mainAxisSize: MainAxisSize.min,
@@ -360,31 +388,13 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
         Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _actionPill(
-              onTap: _toggleSelectMode,
-              icon: Icons.checklist_rtl,
-              label: 'Select',
-            ),
+            select,
             const SizedBox(width: 8),
-            _actionPill(
-              onTap: _openLeadsMap,
-              icon: Icons.map_outlined,
-              label: 'View all leads',
-              foreground: const Color(0xFF0F766E),
-              background: const Color(0xFF0F766E).withValues(alpha: 0.10),
-            ),
+            viewAll,
           ],
         ),
         const SizedBox(height: 8),
-        _actionPill(
-          onTap: () => setState(() => _showDistrict = !_showDistrict),
-          icon: _showDistrict
-              ? Icons.list_alt_outlined
-              : Icons.insights_outlined,
-          label: _showDistrict ? 'Back to Leads' : 'District Performance',
-          foreground: AppColors.purple,
-          background: AppColors.purple.withValues(alpha: 0.10),
-        ),
+        district,
       ],
     );
   }
@@ -538,24 +548,39 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
             index: 0,
             child: Padding(
               padding: const EdgeInsets.only(bottom: 12),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: _LeadSummary(
-                      leads: _leads,
-                      onTapStatus: _openSummaryFilter,
+              child: FomraLayout.isMobile(context)
+                  // Mobile: summary on top, wrapping action pills beneath it.
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _LeadSummary(
+                          leads: _leads,
+                          onTapStatus: _openSummaryFilter,
+                        ),
+                        if (_isManagement && !_selectMode) ...[
+                          const SizedBox(height: 12),
+                          _buildIdleManagementActions(),
+                        ],
+                      ],
+                    )
+                  : Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: _LeadSummary(
+                            leads: _leads,
+                            onTapStatus: _openSummaryFilter,
+                          ),
+                        ),
+                        if (_isManagement && !_selectMode) ...[
+                          const SizedBox(width: 12),
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: _buildIdleManagementActions(),
+                          ),
+                        ],
+                      ],
                     ),
-                  ),
-                  if (_isManagement && !_selectMode) ...[
-                    const SizedBox(width: 12),
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8),
-                      child: _buildIdleManagementActions(),
-                    ),
-                  ],
-                ],
-              ),
             ),
           ),
         ),
