@@ -29,7 +29,9 @@ class FomraAppShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDesktop = FomraLayout.isDesktop(context);
+    // The persistent side rail stays for tablet + desktop; mobile (< 768) gets
+    // a hamburger + slide-out drawer instead.
+    final isDesktop = !FomraLayout.isMobile(context);
     final pageGradient = context.fomraPageGradient;
     final bg = backgroundColor ?? context.fomraPageBg;
 

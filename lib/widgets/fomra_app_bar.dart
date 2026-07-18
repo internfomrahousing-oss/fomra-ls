@@ -110,6 +110,8 @@ class FomraAppBar extends StatelessWidget implements PreferredSizeWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = context.isDarkMode;
+    // Mobile web: show the hamburger for the drawer and tighten the header.
+    final isMobile = FomraLayout.isMobile(context);
     final compact = MediaQuery.sizeOf(context).width < 720;
     final fg = isDark ? AppColors.darkTextPrimary : Colors.white;
     final fgMuted = isDark
@@ -128,8 +130,8 @@ class FomraAppBar extends StatelessWidget implements PreferredSizeWidget {
       surfaceTintColor: Colors.transparent,
       elevation: 0,
       scrolledUnderElevation: 0,
-      automaticallyImplyLeading: compact,
-      titleSpacing: compact ? 10 : 16,
+      automaticallyImplyLeading: isMobile,
+      titleSpacing: isMobile ? 8 : 16,
       title: Row(
         mainAxisSize: MainAxisSize.min,
         children: [

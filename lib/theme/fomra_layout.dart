@@ -14,6 +14,14 @@ class FomraLayout {
   static const double mobileViewportMin = 320;
   static const double desktopViewportMax = 1440;
 
+  /// Below this width is "mobile web": the side navigation rail collapses to a
+  /// hamburger + drawer and the header/padding tighten. Tablet and desktop
+  /// (>= this) keep the persistent sidebar.
+  static const double mobileBreakpoint = 768;
+
+  static bool isMobile(BuildContext context) =>
+      MediaQuery.sizeOf(context).width < mobileBreakpoint;
+
   static bool isTablet(BuildContext context) =>
       MediaQuery.sizeOf(context).width >= tabletBreakpoint;
 
