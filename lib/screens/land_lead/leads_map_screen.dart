@@ -635,10 +635,32 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
     return (center, zoom);
   }
 
+  /// Show the full lead detail as a dismissible popup layered over the map,
+  /// rather than pushing a separate full-screen route — tapping outside (or the
+  /// detail's own close) returns straight to the map with the pins intact.
   void _openLead(BuildContext context, LandLead lead) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => LeadDetailScreen(lead: lead)),
+    showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      barrierColor: Colors.black.withValues(alpha: 0.5),
+      builder: (dialogContext) {
+        final size = MediaQuery.sizeOf(dialogContext);
+        final compact = size.width < 700;
+        return Dialog(
+          insetPadding: EdgeInsets.symmetric(
+            horizontal: compact ? 8 : 40,
+            vertical: compact ? 8 : 28,
+          ),
+          clipBehavior: Clip.antiAlias,
+          backgroundColor: Colors.transparent,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          child: SizedBox(
+            width: double.infinity,
+            height: size.height * (compact ? 0.94 : 0.9),
+            child: LeadDetailScreen(lead: lead),
+          ),
+        );
+      },
     );
   }
 
@@ -797,8 +819,8 @@ class _PropertyPopupState extends State<_PropertyPopup> {
                         Navigator.pop(context);
                         widget.onOpenSite();
                       },
-                      icon: const Icon(Icons.open_in_new_rounded, size: 16),
-                      label: const Text('Open Site'),
+                      icon: const Icon(Icons.article_outlined, size: 16),
+                      label: const Text('View full details'),
                     ),
                   ),
                   const SizedBox(width: 10),
