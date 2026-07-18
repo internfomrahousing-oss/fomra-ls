@@ -23,6 +23,7 @@ import '../../services/land_lead_site_visit_service.dart';
 import '../../services/lead_call_log_service.dart';
 import '../../services/voice_note_service.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/fomra_layout.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../widgets/ui/app_feedback.dart';
 import '../../utils/employee_lead_next_action.dart';
@@ -1595,51 +1596,67 @@ class _ActivitySummaryRow extends StatelessWidget {
       (label: 'Incoming\nAnswered', value: '${callMetrics.incomingAnswered}', icon: CallOutcome.answered.icon, color: AppColors.success),
     ];
 
+    Widget cell(int i) => Container(
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+          decoration: BoxDecoration(
+            color: context.fomraSurfaceVar.withValues(alpha: 0.65),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: context.fomraBorder),
+          ),
+          child: Column(
+            children: [
+              Icon(cells[i].icon, size: 18, color: cells[i].color),
+              const SizedBox(height: 6),
+              Text(
+                cells[i].label,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 10,
+                  height: 1.2,
+                  fontWeight: FontWeight.w600,
+                  color: context.fomraTextSecondary,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                cells[i].value,
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                  color: i == 0 ? AppColors.purple : context.fomraTextPrimary,
+                ),
+              ),
+            ],
+          ),
+        );
+
+    // Mobile web: wrap into rows of three so five cells aren't crushed into one
+    // line; tablet/desktop keep the single equal-width row.
+    if (FomraLayout.isMobile(context)) {
+      const gap = 8.0;
+      return LayoutBuilder(
+        builder: (context, c) {
+          const perRow = 3;
+          final w = c.maxWidth.isFinite
+              ? (c.maxWidth - gap * (perRow - 1)) / perRow
+              : 104.0;
+          return Wrap(
+            spacing: gap,
+            runSpacing: gap,
+            children: [
+              for (var i = 0; i < cells.length; i++)
+                SizedBox(width: w, child: cell(i)),
+            ],
+          );
+        },
+      );
+    }
+
     return Row(
       children: [
         for (var i = 0; i < cells.length; i++) ...[
           if (i > 0) const SizedBox(width: 8),
-          Expanded(
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-              decoration: BoxDecoration(
-                color: context.fomraSurfaceVar.withValues(alpha: 0.65),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: context.fomraBorder),
-              ),
-              child: Column(
-                children: [
-                  Icon(
-                    cells[i].icon,
-                    size: 18,
-                    color: cells[i].color,
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    cells[i].label,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 10,
-                      height: 1.2,
-                      fontWeight: FontWeight.w600,
-                      color: context.fomraTextSecondary,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    cells[i].value,
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w800,
-                      color: i == 0
-                          ? AppColors.purple
-                          : context.fomraTextPrimary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
+          Expanded(child: cell(i)),
         ],
       ],
     );

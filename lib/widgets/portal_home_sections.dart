@@ -385,22 +385,30 @@ class PortalQuickActionsGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final width = MediaQuery.sizeOf(context).width;
-    if (width < 640) {
+    // Mobile web: a 2-per-row grid instead of a horizontally scrolling strip.
+    if (FomraLayout.isMobile(context)) {
+      const gap = 12.0;
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 4),
-        child: SizedBox(
-          height: _cardHeight,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            itemCount: actions.length,
-            separatorBuilder: (_, __) => const SizedBox(width: _gridGap),
-            itemBuilder: (_, i) => SizedBox(
-              width: _cardWidth,
-              height: _cardHeight,
-              child: _QuickActionCard(data: actions[i]),
-            ),
-          ),
+        child: LayoutBuilder(
+          builder: (context, c) {
+            const perRow = 2;
+            final cardW = c.maxWidth.isFinite
+                ? (c.maxWidth - gap * (perRow - 1)) / perRow
+                : _cardWidth;
+            return Wrap(
+              spacing: gap,
+              runSpacing: gap,
+              children: [
+                for (final action in actions)
+                  SizedBox(
+                    width: cardW,
+                    height: _cardHeight,
+                    child: _QuickActionCard(data: action),
+                  ),
+              ],
+            );
+          },
         ),
       );
     }
