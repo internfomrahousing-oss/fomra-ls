@@ -103,7 +103,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _loadPerformanceData();
     if (_canApprove) _loadPendingApprovals();
     if (_isManagement) _loadMeetings();
-    if (!_isManagement) _loadMonthlyTarget();
+    if (!_isManagement) {
+      _loadMonthlyTarget();
+      // Re-scope the Monthly Target card when the Team / Individual toggle flips.
+      ViewScope.instance.addListener(_loadMonthlyTarget);
+    }
     UniversalSearchService.warmDocumentIndex();
   }
 
@@ -124,7 +128,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final monthStart = DateTime(now.year, now.month);
     final monthEnd = DateTime(now.year, now.month + 1)
         .subtract(const Duration(milliseconds: 1));
-    final me = (AuthService.instance.currentUser?.fullName ?? '').trim();
     final myEmail = (AuthService.instance.currentUser?.email ?? '').trim();
 
     final results = await Future.wait([
@@ -137,6 +140,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final target = results[0] as MonthlyTarget?;
     final approved = results[1] as List<LandLeadSignedRequest>;
 
+    // For a Reporting Manager / Head the card counts their whole team's signed
+    // sites (respecting the header Team / Individual toggle); an executive
+    // counts only their own.
+    final names = _targetContributorNames();
+
     setState(() {
       _monthlyProgress = MonthlyTargetProgress.forMonth(
         target: target?.target ?? 0,
@@ -144,11 +152,28 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         completedOn: [
           for (final r in approved)
             if (r.reviewedAt != null &&
-                r.requestedByName.trim().toLowerCase() == me.toLowerCase())
+                names.contains(r.requestedByName.trim().toLowerCase()))
               r.reviewedAt!.toLocal(),
         ],
       );
     });
+  }
+
+  /// The names whose signed sites count toward this user's Monthly Target card.
+  /// A manager viewing "Team" gets every member of their team; otherwise just
+  /// the signed-in user.
+  Set<String> _targetContributorNames() {
+    final me =
+        (AuthService.instance.currentUser?.fullName ?? '').trim().toLowerCase();
+    final profile = TeamHierarchy.currentProfile;
+    final isManager =
+        profile != null && (profile.isReportingManager || profile.isHead);
+    if (isManager && ViewScope.instance.isTeam) {
+      // teamMemberNames returns lowercased names for the manager + all reports.
+      final team = TeamHierarchy.teamMemberNames(profile);
+      return team.isEmpty ? {me} : team;
+    }
+    return {me};
   }
 
   void _onNotificationsChanged() {
@@ -196,6 +221,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     AppStore.instance.removeListener(_onStoreUpdate);
     NotificationHub.instance.removeListener(_onNotificationsChanged);
+    ViewScope.instance.removeListener(_loadMonthlyTarget);
     super.dispose();
   }
 
@@ -634,8 +660,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     index: 2,
                     child: PortalSectionCard(
                       title: 'Monthly Target Progress',
-                      subtitle:
-                          'Your sites this month against the common target',
+                      subtitle: canManageTeam && ViewScope.instance.isTeam
+                          ? "Your team's sites this month against the target"
+                          : 'Your sites this month against the target',
                       icon: Icons.flag_outlined,
                       child: MonthlyTargetProgressCard(
                         progress: _monthlyProgress!,
