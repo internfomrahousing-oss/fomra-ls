@@ -70,6 +70,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   /// first load lands; management never loads it.
   MonthlyTargetProgress? _monthlyProgress;
 
+  /// The fetched target + this month's approvals, cached so the progress can be
+  /// recomputed locally from visibleLeads whenever the store or scope changes
+  /// (without re-hitting the network).
+  MonthlyTarget? _monthlyTarget;
+  List<LandLeadSignedRequest> _approvedSignedThisMonth = const [];
+
   List<LandLead> get _noFutureActivityLeads => NoFutureActivityAnalytics.select(
         AppStore.instance.visibleLeads,
         _meetings,
@@ -137,63 +143,39 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     ]);
     if (!mounted) return;
 
-    final target = results[0] as MonthlyTarget?;
-    final approved = results[1] as List<LandLeadSignedRequest>;
+    _monthlyTarget = results[0] as MonthlyTarget?;
+    _approvedSignedThisMonth = results[1] as List<LandLeadSignedRequest>;
+    _recomputeMonthlyProgress();
+  }
 
-    // For a Reporting Manager / Head the card counts their whole team's signed
-    // sites (respecting the header Team / Individual toggle); an executive
-    // counts only their own. Attribution keys off the requester's EMAIL — a
-    // stable id — because display names drift and any mismatch silently zeroes
-    // the count for everyone. Names are still matched as a fallback so legacy
-    // rows written before requested_by_email existed still count.
-    final emails = _targetContributorEmails();
-    final names = _targetContributorNames();
-
+  /// Recompute the card from the cached target + approvals and the CURRENT
+  /// visibleLeads — cheap and local, so it can run on every store/scope change.
+  ///
+  /// Achieved = signed sites in the current scope. visibleLeads is the single
+  /// scoping rule (role + Team/Individual toggle), so a manager in Team view
+  /// gets the whole team's signed sites and an executive gets their own — no
+  /// brittle name/email matching. Each signed lead is dated by its approval's
+  /// reviewed_at when we have one (the true signing date), otherwise the day it
+  /// was added; forMonth keeps only the ones dated in this month.
+  void _recomputeMonthlyProgress() {
+    if (_isManagement) return;
+    final now = DateTime.now();
+    final signedLeads = AppStore.instance.visibleLeads
+        .where((l) => l.status == LeadStatus.signed);
+    final reviewedAtByLead = <String, DateTime>{
+      for (final r in _approvedSignedThisMonth)
+        if (r.reviewedAt != null) r.leadId: r.reviewedAt!.toLocal(),
+    };
+    final completedOn = [
+      for (final l in signedLeads) reviewedAtByLead[l.leadId] ?? l.addedOn,
+    ];
     setState(() {
       _monthlyProgress = MonthlyTargetProgress.forMonth(
-        target: target?.target ?? 0,
+        target: _monthlyTarget?.target ?? 0,
         now: now,
-        completedOn: [
-          for (final r in approved)
-            if (r.reviewedAt != null &&
-                (emails.contains(r.requestedByEmail.trim().toLowerCase()) ||
-                    names.contains(r.requestedByName.trim().toLowerCase())))
-              r.reviewedAt!.toLocal(),
-        ],
+        completedOn: completedOn,
       );
     });
-  }
-
-  /// The names whose signed sites count toward this user's Monthly Target card —
-  /// the fallback for legacy rows that predate the email column.
-  Set<String> _targetContributorNames() {
-    final me =
-        (AuthService.instance.currentUser?.fullName ?? '').trim().toLowerCase();
-    final profile = TeamHierarchy.currentProfile;
-    final isManager =
-        profile != null && (profile.isReportingManager || profile.isHead);
-    if (isManager && ViewScope.instance.isTeam) {
-      final team = TeamHierarchy.teamMemberNames(profile);
-      return team.isEmpty ? {me} : team;
-    }
-    return {me};
-  }
-
-  /// The emails whose signed sites count toward this user's Monthly Target card.
-  /// A manager viewing "Team" gets every member of their team; otherwise just
-  /// the signed-in user.
-  Set<String> _targetContributorEmails() {
-    final me =
-        (AuthService.instance.currentUser?.email ?? '').trim().toLowerCase();
-    final profile = TeamHierarchy.currentProfile;
-    final isManager =
-        profile != null && (profile.isReportingManager || profile.isHead);
-    if (isManager && ViewScope.instance.isTeam) {
-      // teamMemberEmails returns lowercased emails for the manager + all reports.
-      final team = TeamHierarchy.teamMemberEmails(profile);
-      return team.isEmpty ? {me} : team;
-    }
-    return {me};
   }
 
   void _onNotificationsChanged() {
@@ -245,7 +227,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     super.dispose();
   }
 
-  void _onStoreUpdate() => setState(() {});
+  void _onStoreUpdate() {
+    // Leads just changed in the store — refresh the Monthly Target's signed
+    // count from the new visibleLeads (recompute calls setState). Management
+    // doesn't show the card, so a plain rebuild is enough for it.
+    if (!_isManagement && _monthlyTarget != null) {
+      _recomputeMonthlyProgress();
+    } else {
+      setState(() {});
+    }
+  }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
