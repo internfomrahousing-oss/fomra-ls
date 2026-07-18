@@ -1,6 +1,6 @@
 {
-    "name": "fomra_ls",
-    "short_name": "fomra_ls",
+    "name": "Fomra LandIQ",
+    "short_name": "Fomra LandIQ",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#FFFFFF",

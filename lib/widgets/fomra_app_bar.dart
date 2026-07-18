@@ -155,7 +155,7 @@ class FomraAppBar extends StatelessWidget implements PreferredSizeWidget {
                   ),
                   const SizedBox(width: 10),
                   Text(
-                    'FomraLS',
+                    'Fomra LandIQ',
                     style: TextStyle(
                       color: fg,
                       fontWeight: FontWeight.w800,

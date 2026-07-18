@@ -147,7 +147,7 @@ class _PortalLoginScreenState extends State<PortalLoginScreen> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          'FomraLS · Fomra Housing',
+                          'Fomra LandIQ · Fomra Housing',
                           style: TextStyle(
                             color: Colors.white.withValues(alpha: 0.7),
                             fontSize: 13,

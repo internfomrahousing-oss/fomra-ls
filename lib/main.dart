@@ -55,7 +55,7 @@ class FomraLSApp extends StatelessWidget {
     return ValueListenableBuilder<ThemeMode>(
       valueListenable: ThemeController.instance.mode,
       builder: (context, themeMode, _) => MaterialApp(
-        title: 'FomraLS',
+        title: 'Fomra LandIQ',
         debugShowCheckedModeBanner: false,
         theme: appTheme(),
         darkTheme: appThemeDark(),
@@ -200,7 +200,7 @@ class _StartupScreenState extends State<_StartupScreen> {
               ),
               const SizedBox(height: 20),
               const Text(
-                'FomraLS',
+                'Fomra LandIQ',
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 32,

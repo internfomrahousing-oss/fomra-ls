@@ -454,7 +454,7 @@ class _BulkLeadImportPageState extends State<_BulkLeadImportPage> {
     final csv = '${_csvRow(_bulkImportColumns)}\r\n${_csvRow(example)}\r\n';
     final bytes = Uint8List.fromList(utf8.encode(csv));
     try {
-      await saveCsv(bytes, 'FomraLS_Bulk_Lead_Import_Template.csv');
+      await saveCsv(bytes, 'FomraLandIQ_Bulk_Lead_Import_Template.csv');
       if (mounted) {
         AppFeedback.success(context, 'Template downloaded');
       }

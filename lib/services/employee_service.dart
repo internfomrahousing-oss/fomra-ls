@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:math';
 
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -108,15 +107,6 @@ class EmployeeService {
     return 'invite';
   }
 
-  /// A readable, reasonably strong temporary password to hand to a new employee.
-  /// Ambiguous characters (0/O, 1/l/I) are left out so it's easy to read aloud
-  /// or copy. They can change it after signing in.
-  static String generatePassword({int length = 10}) {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
-    final rand = Random.secure();
-    return List.generate(length, (_) => chars[rand.nextInt(chars.length)]).join();
-  }
-
   /// Reset an employee's login password (management only).
   static Future<void> resetAuthPassword(String email, String password) async {
     final token = await _adminToken();
@@ -144,22 +134,6 @@ class EmployeeService {
       } catch (_) {}
       throw Exception(msg);
     }
-  }
-
-  /// Give an employee a ready-to-use login with a known [password]: create the
-  /// Supabase Auth user if needed, then set the password so it works whether or
-  /// not the account already existed. Management only. This is the whole
-  /// onboarding path now — management shares the password directly, no email.
-  static Future<void> provisionLogin(String email,
-      {String password = 'fomra@2024'}) async {
-    final token = await _adminToken();
-    if (token == null) {
-      throw Exception(
-          'Your session expired. Sign out and sign in again as management, then retry.');
-    }
-    final normalized = email.trim().toLowerCase();
-    await provisionAuthUser(normalized, password: password);
-    await resetAuthPassword(normalized, password);
   }
 
   /// Provision auth users for every current employee (one-time backfill).
@@ -245,8 +219,8 @@ class EmployeeService {
         all.insert(0, profile);
         await _saveCache(all);
       }
-      // The login (so the employee can sign in) is provisioned by the caller
-      // via provisionLogin, so its outcome can be surfaced.
+      // The login is set up by the caller via inviteEmployee (email invite), so
+      // its outcome can be surfaced.
       return profile;
     } catch (e) {
       final profile = EmployeeProfile(

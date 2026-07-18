@@ -163,7 +163,7 @@ class ReportCatalogService {
       capForPdf: format == ReportFormat.pdf,
     );
     final fileName =
-        'FomraLS_${kind.fileStem}_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}'
+        'FomraLandIQ_${kind.fileStem}_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}'
         '.${format == ReportFormat.pdf ? 'pdf' : 'csv'}';
 
     // Excel and CSV both export tabular CSV data (opens directly in Excel).
@@ -996,7 +996,7 @@ class ReportCatalogService {
     String title,
   ) async {
     final doc = pw.Document(
-      title: 'FomraLS $title',
+      title: 'Fomra LandIQ $title',
       author: 'Fomra Housing & Infrastructure Pvt. Ltd.',
     );
 

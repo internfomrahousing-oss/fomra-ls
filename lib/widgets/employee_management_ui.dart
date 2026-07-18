@@ -188,13 +188,13 @@ class EmployeeStatusBadge extends StatelessWidget {
 class EmployeeManagementCard extends StatelessWidget {
   final EmployeeProfile employee;
   final VoidCallback onRemoveAccess;
-  final VoidCallback onSetPassword;
+  final VoidCallback onResendInvite;
 
   const EmployeeManagementCard({
     super.key,
     required this.employee,
     required this.onRemoveAccess,
-    required this.onSetPassword,
+    required this.onResendInvite,
   });
 
   @override
@@ -283,16 +283,16 @@ class EmployeeManagementCard extends StatelessWidget {
               elevation: 8,
               shadowColor: Colors.black26,
               onSelected: (v) {
-                if (v == 'setpwd') onSetPassword();
+                if (v == 'resend') onResendInvite();
                 if (v == 'remove') onRemoveAccess();
               },
               itemBuilder: (_) => [
                 const PopupMenuItem(
-                  value: 'setpwd',
+                  value: 'resend',
                   child: ListTile(
                     contentPadding: EdgeInsets.zero,
-                    leading: Icon(Icons.password_outlined, size: 20),
-                    title: Text('Set password'),
+                    leading: Icon(Icons.mark_email_read_outlined, size: 20),
+                    title: Text('Resend invite'),
                   ),
                 ),
                 const PopupMenuItem(

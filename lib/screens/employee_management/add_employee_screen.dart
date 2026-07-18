@@ -6,7 +6,6 @@ import '../../theme/app_theme.dart';
 import '../../theme/fomra_input.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../widgets/fomra_app_shell.dart';
-import '../../widgets/credentials_dialog.dart';
 import '../../widgets/ui/app_feedback.dart';
 import '../../widgets/portal_home_sections.dart';
 import '../../widgets/portal_page_layout.dart';
@@ -33,10 +32,6 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
   String? _designation;
   bool _saving = false;
 
-  /// How the new employee gets their login. Email invite = they set their own
-  /// password via a link; otherwise management generates one and hands it over.
-  bool _emailInvite = true;
-
   @override
   void dispose() {
     _nameCtrl.dispose();
@@ -57,11 +52,7 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
         email: _emailCtrl.text,
         designation: _designation!,
       );
-      if (_emailInvite) {
-        await _finishWithEmailInvite(profile);
-      } else {
-        await _finishWithGeneratedPassword(profile);
-      }
+      await _finishWithEmailInvite(profile);
     } catch (e) {
       if (!mounted) return;
       AppFeedback.error(context, e.toString().replaceFirst('Exception: ', ''));
@@ -104,36 +95,6 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
             '${profile.designation}, but the set-password email failed:\n\n'
             '$inviteError\n\n'
             'Re-send from User Management, or set a password there directly.',
-      );
-    }
-  }
-
-  /// Generate a password now and show it once so management can hand it over.
-  Future<void> _finishWithGeneratedPassword(EmployeeProfile profile) async {
-    final password = EmployeeService.generatePassword();
-    String? loginError;
-    try {
-      await EmployeeService.provisionLogin(profile.email, password: password);
-    } catch (e) {
-      loginError = e.toString().replaceFirst('Exception: ', '');
-    }
-    if (!mounted) return;
-    Navigator.pop(context, profile);
-    if (loginError == null) {
-      await showCredentialsDialog(
-        context,
-        email: profile.email,
-        password: password,
-        title: '${profile.fullName} added',
-      );
-    } else {
-      AppFeedback.errorDetails(
-        context,
-        title: 'Employee saved, but the login could not be created',
-        message: '${profile.fullName} (${profile.email}) was created as '
-            '${profile.designation}, but their login could not be set up:\n\n'
-            '$loginError\n\n'
-            'Set a password from User Management → Set password.',
       );
     }
   }
@@ -238,38 +199,30 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
                               : null,
                           onChanged: (v) => setState(() => _designation = v),
                         ),
-                        const SizedBox(height: 20),
-                        Text(
-                          'LOGIN SETUP',
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 0.6,
-                            color: context.fomraTextSecondary,
-                          ),
+                        const SizedBox(height: 16),
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.mark_email_read_outlined,
+                              size: 16,
+                              color: context.fomraTextSecondary,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'The employee gets an email with a link to set '
+                                'their own password. Needs email (SMTP) set up '
+                                'in Supabase.',
+                                style: TextStyle(
+                                  fontSize: 11.5,
+                                  height: 1.35,
+                                  color: context.fomraTextSecondary,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 8),
-                        _LoginSetupToggle(
-                          emailInvite: _emailInvite,
-                          onChanged: _saving
-                              ? null
-                              : (v) => setState(() => _emailInvite = v),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          _emailInvite
-                              ? 'The employee gets an email with a link to set '
-                                  'their own password. Needs email (SMTP) set up '
-                                  'in Supabase.'
-                              : 'A password is generated now and shown once for '
-                                  'you to hand over — no email needed.',
-                          style: TextStyle(
-                            fontSize: 11.5,
-                            height: 1.35,
-                            color: context.fomraTextSecondary,
-                          ),
-                        ),
-                        const SizedBox(height: 28),
+                        const SizedBox(height: 24),
                         SizedBox(
                           height: 50,
                           child: FilledButton.icon(
@@ -283,17 +236,11 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
                                       color: Colors.white,
                                     ),
                                   )
-                                : Icon(
-                                    _emailInvite
-                                        ? Icons.mark_email_read_outlined
-                                        : Icons.add_circle_outline,
-                                    size: 18,
-                                  ),
-                            label: Text(
-                              _emailInvite
-                                  ? 'Create & Send Invite'
-                                  : 'Create & Show Password',
-                              style: const TextStyle(fontWeight: FontWeight.w700),
+                                : const Icon(Icons.mark_email_read_outlined,
+                                    size: 18),
+                            label: const Text(
+                              'Create & Send Invite',
+                              style: TextStyle(fontWeight: FontWeight.w700),
                             ),
                             style: FilledButton.styleFrom(
                               shape: RoundedRectangleBorder(
@@ -333,90 +280,6 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
         label: label,
         icon: icon,
         required: required,
-      ),
-    );
-  }
-}
-
-/// Two-way choice for how a new employee receives their login: an email invite
-/// (they set their own password) or a generated password shown once.
-class _LoginSetupToggle extends StatelessWidget {
-  final bool emailInvite;
-  final ValueChanged<bool>? onChanged;
-
-  const _LoginSetupToggle({required this.emailInvite, this.onChanged});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: context.fomraSurfaceVar.withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: context.fomraBorder),
-      ),
-      child: Row(
-        children: [
-          _option(
-            context,
-            selected: emailInvite,
-            icon: Icons.mail_outline_rounded,
-            label: 'Email invite',
-            onTap: () => onChanged?.call(true),
-          ),
-          _option(
-            context,
-            selected: !emailInvite,
-            icon: Icons.password_rounded,
-            label: 'Set password now',
-            onTap: () => onChanged?.call(false),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _option(
-    BuildContext context, {
-    required bool selected,
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-  }) {
-    return Expanded(
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onChanged == null ? null : onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          decoration: BoxDecoration(
-            color: selected ? AppColors.primary : Colors.transparent,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                icon,
-                size: 16,
-                color: selected ? Colors.white : context.fomraTextSecondary,
-              ),
-              const SizedBox(width: 6),
-              Flexible(
-                child: Text(
-                  label,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w700,
-                    color: selected ? Colors.white : context.fomraTextSecondary,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }

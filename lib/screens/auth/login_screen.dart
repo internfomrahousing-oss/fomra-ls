@@ -217,14 +217,19 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           ),
                           const SizedBox(height: 16),
-                          const Text(
-                            'FomraLS',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 64,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: -1.1,
-                              height: 1,
+                          const FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              'Fomra LandIQ',
+                              maxLines: 1,
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 64,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: -1.1,
+                                height: 1,
+                              ),
                             ),
                           ),
                           const SizedBox(height: 12),
@@ -246,11 +251,12 @@ class _LoginScreenState extends State<LoginScreen> {
             ],
           ),
         ),
-        // Right: white panel with the sign-in form
+        // Right: sign-in form panel. Dark-mode uses the page background so the
+        // dark form card doesn't sit on a jarring white panel.
         Expanded(
           flex: 4,
           child: ColoredBox(
-            color: Colors.white,
+            color: context.isDarkMode ? context.fomraPageBg : Colors.white,
             child: Center(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(40),
@@ -318,7 +324,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 16),
                   const Text(
-                    'FomraLS',
+                    'Fomra LandIQ',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: Colors.white,

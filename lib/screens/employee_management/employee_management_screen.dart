@@ -8,7 +8,6 @@ import '../../services/team_hierarchy.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_layout.dart';
 import '../../theme/fomra_theme_context.dart';
-import '../../widgets/credentials_dialog.dart';
 import '../../widgets/employee_management_ui.dart';
 import '../../widgets/ui/app_feedback.dart';
 import '../../widgets/portal_home_sections.dart';
@@ -73,15 +72,15 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
   /// Set (or reset) an employee's login to a freshly generated password and
   /// show it so management can hand it over. Works whether or not they already
   /// had a login — no invite email involved.
-  Future<void> _setPassword(EmployeeProfile employee) async {
+  Future<void> _resendInvite(EmployeeProfile employee) async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Set password'),
+        title: const Text('Resend invite'),
         content: Text(
-          'Generate a new password for ${employee.email}? You\'ll see it once '
-          'to share with them; it replaces any existing password.',
+          'Email ${employee.email} a link to set their own password? If they '
+          'already have a login, a reset-password email is sent instead.',
           style: TextStyle(fontSize: 13, color: context.fomraTextSecondary),
         ),
         actions: [
@@ -90,27 +89,30 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
               child: const Text('Cancel')),
           FilledButton(
               onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Generate')),
+              child: const Text('Send')),
         ],
       ),
     );
     if (confirm != true || !mounted) return;
-    final password = EmployeeService.generatePassword();
     try {
-      await EmployeeService.provisionLogin(employee.email, password: password);
+      final kind = await EmployeeService.inviteEmployee(
+        employee.email,
+        designation: employee.designation,
+        fullName: employee.fullName,
+      );
       if (!mounted) return;
-      await showCredentialsDialog(
+      AppFeedback.success(
         context,
-        email: employee.email,
-        password: password,
-        title: 'Password set for ${employee.fullName}',
+        kind == 'recovery'
+            ? 'Reset-password email sent to ${employee.email}.'
+            : 'Invite sent to ${employee.email}.',
       );
     } catch (e) {
       if (!mounted) return;
       AppFeedback.errorDetails(
         context,
-        title: 'Could not set the password',
-        message: 'Setting a login for ${employee.email} failed:\n\n'
+        title: 'Could not send the invite',
+        message: 'Emailing ${employee.email} failed:\n\n'
             '${e.toString().replaceFirst('Exception: ', '')}',
       );
     }
@@ -306,8 +308,8 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                                     employee: _filtered[i],
                                     onRemoveAccess: () =>
                                         _confirmRemoveAccess(_filtered[i]),
-                                    onSetPassword: () =>
-                                        _setPassword(_filtered[i]),
+                                    onResendInvite: () =>
+                                        _resendInvite(_filtered[i]),
                                   ),
                                 ),
                               ),

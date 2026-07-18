@@ -144,7 +144,7 @@ class _DrawerHeader extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               Text(
-                'FomraLS',
+                'Fomra LandIQ',
                 style: TextStyle(
                   color: isDark ? context.fomraTextPrimary : Colors.white,
                   fontSize: titleSize,
