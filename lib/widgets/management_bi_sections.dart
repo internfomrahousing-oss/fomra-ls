@@ -109,13 +109,15 @@ class BiPipelineSection extends StatelessWidget {
     BuildContext context,
     String title,
     String subtitle,
-    List<LandLead> subset,
-  ) {
+    List<LandLead> subset, {
+    bool hideMeetingPendingBadge = false,
+  }) {
     FilteredLeadsScreen.openList(
       context,
       title: title,
       subtitle: subtitle,
       leads: subset,
+      hideMeetingPendingBadge: hideMeetingPendingBadge,
     );
   }
 
@@ -141,7 +143,8 @@ class BiPipelineSection extends StatelessWidget {
           Icons.stacked_bar_chart_rounded, AppColors.info,
           onTap: tappable
               ? () => _open(
-                  context, 'Pipeline Acres', 'Active pipeline leads', active)
+                  context, 'Pipeline Acres', 'Active pipeline leads', active,
+                  hideMeetingPendingBadge: true)
               : null),
       _PipeTile('Active Deals', '${summary.activeDeals}',
           Icons.trending_up_rounded, AppColors.warning,

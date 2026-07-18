@@ -17,12 +17,17 @@ class FilteredLeadsScreen extends StatefulWidget {
   final String? presetTitle;
   final String? presetSubtitle;
 
+  /// Hides the "Land owner meeting pending" status pill in this list (e.g. the
+  /// Pipeline Acres view, where that stage is noise).
+  final bool hideMeetingPendingBadge;
+
   const FilteredLeadsScreen({
     super.key,
     this.filter,
     this.presetLeads,
     this.presetTitle,
     this.presetSubtitle,
+    this.hideMeetingPendingBadge = false,
   });
 
   static void open(BuildContext context, LeadListFilter filter) {
@@ -41,6 +46,7 @@ class FilteredLeadsScreen extends StatefulWidget {
     required String title,
     required String subtitle,
     required List<LandLead> leads,
+    bool hideMeetingPendingBadge = false,
   }) {
     Navigator.push(
       context,
@@ -49,6 +55,7 @@ class FilteredLeadsScreen extends StatefulWidget {
           presetLeads: List<LandLead>.from(leads),
           presetTitle: title,
           presetSubtitle: subtitle,
+          hideMeetingPendingBadge: hideMeetingPendingBadge,
         ),
       ),
     );
@@ -125,6 +132,7 @@ class _FilteredLeadsScreenState extends State<FilteredLeadsScreen> {
                       final lead = leads[index];
                       return _FilteredLeadRow(
                         lead: lead,
+                        hideMeetingPending: widget.hideMeetingPendingBadge,
                         // No trail passed: the lead detail names itself and the
                         // path (… > this filter > Lead X) comes from the stack.
                         onTap: () => Navigator.push(
@@ -146,8 +154,13 @@ class _FilteredLeadsScreenState extends State<FilteredLeadsScreen> {
 class _FilteredLeadRow extends StatelessWidget {
   final LandLead lead;
   final VoidCallback onTap;
+  final bool hideMeetingPending;
 
-  const _FilteredLeadRow({required this.lead, required this.onTap});
+  const _FilteredLeadRow({
+    required this.lead,
+    required this.onTap,
+    this.hideMeetingPending = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -208,25 +221,29 @@ class _FilteredLeadRow extends StatelessWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: lead.status.color.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(999),
-                      border: Border.all(
-                        color: lead.status.color.withValues(alpha: 0.28),
+                  // The "Land owner meeting pending" pill is suppressed in views
+                  // (e.g. Pipeline Acres) where that early stage is just noise.
+                  if (!(hideMeetingPending &&
+                      lead.status == LeadStatus.prospectMeetingPending))
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: lead.status.color.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(
+                          color: lead.status.color.withValues(alpha: 0.28),
+                        ),
+                      ),
+                      child: Text(
+                        lead.status.label,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: lead.status.color,
+                        ),
                       ),
                     ),
-                    child: Text(
-                      lead.status.label,
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: lead.status.color,
-                      ),
-                    ),
-                  ),
                   const SizedBox(height: 8),
                   Icon(
                     Icons.chevron_right_rounded,
