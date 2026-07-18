@@ -2,7 +2,6 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../analytics/ai_lead_score.dart';
 import '../../models/land_lead.dart';
 import '../../models/land_lead_legal_document.dart';
 import '../../models/land_lead_meeting.dart';
@@ -548,17 +547,6 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
             ),
     );
 
-    final aiResult = AiLeadScore.compute(
-      lead: lead,
-      callLogs: _callLogs,
-      meetings: _meetings,
-      siteVisits: _siteVisits,
-      legalDocs: _legalDocs,
-      allLeads: AppStore.instance.leads,
-      overdueTaskCount:
-          tasksForLead(lead.leadId).where((t) => t.isOverdue).length,
-    );
-
     return FomraAppShell(
       currentRoute: '/land-lead',
       backgroundColor: context.fomraPageBg,
@@ -606,7 +594,6 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
                                         leadAgeDays: _leadAgeDays,
                                         taskCount:
                                             taskCountForLead(lead.leadId),
-                                        aiResult: aiResult,
                                         readOnly: _viewOnly,
                                         onStatusChanged: _changeStatus,
                                         onCreateTask: _openCreateTask,
@@ -632,7 +619,6 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
                                     displayName: _displayName,
                                     leadAgeDays: _leadAgeDays,
                                     taskCount: taskCountForLead(lead.leadId),
-                                    aiResult: aiResult,
                                     readOnly: _viewOnly,
                                     onStatusChanged: _changeStatus,
                                     onCreateTask: _openCreateTask,
@@ -675,7 +661,6 @@ class _ProfilePanel extends StatelessWidget {
   final String displayName;
   final int leadAgeDays;
   final int taskCount;
-  final AiLeadScoreResult aiResult;
   final bool readOnly;
   final ValueChanged<LeadStatus?> onStatusChanged;
   final VoidCallback onCreateTask;
@@ -687,23 +672,12 @@ class _ProfilePanel extends StatelessWidget {
     required this.displayName,
     required this.leadAgeDays,
     required this.taskCount,
-    required this.aiResult,
     this.readOnly = false,
     required this.onStatusChanged,
     required this.onCreateTask,
     required this.onViewTasks,
     this.onNavigate,
   });
-
-  static Color scoreColorFor(AiScoreBand band) => switch (band) {
-        AiScoreBand.excellent => AppColors.success,
-        AiScoreBand.good => AppColors.info,
-        AiScoreBand.moderate => AppColors.warning,
-        AiScoreBand.needsAttention => const Color(0xFFF97316),
-        AiScoreBand.highRisk => AppColors.error,
-      };
-
-  Color _scoreColor() => scoreColorFor(aiResult.band);
 
   @override
   Widget build(BuildContext context) {
@@ -814,43 +788,6 @@ class _ProfilePanel extends StatelessWidget {
                               _InfoChip(
                                 label: lead.landType.label,
                                 icon: Icons.landscape_outlined,
-                              ),
-                              InkWell(
-                                onTap: () =>
-                                    _showAiScoreBreakdown(context, aiResult),
-                                borderRadius: BorderRadius.circular(999),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 10, vertical: 5),
-                                  decoration: BoxDecoration(
-                                    color:
-                                        _scoreColor().withValues(alpha: 0.12),
-                                    borderRadius: BorderRadius.circular(999),
-                                    border: Border.all(
-                                      color:
-                                          _scoreColor().withValues(alpha: 0.4),
-                                    ),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(Icons.auto_awesome_outlined,
-                                          size: 13, color: _scoreColor()),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        'AI Score ${aiResult.score} · ${aiResult.band.label}',
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w800,
-                                          color: _scoreColor(),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 2),
-                                      Icon(Icons.info_outline_rounded,
-                                          size: 12, color: _scoreColor()),
-                                    ],
-                                  ),
-                                ),
                               ),
                             ],
                           ),
@@ -966,182 +903,6 @@ class _ProfilePanel extends StatelessWidget {
             ],
           ),
         ),
-    );
-  }
-}
-
-void _showAiScoreBreakdown(BuildContext context, AiLeadScoreResult result) {
-  showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    backgroundColor: Colors.transparent,
-    builder: (ctx) => _AiScoreBreakdownSheet(result: result),
-  );
-}
-
-class _AiScoreBreakdownSheet extends StatelessWidget {
-  final AiLeadScoreResult result;
-
-  const _AiScoreBreakdownSheet({required this.result});
-
-  @override
-  Widget build(BuildContext context) {
-    final color = _ProfilePanel.scoreColorFor(result.band);
-    return DraggableScrollableSheet(
-      initialChildSize: 0.7,
-      maxChildSize: 0.92,
-      minChildSize: 0.4,
-      expand: false,
-      builder: (ctx, scrollController) => Container(
-        decoration: BoxDecoration(
-          color: context.fomraSurface,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: ListView(
-          controller: scrollController,
-          padding: const EdgeInsets.fromLTRB(18, 14, 18, 24),
-          children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: context.fomraBorder,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Container(
-                  width: 52,
-                  height: 52,
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    '${result.score}',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w900,
-                      color: color,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'AI Lead Score — ${result.band.label}',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w800,
-                          color: context.fomraTextPrimary,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'Weighted across 6 factors, recalculated automatically as this lead changes.',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: context.fomraTextSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 18),
-            for (final category in result.categories)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 14),
-                child: _AiScoreCategoryTile(category: category),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _AiScoreCategoryTile extends StatelessWidget {
-  final AiScoreCategory category;
-
-  const _AiScoreCategoryTile({required this.category});
-
-  @override
-  Widget build(BuildContext context) {
-    final barColor = category.rawScore >= 70
-        ? AppColors.success
-        : category.rawScore >= 40
-            ? AppColors.warning
-            : AppColors.error;
-    return AppCard(
-      padding: const EdgeInsets.all(14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  '${category.label} · ${category.weightPercent.round()}%',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w800,
-                    color: context.fomraTextPrimary,
-                  ),
-                ),
-              ),
-              Text(
-                '${category.rawScore.round()}/100',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: barColor,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(999),
-            child: LinearProgressIndicator(
-              value: (category.rawScore / 100).clamp(0, 1),
-              minHeight: 6,
-              backgroundColor: context.fomraSurfaceVar,
-              valueColor: AlwaysStoppedAnimation(barColor),
-            ),
-          ),
-          const SizedBox(height: 10),
-          for (final note in category.notes)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 4),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(Icons.circle, size: 4, color: context.fomraTextSecondary),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      note,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: context.fomraTextSecondary,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-        ],
-      ),
     );
   }
 }
