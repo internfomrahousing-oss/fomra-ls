@@ -537,6 +537,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
       meetings: _meetings,
       legalDocs: _legalDocs,
       onDetailAction: _handleDetailAction,
+      onOpenTasks: _openViewTasks,
       shouldLoadMiTab: _shouldLoadMiTab,
       guidanceBanner: _viewOnly
           ? null
@@ -559,14 +560,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
           const [FomraBreadcrumbs.landWorkspace],
           'Lead Details',
         ),
-        actions: [
-          if (_canEditSite)
-            IconButton(
-              onPressed: _openEdit,
-              tooltip: 'Edit lead',
-              icon: const Icon(Icons.edit_outlined),
-            ),
-        ],
+        // Edit moved into the profile header (see _ProfilePanel.onEdit).
       ),
       body: SafeArea(
         child: LayoutBuilder(
@@ -598,6 +592,8 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
                                         onStatusChanged: _changeStatus,
                                         onCreateTask: _openCreateTask,
                                         onViewTasks: _openViewTasks,
+                                        onEdit:
+                                            _canEditSite ? _openEdit : null,
                                         onNavigate:
                                             lead.gpsCoordinates.trim().isEmpty
                                                 ? null
@@ -623,6 +619,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
                                     onStatusChanged: _changeStatus,
                                     onCreateTask: _openCreateTask,
                                     onViewTasks: _openViewTasks,
+                                    onEdit: _canEditSite ? _openEdit : null,
                                   ),
                                   const SizedBox(height: 12),
                                   workspace,
@@ -667,6 +664,10 @@ class _ProfilePanel extends StatelessWidget {
   final VoidCallback onViewTasks;
   final VoidCallback? onNavigate;
 
+  /// Edit the lead — moved here from the app-bar action. Null when the current
+  /// user can't edit this lead.
+  final VoidCallback? onEdit;
+
   const _ProfilePanel({
     required this.lead,
     required this.displayName,
@@ -677,6 +678,7 @@ class _ProfilePanel extends StatelessWidget {
     required this.onCreateTask,
     required this.onViewTasks,
     this.onNavigate,
+    this.onEdit,
   });
 
   @override
@@ -816,59 +818,54 @@ class _ProfilePanel extends StatelessWidget {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        InkWell(
-                          onTap: onViewTasks,
-                          borderRadius: BorderRadius.circular(14),
-                          child: _LeadTaskCountBadge(count: taskCount),
-                        ),
-                        const SizedBox(height: 8),
-                        SizedBox(
-                          width: 118,
-                          child: FilledButton.icon(
-                            onPressed: onCreateTask,
-                            icon: const Icon(Icons.add_task_outlined, size: 14),
-                            label: const Text('Create'),
-                            style: FilledButton.styleFrom(
-                              backgroundColor: AppColors.primary,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 8,
-                              ),
-                              textStyle: const TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        SizedBox(
-                          width: 118,
-                          child: OutlinedButton.icon(
-                            onPressed: onViewTasks,
-                            icon: const Icon(Icons.list_alt_outlined, size: 14),
-                            label: const Text('View Tasks'),
-                            style: OutlinedButton.styleFrom(
+                        // Edit sits where the task box used to be (top-right).
+                        if (onEdit != null)
+                          IconButton(
+                            onPressed: onEdit,
+                            tooltip: 'Edit lead',
+                            icon: const Icon(Icons.edit_outlined, size: 20),
+                            style: IconButton.styleFrom(
                               foregroundColor: AppColors.primary,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 8,
-                              ),
-                              textStyle: const TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              side: BorderSide(
-                                color: AppColors.primary.withValues(alpha: 0.4),
-                              ),
+                              backgroundColor:
+                                  AppColors.primary.withValues(alpha: 0.08),
                             ),
                           ),
+                        const SizedBox(height: 8),
+                        // Task count sits to the LEFT of the Create button.
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            InkWell(
+                              onTap: onViewTasks,
+                              borderRadius: BorderRadius.circular(14),
+                              child: _LeadTaskCountBadge(count: taskCount),
+                            ),
+                            const SizedBox(width: 8),
+                            SizedBox(
+                              width: 118,
+                              child: FilledButton.icon(
+                                onPressed: onCreateTask,
+                                icon: const Icon(Icons.add_task_outlined,
+                                    size: 14),
+                                label: const Text('Create'),
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: AppColors.primary,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 8,
+                                  ),
+                                  textStyle: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
@@ -956,22 +953,8 @@ class _LeadTaskCountBadge extends StatelessWidget {
         border: Border.all(color: AppColors.primary.withValues(alpha: 0.16)),
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            width: 30,
-            height: 30,
-            decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha: 0.12),
-              shape: BoxShape.circle,
-            ),
-            alignment: Alignment.center,
-            child: const Icon(
-              Icons.task_alt_outlined,
-              size: 17,
-              color: AppColors.primary,
-            ),
-          ),
-          const SizedBox(height: 6),
           Text(
             '$count',
             style: const TextStyle(
@@ -1008,6 +991,7 @@ class _WorkspacePanel extends StatelessWidget {
   final List<LandLeadMeeting> meetings;
   final List<LandLeadLegalDocument> legalDocs;
   final ValueChanged<String> onDetailAction;
+  final VoidCallback onOpenTasks;
   final bool Function(int tabIndex) shouldLoadMiTab;
   final Widget? guidanceBanner;
   final String readOnlyNote;
@@ -1026,6 +1010,7 @@ class _WorkspacePanel extends StatelessWidget {
     this.meetings = const [],
     this.legalDocs = const [],
     required this.onDetailAction,
+    required this.onOpenTasks,
     required this.shouldLoadMiTab,
     this.guidanceBanner,
   });
@@ -1061,7 +1046,8 @@ class _WorkspacePanel extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 10),
-              _ActionToolbar(onAction: onDetailAction),
+              _ActionToolbar(
+                  onAction: onDetailAction, onOpenTasks: onOpenTasks),
               const SizedBox(height: 16),
             ] else ...[
               Text(
@@ -1082,7 +1068,8 @@ class _WorkspacePanel extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 10),
-              _ActionToolbar(onAction: onDetailAction),
+              _ActionToolbar(
+                  onAction: onDetailAction, onOpenTasks: onOpenTasks),
               const SizedBox(height: 16),
             ],
             _ActivitySummaryRow(
@@ -1180,8 +1167,9 @@ class _WorkspacePanel extends StatelessWidget {
 
 class _ActionToolbar extends StatelessWidget {
   final ValueChanged<String> onAction;
+  final VoidCallback onOpenTasks;
 
-  const _ActionToolbar({required this.onAction});
+  const _ActionToolbar({required this.onAction, required this.onOpenTasks});
 
   @override
   Widget build(BuildContext context) {
@@ -1191,6 +1179,8 @@ class _ActionToolbar extends StatelessWidget {
       (Icons.location_on_outlined, 'Site visit', AppColors.purple),
       (Icons.apartment_outlined, 'Management site visit', AppColors.purple),
       (Icons.groups_outlined, 'Meeting', AppColors.purple),
+      // Tasks opens the task list rather than an activity dialog.
+      (Icons.checklist_rounded, 'Tasks', AppColors.purple),
       (Icons.gavel_outlined, 'Legal', AppColors.purple),
       (Icons.draw_outlined, 'Signed', AppColors.purple),
     ];
@@ -1206,7 +1196,8 @@ class _ActionToolbar extends StatelessWidget {
                 color: action.$3.withValues(alpha: 0.07),
                 borderRadius: BorderRadius.circular(24),
                 child: InkWell(
-                  onTap: () => onAction(action.$2),
+                  onTap: () =>
+                      action.$2 == 'Tasks' ? onOpenTasks() : onAction(action.$2),
                   borderRadius: BorderRadius.circular(24),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(
