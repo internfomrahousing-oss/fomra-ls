@@ -1658,13 +1658,13 @@ class _OwnerFields extends StatelessWidget {
         hint: '10-digit mobile number',
         icon: Icons.phone_outlined,
         keyboardType: TextInputType.phone,
-        // The primary owner's number is required; extra owners are optional but
-        // must still be a full 10 digits if given.
-        required: index == 0,
+        // Contact number is optional for every owner, but must still be a full
+        // 10 digits when one is entered.
+        required: false,
         inputFormatters: PhoneValidation.inputFormatters,
         validator: PhoneValidation.validator(
           index == 0 ? 'Contact Number' : 'Owner ${index + 1} Contact',
-          required: index == 0,
+          required: false,
         ),
       ),
     );
