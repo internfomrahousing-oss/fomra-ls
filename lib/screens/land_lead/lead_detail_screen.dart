@@ -1849,6 +1849,57 @@ class _LeadDetailsGroup extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final rowsContent = LayoutBuilder(
+      builder: (context, constraints) {
+        final useTwoColumns = constraints.maxWidth >= 360;
+        if (!useTwoColumns) {
+          return _LeadDetailsColumn(rows: rows);
+        }
+        final split = (rows.length / 2).ceil();
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: _LeadDetailsColumn(rows: rows.sublist(0, split)),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: _LeadDetailsColumn(rows: rows.sublist(split)),
+            ),
+          ],
+        );
+      },
+    );
+
+    // Mobile: each section is a collapsible dropdown so the page isn't one long
+    // list. Tablet/desktop keep the always-open two-column layout.
+    if (FomraLayout.isMobile(context)) {
+      return Container(
+        decoration: BoxDecoration(
+          border: Border.all(color: context.fomraBorder),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Theme(
+          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+          child: ExpansionTile(
+            tilePadding: const EdgeInsets.symmetric(horizontal: 14),
+            childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+            expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
+            title: Text(
+              title,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: context.fomraTextPrimary,
+              ),
+            ),
+            children: [rowsContent],
+          ),
+        ),
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1862,27 +1913,7 @@ class _LeadDetailsGroup extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 10),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final useTwoColumns = constraints.maxWidth >= 360;
-            if (!useTwoColumns) {
-              return _LeadDetailsColumn(rows: rows);
-            }
-            final split = (rows.length / 2).ceil();
-            return Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: _LeadDetailsColumn(rows: rows.sublist(0, split)),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: _LeadDetailsColumn(rows: rows.sublist(split)),
-                ),
-              ],
-            );
-          },
-        ),
+        rowsContent,
       ],
     );
   }

@@ -36,13 +36,11 @@ abstract final class AddLeadUi {
 
 class AddLeadAppBar extends StatelessWidget implements PreferredSizeWidget {
   final String title;
-  final VoidCallback onSave;
   final bool saving;
 
   const AddLeadAppBar({
     super.key,
     required this.title,
-    required this.onSave,
     this.saving = false,
   });
 
@@ -85,20 +83,7 @@ class AddLeadAppBar extends StatelessWidget implements PreferredSizeWidget {
                   ),
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: TextButton(
-                  onPressed: saving ? null : onSave,
-                  style: TextButton.styleFrom(
-                    foregroundColor: AppColors.primary,
-                    padding: const EdgeInsets.symmetric(horizontal: 14),
-                  ),
-                  child: const Text(
-                    'Save',
-                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
-                  ),
-                ),
-              ),
+              // Save lives only in the sticky footer at the bottom now.
             ],
           ),
         ),
@@ -1084,7 +1069,8 @@ class AddLeadLiveLocationCard extends StatelessWidget {
     final filled = status != null && status!.contains('✓');
 
     return Material(
-      color: Colors.white,
+      // Follows dark mode instead of a hardcoded white bar.
+      color: context.isDarkMode ? context.fomraSurfaceVar : Colors.white,
       borderRadius: BorderRadius.circular(AddLeadUi.fieldRadius),
       child: InkWell(
         onTap: onTap,

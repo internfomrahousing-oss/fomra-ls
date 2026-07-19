@@ -11,6 +11,7 @@ import '../../models/gps_fix.dart';
 import '../../models/land_lead.dart';
 import '../../theme/app_theme.dart';
 import '../../config/maptiler_tiles.dart';
+import '../../theme/fomra_layout.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../widgets/add_lead_ui.dart';
 import '../../widgets/terms_deal_selector.dart';
@@ -989,7 +990,6 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
       backgroundColor: context.fomraPageBg,
       appBar: AddLeadAppBar(
         title: _isEdit ? 'Edit Land Lead' : 'Add Land Lead',
-        onSave: _submit,
         saving: _saving,
       ),
       bottomNavigationBar: AddLeadStickyFooter(
@@ -1000,9 +1000,11 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          FomraModuleBreadcrumbBar(
-            label: _isEdit ? 'Edit Land Lead' : 'Add Land Lead',
-          ),
+          // No breadcrumb row on mobile (keeps the compact header).
+          if (!FomraLayout.isMobile(context))
+            FomraModuleBreadcrumbBar(
+              label: _isEdit ? 'Edit Land Lead' : 'Add Land Lead',
+            ),
           AddLeadProgressNav(
             steps: progressSteps,
             onStepTap: _scrollToSection,
