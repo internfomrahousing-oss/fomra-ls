@@ -42,6 +42,9 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
   final MapController _mapController = MapController();
   bool _mapReady = false;
 
+  /// The pin whose details are shown in the in-screen panel (null = none).
+  LandLead? _selectedLead;
+
   // ── Filters ────────────────────────────────────────────────────────────────
   final Set<LeadStatus> _stages = {};
   String? _executive;
@@ -185,7 +188,7 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
                   width: 44,
                   height: 52,
                   child: GestureDetector(
-                    onTap: () => _openPropertyPopup(context, p.lead),
+                    onTap: () => setState(() => _selectedLead = p.lead),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -250,6 +253,8 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
               ),
             ),
           ),
+        // The status legend hides while a pin's details are open.
+        if (_selectedLead == null)
         Positioned(
           left: 12,
           right: 12,
@@ -284,6 +289,20 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
             ),
           ),
         ),
+        // Tapping a pin shows its details here, in the map screen itself — no
+        // popup. Tapping the map background (or the X) dismisses it.
+        if (_selectedLead != null)
+          Positioned(
+            left: 12,
+            right: 12,
+            bottom: 12,
+            child: _PropertyPopup(
+              key: ValueKey(_selectedLead!.leadId),
+              lead: _selectedLead!,
+              onOpenSite: () => _openLead(context, _selectedLead!),
+              onClose: () => setState(() => _selectedLead = null),
+            ),
+          ),
         if (!_mapReady) const Center(child: CircularProgressIndicator()),
       ],
     );
@@ -664,16 +683,6 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
     );
   }
 
-  void _openPropertyPopup(BuildContext context, LandLead lead) {
-    showDialog<void>(
-      context: context,
-      barrierColor: Colors.black.withValues(alpha: 0.35),
-      builder: (_) => _PropertyPopup(
-        lead: lead,
-        onOpenSite: () => _openLead(context, lead),
-      ),
-    );
-  }
 }
 
 String _siteName(LandLead l) {
@@ -688,15 +697,19 @@ String _siteName(LandLead l) {
   return 'Site #${l.leadId}';
 }
 
-/// Pin-tap popup: site identity, stage, ownership, AI score, and quick
-/// actions (open the full site, or launch Google Maps navigation).
+/// Pin-tap detail panel shown inline in the map screen (not a dialog): site
+/// identity, stage, ownership, and quick actions (open the full site, or launch
+/// Google Maps navigation).
 class _PropertyPopup extends StatefulWidget {
   final LandLead lead;
   final VoidCallback onOpenSite;
+  final VoidCallback onClose;
 
   const _PropertyPopup({
+    super.key,
     required this.lead,
     required this.onOpenSite,
+    required this.onClose,
   });
 
   @override
@@ -757,12 +770,17 @@ class _PropertyPopupState extends State<_PropertyPopup> {
     final lead = widget.lead;
     final acres = leadPortfolioAcres(lead);
 
-    return Dialog(
-      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-      backgroundColor: context.fomraSurface,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 400, maxHeight: 460),
+    return Material(
+      color: context.fomraSurface,
+      elevation: 6,
+      borderRadius: BorderRadius.circular(18),
+      shadowColor: Colors.black.withValues(alpha: 0.3),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: context.fomraBorder),
+        ),
+        constraints: const BoxConstraints(maxHeight: 420),
         child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
           child: Column(
@@ -782,7 +800,7 @@ class _PropertyPopupState extends State<_PropertyPopup> {
                     ),
                   ),
                   IconButton(
-                    onPressed: () => Navigator.pop(context),
+                    onPressed: widget.onClose,
                     icon: const Icon(Icons.close_rounded),
                     visualDensity: VisualDensity.compact,
                   ),
@@ -816,11 +834,11 @@ class _PropertyPopupState extends State<_PropertyPopup> {
                   Expanded(
                     child: OutlinedButton.icon(
                       onPressed: () {
-                        Navigator.pop(context);
+                        widget.onClose();
                         widget.onOpenSite();
                       },
                       icon: const Icon(Icons.article_outlined, size: 16),
-                      label: const Text('View full details'),
+                      label: const Text('View'),
                     ),
                   ),
                   const SizedBox(width: 10),

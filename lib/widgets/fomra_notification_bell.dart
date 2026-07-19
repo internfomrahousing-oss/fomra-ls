@@ -205,29 +205,14 @@ class _NotificationsDropdown extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final screen = MediaQuery.of(context).size;
+    final isMobile = screen.width < 480;
     final width = screen.width < 400 ? screen.width - 24 : 380.0;
     final maxHeight = (screen.height * 0.6).clamp(240.0, 520.0);
 
-    return Stack(
-      children: [
-        // Tap outside to close.
-        Positioned.fill(
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: onDismiss,
-          ),
-        ),
-        CompositedTransformFollower(
-          link: link,
-          targetAnchor: Alignment.bottomRight,
-          followerAnchor: Alignment.topRight,
-          offset: const Offset(8, 10),
-          child: Align(
-            alignment: Alignment.topRight,
-            child: Material(
+    final panel = Material(
               color: Colors.transparent,
               child: Container(
-                width: width,
+                width: isMobile ? double.infinity : width,
                 constraints: BoxConstraints(maxHeight: maxHeight),
                 decoration: BoxDecoration(
                   color: context.fomraSurface,
@@ -338,9 +323,34 @@ class _NotificationsDropdown extends StatelessWidget {
                   ],
                 ),
               ),
-            ),
+            );
+
+    return Stack(
+      children: [
+        // Tap outside to close.
+        Positioned.fill(
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onDismiss,
           ),
         ),
+        // Mobile: pin the panel below the header with equal side margins so it
+        // never overflows off-screen. Wider screens anchor it to the bell.
+        if (isMobile)
+          Positioned(
+            top: MediaQuery.of(context).padding.top + kToolbarHeight + 6,
+            left: 12,
+            right: 12,
+            child: panel,
+          )
+        else
+          CompositedTransformFollower(
+            link: link,
+            targetAnchor: Alignment.bottomRight,
+            followerAnchor: Alignment.topRight,
+            offset: const Offset(8, 10),
+            child: Align(alignment: Alignment.topRight, child: panel),
+          ),
       ],
     );
   }
