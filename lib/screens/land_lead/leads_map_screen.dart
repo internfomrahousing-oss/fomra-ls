@@ -5,13 +5,7 @@ import 'package:latlong2/latlong.dart';
 
 import '../../config/maptiler_tiles.dart';
 import '../../models/land_lead.dart';
-import '../../models/land_lead_meeting.dart';
-import '../../models/land_lead_site_visit.dart';
-import '../../models/lead_call_log.dart';
-import '../../services/land_lead_meeting_service.dart';
 import '../../services/lead_visibility.dart';
-import '../../services/land_lead_site_visit_service.dart';
-import '../../services/lead_call_log_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../utils/lead_location_parser.dart';
@@ -19,7 +13,6 @@ import '../../utils/maps_navigation.dart';
 import '../../widgets/fomra_app_shell.dart';
 import '../../widgets/lead_portfolio_breakdown.dart';
 import '../../widgets/portal_page_layout.dart';
-import '../../widgets/terms_deal_selector.dart';
 import 'lead_detail_screen.dart';
 
 class _PlottedLead {
@@ -42,8 +35,8 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
   final MapController _mapController = MapController();
   bool _mapReady = false;
 
-  /// The pin whose details are shown in the in-screen panel (null = none).
-  LandLead? _selectedLead;
+  /// The pin whose compact details card is shown on the map (null = none).
+  _PlottedLead? _selectedPin;
 
   // ── Filters ────────────────────────────────────────────────────────────────
   final Set<LeadStatus> _stages = {};
@@ -181,14 +174,15 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
               maxZoom: 22,
             ),
             MarkerLayer(
-              markers: plotted.map((p) {
+              markers: [
+                ...plotted.map((p) {
                 final color = p.lead.status.color;
                 return Marker(
                   point: p.point,
                   width: 44,
                   height: 52,
                   child: GestureDetector(
-                    onTap: () => setState(() => _selectedLead = p.lead),
+                    onTap: () => setState(() => _selectedPin = p),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -225,7 +219,23 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
                     ),
                   ),
                 );
-              }).toList(),
+                }),
+                // A small details card anchored just above the tapped pin. As a
+                // marker it stays pinned to the location while the map moves.
+                if (_selectedPin != null)
+                  Marker(
+                    point: _selectedPin!.point,
+                    width: 226,
+                    height: 150,
+                    // Anchor the card's bottom to the pin so it floats above it.
+                    alignment: Alignment.bottomCenter,
+                    child: _PropertyPopup(
+                      lead: _selectedPin!.lead,
+                      onOpenSite: () => _openLead(context, _selectedPin!.lead),
+                      onClose: () => setState(() => _selectedPin = null),
+                    ),
+                  ),
+              ],
             ),
           ],
         ),
@@ -254,7 +264,7 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
             ),
           ),
         // The status legend hides while a pin's details are open.
-        if (_selectedLead == null)
+        if (_selectedPin == null)
         Positioned(
           left: 12,
           right: 12,
@@ -289,20 +299,6 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
             ),
           ),
         ),
-        // Tapping a pin shows its details here, in the map screen itself — no
-        // popup. Tapping the map background (or the X) dismisses it.
-        if (_selectedLead != null)
-          Positioned(
-            left: 12,
-            right: 12,
-            bottom: 12,
-            child: _PropertyPopup(
-              key: ValueKey(_selectedLead!.leadId),
-              lead: _selectedLead!,
-              onOpenSite: () => _openLead(context, _selectedLead!),
-              onClose: () => setState(() => _selectedLead = null),
-            ),
-          ),
         if (!_mapReady) const Center(child: CircularProgressIndicator()),
       ],
     );
@@ -697,200 +693,135 @@ String _siteName(LandLead l) {
   return 'Site #${l.leadId}';
 }
 
-/// Pin-tap detail panel shown inline in the map screen (not a dialog): site
-/// identity, stage, ownership, and quick actions (open the full site, or launch
-/// Google Maps navigation).
-class _PropertyPopup extends StatefulWidget {
+/// Small pin-tap details card, shown on the map near the tapped pin (rendered
+/// as a marker so it stays anchored to the location while the map moves).
+class _PropertyPopup extends StatelessWidget {
   final LandLead lead;
   final VoidCallback onOpenSite;
   final VoidCallback onClose;
 
   const _PropertyPopup({
-    super.key,
     required this.lead,
     required this.onOpenSite,
     required this.onClose,
   });
 
   @override
-  State<_PropertyPopup> createState() => _PropertyPopupState();
-}
-
-class _PropertyPopupState extends State<_PropertyPopup> {
-  bool _loading = true;
-  DateTime? _lastActivity;
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    final leadId = widget.lead.leadId;
-    try {
-      final results = await Future.wait([
-        LeadCallLogService.getForLead(leadId),
-        LandLeadMeetingService.getForLead(leadId),
-        LandLeadSiteVisitService.getAllForLead(leadId),
-      ]);
-      final callLogs = results[0] as List<LeadCallLog>;
-      final meetings = results[1] as List<LandLeadMeeting>;
-      final siteVisits = results[2] as List<LandLeadSiteVisit>;
-
-      var last = widget.lead.addedOn;
-      for (final c in callLogs) {
-        if (c.calledAt.isAfter(last)) last = c.calledAt;
-      }
-      for (final m in meetings) {
-        if (m.metAt.isAfter(last)) last = m.metAt;
-      }
-      for (final v in siteVisits) {
-        if (v.visitedAt.isAfter(last)) last = v.visitedAt;
-      }
-
-      if (!mounted) return;
-      setState(() {
-        _lastActivity = last;
-        _loading = false;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _loading = false);
-    }
-  }
-
-  String get _termsLabel {
-    final primary = parseTermsDeal(widget.lead.accessDetails).primary;
-    return (primary == null || primary.trim().isEmpty) ? '—' : primary.trim();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final lead = widget.lead;
     final acres = leadPortfolioAcres(lead);
-
     return Material(
       color: context.fomraSurface,
-      elevation: 6,
-      borderRadius: BorderRadius.circular(18),
-      shadowColor: Colors.black.withValues(alpha: 0.3),
+      elevation: 8,
+      borderRadius: BorderRadius.circular(14),
+      shadowColor: Colors.black.withValues(alpha: 0.35),
       child: Container(
+        width: 226,
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(color: context.fomraBorder),
         ),
-        constraints: const BoxConstraints(maxHeight: 420),
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      _siteName(lead),
-                      style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w800,
-                        color: context.fomraTextPrimary,
-                      ),
+        padding: const EdgeInsets.fromLTRB(12, 8, 8, 10),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Text(
+                    _siteName(lead),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      color: context.fomraTextPrimary,
                     ),
                   ),
-                  IconButton(
-                    onPressed: widget.onClose,
-                    icon: const Icon(Icons.close_rounded),
-                    visualDensity: VisualDensity.compact,
+                ),
+                InkWell(
+                  onTap: onClose,
+                  borderRadius: BorderRadius.circular(20),
+                  child: Padding(
+                    padding: const EdgeInsets.all(2),
+                    child: Icon(Icons.close_rounded,
+                        size: 18, color: context.fomraTextSecondary),
                   ),
-                ],
-              ),
-              const SizedBox(height: 2),
-              Text(
-                'Site #${lead.leadId}',
-                style: TextStyle(fontSize: 12, color: context.fomraTextSecondary),
-              ),
-              const SizedBox(height: 14),
-              _row('Village', lead.village.trim().isEmpty ? '—' : lead.village),
-              _row('Acres', acres.toStringAsFixed(2)),
-              _row('Current Stage', lead.status.label),
-              _row('Assigned Executive',
-                  lead.createdByName.trim().isEmpty ? '—' : lead.createdByName),
-              _row('Owner', lead.ownerName.trim().isEmpty ? '—' : lead.ownerName),
-              _row('Broker', lead.brokerName.trim().isEmpty ? '—' : lead.brokerName),
-              _row('Terms', _termsLabel),
-              _row(
-                'Last Activity',
-                _loading
-                    ? 'Loading…'
-                    : _lastActivity == null
-                        ? '—'
-                        : DateFormat('dd MMM yyyy').format(_lastActivity!),
-              ),
-              const SizedBox(height: 14),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () {
-                        widget.onClose();
-                        widget.onOpenSite();
-                      },
-                      icon: const Icon(Icons.article_outlined, size: 16),
-                      label: const Text('View'),
+                ),
+              ],
+            ),
+            Text(
+              'Site #${lead.leadId}',
+              style: TextStyle(fontSize: 11, color: context.fomraTextSecondary),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: lead.status.color.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    lead.status.label,
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w700,
+                      color: lead.status.color,
                     ),
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: FilledButton.icon(
-                      onPressed: lead.gpsCoordinates.trim().isEmpty
-                          ? null
-                          : () => MapsNavigation.navigateFromGpsString(
-                                lead.gpsCoordinates,
-                                label: _siteName(lead),
-                              ),
-                      icon: const Icon(Icons.directions_rounded, size: 16),
-                      label: const Text('Navigate'),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  '${acres.toStringAsFixed(2)} ac',
+                  style:
+                      TextStyle(fontSize: 11.5, color: context.fomraTextSecondary),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () {
+                      onClose();
+                      onOpenSite();
+                    },
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 6),
+                      minimumSize: const Size(0, 34),
+                      visualDensity: VisualDensity.compact,
                     ),
+                    child: const Text('View',
+                        style: TextStyle(
+                            fontSize: 12.5, fontWeight: FontWeight.w700)),
                   ),
-                ],
-              ),
-            ],
-          ),
+                ),
+                const SizedBox(width: 8),
+                SizedBox(
+                  height: 34,
+                  child: FilledButton(
+                    onPressed: lead.gpsCoordinates.trim().isEmpty
+                        ? null
+                        : () => MapsNavigation.navigateFromGpsString(
+                              lead.gpsCoordinates,
+                              label: _siteName(lead),
+                            ),
+                    style: FilledButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    child: const Icon(Icons.directions_rounded, size: 18),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
-      ),
-    );
-  }
-
-  Widget _row(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 130,
-            child: Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: context.fomraTextSecondary,
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: context.fomraTextPrimary,
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }
