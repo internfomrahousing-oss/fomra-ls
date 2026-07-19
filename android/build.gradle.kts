@@ -1,4 +1,4 @@
-howallprojects {
+allprojects {
     repositories {
         google()
         mavenCentral()
