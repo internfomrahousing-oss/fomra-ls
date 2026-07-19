@@ -54,41 +54,49 @@ class FomraAppShell extends StatelessWidget {
       return ColoredBox(color: bg, child: child);
     }
 
+    // Desktop/tablet: a persistent side rail beside a content Scaffold.
+    if (isDesktop) {
+      return shellBody(
+        Scaffold(
+          backgroundColor: Colors.transparent,
+          body: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SizedBox(
+                height: double.infinity,
+                child: FomraSideNav(currentRoute: currentRoute),
+              ),
+              Expanded(
+                child: Scaffold(
+                  backgroundColor: Colors.transparent,
+                  appBar: appBar,
+                  primary: true,
+                  body: bodyWithBanner,
+                  floatingActionButton: floatingActionButton,
+                  floatingActionButtonLocation: floatingActionButtonLocation,
+                  bottomNavigationBar: bottomNavigationBar,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Mobile: ONE Scaffold owns both the drawer and the app bar, so the app
+    // bar's automatic hamburger can find the drawer and open it. (Previously the
+    // drawer sat on an outer Scaffold while the app bar was on an inner one, so
+    // no hamburger showed.)
     return shellBody(
       Scaffold(
         backgroundColor: Colors.transparent,
-        drawer: isDesktop ? null : AppDrawer(currentRoute: currentRoute),
-        body: isDesktop
-            ? Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  SizedBox(
-                    height: double.infinity,
-                    child: FomraSideNav(currentRoute: currentRoute),
-                  ),
-                  Expanded(
-                    child: Scaffold(
-                      backgroundColor: Colors.transparent,
-                      appBar: appBar,
-                      primary: true,
-                      body: bodyWithBanner,
-                      floatingActionButton: floatingActionButton,
-                      floatingActionButtonLocation:
-                          floatingActionButtonLocation,
-                      bottomNavigationBar: bottomNavigationBar,
-                    ),
-                  ),
-                ],
-              )
-            : Scaffold(
-                backgroundColor: Colors.transparent,
-                appBar: appBar,
-                primary: true,
-                body: bodyWithBanner,
-                floatingActionButton: floatingActionButton,
-                floatingActionButtonLocation: floatingActionButtonLocation,
-                bottomNavigationBar: bottomNavigationBar,
-              ),
+        drawer: AppDrawer(currentRoute: currentRoute),
+        appBar: appBar,
+        primary: true,
+        body: bodyWithBanner,
+        floatingActionButton: floatingActionButton,
+        floatingActionButtonLocation: floatingActionButtonLocation,
+        bottomNavigationBar: bottomNavigationBar,
       ),
     );
   }

@@ -836,42 +836,58 @@ class _ProfilePanel extends StatelessWidget {
                             ),
                           ),
                         const SizedBox(height: 8),
-                        // Task count sits to the LEFT of the Create button.
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            InkWell(
-                              onTap: onViewTasks,
-                              borderRadius: BorderRadius.circular(14),
-                              child: _LeadTaskCountBadge(count: taskCount),
-                            ),
-                            const SizedBox(width: 8),
-                            SizedBox(
-                              width: 118,
-                              child: FilledButton.icon(
-                                onPressed: onCreateTask,
-                                icon: const Icon(Icons.add_task_outlined,
-                                    size: 14),
-                                label: const Text('Create'),
-                                style: FilledButton.styleFrom(
-                                  backgroundColor: AppColors.primary,
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 8,
-                                  ),
-                                  textStyle: const TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
+                        // Desktop: task count to the LEFT of Create. Mobile:
+                        // task count on top, Create beneath — both on the right.
+                        Builder(builder: (context) {
+                          final taskBadge = InkWell(
+                            onTap: onViewTasks,
+                            borderRadius: BorderRadius.circular(14),
+                            child: _LeadTaskCountBadge(count: taskCount),
+                          );
+                          final createButton = SizedBox(
+                            width: 118,
+                            child: FilledButton.icon(
+                              onPressed: onCreateTask,
+                              icon: const Icon(Icons.add_task_outlined,
+                                  size: 14),
+                              label: const Text('Create'),
+                              style: FilledButton.styleFrom(
+                                backgroundColor: AppColors.primary,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 8,
+                                ),
+                                textStyle: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
                                 ),
                               ),
                             ),
-                          ],
-                        ),
+                          );
+                          if (FomraLayout.isMobile(context)) {
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                taskBadge,
+                                const SizedBox(height: 8),
+                                createButton,
+                              ],
+                            );
+                          }
+                          return Row(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              taskBadge,
+                              const SizedBox(width: 8),
+                              createButton,
+                            ],
+                          );
+                        }),
                       ],
                     ),
                   ],
@@ -1199,18 +1215,22 @@ class _ActionToolbar extends StatelessWidget {
               action.$2 == 'Tasks' ? onOpenTasks() : onAction(action.$2),
           borderRadius: BorderRadius.circular(24),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(action.$1, size: 16, color: action.$3),
                 const SizedBox(width: 6),
-                Text(
-                  action.$2,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: context.fomraTextPrimary,
+                Flexible(
+                  child: Text(
+                    action.$2,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: context.fomraTextPrimary,
+                    ),
                   ),
                 ),
               ],
@@ -1220,13 +1240,23 @@ class _ActionToolbar extends StatelessWidget {
       );
     }
 
-    // Mobile: wrap the pills onto multiple rows instead of a single
-    // horizontally-scrolling strip.
+    // Mobile: a tidy 2-column grid of equal-width tiles (they align into
+    // columns instead of wrapping as ragged content-width pills).
     if (FomraLayout.isMobile(context)) {
-      return Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        children: [for (final action in actions) pill(action)],
+      const gap = 8.0;
+      return LayoutBuilder(
+        builder: (context, c) {
+          final cellW =
+              c.maxWidth.isFinite ? (c.maxWidth - gap) / 2 : 160.0;
+          return Wrap(
+            spacing: gap,
+            runSpacing: gap,
+            children: [
+              for (final action in actions)
+                SizedBox(width: cellW, child: pill(action)),
+            ],
+          );
+        },
       );
     }
 

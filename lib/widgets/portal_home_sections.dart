@@ -406,7 +406,9 @@ class PortalQuickActionsGrid extends StatelessWidget {
                 for (final action in actions)
                   SizedBox(
                     width: cardW,
-                    height: _cardHeight,
+                    // Taller than desktop's row card to fit the stacked icon +
+                    // two-line label.
+                    height: 112,
                     child: _QuickActionCard(data: action),
                   ),
               ],
@@ -495,6 +497,88 @@ class _QuickActionCardState extends State<_QuickActionCard> {
     final shadowBlur = _hovered ? 28.0 : 20.0;
     final shadowOffset = _hovered ? 10.0 : 6.0;
 
+    final mobile = FomraLayout.isMobile(context);
+
+    final iconBox = AnimatedScale(
+      scale: _hovered ? 1.05 : 1,
+      duration: _motion,
+      curve: _curve,
+      child: AnimatedContainer(
+        duration: _motion,
+        curve: _curve,
+        width: 48,
+        height: 48,
+        decoration: BoxDecoration(
+          color: iconTint,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        alignment: Alignment.center,
+        child: Icon(data.icon, size: 21, color: data.accent),
+      ),
+    );
+
+    // Mobile: icon on top, wrapping label beneath — so the full label shows
+    // instead of truncating ("Sho…"). Tablet/desktop keep the icon + label row.
+    final Widget content = mobile
+        ? Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              iconBox,
+              const SizedBox(height: 8),
+              Text(
+                data.label,
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  height: 1.2,
+                  color: context.fomraTextPrimary,
+                ),
+              ),
+            ],
+          )
+        : Row(
+            children: [
+              iconBox,
+              const SizedBox(width: 24),
+              Expanded(
+                child: Text(
+                  data.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: -0.2,
+                    height: 1.2,
+                    color: context.fomraTextPrimary,
+                  ),
+                ),
+              ),
+              AnimatedOpacity(
+                opacity: _hovered ? 1 : 0,
+                duration: _motion,
+                curve: _curve,
+                child: AnimatedSlide(
+                  duration: _motion,
+                  curve: _curve,
+                  offset: _hovered ? Offset.zero : const Offset(-0.2, 0),
+                  child: Icon(
+                    Icons.arrow_forward_rounded,
+                    size: 18,
+                    color: _hovered && isDark
+                        ? AppColors.primary
+                        : context.fomraTextSecondary.withValues(
+                            alpha: _hovered ? 0.9 : 0,
+                          ),
+                  ),
+                ),
+              ),
+            ],
+          );
+
     final card = AnimatedContainer(
       duration: _motion,
       curve: _curve,
@@ -517,66 +601,8 @@ class _QuickActionCardState extends State<_QuickActionCard> {
           ),
         ],
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Row(
-        children: [
-          AnimatedScale(
-            scale: _hovered ? 1.05 : 1,
-            duration: _motion,
-            curve: _curve,
-            child: AnimatedContainer(
-              duration: _motion,
-              curve: _curve,
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: iconTint,
-                borderRadius: BorderRadius.circular(20),
-              ),
-              alignment: Alignment.center,
-              child: Icon(
-                data.icon,
-                size: 21,
-                color: data.accent,
-              ),
-            ),
-          ),
-          const SizedBox(width: 24),
-          Expanded(
-            child: Text(
-              data.label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                letterSpacing: -0.2,
-                height: 1.2,
-                color: context.fomraTextPrimary,
-              ),
-            ),
-          ),
-          AnimatedOpacity(
-            opacity: _hovered ? 1 : 0,
-            duration: _motion,
-            curve: _curve,
-            child: AnimatedSlide(
-              duration: _motion,
-              curve: _curve,
-              offset: _hovered ? Offset.zero : const Offset(-0.2, 0),
-              child: Icon(
-                Icons.arrow_forward_rounded,
-                size: 18,
-                color: _hovered && isDark
-                    ? AppColors.primary
-                    : context.fomraTextSecondary.withValues(
-                        alpha: _hovered ? 0.9 : 0,
-                      ),
-              ),
-            ),
-          ),
-        ],
-      ),
+      padding: EdgeInsets.symmetric(horizontal: mobile ? 12 : 20, vertical: 10),
+      child: content,
     );
 
     return MouseRegion(

@@ -55,10 +55,20 @@ class FomraSubPageAppBar extends StatelessWidget implements PreferredSizeWidget 
     this.breadcrumbs,
   });
 
+  /// Phone-width check without a BuildContext, so [preferredSize] and the
+  /// rendered [bottom] agree when the breadcrumb row is hidden on mobile.
+  bool get _isMobileViewport {
+    final view = WidgetsBinding.instance.platformDispatcher.views.first;
+    final width = view.physicalSize.width / view.devicePixelRatio;
+    return width < FomraLayout.mobileBreakpoint;
+  }
+
   /// An explicit [breadcrumbs] list wins, for pages whose title is dynamic.
   /// Otherwise the page's fixed module hierarchy is derived from [title] — the
   /// same rule [FomraAppBar] follows.
   PreferredSizeWidget? _breadcrumbBottom() {
+    // Mobile keeps the header compact — no breadcrumb row.
+    if (_isMobileViewport) return null;
     if (breadcrumbs != null) {
       return breadcrumbs!.length >= 2 ? FomraBreadcrumbBar(items: breadcrumbs!) : null;
     }

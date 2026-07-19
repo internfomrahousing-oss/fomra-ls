@@ -34,11 +34,22 @@ class FomraAppBar extends StatelessWidget implements PreferredSizeWidget {
     this.showUniversalSearch = true,
   });
 
+  /// Whether the viewport is phone-width. Computed WITHOUT a BuildContext (from
+  /// the platform view) so [preferredSize] and [_buildBottom] agree — the app
+  /// bar hides the breadcrumb bar on mobile, and preferredSize must match.
+  bool get _isMobileViewport {
+    final view = WidgetsBinding.instance.platformDispatcher.views.first;
+    final width = view.physicalSize.width / view.devicePixelRatio;
+    return width < FomraLayout.mobileBreakpoint;
+  }
+
   /// The breadcrumb bar for this page, or null when there's nothing to show.
   ///
   /// An explicit [breadcrumbs] list wins, for pages whose title is dynamic.
   /// Otherwise the page's fixed module hierarchy is derived from [moduleName].
   PreferredSizeWidget? _breadcrumbBar() {
+    // Mobile keeps the header compact — no breadcrumb row.
+    if (_isMobileViewport) return null;
     if (breadcrumbs != null && breadcrumbs!.isNotEmpty) {
       return breadcrumbs!.length >= 2
           ? FomraBreadcrumbBar(items: breadcrumbs!)
