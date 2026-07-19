@@ -70,11 +70,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   /// first load lands; management never loads it.
   MonthlyTargetProgress? _monthlyProgress;
 
-  /// The fetched target + this month's approvals, cached so the progress can be
-  /// recomputed locally from visibleLeads whenever the store or scope changes
-  /// (without re-hitting the network).
+  /// The fetched target, cached so the progress can be recomputed locally from
+  /// visibleLeads whenever the store or scope changes (without re-hitting the
+  /// network).
   MonthlyTarget? _monthlyTarget;
-  List<LandLeadSignedRequest> _approvedSignedThisMonth = const [];
 
   List<LandLead> get _noFutureActivityLeads => NoFutureActivityAnalytics.select(
         AppStore.instance.visibleLeads,
@@ -124,50 +123,33 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (mounted) setState(() => _meetings = meetings);
   }
 
-  /// This employee's progress against the common monthly target.
-  ///
-  /// A site counts on the day its Signed request was approved — the same
-  /// workflow that marks a lead Signed — so the card follows completed work
-  /// without any new tracking. Both reads degrade to empty rather than throw.
+  /// This employee's progress against the common monthly target. Achieved is
+  /// counted locally from the leads they've sourced this month (see
+  /// [_recomputeMonthlyProgress]); this just fetches the target. Degrades to a
+  /// null target rather than throwing.
   Future<void> _loadMonthlyTarget() async {
     final now = DateTime.now();
-    final monthStart = DateTime(now.year, now.month);
-    final monthEnd = DateTime(now.year, now.month + 1)
-        .subtract(const Duration(milliseconds: 1));
     final myEmail = (AuthService.instance.currentUser?.email ?? '').trim();
-
-    final results = await Future.wait([
-      // A personal target for this employee wins over the common one.
-      MonthlyTargetService.resolveForEmployee(myEmail, now: now),
-      LandLeadSignedService.getApprovedBetween(from: monthStart, to: monthEnd),
-    ]);
+    final target =
+        await MonthlyTargetService.resolveForEmployee(myEmail, now: now);
     if (!mounted) return;
-
-    _monthlyTarget = results[0] as MonthlyTarget?;
-    _approvedSignedThisMonth = results[1] as List<LandLeadSignedRequest>;
+    _monthlyTarget = target;
     _recomputeMonthlyProgress();
   }
 
-  /// Recompute the card from the cached target + approvals and the CURRENT
-  /// visibleLeads — cheap and local, so it can run on every store/scope change.
+  /// Recompute the card from the cached target and the CURRENT visibleLeads —
+  /// cheap and local, so it can run on every store/scope change.
   ///
-  /// Achieved = signed sites in the current scope. visibleLeads is the single
-  /// scoping rule (role + Team/Individual toggle), so a manager in Team view
-  /// gets the whole team's signed sites and an executive gets their own — no
-  /// brittle name/email matching. Each signed lead is dated by its approval's
-  /// reviewed_at when we have one (the true signing date), otherwise the day it
-  /// was added; forMonth keeps only the ones dated in this month.
+  /// Achieved = sites SOURCED (leads added) this month in the current scope.
+  /// visibleLeads is the single scoping rule (role + Team/Individual toggle), so
+  /// a manager in Team view gets the whole team's sites and an executive gets
+  /// their own. Each lead counts on the day it was added; forMonth keeps only
+  /// the ones added this month.
   void _recomputeMonthlyProgress() {
     if (_isManagement) return;
     final now = DateTime.now();
-    final signedLeads = AppStore.instance.visibleLeads
-        .where((l) => l.status == LeadStatus.signed);
-    final reviewedAtByLead = <String, DateTime>{
-      for (final r in _approvedSignedThisMonth)
-        if (r.reviewedAt != null) r.leadId: r.reviewedAt!.toLocal(),
-    };
     final completedOn = [
-      for (final l in signedLeads) reviewedAtByLead[l.leadId] ?? l.addedOn,
+      for (final l in AppStore.instance.visibleLeads) l.addedOn,
     ];
     setState(() {
       _monthlyProgress = MonthlyTargetProgress.forMonth(
@@ -872,7 +854,10 @@ class _EmployeeTodayTasksSection extends StatelessWidget {
             )
           : LayoutBuilder(
               builder: (context, constraints) {
-                final twoCols = constraints.maxWidth >= 360;
+                // Mobile: a 2×2 grid of square tiles. Wider screens keep the
+                // 2-up row cards (single column only when truly narrow).
+                final mobile = FomraLayout.isMobile(context);
+                final twoCols = mobile || constraints.maxWidth >= 360;
                 final cardWidth = twoCols
                     ? (constraints.maxWidth - AppSpacing.sm) / 2
                     : constraints.maxWidth;
@@ -883,6 +868,7 @@ class _EmployeeTodayTasksSection extends StatelessWidget {
                     for (final c in categories)
                       SizedBox(
                         width: cardWidth,
+                        height: mobile ? cardWidth : null,
                         child: _TaskSummaryCard(
                           label: c.label,
                           count: c.leads.length,

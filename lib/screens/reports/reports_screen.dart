@@ -186,6 +186,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
       firstDate: DateTime(now.year - 3),
       lastDate: DateTime(now.year + 1),
       initialDateRange: _dateRange,
+      // A compact input dialog instead of the full-screen calendar (tap the
+      // calendar icon inside to switch to the month view if needed).
+      initialEntryMode: DatePickerEntryMode.input,
     );
     if (picked != null) setState(() => _dateRange = picked);
   }

@@ -470,8 +470,26 @@ class _CompactDateRangePopupState extends State<_CompactDateRangePopup> {
   Widget build(BuildContext context) {
     final now = DateTime.now();
     final target = _pickingEnd ? (_end ?? _start ?? now) : (_start ?? now);
+    final isDark = context.isDarkMode;
+    // Force the calendar's day/weekday/year text to the app's foreground colors
+    // so the picker follows dark mode (showMenu can otherwise render it light).
+    final calendarTheme = Theme.of(context).copyWith(
+      colorScheme: Theme.of(context).colorScheme.copyWith(
+            surface: context.fomraSurface,
+            onSurface: context.fomraTextPrimary,
+            brightness: isDark ? Brightness.dark : Brightness.light,
+          ),
+      datePickerTheme: DatePickerThemeData(
+        backgroundColor: context.fomraSurface,
+        dayForegroundColor:
+            WidgetStatePropertyAll(context.fomraTextPrimary),
+        yearForegroundColor:
+            WidgetStatePropertyAll(context.fomraTextPrimary),
+        weekdayStyle: TextStyle(color: context.fomraTextSecondary),
+      ),
+    );
     return Material(
-      color: Theme.of(context).colorScheme.surface,
+      color: context.fomraSurface,
       borderRadius: BorderRadius.circular(14),
       child: SizedBox(
         width: 300,
@@ -504,7 +522,9 @@ class _CompactDateRangePopupState extends State<_CompactDateRangePopup> {
             ),
             SizedBox(
               height: 320,
-              child: CalendarDatePicker(
+              child: Theme(
+                data: calendarTheme,
+                child: CalendarDatePicker(
                 initialDate: target,
                 firstDate: DateTime(now.year - 3),
                 lastDate: DateTime(now.year + 1),
@@ -523,6 +543,7 @@ class _CompactDateRangePopupState extends State<_CompactDateRangePopup> {
                     }
                   });
                 },
+                ),
               ),
             ),
             Padding(
