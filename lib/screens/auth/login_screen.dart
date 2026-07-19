@@ -158,7 +158,9 @@ class _LoginScreenState extends State<LoginScreen> {
           child: Stack(
             children: [
               Container(
-                decoration: const BoxDecoration(gradient: AppColors.heroGradient),
+                // Same gradient as the in-app header, so the login panel matches
+                // the app's look (dark navy in dark mode).
+                decoration: BoxDecoration(gradient: context.fomraHeroGradient),
               ),
               Positioned(
                 top: -120,
