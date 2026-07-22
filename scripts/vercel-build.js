@@ -18,7 +18,13 @@ const path = require('path');
 const repoRoot = path.join(__dirname, '..');
 const flutterDir = path.join(repoRoot, '.flutter-sdk');
 const flutterBin = path.join(flutterDir, 'bin');
-const flutterArchiveVersion = '3.35.5';
+// Must be >= the highest `flutter:` constraint in the dependency tree. The
+// `record` 7.x packages require Flutter >= 3.44.0 / Dart ^3.12.0, so an older
+// pin (previously 3.35.5) fails `flutter pub get` before it ever compiles.
+const flutterArchiveVersion = '3.44.2';
+// Records which SDK version the cached .flutter-sdk holds, so bumping the
+// version above forces a fresh install instead of silently reusing an old SDK.
+const flutterStampFile = path.join(flutterDir, '.installed-version');
 const flutterPlatform = process.platform;
 const flutterArch = process.arch;
 
@@ -69,8 +75,17 @@ function extractArchive(archivePath, extractDir, archiveUrl) {
 
 function installFlutter() {
   if (fs.existsSync(path.join(flutterBin, 'flutter'))) {
-    console.log('Using cached Flutter SDK at', flutterDir);
-    return;
+    const cached = fs.existsSync(flutterStampFile)
+      ? fs.readFileSync(flutterStampFile, 'utf8').trim()
+      : '';
+    if (cached === flutterArchiveVersion) {
+      console.log(`Using cached Flutter SDK ${cached} at`, flutterDir);
+      return;
+    }
+    console.log(
+      `Cached Flutter SDK is "${cached || 'unknown'}", need ${flutterArchiveVersion} — reinstalling.`,
+    );
+    fs.rmSync(flutterDir, { recursive: true, force: true });
   }
 
   const archiveInfo = flutterArchiveInfo();
@@ -98,6 +113,9 @@ function installFlutter() {
   if (!fs.existsSync(path.join(flutterBin, 'flutter'))) {
     throw new Error('Flutter release archive did not produce a usable SDK at .flutter-sdk');
   }
+
+  // Stamp the installed version so a future version bump invalidates the cache.
+  fs.writeFileSync(flutterStampFile, flutterArchiveVersion);
 }
 
 installFlutter();
