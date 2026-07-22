@@ -41,21 +41,42 @@ class EmployeeLeadGuidanceBanners extends StatelessWidget {
                 ? (label: 'Medium', color: AppColors.warning)
                 : (label: 'Normal', color: AppColors.info);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _NextActionBanner(
+    return LayoutBuilder(
+      builder: (context, c) {
+        // Wide enough: Next Action on the left, the three KPIs stacked in a
+        // single column to its right. Narrow: stack, KPIs as a 3-across row.
+        final sideBySide = c.maxWidth >= 520;
+        final nextAction = _NextActionBanner(
           action: insight.nextAction,
           stage: insight.stage,
           priority: priority,
           onTap: onNextActionTap,
-        ),
-        const SizedBox(height: 8),
-        _PendingTaskBanner(
+        );
+        final kpis = _PendingTaskBanner(
           summary: insight.tasks,
           onTap: onOpenTasks,
-        ),
-      ],
+          vertical: sideBySide,
+        );
+
+        if (sideBySide) {
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: nextAction),
+              const SizedBox(width: 10),
+              SizedBox(width: 190, child: kpis),
+            ],
+          );
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            nextAction,
+            const SizedBox(height: 8),
+            kpis,
+          ],
+        );
+      },
     );
   }
 }
@@ -232,46 +253,62 @@ class _PendingTaskBanner extends StatelessWidget {
   final EmployeePendingTaskSummary summary;
   final VoidCallback? onTap;
 
-  const _PendingTaskBanner({required this.summary, this.onTap});
+  /// When true, the three KPIs stack in a single column (used beside the Next
+  /// Action on wide layouts); otherwise they sit in a 3-across row.
+  final bool vertical;
+
+  const _PendingTaskBanner({
+    required this.summary,
+    this.onTap,
+    this.vertical = false,
+  });
 
   @override
   Widget build(BuildContext context) {
-    // Three compact KPI cards (point 5) — shorter than the old single divided
-    // strip, each self-contained with its own accent.
+    // Three compact KPI cards (point 5), each self-contained with its accent.
+    final dueToday = _TaskStat(
+      label: 'Due Today',
+      value: '${summary.dueToday}',
+      color: AppColors.warning,
+    );
+    final overdue = _TaskStat(
+      label: 'Overdue',
+      value: '${summary.overdue}',
+      color: AppColors.error,
+    );
+    final pending = _TaskStat(
+      label: 'Pending Since',
+      value: summary.pendingSinceDays <= 0
+          ? '—'
+          : '${summary.pendingSinceDays}d',
+      color: AppColors.info,
+    );
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
-        child: Row(
-          children: [
-            Expanded(
-              child: _TaskStat(
-                label: 'Due Today',
-                value: '${summary.dueToday}',
-                color: AppColors.warning,
+        child: vertical
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  dueToday,
+                  const SizedBox(height: 8),
+                  overdue,
+                  const SizedBox(height: 8),
+                  pending,
+                ],
+              )
+            : Row(
+                children: [
+                  Expanded(child: dueToday),
+                  const SizedBox(width: 8),
+                  Expanded(child: overdue),
+                  const SizedBox(width: 8),
+                  Expanded(child: pending),
+                ],
               ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _TaskStat(
-                label: 'Overdue',
-                value: '${summary.overdue}',
-                color: AppColors.error,
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _TaskStat(
-                label: 'Pending Since',
-                value: summary.pendingSinceDays <= 0
-                    ? '—'
-                    : '${summary.pendingSinceDays}d',
-                color: AppColors.info,
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

@@ -292,21 +292,6 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
                   ),
                 );
                 }),
-                // A small details card anchored just above the tapped pin. As a
-                // marker it stays pinned to the location while the map moves.
-                if (_selectedPin != null)
-                  Marker(
-                    point: _selectedPin!.point,
-                    width: 226,
-                    height: 150,
-                    // Anchor the card's bottom to the pin so it floats above it.
-                    alignment: Alignment.bottomCenter,
-                    child: _PropertyPopup(
-                      lead: _selectedPin!.lead,
-                      onOpenSite: () => _openLead(context, _selectedPin!.lead),
-                      onClose: () => setState(() => _selectedPin = null),
-                    ),
-                  ),
               ],
             ),
           ],
@@ -371,6 +356,26 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
             ),
           ),
         ),
+        // Rich details card for the tapped pin. Rendered here in the map's
+        // outer Stack (not inside the MarkerLayer) so its buttons receive taps
+        // reliably instead of losing them to the map's gesture recognizers.
+        if (_selectedPin != null)
+          Positioned(
+            left: 12,
+            right: 12,
+            bottom: 12,
+            child: Align(
+              alignment: Alignment.bottomCenter,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 460),
+                child: _PropertyPopup(
+                  lead: _selectedPin!.lead,
+                  onOpenSite: () => _openLead(context, _selectedPin!.lead),
+                  onClose: () => setState(() => _selectedPin = null),
+                ),
+              ),
+            ),
+          ),
         if (!_mapReady) const Center(child: CircularProgressIndicator()),
       ],
     );
@@ -849,8 +854,9 @@ String _siteName(LandLead l) {
   return 'Site #${l.leadId}';
 }
 
-/// Small pin-tap details card, shown on the map near the tapped pin (rendered
-/// as a marker so it stays anchored to the location while the map moves).
+/// Pin-tap details card, shown as an overlay on the map (in the outer Stack,
+/// not the marker layer) so its action buttons receive taps reliably. Shows
+/// the site's key details with View / Navigate actions.
 class _PropertyPopup extends StatelessWidget {
   final LandLead lead;
   final VoidCallback onOpenSite;
@@ -865,18 +871,40 @@ class _PropertyPopup extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final acres = leadPortfolioAcres(lead);
+    final villageDistrict = [
+      if (lead.village.trim().isNotEmpty) lead.village.trim(),
+      if (lead.district.trim().isNotEmpty) lead.district.trim(),
+    ].join(', ');
+
+    final details = <(IconData, String, String)>[
+      if (lead.ownerName.trim().isNotEmpty)
+        (Icons.person_outline, 'Owner', lead.ownerName.trim()),
+      if (lead.surveyNumber.trim().isNotEmpty)
+        (Icons.tag_rounded, 'Survey No.', lead.surveyNumber.trim()),
+      if (villageDistrict.isNotEmpty)
+        (Icons.location_city_outlined, 'Village', villageDistrict),
+      if (lead.brokerName.trim().isNotEmpty)
+        (Icons.handshake_outlined, 'Broker', lead.brokerName.trim()),
+      if (lead.createdByName.trim().isNotEmpty)
+        (Icons.badge_outlined, 'Executive', lead.createdByName.trim()),
+      (
+        Icons.event_outlined,
+        'Added',
+        DateFormat('dd MMM yyyy').format(lead.addedOn),
+      ),
+    ];
+
     return Material(
       color: context.fomraSurface,
-      elevation: 8,
-      borderRadius: BorderRadius.circular(14),
-      shadowColor: Colors.black.withValues(alpha: 0.35),
+      elevation: 12,
+      borderRadius: BorderRadius.circular(16),
+      shadowColor: Colors.black.withValues(alpha: 0.4),
       child: Container(
-        width: 226,
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(color: context.fomraBorder),
         ),
-        padding: const EdgeInsets.fromLTRB(12, 8, 8, 10),
+        padding: const EdgeInsets.fromLTRB(16, 12, 12, 14),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -885,15 +913,29 @@ class _PropertyPopup extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
-                  child: Text(
-                    _siteName(lead),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w800,
-                      color: context.fomraTextPrimary,
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _siteName(lead),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                          height: 1.2,
+                          color: context.fomraTextPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Site #${lead.leadId}',
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          color: context.fomraTextSecondary,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 InkWell(
@@ -902,21 +944,19 @@ class _PropertyPopup extends StatelessWidget {
                   child: Padding(
                     padding: const EdgeInsets.all(2),
                     child: Icon(Icons.close_rounded,
-                        size: 18, color: context.fomraTextSecondary),
+                        size: 20, color: context.fomraTextSecondary),
                   ),
                 ),
               ],
             ),
-            Text(
-              'Site #${lead.leadId}',
-              style: TextStyle(fontSize: 11, color: context.fomraTextSecondary),
-            ),
-            const SizedBox(height: 8),
-            Row(
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
               children: [
                 Container(
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
                     color: lead.status.color.withValues(alpha: 0.14),
                     borderRadius: BorderRadius.circular(999),
@@ -924,54 +964,90 @@ class _PropertyPopup extends StatelessWidget {
                   child: Text(
                     lead.status.label,
                     style: TextStyle(
-                      fontSize: 10.5,
+                      fontSize: 11,
                       fontWeight: FontWeight.w700,
                       color: lead.status.color,
                     ),
                   ),
                 ),
-                const SizedBox(width: 8),
-                Text(
-                  '${acres.toStringAsFixed(2)} ac',
-                  style:
-                      TextStyle(fontSize: 11.5, color: context.fomraTextSecondary),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: context.fomraSurfaceVar,
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: context.fomraBorder),
+                  ),
+                  child: Text(
+                    '${acres.toStringAsFixed(2)} ac',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: context.fomraTextSecondary,
+                    ),
+                  ),
                 ),
               ],
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 12),
+            // Detail rows — two columns when the card is wide enough.
+            LayoutBuilder(
+              builder: (context, c) {
+                final twoCol = c.maxWidth >= 340;
+                const gap = 10.0;
+                final cellW =
+                    twoCol ? (c.maxWidth - gap) / 2 : c.maxWidth;
+                return Wrap(
+                  spacing: gap,
+                  runSpacing: 10,
+                  children: [
+                    for (final d in details)
+                      SizedBox(
+                        width: cellW,
+                        child: _detailRow(context, d.$1, d.$2, d.$3),
+                      ),
+                  ],
+                );
+              },
+            ),
+            const SizedBox(height: 14),
             Row(
               children: [
                 Expanded(
-                  child: OutlinedButton(
+                  child: FilledButton.icon(
                     onPressed: () {
                       onClose();
                       onOpenSite();
                     },
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 6),
-                      minimumSize: const Size(0, 34),
-                      visualDensity: VisualDensity.compact,
-                    ),
-                    child: const Text('View',
+                    icon: const Icon(Icons.open_in_new_rounded, size: 18),
+                    label: const Text('View Details',
                         style: TextStyle(
-                            fontSize: 12.5, fontWeight: FontWeight.w700)),
+                            fontSize: 13, fontWeight: FontWeight.w700)),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      minimumSize: const Size(0, 42),
+                    ),
                   ),
                 ),
                 const SizedBox(width: 8),
                 SizedBox(
-                  height: 34,
-                  child: FilledButton(
+                  height: 42,
+                  child: OutlinedButton.icon(
                     onPressed: lead.gpsCoordinates.trim().isEmpty
                         ? null
                         : () => MapsNavigation.navigateFromGpsString(
                               lead.gpsCoordinates,
                               label: _siteName(lead),
                             ),
-                    style: FilledButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      visualDensity: VisualDensity.compact,
+                    icon: const Icon(Icons.directions_rounded, size: 18),
+                    label: const Text('Navigate',
+                        style: TextStyle(
+                            fontSize: 13, fontWeight: FontWeight.w700)),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.primary,
+                      side:
+                          BorderSide(color: AppColors.primary.withValues(alpha: 0.4)),
                     ),
-                    child: const Icon(Icons.directions_rounded, size: 18),
                   ),
                 ),
               ],
@@ -979,6 +1055,48 @@ class _PropertyPopup extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _detailRow(
+    BuildContext context,
+    IconData icon,
+    String label,
+    String value,
+  ) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 15, color: context.fomraTextSecondary),
+        const SizedBox(width: 7),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label.toUpperCase(),
+                style: TextStyle(
+                  fontSize: 9,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.4,
+                  color: context.fomraTextSecondary,
+                ),
+              ),
+              const SizedBox(height: 1),
+              Text(
+                value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  color: context.fomraTextPrimary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
