@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:intl/intl.dart';
@@ -39,22 +41,35 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
   _PlottedLead? _selectedPin;
 
   // ── Filters ────────────────────────────────────────────────────────────────
+  final TextEditingController _searchCtrl = TextEditingController();
+  String _search = '';
   final Set<LeadStatus> _stages = {};
   String? _executive;
   String? _broker;
   DateTimeRange? _dateRange;
 
-  bool get _hasActiveFilters =>
+  /// Filters excluding the free-text search — drives the "Filters" badge.
+  bool get _hasFieldFilters =>
       _stages.isNotEmpty ||
       _executive != null ||
       _broker != null ||
       _dateRange != null;
 
+  bool get _hasActiveFilters => _hasFieldFilters || _search.trim().isNotEmpty;
+
   void _clearFilters() {
+    _search = '';
+    _searchCtrl.clear();
     _stages.clear();
     _executive = null;
     _broker = null;
     _dateRange = null;
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
   }
 
   /// Role-scoped source leads: an executive only ever sees the sites assigned
@@ -75,6 +90,7 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
   }
 
   List<LandLead> get _filteredLeads {
+    final q = _search.trim().toLowerCase();
     return _scopedLeads.where((l) {
       if (_stages.isNotEmpty && !_stages.contains(l.status)) return false;
       if (_executive != null && l.createdByName.trim() != _executive) {
@@ -86,6 +102,16 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
         if (d.isBefore(_dateRange!.start) || d.isAfter(_dateRange!.end)) {
           return false;
         }
+      }
+      if (q.isNotEmpty) {
+        final match = <String>[
+          l.ownerName,
+          l.surveyNumber,
+          l.village,
+          l.brokerName,
+          l.leadId,
+        ].any((f) => f.toLowerCase().contains(q));
+        if (!match) return false;
       }
       return true;
     }).toList();
@@ -117,8 +143,18 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
       currentRoute: '/land-lead',
       appBar: FomraSubPageAppBar(
         title: 'Project Map',
-        subtitle:
-            '${filtered.length} site${filtered.length == 1 ? '' : 's'} · ${totalAcres.toStringAsFixed(2)} acres',
+        // Compact KPI chips sit inline with the title in the header, so the
+        // body — and therefore the map — keeps its full height.
+        actions: allPlotted.isEmpty
+            ? null
+            : [
+                _headerKpi(
+                    '${filtered.length}', 'Sites', Icons.place_outlined),
+                const SizedBox(width: 8),
+                _headerKpi(totalAcres.toStringAsFixed(2), 'Acres',
+                    Icons.landscape_outlined),
+                const SizedBox(width: 12),
+              ],
       ),
       body: allPlotted.isEmpty
           ? _buildEmpty(context)
@@ -131,8 +167,8 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       SizedBox(
-                        width: 340,
-                        child: _sidePanel(context, filtered, totalAcres),
+                        width: 320,
+                        child: _sidePanel(context),
                       ),
                       const VerticalDivider(width: 1),
                       Expanded(child: map),
@@ -141,12 +177,48 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
                 }
                 return Column(
                   children: [
-                    _compactFilterBar(context, filtered.length, totalAcres),
+                    _compactSearchBar(context),
                     Expanded(child: map),
                   ],
                 );
               },
             ),
+    );
+  }
+
+  // ── Header KPI chip (rendered on the gradient app bar) ─────────────────────
+  Widget _headerKpi(String value, String label, IconData icon) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.16),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.28)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: Colors.white),
+          const SizedBox(width: 6),
+          Text(
+            value,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.82),
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -304,25 +376,22 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
     );
   }
 
-  // ── Wide side panel: filters + matching list ───────────────────────────────
-  Widget _sidePanel(
-    BuildContext context,
-    List<LandLead> filtered,
-    double totalAcres,
-  ) {
+  // ── Wide side panel: sticky search + scrollable filters ────────────────────
+  Widget _sidePanel(BuildContext context) {
     return Material(
       color: context.fomraSurface,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // Search stays pinned while the filter list scrolls beneath it.
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
-            child: _totalsRow(context, filtered.length, totalAcres),
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+            child: _searchField(context, (fn) => setState(fn)),
           ),
           const Divider(height: 1),
           Expanded(
             child: ListView(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
               children: [
                 _filterControls(context, (fn) => setState(fn)),
               ],
@@ -333,12 +402,8 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
     );
   }
 
-  // ── Narrow: compact filter bar + matching list ─────────────────────────────
-  Widget _compactFilterBar(
-    BuildContext context,
-    int matchCount,
-    double totalAcres,
-  ) {
+  // ── Narrow: sticky search + Filters button (opens slide-over drawer) ───────
+  Widget _compactSearchBar(BuildContext context) {
     return Material(
       color: context.fomraSurface,
       elevation: 1,
@@ -346,15 +411,24 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
         padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
         child: Row(
           children: [
-            Expanded(child: _totalsRow(context, matchCount, totalAcres)),
+            Expanded(child: _searchField(context, (fn) => setState(fn))),
             const SizedBox(width: 8),
-            OutlinedButton.icon(
-              onPressed: _openFilterSheet,
-              icon: Badge(
-                isLabelVisible: _hasActiveFilters,
-                child: const Icon(Icons.tune_rounded, size: 18),
+            SizedBox(
+              height: 42,
+              child: OutlinedButton.icon(
+                onPressed: _openFilterDrawer,
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                icon: Badge(
+                  isLabelVisible: _hasFieldFilters,
+                  child: const Icon(Icons.tune_rounded, size: 18),
+                ),
+                label: const Text('Filters'),
               ),
-              label: const Text('Filters'),
             ),
           ],
         ),
@@ -362,67 +436,144 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
     );
   }
 
-  void _openFilterSheet() {
-    showModalBottomSheet<void>(
+  /// Mobile filter panel as a right-side slide-over drawer.
+  void _openFilterDrawer() {
+    showGeneralDialog<void>(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: context.fomraSurface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (ctx, setSheet) {
-            void apply(VoidCallback fn) {
-              setState(fn);
-              setSheet(() {});
-            }
+      barrierDismissible: true,
+      barrierLabel: 'Filters',
+      barrierColor: Colors.black.withValues(alpha: 0.45),
+      transitionDuration: const Duration(milliseconds: 240),
+      pageBuilder: (ctx, _, __) {
+        final width =
+            math.min(360.0, MediaQuery.sizeOf(ctx).width * 0.86);
+        return Align(
+          alignment: Alignment.centerRight,
+          child: StatefulBuilder(
+            builder: (ctx, setSheet) {
+              void apply(VoidCallback fn) {
+                setState(fn);
+                setSheet(() {});
+              }
 
-            return DraggableScrollableSheet(
-              expand: false,
-              initialChildSize: 0.8,
-              maxChildSize: 0.95,
-              builder: (ctx, controller) => ListView(
-                controller: controller,
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
-                children: [
-                  Row(
-                    children: [
-                      Text(
-                        'Filter properties',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w800,
-                          color: context.fomraTextPrimary,
+              return Material(
+                color: context.fomraSurface,
+                child: SizedBox(
+                  width: width,
+                  height: double.infinity,
+                  child: SafeArea(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(20, 16, 12, 8),
+                          child: Row(
+                            children: [
+                              Text(
+                                'Filters',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w800,
+                                  color: context.fomraTextPrimary,
+                                ),
+                              ),
+                              const Spacer(),
+                              IconButton(
+                                onPressed: () => Navigator.pop(ctx),
+                                icon: const Icon(Icons.close_rounded),
+                                tooltip: 'Close',
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                      const Spacer(),
-                      TextButton(
-                        onPressed: () => Navigator.pop(ctx),
-                        child: const Text('Done'),
-                      ),
-                    ],
+                        const Divider(height: 1),
+                        Expanded(
+                          child: ListView(
+                            padding:
+                                const EdgeInsets.fromLTRB(20, 16, 20, 28),
+                            children: [
+                              _filterControls(context, apply),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: 8),
-                  _filterControls(context, apply),
-                ],
-              ),
-            );
-          },
+                ),
+              );
+            },
+          ),
+        );
+      },
+      transitionBuilder: (ctx, anim, _, child) {
+        return SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(1, 0),
+            end: Offset.zero,
+          ).animate(
+            CurvedAnimation(parent: anim, curve: Curves.easeOutCubic),
+          ),
+          child: child,
         );
       },
     );
   }
 
-  // ── Filter controls (shared by side panel + bottom sheet) ──────────────────
+  // ── Search field (leading icon; owner / survey / village / broker / ID) ────
+  Widget _searchField(
+    BuildContext context,
+    void Function(VoidCallback) apply,
+  ) {
+    return SizedBox(
+      height: 42,
+      child: TextField(
+        controller: _searchCtrl,
+        onChanged: (v) => apply(() => _search = v),
+        textInputAction: TextInputAction.search,
+        style: TextStyle(fontSize: 13, color: context.fomraTextPrimary),
+        decoration: InputDecoration(
+          hintText: 'Search owner, survey, village, broker, ID',
+          hintStyle: TextStyle(
+            fontSize: 13,
+            color: context.fomraTextSecondary.withValues(alpha: 0.8),
+          ),
+          isDense: true,
+          filled: true,
+          fillColor: context.fomraSurfaceVar,
+          prefixIcon: Icon(Icons.search_rounded,
+              size: 18, color: context.fomraTextSecondary),
+          prefixIconConstraints:
+              const BoxConstraints(minWidth: 36, minHeight: 36),
+          suffixIcon: _search.isEmpty
+              ? null
+              : IconButton(
+                  icon: const Icon(Icons.close_rounded, size: 16),
+                  splashRadius: 18,
+                  onPressed: () => apply(() {
+                    _search = '';
+                    _searchCtrl.clear();
+                  }),
+                ),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide.none,
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── Filter controls (shared by side panel + slide-over drawer) ─────────────
   Widget _filterControls(
     BuildContext context,
     void Function(VoidCallback) apply,
   ) {
-    final df = DateFormat('dd MMM yyyy');
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        // Section title with the "Clear all" aligned neatly on the same row.
         Row(
           children: [
             Text(
@@ -430,6 +581,7 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w800,
+                letterSpacing: 0.2,
                 color: context.fomraTextSecondary,
               ),
             ),
@@ -438,56 +590,89 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
               TextButton(
                 onPressed: () => apply(_clearFilters),
                 style: TextButton.styleFrom(
-                  padding: EdgeInsets.zero,
-                  minimumSize: const Size(0, 32),
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  minimumSize: const Size(0, 28),
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  visualDensity: VisualDensity.compact,
                 ),
-                child: const Text('Clear all'),
+                child: const Text('Clear all',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
               ),
           ],
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 8),
         Wrap(
-          spacing: 8,
-          runSpacing: 8,
+          spacing: 6,
+          runSpacing: 6,
           children: [
             for (final s in leadStatusPipelineOrder)
-              FilterChip(
-                label: Text(s.label),
-                selected: _stages.contains(s),
-                onSelected: (v) =>
-                    apply(() => v ? _stages.add(s) : _stages.remove(s)),
-                selectedColor: s.color.withValues(alpha: 0.18),
-                checkmarkColor: s.color,
-                labelStyle: const TextStyle(fontSize: 12),
-              ),
+              _stageChip(context, s, apply),
           ],
         ),
         const SizedBox(height: 14),
         _dropdown(context, 'Assigned Executive', _executive,
             _distinct((l) => l.createdByName), (v) => apply(() => _executive = v)),
+        const SizedBox(height: 10),
         _dropdown(context, 'Broker', _broker, _distinct((l) => l.brokerName),
             (v) => apply(() => _broker = v)),
-        const SizedBox(height: 4),
-        OutlinedButton.icon(
-          onPressed: () async {
-            final now = DateTime.now();
-            final range = await showDateRangePicker(
-              context: context,
-              firstDate: DateTime(now.year - 5),
-              lastDate: DateTime(now.year + 1),
-              initialDateRange: _dateRange,
-            );
-            if (range != null) apply(() => _dateRange = range);
-          },
-          icon: const Icon(Icons.date_range_outlined, size: 18),
-          label: Text(
-            _dateRange == null
-                ? 'Any date'
-                : '${df.format(_dateRange!.start)} – ${df.format(_dateRange!.end)}',
-          ),
-        ),
+        const SizedBox(height: 10),
+        _dateField(context, apply),
       ],
+    );
+  }
+
+  // Compact stage chip — reduced height, selected highlight uses status color.
+  Widget _stageChip(
+    BuildContext context,
+    LeadStatus s,
+    void Function(VoidCallback) apply,
+  ) {
+    final selected = _stages.contains(s);
+    return FilterChip(
+      label: Text(s.label),
+      selected: selected,
+      showCheckmark: false,
+      onSelected: (v) =>
+          apply(() => v ? _stages.add(s) : _stages.remove(s)),
+      backgroundColor: context.fomraSurfaceVar,
+      selectedColor: s.color.withValues(alpha: 0.18),
+      side: BorderSide(
+        color: selected ? s.color : context.fomraBorder,
+        width: selected ? 1.4 : 1,
+      ),
+      labelStyle: TextStyle(
+        fontSize: 11.5,
+        fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+        color: selected ? s.color : context.fomraTextSecondary,
+      ),
+      labelPadding: const EdgeInsets.symmetric(horizontal: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      visualDensity: VisualDensity.compact,
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+    );
+  }
+
+  InputDecoration _fieldDecoration(
+    BuildContext context, {
+    required String label,
+    Widget? prefixIcon,
+    Widget? suffixIcon,
+  }) {
+    return InputDecoration(
+      labelText: label,
+      labelStyle: TextStyle(fontSize: 13, color: context.fomraTextSecondary),
+      isDense: true,
+      filled: true,
+      fillColor: context.fomraSurfaceVar,
+      prefixIcon: prefixIcon,
+      suffixIcon: suffixIcon,
+      contentPadding:
+          const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide.none,
+      ),
     );
   }
 
@@ -498,76 +683,66 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
     List<String> options,
     ValueChanged<String?> onChanged,
   ) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: DropdownButtonFormField<String?>(
-        key: ValueKey('$label-${value ?? 'all'}'),
-        initialValue: value,
-        isExpanded: true,
-        decoration: InputDecoration(
-          labelText: label,
-          isDense: true,
-          filled: true,
-          fillColor: context.fomraSurfaceVar,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide.none,
-          ),
-        ),
-        items: [
-          const DropdownMenuItem<String?>(value: null, child: Text('All')),
-          for (final o in options)
-            DropdownMenuItem<String?>(value: o, child: Text(o)),
-        ],
-        onChanged: onChanged,
-      ),
-    );
-  }
-
-  Widget _totalsRow(BuildContext context, int matchCount, double totalAcres) {
-    return Row(
-      children: [
-        _totalPill(context, '$matchCount', 'Sites', AppColors.primary),
-        const SizedBox(width: 10),
-        _totalPill(context, totalAcres.toStringAsFixed(2), 'Acres',
-            AppColors.info),
+    return DropdownButtonFormField<String?>(
+      key: ValueKey('$label-${value ?? 'all'}'),
+      initialValue: value,
+      isExpanded: true,
+      style: TextStyle(fontSize: 13, color: context.fomraTextPrimary),
+      decoration: _fieldDecoration(context, label: label),
+      items: [
+        const DropdownMenuItem<String?>(value: null, child: Text('All')),
+        for (final o in options)
+          DropdownMenuItem<String?>(value: o, child: Text(o)),
       ],
+      onChanged: onChanged,
     );
   }
 
-  Widget _totalPill(
+  // Compact outlined date field with a calendar icon — matches the dropdowns.
+  Widget _dateField(
     BuildContext context,
-    String value,
-    String label,
-    Color color,
+    void Function(VoidCallback) apply,
   ) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color.withValues(alpha: 0.25)),
+    final df = DateFormat('dd MMM yyyy');
+    final hasRange = _dateRange != null;
+    return InkWell(
+      borderRadius: BorderRadius.circular(10),
+      onTap: () async {
+        final now = DateTime.now();
+        final range = await showDateRangePicker(
+          context: context,
+          firstDate: DateTime(now.year - 5),
+          lastDate: DateTime(now.year + 1),
+          initialDateRange: _dateRange,
+        );
+        if (range != null) apply(() => _dateRange = range);
+      },
+      child: InputDecorator(
+        decoration: _fieldDecoration(
+          context,
+          label: 'Date added',
+          prefixIcon: Icon(Icons.calendar_today_outlined,
+              size: 16, color: context.fomraTextSecondary),
+          suffixIcon: hasRange
+              ? IconButton(
+                  icon: const Icon(Icons.close_rounded, size: 16),
+                  splashRadius: 18,
+                  onPressed: () => apply(() => _dateRange = null),
+                )
+              : null,
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              value,
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w800,
-                color: color,
-              ),
-            ),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 10,
-                color: context.fomraTextSecondary,
-              ),
-            ),
-          ],
+        child: Text(
+          hasRange
+              ? '${df.format(_dateRange!.start)} – ${df.format(_dateRange!.end)}'
+              : 'Any date',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: 13,
+            color: hasRange
+                ? context.fomraTextPrimary
+                : context.fomraTextSecondary,
+          ),
         ),
       ),
     );
@@ -650,32 +825,13 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
     return (center, zoom);
   }
 
-  /// Show the full lead detail as a dismissible popup layered over the map,
-  /// rather than pushing a separate full-screen route — tapping outside (or the
-  /// detail's own close) returns straight to the map with the pins intact.
+  /// Navigate directly to the Land Lead Details page for the tapped site,
+  /// matching the standard lead-detail navigation used across the app. The
+  /// selected lead is passed by value so it loads immediately; role-based
+  /// visibility is already enforced upstream (only scoped pins are shown).
   void _openLead(BuildContext context, LandLead lead) {
-    showDialog<void>(
-      context: context,
-      barrierDismissible: true,
-      barrierColor: Colors.black.withValues(alpha: 0.5),
-      builder: (dialogContext) {
-        final size = MediaQuery.sizeOf(dialogContext);
-        final compact = size.width < 700;
-        return Dialog(
-          insetPadding: EdgeInsets.symmetric(
-            horizontal: compact ? 8 : 40,
-            vertical: compact ? 8 : 28,
-          ),
-          clipBehavior: Clip.antiAlias,
-          backgroundColor: Colors.transparent,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-          child: SizedBox(
-            width: double.infinity,
-            height: size.height * (compact ? 0.94 : 0.9),
-            child: LeadDetailScreen(lead: lead),
-          ),
-        );
-      },
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => LeadDetailScreen(lead: lead)),
     );
   }
 
