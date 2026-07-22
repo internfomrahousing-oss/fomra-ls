@@ -1,4 +1,5 @@
 import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -28,10 +29,9 @@ import '../../widgets/ui/app_feedback.dart';
 import '../../utils/employee_lead_next_action.dart';
 import '../../utils/maps_navigation.dart';
 import '../../widgets/employee_lead_workflow_ui.dart';
-import '../../widgets/fomra_app_bar.dart';
 import '../../widgets/fomra_app_shell.dart';
 import '../../widgets/offline_status_banner.dart';
-import '../../widgets/fomra_breadcrumb.dart';
+import '../../widgets/portal_page_layout.dart';
 import '../../widgets/ui/app_components.dart';
 import '../market_intelligence/market_intelligence_screen.dart';
 import '../task_management/task_management_screen.dart';
@@ -56,6 +56,74 @@ String _formatReceivedOn(DateTime receivedOn) {
   final local = receivedOn.toLocal();
   return '${local.day}/${local.month}/${local.year} '
       '${local.hour}:${local.minute.toString().padLeft(2, '0')}';
+}
+
+/// Realistic sample activity for the timeline, used ONLY in debug/demo builds
+/// when a lead has no real records (see the kDebugMode guard at the call site).
+/// Purely local — never persisted — so production data and logic are untouched.
+List<
+    ({
+      DateTime at,
+      String title,
+      String subtitle,
+      IconData icon,
+      String? audioUrl,
+      _ActivityFilter category,
+    })> _demoTimelineEvents(LandLead lead) {
+  final now = DateTime.now();
+  ({
+    DateTime at,
+    String title,
+    String subtitle,
+    IconData icon,
+    String? audioUrl,
+    _ActivityFilter category,
+  }) e(
+    int daysAgo,
+    String title,
+    String employee,
+    String status,
+    String description,
+    IconData icon,
+    _ActivityFilter category,
+  ) {
+    final at = now.subtract(Duration(days: daysAgo, hours: daysAgo));
+    return (
+      at: at,
+      title: title,
+      subtitle: [_formatReceivedOn(at), employee, status, description].join('\n'),
+      icon: icon,
+      audioUrl: null,
+      category: category,
+    );
+  }
+
+  return [
+    e(1, 'Outgoing call', 'Arun Kumar', 'Answered · 4 min',
+        'Owner confirmed interest and asked to schedule a site visit.',
+        Icons.call_outlined, _ActivityFilter.calls),
+    e(2, 'Note', 'Priya S', 'Logged',
+        'Owner prefers weekend meetings close to the site.',
+        Icons.notes_outlined, _ActivityFilter.notes),
+    e(3, 'Meeting', 'Arun Kumar', 'Completed · 45 min',
+        'Discussed pricing and boundary details with the land owner.',
+        Icons.groups_outlined, _ActivityFilter.meetings),
+    e(5, 'Site Visit', 'Karthik R', 'Completed',
+        'Verified the access road and marked the corner coordinates.',
+        Icons.location_on_outlined, _ActivityFilter.siteVisits),
+    e(7, 'Management Site Visit', 'Management', 'Approved',
+        'Management reviewed the parcel and cleared it for legal checks.',
+        Icons.apartment_outlined, _ActivityFilter.managementSiteVisits),
+    e(9, 'Legal Update', 'Legal Desk', 'Verified',
+        'Patta and Chitta collected; FMB sketch has been requested.',
+        Icons.gavel_outlined, _ActivityFilter.notes),
+    e(10, 'Task Created', 'Priya S', 'Open',
+        'Follow up on the pending EC before starting negotiation.',
+        Icons.checklist_rounded, _ActivityFilter.notes),
+    e(12, 'Project Signed', 'Arun Kumar', 'Submitted for approval',
+        'Signing package submitted and awaiting management approval.',
+        Icons.draw_outlined, _ActivityFilter.notes),
+  ];
 }
 
 class LeadDetailScreen extends StatefulWidget {
@@ -83,7 +151,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
   /// it — an executive, RM or Head never gets the tab at all.
   static List<String> get _tabs => [
         'Activity',
-        'Site Photos',
+        'Photos',
         'Infrastructure',
         'Land Records',
         if (AuthService.instance.isManagement) 'Competitor Projects',
@@ -521,6 +589,30 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
 
   @override
   Widget build(BuildContext context) {
+    // ── Discrete sections, composed per breakpoint below ────────────────────
+    final summary = _LeadSummaryCard(
+      lead: lead,
+      displayName: _displayName,
+      leadAgeDays: _leadAgeDays,
+      taskCount: taskCountForLead(lead.leadId),
+      readOnly: _viewOnly,
+      onStatusChanged: _changeStatus,
+      onCreateTask: _openCreateTask,
+      onViewTasks: _openViewTasks,
+      onEdit: _canEditSite ? _openEdit : null,
+      onNavigate:
+          lead.gpsCoordinates.trim().isEmpty ? null : _navigateToProperty,
+    );
+
+    // Next Action + Due/Overdue/Pending KPIs — only for the working executive.
+    final Widget? guidance = _viewOnly
+        ? null
+        : EmployeeLeadGuidanceBanners(
+            insight: _workflowInsight,
+            onOpenTasks: _openViewTasks,
+            onNextActionTap: _onNextActionTap,
+          );
+
     final workspace = _WorkspacePanel(
       lead: lead,
       readOnly: _viewOnly,
@@ -539,28 +631,19 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
       onDetailAction: _handleDetailAction,
       onOpenTasks: _openViewTasks,
       shouldLoadMiTab: _shouldLoadMiTab,
-      guidanceBanner: _viewOnly
-          ? null
-          : EmployeeLeadGuidanceBanners(
-              insight: _workflowInsight,
-              onOpenTasks: _openViewTasks,
-              onNextActionTap: _onNextActionTap,
-            ),
     );
+
+    final infoCards = _LeadInfoCards(lead: lead, leadAgeDays: _leadAgeDays);
 
     return FomraAppShell(
       currentRoute: '/land-lead',
       backgroundColor: context.fomraPageBg,
-      // The standard app header (search, notification bell, view scope, theme,
-      // profile) with the module breadcrumb below it — the same one every other
-      // page uses. Editing the site moves into the header actions.
-      appBar: FomraAppBar(
-        moduleName: 'Lead Details',
-        breadcrumbs: FomraBreadcrumbs.under(
-          const [FomraBreadcrumbs.landWorkspace],
-          'Lead Details',
-        ),
-        // Edit moved into the profile header (see _ProfilePanel.onEdit).
+      // A drill-down sub-page header with a real Back button, so returning goes
+      // to the actual previous page (workspace, map, search, notifications…)
+      // instead of always jumping Home. The breadcrumb names the lead itself.
+      appBar: FomraSubPageAppBar(
+        title: 'Lead #${lead.leadId}',
+        subtitle: _displayName == 'Lead #${lead.leadId}' ? null : _displayName,
       ),
       body: SafeArea(
         child: LayoutBuilder(
@@ -579,53 +662,57 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
                     child: Stack(
                       children: [
                         wide
+                            // Desktop / tablet: a reference column (summary +
+                            // information cards) beside a work column (next
+                            // action + KPIs + workspace) so width is filled and
+                            // no section leaves a large empty gap.
                             ? SingleChildScrollView(
                                 child: Row(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Expanded(
                                       flex: 2,
-                                      child: _ProfilePanel(
-                                        lead: lead,
-                                        displayName: _displayName,
-                                        leadAgeDays: _leadAgeDays,
-                                        taskCount:
-                                            taskCountForLead(lead.leadId),
-                                        readOnly: _viewOnly,
-                                        onStatusChanged: _changeStatus,
-                                        onCreateTask: _openCreateTask,
-                                        onViewTasks: _openViewTasks,
-                                        onEdit:
-                                            _canEditSite ? _openEdit : null,
-                                        onNavigate:
-                                            lead.gpsCoordinates.trim().isEmpty
-                                                ? null
-                                                : _navigateToProperty,
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.stretch,
+                                        children: [
+                                          summary,
+                                          const SizedBox(height: 12),
+                                          infoCards,
+                                        ],
                                       ),
                                     ),
                                     const SizedBox(width: 12),
                                     Expanded(
                                       flex: 3,
-                                      child: workspace,
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.stretch,
+                                        children: [
+                                          if (guidance != null) ...[
+                                            guidance,
+                                            const SizedBox(height: 12),
+                                          ],
+                                          workspace,
+                                        ],
+                                      ),
                                     ),
                                   ],
                                 ),
                               )
+                            // Mobile: one natural top-to-bottom flow — summary →
+                            // next action → KPIs → workspace → information.
                             : ListView(
                                 children: [
-                                  _ProfilePanel(
-                                    lead: lead,
-                                    displayName: _displayName,
-                                    leadAgeDays: _leadAgeDays,
-                                    taskCount: taskCountForLead(lead.leadId),
-                                    readOnly: _viewOnly,
-                                    onStatusChanged: _changeStatus,
-                                    onCreateTask: _openCreateTask,
-                                    onViewTasks: _openViewTasks,
-                                    onEdit: _canEditSite ? _openEdit : null,
-                                  ),
+                                  summary,
+                                  if (guidance != null) ...[
+                                    const SizedBox(height: 12),
+                                    guidance,
+                                  ],
                                   const SizedBox(height: 12),
                                   workspace,
+                                  const SizedBox(height: 12),
+                                  infoCards,
                                 ],
                               ),
                         if (!_viewOnly)
@@ -658,7 +745,10 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
   }
 }
 
-class _ProfilePanel extends StatelessWidget {
+/// Compact lead summary header (point 3): identity, stage, location, and the
+/// key facts (age / extent / terms / type / executive) as scannable pills, plus
+/// the quick actions — all in a short card instead of the old tall hero.
+class _LeadSummaryCard extends StatelessWidget {
   final LandLead lead;
   final String displayName;
   final int leadAgeDays;
@@ -669,11 +759,10 @@ class _ProfilePanel extends StatelessWidget {
   final VoidCallback onViewTasks;
   final VoidCallback? onNavigate;
 
-  /// Edit the lead — moved here from the app-bar action. Null when the current
-  /// user can't edit this lead.
+  /// Edit the lead. Null when the current user can't edit this lead.
   final VoidCallback? onEdit;
 
-  const _ProfilePanel({
+  const _LeadSummaryCard({
     required this.lead,
     required this.displayName,
     required this.leadAgeDays,
@@ -689,268 +778,245 @@ class _ProfilePanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final locationLabel = [
-      if (lead.village.isNotEmpty) lead.village,
-      if (lead.district.isNotEmpty) lead.district,
+      if (lead.village.trim().isNotEmpty) lead.village.trim(),
+      if (lead.district.trim().isNotEmpty) lead.district.trim(),
     ].join(', ');
-    final initial = displayName.isNotEmpty
+    final initial = displayName.trim().isNotEmpty
         ? displayName.trim()[0].toUpperCase()
         : '#';
 
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        decoration: BoxDecoration(
-          color: context.fomraSurface,
-          border: Border.all(color: context.fomraBorder),
-          boxShadow: context.fomraCardShadow,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-              Container(
-                padding: const EdgeInsets.fromLTRB(18, 18, 12, 16),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      lead.status.color.withValues(alpha: 0.18),
-                      lead.status.color.withValues(alpha: 0.04),
-                    ],
+    final metrics = <(String, String)>[
+      ('Age', '$leadAgeDays days'),
+      ('Extent', lead.landExtent.trim().isEmpty ? '—' : lead.landExtent.trim()),
+      if (lead.accessDetails.trim().isNotEmpty) ('Terms', lead.accessDetails.trim()),
+      ('Type', lead.landType.label),
+      if (lead.createdByName.trim().isNotEmpty)
+        ('Executive', lead.createdByName.trim()),
+    ];
+
+    return Container(
+      decoration: BoxDecoration(
+        color: context.fomraSurface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: context.fomraBorder),
+        boxShadow: context.fomraCardShadow,
+      ),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              CircleAvatar(
+                radius: 21,
+                backgroundColor: lead.status.color.withValues(alpha: 0.16),
+                child: Text(
+                  initial,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: lead.status.color,
                   ),
-                  border: Border(
-                    bottom: BorderSide(color: context.fomraBorder),
-                  ),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    CircleAvatar(
-                      radius: 26,
-                      backgroundColor: lead.status.color.withValues(alpha: 0.2),
-                      child: Text(
-                        initial,
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w800,
-                          color: lead.status.color,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '#${lead.leadId}',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 0.3,
-                              color: context.fomraTextSecondary,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            displayName,
-                            style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w800,
-                              color: context.fomraTextPrimary,
-                            ),
-                          ),
-                          if (locationLabel.isNotEmpty) ...[
-                            const SizedBox(height: 6),
-                            Row(
-                              children: [
-                                Icon(
-                                  Icons.place_outlined,
-                                  size: 14,
-                                  color: context.fomraTextSecondary,
-                                ),
-                                const SizedBox(width: 4),
-                                Expanded(
-                                  child: Text(
-                                    locationLabel,
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: context.fomraTextSecondary,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                          const SizedBox(height: 10),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 6,
-                            children: [
-                              _InfoChip(
-                                label: '$leadAgeDays days old',
-                                icon: Icons.schedule_outlined,
-                              ),
-                              _InfoChip(
-                                label: lead.landType.label,
-                                icon: Icons.landscape_outlined,
-                              ),
-                            ],
-                          ),
-                          if (onNavigate != null) ...[
-                            const SizedBox(height: 10),
-                            Align(
-                              alignment: Alignment.centerLeft,
-                              child: OutlinedButton.icon(
-                                onPressed: onNavigate,
-                                icon: const Icon(Icons.place_outlined, size: 16),
-                                label: const Text('Navigate'),
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: AppColors.purple,
-                                  side: BorderSide(
-                                      color: AppColors.purple
-                                          .withValues(alpha: 0.4)),
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 14, vertical: 8),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        // Edit sits where the task box used to be (top-right).
-                        if (onEdit != null)
-                          IconButton(
-                            onPressed: onEdit,
-                            tooltip: 'Edit lead',
-                            icon: const Icon(Icons.edit_outlined, size: 20),
-                            style: IconButton.styleFrom(
-                              foregroundColor: AppColors.primary,
-                              backgroundColor:
-                                  AppColors.primary.withValues(alpha: 0.08),
-                            ),
-                          ),
-                        const SizedBox(height: 8),
-                        // Desktop: task count to the LEFT of Create. Mobile:
-                        // task count on top, Create beneath — both on the right.
-                        Builder(builder: (context) {
-                          final taskBadge = InkWell(
-                            onTap: onViewTasks,
-                            borderRadius: BorderRadius.circular(14),
-                            child: _LeadTaskCountBadge(count: taskCount),
-                          );
-                          final createButton = SizedBox(
-                            width: 118,
-                            child: FilledButton.icon(
-                              onPressed: onCreateTask,
-                              icon: const Icon(Icons.add_task_outlined,
-                                  size: 14),
-                              label: const Text('Create'),
-                              style: FilledButton.styleFrom(
-                                backgroundColor: AppColors.primary,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 8,
-                                ),
-                                textStyle: const TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                              ),
-                            ),
-                          );
-                          if (FomraLayout.isMobile(context)) {
-                            return Column(
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                taskBadge,
-                                const SizedBox(height: 8),
-                                createButton,
-                              ],
-                            );
-                          }
-                          return Row(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              taskBadge,
-                              const SizedBox(width: 8),
-                              createButton,
-                            ],
-                          );
-                        }),
-                      ],
-                    ),
-                  ],
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+              const SizedBox(width: 12),
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _StageStatusField(
-                      status: lead.status,
-                      readOnly: readOnly,
-                      onStatusChanged: onStatusChanged,
+                    Row(
+                      children: [
+                        Text(
+                          '#${lead.leadId}',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.3,
+                            color: context.fomraTextSecondary,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Flexible(child: _StageBadge(status: lead.status)),
+                      ],
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 3),
                     Text(
-                      'LEAD DETAILS',
+                      displayName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        fontSize: 10,
+                        fontSize: 17,
                         fontWeight: FontWeight.w800,
-                        letterSpacing: 0.6,
-                        color: context.fomraTextSecondary,
+                        color: context.fomraTextPrimary,
                       ),
                     ),
-                    const SizedBox(height: 10),
-                    _LeadDetailsList(lead: lead, leadAgeDays: leadAgeDays),
+                    if (locationLabel.isNotEmpty) ...[
+                      const SizedBox(height: 3),
+                      Row(
+                        children: [
+                          Icon(Icons.place_outlined,
+                              size: 13, color: context.fomraTextSecondary),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              locationLabel,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: context.fomraTextSecondary,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              InkWell(
+                onTap: onViewTasks,
+                borderRadius: BorderRadius.circular(14),
+                child: _LeadTaskCountBadge(count: taskCount),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          // Compact metric strip — the summary facts, scannable at a glance.
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final m in metrics) _MetricPill(label: m.$1, value: m.$2),
+            ],
+          ),
+          const SizedBox(height: 12),
+          // Editable stage keeps the existing status-change workflow intact.
+          _StageStatusField(
+            status: lead.status,
+            readOnly: readOnly,
+            onStatusChanged: onStatusChanged,
+          ),
+          const SizedBox(height: 12),
+          // Quick actions — wrap automatically, compact, aligned icons.
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              if (onNavigate != null)
+                OutlinedButton.icon(
+                  onPressed: onNavigate,
+                  icon: const Icon(Icons.navigation_outlined, size: 16),
+                  label: const Text('Navigate'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.purple,
+                    side: BorderSide(
+                        color: AppColors.purple.withValues(alpha: 0.4)),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ),
+              if (onEdit != null)
+                OutlinedButton.icon(
+                  onPressed: onEdit,
+                  icon: const Icon(Icons.edit_outlined, size: 16),
+                  label: const Text('Edit'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.primary,
+                    side: BorderSide(
+                        color: AppColors.primary.withValues(alpha: 0.4)),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ),
+              FilledButton.icon(
+                onPressed: onCreateTask,
+                icon: const Icon(Icons.add_task_outlined, size: 16),
+                label: const Text('Create Task'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  visualDensity: VisualDensity.compact,
                 ),
               ),
             ],
           ),
-        ),
+        ],
+      ),
     );
   }
 }
 
-class _InfoChip extends StatelessWidget {
-  final String label;
-  final IconData icon;
-
-  const _InfoChip({required this.label, required this.icon});
+class _StageBadge extends StatelessWidget {
+  final LeadStatus status;
+  const _StageBadge({required this.status});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
-        color: context.fomraSurface.withValues(alpha: 0.85),
-        borderRadius: BorderRadius.circular(20),
+        color: status.color.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        status.label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontSize: 10.5,
+          fontWeight: FontWeight.w800,
+          color: status.color,
+        ),
+      ),
+    );
+  }
+}
+
+/// A single compact "LABEL value" pill used in the summary metric strip.
+class _MetricPill extends StatelessWidget {
+  final String label;
+  final String value;
+  const _MetricPill({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: context.fomraSurfaceVar.withValues(alpha: 0.6),
+        borderRadius: BorderRadius.circular(10),
         border: Border.all(color: context.fomraBorder),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 13, color: context.fomraTextSecondary),
-          const SizedBox(width: 4),
           Text(
-            label,
+            label.toUpperCase(),
             style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
+              fontSize: 9.5,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.4,
               color: context.fomraTextSecondary,
+            ),
+          ),
+          const SizedBox(width: 6),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 170),
+            child: Text(
+              value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: context.fomraTextPrimary,
+              ),
             ),
           ),
         ],
@@ -1014,7 +1080,6 @@ class _WorkspacePanel extends StatelessWidget {
   final ValueChanged<String> onDetailAction;
   final VoidCallback onOpenTasks;
   final bool Function(int tabIndex) shouldLoadMiTab;
-  final Widget? guidanceBanner;
   final String readOnlyNote;
 
   const _WorkspacePanel({
@@ -1033,27 +1098,22 @@ class _WorkspacePanel extends StatelessWidget {
     required this.onDetailAction,
     required this.onOpenTasks,
     required this.shouldLoadMiTab,
-    this.guidanceBanner,
   });
 
   @override
   Widget build(BuildContext context) {
     return ClipRRect(
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: BorderRadius.circular(16),
       child: Container(
         decoration: BoxDecoration(
           color: context.fomraSurface,
           border: Border.all(color: context.fomraBorder),
           boxShadow: context.fomraCardShadow,
         ),
-        padding: const EdgeInsets.fromLTRB(18, 16, 18, 12),
+        padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (guidanceBanner != null) ...[
-              guidanceBanner!,
-              const SizedBox(height: 12),
-            ],
             if (!readOnly) ...[
               // Call / WhatsApp live in the Quick Actions FAB only — the
               // standalone header icons were removed to cut duplication.
@@ -1107,35 +1167,43 @@ class _WorkspacePanel extends StatelessWidget {
                 legalDocs: legalDocs,
               ),
             ] else ...[
+              // Modern enterprise segmented tabs — the active segment is a
+              // filled accent pill inside a bordered track.
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                padding: const EdgeInsets.all(4),
                 decoration: BoxDecoration(
                   color: context.fomraSurfaceVar.withValues(alpha: 0.7),
                   borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: context.fomraBorder),
                 ),
                 child: TabBar(
                   controller: tabController,
                   isScrollable: true,
                   tabAlignment: TabAlignment.start,
                   dividerColor: Colors.transparent,
-                  labelColor: AppColors.purple,
+                  labelColor: Colors.white,
                   unselectedLabelColor: context.fomraTextSecondary,
                   indicator: BoxDecoration(
-                    color: context.fomraSurface,
-                    borderRadius: BorderRadius.circular(10),
-                    boxShadow: context.fomraCardShadow,
+                    color: AppColors.purple,
+                    borderRadius: BorderRadius.circular(9),
                   ),
                   indicatorSize: TabBarIndicatorSize.tab,
+                  overlayColor:
+                      WidgetStatePropertyAll(AppColors.purple.withValues(alpha: 0.08)),
                   labelPadding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
                   labelStyle: const TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
                   ),
-                  tabs: [for (final t in tabs) Tab(text: t, height: 34)],
+                  unselectedLabelStyle: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  tabs: [for (final t in tabs) Tab(text: t, height: 30)],
                 ),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 12),
               // Render only the active tab at its natural height so the whole
               // page shares a single scroll (no inner tab scroll view).
               AnimatedBuilder(
@@ -1209,18 +1277,18 @@ class _ActionToolbar extends StatelessWidget {
     Widget pill((IconData, String, Color) action) {
       return Material(
         color: action.$3.withValues(alpha: 0.07),
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(12),
         child: InkWell(
           onTap: () =>
               action.$2 == 'Tasks' ? onOpenTasks() : onAction(action.$2),
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(12),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(action.$1, size: 16, color: action.$3),
-                const SizedBox(width: 6),
+                const SizedBox(width: 8),
                 Flexible(
                   child: Text(
                     action.$2,
@@ -1240,37 +1308,24 @@ class _ActionToolbar extends StatelessWidget {
       );
     }
 
-    // Mobile: a tidy 2-column grid of equal-width tiles (they align into
-    // columns instead of wrapping as ragged content-width pills).
-    if (FomraLayout.isMobile(context)) {
-      const gap = 8.0;
-      return LayoutBuilder(
-        builder: (context, c) {
-          final cellW =
-              c.maxWidth.isFinite ? (c.maxWidth - gap) / 2 : 160.0;
-          return Wrap(
-            spacing: gap,
-            runSpacing: gap,
-            children: [
-              for (final action in actions)
-                SizedBox(width: cellW, child: pill(action)),
-            ],
-          );
-        },
-      );
-    }
-
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: [
-          for (final action in actions)
-            Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: pill(action),
-            ),
-        ],
-      ),
+    // One equal-width wrapping grid at every size: 2 columns on phones, more as
+    // width allows. Tiles wrap automatically and share a consistent size.
+    const gap = 8.0;
+    return LayoutBuilder(
+      builder: (context, c) {
+        final maxW = c.maxWidth.isFinite ? c.maxWidth : 360.0;
+        // Aim for ~150px tiles, clamped to 2–4 columns.
+        final cols = (maxW / 158).floor().clamp(2, 4);
+        final cellW = (maxW - gap * (cols - 1)) / cols;
+        return Wrap(
+          spacing: gap,
+          runSpacing: gap,
+          children: [
+            for (final action in actions)
+              SizedBox(width: cellW, child: pill(action)),
+          ],
+        );
+      },
     );
   }
 }
@@ -1394,69 +1449,68 @@ class _ActivitySummaryRow extends StatelessWidget {
       (label: 'Incoming\nAnswered', value: '${callMetrics.incomingAnswered}', icon: CallOutcome.answered.icon, color: AppColors.success),
     ];
 
+    // Compact stat card: icon + value on one line, label beneath — shorter and
+    // easier to scan than the old tall centred cell.
     Widget cell(int i) => Container(
-          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+          padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 10),
           decoration: BoxDecoration(
-            color: context.fomraSurfaceVar.withValues(alpha: 0.65),
+            color: context.fomraSurfaceVar.withValues(alpha: 0.6),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: context.fomraBorder),
           ),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(cells[i].icon, size: 18, color: cells[i].color),
-              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Icon(cells[i].icon, size: 15, color: cells[i].color),
+                  const SizedBox(width: 6),
+                  Text(
+                    cells[i].value,
+                    style: TextStyle(
+                      fontSize: 17,
+                      height: 1,
+                      fontWeight: FontWeight.w800,
+                      color:
+                          i == 0 ? AppColors.purple : context.fomraTextPrimary,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 5),
               Text(
-                cells[i].label,
-                textAlign: TextAlign.center,
+                cells[i].label.replaceAll('\n', ' '),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontSize: 10,
-                  height: 1.2,
+                  height: 1.15,
                   fontWeight: FontWeight.w600,
                   color: context.fomraTextSecondary,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                cells[i].value,
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w800,
-                  color: i == 0 ? AppColors.purple : context.fomraTextPrimary,
                 ),
               ),
             ],
           ),
         );
 
-    // Mobile web: wrap into rows of three so five cells aren't crushed into one
-    // line; tablet/desktop keep the single equal-width row.
-    if (FomraLayout.isMobile(context)) {
-      const gap = 8.0;
-      return LayoutBuilder(
-        builder: (context, c) {
-          const perRow = 3;
-          final w = c.maxWidth.isFinite
-              ? (c.maxWidth - gap * (perRow - 1)) / perRow
-              : 104.0;
-          return Wrap(
-            spacing: gap,
-            runSpacing: gap,
-            children: [
-              for (var i = 0; i < cells.length; i++)
-                SizedBox(width: w, child: cell(i)),
-            ],
-          );
-        },
-      );
-    }
-
-    return Row(
-      children: [
-        for (var i = 0; i < cells.length; i++) ...[
-          if (i > 0) const SizedBox(width: 8),
-          Expanded(child: cell(i)),
-        ],
-      ],
+    // One responsive grid at every width — all five across on desktop, wrapping
+    // to 2–3 columns as space tightens. Cards keep an equal width.
+    const gap = 8.0;
+    return LayoutBuilder(
+      builder: (context, c) {
+        final maxW = c.maxWidth.isFinite ? c.maxWidth : 360.0;
+        final cols = (maxW / 132).floor().clamp(2, cells.length);
+        final w = (maxW - gap * (cols - 1)) / cols;
+        return Wrap(
+          spacing: gap,
+          runSpacing: gap,
+          children: [
+            for (var i = 0; i < cells.length; i++)
+              SizedBox(width: w, child: cell(i)),
+          ],
+        );
+      },
     );
   }
 }
@@ -1599,6 +1653,13 @@ class _ActivityTimelineState extends State<_ActivityTimeline> {
         audioUrl: audioUrl,
         category: _ActivityFilter.notes,
       ));
+    }
+
+    // Demo/development only: when a lead has no real activity, seed a realistic
+    // sample timeline so the page isn't empty in demos. Guarded by kDebugMode,
+    // rendered locally and NEVER written to Supabase — zero production impact.
+    if (kDebugMode && events.isEmpty) {
+      events.addAll(_demoTimelineEvents(lead));
     }
 
     events.sort((a, b) => b.at.compareTo(a.at));
@@ -1772,149 +1833,155 @@ class _ActivityFilterBar extends StatelessWidget {
   }
 }
 
-class _LeadDetailsList extends StatelessWidget {
+/// The lead's reference detail, split into compact, scannable cards (point 8):
+/// Owner / Location / Land / Acquisition / Timeline — laid out in a responsive
+/// grid instead of one long section.
+class _LeadInfoCards extends StatelessWidget {
   final LandLead lead;
   final int leadAgeDays;
 
-  const _LeadDetailsList({
+  const _LeadInfoCards({
     required this.lead,
     required this.leadAgeDays,
   });
 
-  String _value(String raw) => raw.trim().isEmpty ? '—' : raw.trim();
+  String _v(String raw) => raw.trim().isEmpty ? '—' : raw.trim();
 
   @override
   Widget build(BuildContext context) {
-    final ownerRows = <(String, String)>[
-      ('Owner', _value(lead.ownerName)),
-      ('Contact', _value(lead.contactDetails)),
-      ('Input Source', lead.inputSource.label),
-      if (lead.createdByName.isNotEmpty)
-        (lead.ownershipLabel, lead.createdByName),
+    final cards = <({String title, IconData icon, List<(String, String)> rows})>[
+      (
+        title: 'Owner Information',
+        icon: Icons.person_outline,
+        rows: [
+          ('Owner', _v(lead.ownerName)),
+          ('Contact', _v(lead.contactDetails)),
+        ],
+      ),
+      (
+        title: 'Location Information',
+        icon: Icons.place_outlined,
+        rows: [
+          ('Location', _v(lead.location)),
+          ('Village', _v(lead.village)),
+          ('Taluk', _v(lead.taluk)),
+          ('District', _v(lead.district)),
+          ('Pincode', _v(lead.pincode)),
+        ],
+      ),
+      (
+        title: 'Land Information',
+        icon: Icons.landscape_outlined,
+        rows: [
+          ('Land Type', lead.landType.label),
+          ('Survey No.', _v(lead.surveyNumber)),
+          ('Sub Division', _v(lead.subDivision)),
+          ('Land Extent', _v(lead.landExtent)),
+          if (lead.roadWidth.trim().isNotEmpty) ('Road Width', lead.roadWidth),
+        ],
+      ),
+      (
+        title: 'Acquisition Details',
+        icon: Icons.handshake_outlined,
+        rows: [
+          ('Input Source', lead.inputSource.label),
+          if (lead.createdByName.trim().isNotEmpty)
+            (lead.ownershipLabel, lead.createdByName.trim()),
+          if (lead.brokerName.trim().isNotEmpty) ('Broker', lead.brokerName.trim()),
+          if (lead.accessDetails.trim().isNotEmpty)
+            ('Terms', lead.accessDetails.trim()),
+        ],
+      ),
+      (
+        title: 'Timeline Information',
+        icon: Icons.schedule_outlined,
+        rows: [
+          ('Status', lead.status.label),
+          if (lead.status == LeadStatus.dropped &&
+              lead.dropReason.trim().isNotEmpty)
+            (
+              'Drop reason',
+              LeadDropReasonCatalogService.instance
+                  .displayLabelForRaw(lead.dropReason),
+            ),
+          if (lead.status == LeadStatus.dropped &&
+              lead.dropNotes.trim().isNotEmpty)
+            ('Drop notes', lead.dropNotes.trim()),
+          ('Received On', _formatReceivedOn(lead.addedOn)),
+          ('Lead Age', '$leadAgeDays days'),
+          ('Current Date & Time', _formatReceivedOn(DateTime.now())),
+        ],
+      ),
     ];
 
-    final locationRows = <(String, String)>[
-      ('Location', _value(lead.location)),
-      ('Village', _value(lead.village)),
-      ('Taluk', _value(lead.taluk)),
-      ('District', _value(lead.district)),
-      ('Pincode', _value(lead.pincode)),
-    ];
-
-    final landRows = <(String, String)>[
-      ('Land Type', lead.landType.label),
-      ('Survey No.', _value(lead.surveyNumber)),
-      ('Sub Division', _value(lead.subDivision)),
-      ('Land Extent', _value(lead.landExtent)),
-      if (lead.roadWidth.isNotEmpty) ('Road Width', lead.roadWidth),
-      if (lead.accessDetails.isNotEmpty) ('Terms', lead.accessDetails),
-    ];
-
-    final statusRows = <(String, String)>[
-      ('Status', lead.status.label),
-      if (lead.status == LeadStatus.dropped &&
-          lead.dropReason.trim().isNotEmpty)
-        (
-          'Drop reason',
-          LeadDropReasonCatalogService.instance.displayLabelForRaw(lead.dropReason),
-        ),
-      if (lead.status == LeadStatus.dropped &&
-          lead.dropNotes.trim().isNotEmpty)
-        ('Drop notes', lead.dropNotes.trim()),
-      ('Received On', _formatReceivedOn(lead.addedOn)),
-      ('Lead Age', '$leadAgeDays days'),
-      ("Lead's Current Date & Time", _formatReceivedOn(DateTime.now())),
-    ];
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _LeadDetailsGroup(title: 'Owner & Contact', rows: ownerRows),
-        const SizedBox(height: 18),
-        _LeadDetailsGroup(title: 'Location', rows: locationRows),
-        const SizedBox(height: 18),
-        _LeadDetailsGroup(title: 'Land Details', rows: landRows),
-        const SizedBox(height: 18),
-        _LeadDetailsGroup(title: 'Status & Timeline', rows: statusRows),
-      ],
-    );
-  }
-}
-
-class _LeadDetailsGroup extends StatelessWidget {
-  final String title;
-  final List<(String, String)> rows;
-
-  const _LeadDetailsGroup({required this.title, required this.rows});
-
-  @override
-  Widget build(BuildContext context) {
-    final rowsContent = LayoutBuilder(
-      builder: (context, constraints) {
-        final useTwoColumns = constraints.maxWidth >= 360;
-        if (!useTwoColumns) {
-          return _LeadDetailsColumn(rows: rows);
-        }
-        final split = (rows.length / 2).ceil();
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    const gap = 12.0;
+    return LayoutBuilder(
+      builder: (context, c) {
+        final maxW = c.maxWidth.isFinite ? c.maxWidth : 360.0;
+        final cols = (maxW / 300).floor().clamp(1, 2);
+        final w = (maxW - gap * (cols - 1)) / cols;
+        return Wrap(
+          spacing: gap,
+          runSpacing: gap,
           children: [
-            Expanded(
-              child: _LeadDetailsColumn(rows: rows.sublist(0, split)),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: _LeadDetailsColumn(rows: rows.sublist(split)),
-            ),
+            for (final card in cards)
+              SizedBox(
+                width: cols == 1 ? maxW : w,
+                child: _LeadInfoCard(
+                  title: card.title,
+                  icon: card.icon,
+                  rows: card.rows,
+                ),
+              ),
           ],
         );
       },
     );
+  }
+}
 
-    // Mobile: each section is a collapsible dropdown so the page isn't one long
-    // list. Tablet/desktop keep the always-open two-column layout.
-    if (FomraLayout.isMobile(context)) {
-      return Container(
-        decoration: BoxDecoration(
-          border: Border.all(color: context.fomraBorder),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: Theme(
-          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-          child: ExpansionTile(
-            tilePadding: const EdgeInsets.symmetric(horizontal: 14),
-            childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
-            expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
-            title: Text(
-              title,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: context.fomraTextPrimary,
+class _LeadInfoCard extends StatelessWidget {
+  final String title;
+  final IconData icon;
+  final List<(String, String)> rows;
+
+  const _LeadInfoCard({
+    required this.title,
+    required this.icon,
+    required this.rows,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: context.fomraSurface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: context.fomraBorder),
+        boxShadow: context.fomraCardShadow,
+      ),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 15, color: AppColors.purple),
+              const SizedBox(width: 7),
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w800,
+                  color: context.fomraTextPrimary,
+                ),
               ),
-            ),
-            children: [rowsContent],
+            ],
           ),
-        ),
-      );
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 0.3,
-            color: context.fomraTextSecondary,
-          ),
-        ),
-        const SizedBox(height: 10),
-        rowsContent,
-      ],
+          const SizedBox(height: 10),
+          _LeadDetailsColumn(rows: rows),
+        ],
+      ),
     );
   }
 }

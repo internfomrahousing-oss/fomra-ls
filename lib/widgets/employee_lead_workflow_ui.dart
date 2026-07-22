@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../models/land_lead.dart';
 import '../theme/app_theme.dart';
-import '../theme/fomra_layout.dart';
 import '../theme/fomra_theme_context.dart';
 import '../utils/employee_lead_next_action.dart';
 
@@ -31,12 +30,24 @@ class EmployeeLeadGuidanceBanners extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Priority is derived from the lead's own pending tasks — reusing existing
+    // data, not a new field: overdue → High, due today → Medium, else Normal.
+    final tasks = insight.tasks;
+    final ({String label, Color color})? priority = !insight.nextAction.isPending
+        ? null
+        : tasks.overdue > 0
+            ? (label: 'High', color: AppColors.error)
+            : tasks.dueToday > 0
+                ? (label: 'Medium', color: AppColors.warning)
+                : (label: 'Normal', color: AppColors.info);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _NextActionBanner(
           action: insight.nextAction,
           stage: insight.stage,
+          priority: priority,
           onTap: onNextActionTap,
         ),
         const SizedBox(height: 8),
@@ -49,17 +60,19 @@ class EmployeeLeadGuidanceBanners extends StatelessWidget {
   }
 }
 
-/// The one activity the executive has to do next, why it is next, and the stage
-/// the lead is in. Deliberately carries no due date, pending count, priority or
-/// overdue badge — the pending activity itself is the message.
+/// The one activity the executive has to do next, its stage and a derived
+/// priority — kept to a compact height (title, short description, stage,
+/// priority) so it sits neatly beside / above the lead summary.
 class _NextActionBanner extends StatelessWidget {
   final EmployeeNextAction action;
   final LeadStatus stage;
+  final ({String label, Color color})? priority;
   final VoidCallback? onTap;
 
   const _NextActionBanner({
     required this.action,
     required this.stage,
+    this.priority,
     this.onTap,
   });
 
@@ -72,95 +85,136 @@ class _NextActionBanner extends StatelessWidget {
       child: InkWell(
         // Nothing to open once the pipeline is done.
         onTap: action.isPending ? onTap : null,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
         child: Ink(
           decoration: BoxDecoration(
             color: accent.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(14),
             border: Border.all(color: accent.withValues(alpha: 0.35)),
           ),
-          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
-                  Icon(Icons.bolt_rounded, size: 18, color: accent),
-                  const SizedBox(width: 6),
+                  Icon(Icons.bolt_rounded, size: 15, color: accent),
+                  const SizedBox(width: 5),
                   Text(
                     'NEXT ACTION',
                     style: TextStyle(
-                      fontSize: 10,
+                      fontSize: 9.5,
                       fontWeight: FontWeight.w800,
                       letterSpacing: 0.6,
                       color: accent,
                     ),
                   ),
+                  const Spacer(),
+                  if (priority != null)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: priority!.color.withValues(alpha: 0.14),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.flag_rounded,
+                              size: 11, color: priority!.color),
+                          const SizedBox(width: 4),
+                          Text(
+                            priority!.label,
+                            style: TextStyle(
+                              color: priority!.color,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                 ],
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 8),
               Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Container(
-                    width: 38,
-                    height: 38,
+                    width: 30,
+                    height: 30,
                     decoration: BoxDecoration(
                       color: accent.withValues(alpha: 0.14),
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(10),
                     ),
-                    child: Icon(_actionIcon(action.kind), size: 20, color: accent),
+                    child: Icon(_actionIcon(action.kind), size: 17, color: accent),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
-                    child: Text(
-                      action.title,
-                      style: TextStyle(
-                        fontSize: 19,
-                        fontWeight: FontWeight.w800,
-                        color: context.fomraTextPrimary,
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          action.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 14.5,
+                            fontWeight: FontWeight.w800,
+                            color: context.fomraTextPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          action.description,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            height: 1.3,
+                            fontWeight: FontWeight.w500,
+                            color: context.fomraTextSecondary,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
               const SizedBox(height: 8),
-              Text(
-                action.description,
-                style: TextStyle(
-                  fontSize: 12,
-                  height: 1.4,
-                  fontWeight: FontWeight.w500,
-                  color: context.fomraTextSecondary,
-                ),
-              ),
-              const SizedBox(height: 10),
               Row(
                 children: [
                   Text(
                     'Current Stage:',
                     style: TextStyle(
-                      fontSize: 11,
+                      fontSize: 10.5,
                       fontWeight: FontWeight.w600,
                       color: context.fomraTextSecondary,
                     ),
                   ),
                   const SizedBox(width: 6),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 3,
-                    ),
-                    decoration: BoxDecoration(
-                      color: stage.color.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      stage.label,
-                      style: TextStyle(
-                        color: stage.color,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
+                  Flexible(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: stage.color.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        stage.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: stage.color,
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                     ),
                   ),
@@ -182,47 +236,41 @@ class _PendingTaskBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Three compact KPI cards (point 5) — shorter than the old single divided
+    // strip, each self-contained with its own accent.
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Ink(
-          decoration: BoxDecoration(
-            color: context.fomraSurface,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: context.fomraBorder),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          child: Row(
-            children: [
-              Expanded(
-                child: _TaskStat(
-                  label: 'Due Today',
-                  value: '${summary.dueToday}',
-                  color: AppColors.warning,
-                ),
+        borderRadius: BorderRadius.circular(12),
+        child: Row(
+          children: [
+            Expanded(
+              child: _TaskStat(
+                label: 'Due Today',
+                value: '${summary.dueToday}',
+                color: AppColors.warning,
               ),
-              Container(width: 1, height: 28, color: context.fomraBorder),
-              Expanded(
-                child: _TaskStat(
-                  label: 'Overdue',
-                  value: '${summary.overdue}',
-                  color: AppColors.error,
-                ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _TaskStat(
+                label: 'Overdue',
+                value: '${summary.overdue}',
+                color: AppColors.error,
               ),
-              Container(width: 1, height: 28, color: context.fomraBorder),
-              Expanded(
-                child: _TaskStat(
-                  label: 'Pending Since',
-                  value: summary.pendingSinceDays <= 0
-                      ? '—'
-                      : '${summary.pendingSinceDays}d',
-                  color: AppColors.info,
-                ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _TaskStat(
+                label: 'Pending Since',
+                value: summary.pendingSinceDays <= 0
+                    ? '—'
+                    : '${summary.pendingSinceDays}d',
+                color: AppColors.info,
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -242,35 +290,43 @@ class _TaskStat extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Keep the number prominent on phones and stop the label from wrapping to
-    // an awkward second line in the narrow column.
-    final mobile = FomraLayout.isMobile(context);
-    return Column(
-      children: [
-        FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Text(
-            value,
-            maxLines: 1,
-            style: TextStyle(
-              fontSize: mobile ? 18 : 16,
-              fontWeight: FontWeight.w800,
-              color: color,
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              value,
+              maxLines: 1,
+              style: TextStyle(
+                fontSize: 18,
+                height: 1,
+                fontWeight: FontWeight.w800,
+                color: color,
+              ),
             ),
           ),
-        ),
-        Text(
-          label,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: 10,
-            fontWeight: FontWeight.w600,
-            color: context.fomraTextSecondary,
+          const SizedBox(height: 3),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: context.fomraTextSecondary,
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
