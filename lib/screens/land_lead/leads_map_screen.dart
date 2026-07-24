@@ -14,6 +14,7 @@ import '../../utils/lead_location_parser.dart';
 import '../../utils/maps_navigation.dart';
 import '../../widgets/fomra_app_shell.dart';
 import '../../widgets/lead_portfolio_breakdown.dart';
+import '../../widgets/fomra_breadcrumb.dart';
 import '../../widgets/portal_page_layout.dart';
 import 'lead_detail_screen.dart';
 
@@ -40,20 +41,26 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
   /// The pin whose compact details card is shown on the map (null = none).
   _PlottedLead? _selectedPin;
 
+  // Shared metrics so the search box, dropdowns and date field line up as one
+  // consistent set of controls.
+  static const double _kFieldHeight = 44;
+  static const double _kFieldRadius = 10;
+  static const double _kControlGap = 12;
+
   // ── Filters ────────────────────────────────────────────────────────────────
   final TextEditingController _searchCtrl = TextEditingController();
   String _search = '';
   final Set<LeadStatus> _stages = {};
   String? _executive;
   String? _broker;
-  DateTimeRange? _dateRange;
+  DateTime? _dateFilter;
 
   /// Filters excluding the free-text search — drives the "Filters" badge.
   bool get _hasFieldFilters =>
       _stages.isNotEmpty ||
       _executive != null ||
       _broker != null ||
-      _dateRange != null;
+      _dateFilter != null;
 
   bool get _hasActiveFilters => _hasFieldFilters || _search.trim().isNotEmpty;
 
@@ -63,7 +70,7 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
     _stages.clear();
     _executive = null;
     _broker = null;
-    _dateRange = null;
+    _dateFilter = null;
   }
 
   @override
@@ -97,19 +104,20 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
         return false;
       }
       if (_broker != null && l.brokerName.trim() != _broker) return false;
-      if (_dateRange != null) {
+      if (_dateFilter != null) {
         final d = DateTime(l.addedOn.year, l.addedOn.month, l.addedOn.day);
-        if (d.isBefore(_dateRange!.start) || d.isAfter(_dateRange!.end)) {
-          return false;
-        }
+        final sel =
+            DateTime(_dateFilter!.year, _dateFilter!.month, _dateFilter!.day);
+        if (d != sel) return false;
       }
       if (q.isNotEmpty) {
         final match = <String>[
+          l.leadId,
           l.ownerName,
           l.surveyNumber,
           l.village,
           l.brokerName,
-          l.leadId,
+          l.createdByName,
         ].any((f) => f.toLowerCase().contains(q));
         if (!match) return false;
       }
@@ -530,16 +538,16 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
     void Function(VoidCallback) apply,
   ) {
     return SizedBox(
-      height: 42,
+      height: _kFieldHeight,
       child: TextField(
         controller: _searchCtrl,
         onChanged: (v) => apply(() => _search = v),
         textInputAction: TextInputAction.search,
         style: TextStyle(fontSize: 13, color: context.fomraTextPrimary),
         decoration: InputDecoration(
-          hintText: 'Search owner, survey, village, broker, ID',
+          hintText: 'Search ID, owner, survey, village, broker, executive',
           hintStyle: TextStyle(
-            fontSize: 13,
+            fontSize: 12.5,
             color: context.fomraTextSecondary.withValues(alpha: 0.8),
           ),
           isDense: true,
@@ -560,9 +568,9 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
                   }),
                 ),
           contentPadding:
-              const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(_kFieldRadius),
             borderSide: BorderSide.none,
           ),
         ),
@@ -578,33 +586,7 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Section title with the "Clear all" aligned neatly on the same row.
-        Row(
-          children: [
-            Text(
-              'Site Stage',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 0.2,
-                color: context.fomraTextSecondary,
-              ),
-            ),
-            const Spacer(),
-            if (_hasActiveFilters)
-              TextButton(
-                onPressed: () => apply(_clearFilters),
-                style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 6),
-                  minimumSize: const Size(0, 28),
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  visualDensity: VisualDensity.compact,
-                ),
-                child: const Text('Clear all',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
-              ),
-          ],
-        ),
+        _sectionLabel(context, 'SITE STAGE'),
         const SizedBox(height: 8),
         Wrap(
           spacing: 6,
@@ -614,15 +596,49 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
               _stageChip(context, s, apply),
           ],
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: _kControlGap + 4),
         _dropdown(context, 'Assigned Executive', _executive,
             _distinct((l) => l.createdByName), (v) => apply(() => _executive = v)),
-        const SizedBox(height: 10),
+        const SizedBox(height: _kControlGap),
         _dropdown(context, 'Broker', _broker, _distinct((l) => l.brokerName),
             (v) => apply(() => _broker = v)),
-        const SizedBox(height: 10),
+        const SizedBox(height: _kControlGap),
         _dateField(context, apply),
+        const SizedBox(height: _kControlGap + 6),
+        // Compact, full-width clear button at the bottom — replaces the small
+        // top text link. Disabled (hidden) when nothing is active.
+        if (_hasActiveFilters)
+          SizedBox(
+            height: 38,
+            child: OutlinedButton.icon(
+              onPressed: () => apply(_clearFilters),
+              icon: const Icon(Icons.filter_alt_off_outlined, size: 16),
+              label: const Text('Clear All Filters',
+                  style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: context.fomraTextSecondary,
+                side: BorderSide(color: context.fomraBorder),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(_kFieldRadius),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+              ),
+            ),
+          ),
       ],
+    );
+  }
+
+  /// Uniform section label above a group of filter controls.
+  Widget _sectionLabel(BuildContext context, String text) {
+    return Text(
+      text,
+      style: TextStyle(
+        fontSize: 11,
+        fontWeight: FontWeight.w800,
+        letterSpacing: 0.6,
+        color: context.fomraTextSecondary,
+      ),
     );
   }
 
@@ -650,9 +666,9 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
         fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
         color: selected ? s.color : context.fomraTextSecondary,
       ),
-      labelPadding: const EdgeInsets.symmetric(horizontal: 4),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      visualDensity: VisualDensity.compact,
+      labelPadding: const EdgeInsets.symmetric(horizontal: 3),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
+      visualDensity: const VisualDensity(horizontal: -3, vertical: -3),
       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
     );
@@ -666,16 +682,27 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
   }) {
     return InputDecoration(
       labelText: label,
-      labelStyle: TextStyle(fontSize: 13, color: context.fomraTextSecondary),
+      labelStyle: TextStyle(
+        fontSize: 12.5,
+        fontWeight: FontWeight.w600,
+        color: context.fomraTextSecondary,
+      ),
+      floatingLabelStyle: TextStyle(
+        fontSize: 12.5,
+        fontWeight: FontWeight.w700,
+        color: context.fomraTextSecondary,
+      ),
       isDense: true,
       filled: true,
       fillColor: context.fomraSurfaceVar,
       prefixIcon: prefixIcon,
       suffixIcon: suffixIcon,
+      // Tighter vertical padding trims each field ~25% while staying aligned
+      // with the search box's height.
       contentPadding:
-          const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(_kFieldRadius),
         borderSide: BorderSide.none,
       ),
     );
@@ -709,18 +736,18 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
     void Function(VoidCallback) apply,
   ) {
     final df = DateFormat('dd MMM yyyy');
-    final hasRange = _dateRange != null;
+    final hasDate = _dateFilter != null;
     return InkWell(
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: BorderRadius.circular(_kFieldRadius),
       onTap: () async {
         final now = DateTime.now();
-        final range = await showDateRangePicker(
+        final picked = await showDatePicker(
           context: context,
+          initialDate: _dateFilter ?? now,
           firstDate: DateTime(now.year - 5),
           lastDate: DateTime(now.year + 1),
-          initialDateRange: _dateRange,
         );
-        if (range != null) apply(() => _dateRange = range);
+        if (picked != null) apply(() => _dateFilter = picked);
       },
       child: InputDecorator(
         decoration: _fieldDecoration(
@@ -728,23 +755,21 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
           label: 'Date added',
           prefixIcon: Icon(Icons.calendar_today_outlined,
               size: 16, color: context.fomraTextSecondary),
-          suffixIcon: hasRange
+          suffixIcon: hasDate
               ? IconButton(
                   icon: const Icon(Icons.close_rounded, size: 16),
                   splashRadius: 18,
-                  onPressed: () => apply(() => _dateRange = null),
+                  onPressed: () => apply(() => _dateFilter = null),
                 )
               : null,
         ),
         child: Text(
-          hasRange
-              ? '${df.format(_dateRange!.start)} – ${df.format(_dateRange!.end)}'
-              : 'Any date',
+          hasDate ? df.format(_dateFilter!) : 'Any date',
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
             fontSize: 13,
-            color: hasRange
+            color: hasDate
                 ? context.fomraTextPrimary
                 : context.fomraTextSecondary,
           ),
@@ -836,7 +861,18 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
   /// visibility is already enforced upstream (only scoped pins are shown).
   void _openLead(BuildContext context, LandLead lead) {
     Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => LeadDetailScreen(lead: lead)),
+      MaterialPageRoute(
+        // Show where the lead was opened from: Home > Project Map > Lead #id.
+        // Tapping "Project Map" pops back to this map.
+        builder: (_) => LeadDetailScreen(
+          lead: lead,
+          breadcrumbs: [
+            FomraBreadcrumbs.home,
+            const FomraBreadcrumbItem.pop('Project Map'),
+            FomraBreadcrumbItem.current('Lead #${lead.leadId}'),
+          ],
+        ),
+      ),
     );
   }
 

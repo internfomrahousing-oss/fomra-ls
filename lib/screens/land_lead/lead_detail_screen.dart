@@ -30,6 +30,7 @@ import '../../utils/employee_lead_next_action.dart';
 import '../../utils/maps_navigation.dart';
 import '../../widgets/employee_lead_workflow_ui.dart';
 import '../../widgets/fomra_app_shell.dart';
+import '../../widgets/fomra_breadcrumb.dart';
 import '../../widgets/offline_status_banner.dart';
 import '../../widgets/portal_page_layout.dart';
 import '../../widgets/ui/app_components.dart';
@@ -129,9 +130,15 @@ List<
 class LeadDetailScreen extends StatefulWidget {
   final LandLead lead;
 
+  /// Optional explicit breadcrumb trail (e.g. `Home > Project Map > Lead #7`)
+  /// for callers that want to show where the lead was opened from. When null,
+  /// the app bar falls back to the flat `Home > Lead #id` derived from title.
+  final List<FomraBreadcrumbItem>? breadcrumbs;
+
   const LeadDetailScreen({
     super.key,
     required this.lead,
+    this.breadcrumbs,
   });
 
   @override
@@ -644,6 +651,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
       appBar: FomraSubPageAppBar(
         title: 'Lead #${lead.leadId}',
         subtitle: _displayName == 'Lead #${lead.leadId}' ? null : _displayName,
+        breadcrumbs: widget.breadcrumbs,
       ),
       body: SafeArea(
         child: LayoutBuilder(
@@ -1865,9 +1873,30 @@ class _ActivityFilterBar extends StatelessWidget {
   }
 }
 
-/// The lead's reference detail, split into compact, scannable cards (point 8):
-/// Owner / Location / Land / Acquisition / Timeline — laid out in a responsive
-/// grid instead of one long section.
+/// Rendering style for a single key-value fact in an info card.
+enum _FieldStyle { plain, accent, badge, chips }
+
+/// One labelled fact in an info card. [wide] forces a full-width cell; long
+/// plain values auto-span. [color] tints [badge]/[accent] styles.
+class _Field {
+  final String label;
+  final String value;
+  final _FieldStyle style;
+  final Color? color;
+  final bool wide;
+
+  const _Field(
+    this.label,
+    this.value, {
+    this.style = _FieldStyle.plain,
+    this.color,
+    this.wide = false,
+  });
+}
+
+/// The lead's reference detail, merged into three compact, scannable cards —
+/// Contact & Lead / Property Information / Status & Timeline — laid out as a
+/// responsive two-column key-value grid instead of one long form.
 class _LeadInfoCards extends StatelessWidget {
   final LandLead lead;
   final int leadAgeDays;
@@ -1881,67 +1910,55 @@ class _LeadInfoCards extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cards = <({String title, IconData icon, List<(String, String)> rows})>[
+    final cards = <({String title, IconData icon, List<_Field> fields})>[
       (
-        title: 'Owner Information',
-        icon: Icons.person_outline,
-        rows: [
-          ('Owner', _v(lead.ownerName)),
-          ('Contact', _v(lead.contactDetails)),
+        title: 'Contact & Lead',
+        icon: Icons.contacts_outlined,
+        fields: [
+          _Field('Owner', _v(lead.ownerName)),
+          _Field('Contact', _v(lead.contactDetails)),
+          _Field('Executive', _v(lead.createdByName),
+              style: _FieldStyle.badge, color: AppColors.purple),
+          _Field('Broker', _v(lead.brokerName)),
+          _Field('Input Source', lead.inputSource.label),
         ],
       ),
       (
-        title: 'Location Information',
-        icon: Icons.place_outlined,
-        rows: [
-          ('Location', _v(lead.location)),
-          ('Village', _v(lead.village)),
-          ('Taluk', _v(lead.taluk)),
-          ('District', _v(lead.district)),
-          ('Pincode', _v(lead.pincode)),
-        ],
-      ),
-      (
-        title: 'Land Information',
-        icon: Icons.landscape_outlined,
-        rows: [
-          ('Land Type', lead.landType.label),
-          ('Survey No.', _v(lead.surveyNumber)),
-          ('Sub Division', _v(lead.subDivision)),
-          ('Land Extent', _v(lead.landExtent)),
-          if (lead.roadWidth.trim().isNotEmpty) ('Road Width', lead.roadWidth),
-        ],
-      ),
-      (
-        title: 'Acquisition Details',
-        icon: Icons.handshake_outlined,
-        rows: [
-          ('Input Source', lead.inputSource.label),
-          if (lead.createdByName.trim().isNotEmpty)
-            (lead.ownershipLabel, lead.createdByName.trim()),
-          if (lead.brokerName.trim().isNotEmpty) ('Broker', lead.brokerName.trim()),
+        title: 'Property Information',
+        icon: Icons.home_work_outlined,
+        fields: [
+          _Field('Village', _v(lead.village)),
+          _Field('District', _v(lead.district)),
+          _Field('Survey No.', _v(lead.surveyNumber),
+              style: _FieldStyle.badge, color: AppColors.primary),
+          _Field('Land Type', lead.landType.label),
+          _Field('Land Extent', _v(lead.landExtent),
+              style: _FieldStyle.badge, color: AppColors.success),
+          _Field('Road Width', _v(lead.roadWidth)),
           if (lead.accessDetails.trim().isNotEmpty)
-            ('Terms', lead.accessDetails.trim()),
+            _Field('Terms', lead.accessDetails.trim(),
+                style: _FieldStyle.chips, wide: true),
         ],
       ),
       (
-        title: 'Timeline Information',
-        icon: Icons.schedule_outlined,
-        rows: [
-          ('Status', lead.status.label),
+        title: 'Status & Timeline',
+        icon: Icons.timeline_outlined,
+        fields: [
+          _Field('Current Stage', lead.status.label,
+              style: _FieldStyle.badge, color: lead.status.color),
+          _Field('Lead Age', '$leadAgeDays days', style: _FieldStyle.accent),
+          _Field('Received On', _formatReceivedOn(lead.addedOn)),
           if (lead.status == LeadStatus.dropped &&
               lead.dropReason.trim().isNotEmpty)
-            (
+            _Field(
               'Drop reason',
               LeadDropReasonCatalogService.instance
                   .displayLabelForRaw(lead.dropReason),
+              wide: true,
             ),
           if (lead.status == LeadStatus.dropped &&
               lead.dropNotes.trim().isNotEmpty)
-            ('Drop notes', lead.dropNotes.trim()),
-          ('Received On', _formatReceivedOn(lead.addedOn)),
-          ('Lead Age', '$leadAgeDays days'),
-          ('Current Date & Time', _formatReceivedOn(DateTime.now())),
+            _Field('Drop notes', lead.dropNotes.trim(), wide: true),
         ],
       ),
     ];
@@ -1962,7 +1979,7 @@ class _LeadInfoCards extends StatelessWidget {
                 child: _LeadInfoCard(
                   title: card.title,
                   icon: card.icon,
-                  rows: card.rows,
+                  fields: card.fields,
                 ),
               ),
           ],
@@ -1975,17 +1992,17 @@ class _LeadInfoCards extends StatelessWidget {
 class _LeadInfoCard extends StatelessWidget {
   final String title;
   final IconData icon;
-  final List<(String, String)> rows;
+  final List<_Field> fields;
 
   const _LeadInfoCard({
     required this.title,
     required this.icon,
-    required this.rows,
+    required this.fields,
   });
 
-  /// A field spans the full card width when its value is long or free-text
-  /// (addresses, terms, drop notes) so it never crams into a half-width cell.
-  static bool _isWideField(String value) => value.trim().length > 18;
+  /// A field takes the full card width when flagged [wide] or its plain value
+  /// is long, so it never crams into a half-width cell.
+  static bool _isWide(_Field f) => f.wide || f.value.trim().length > 18;
 
   @override
   Widget build(BuildContext context) {
@@ -2027,12 +2044,10 @@ class _LeadInfoCard extends StatelessWidget {
                 spacing: gap,
                 runSpacing: 10,
                 children: [
-                  for (final row in rows)
+                  for (final f in fields)
                     SizedBox(
-                      width: (!twoCol || _isWideField(row.$2))
-                          ? c.maxWidth
-                          : cellW,
-                      child: _LeadDetailRow(label: row.$1, value: row.$2),
+                      width: (!twoCol || _isWide(f)) ? c.maxWidth : cellW,
+                      child: _LeadDetailRow(field: f),
                     ),
                 ],
               );
@@ -2045,12 +2060,20 @@ class _LeadInfoCard extends StatelessWidget {
 }
 
 /// Compact stacked key-value cell — a small muted label above a prominent
-/// value, so a card reads as a dense two-column grid of facts.
+/// value that can render as plain text, an accent, a colored badge, or chips.
 class _LeadDetailRow extends StatelessWidget {
-  final String label;
-  final String value;
+  final _Field field;
 
-  const _LeadDetailRow({required this.label, required this.value});
+  const _LeadDetailRow({required this.field});
+
+  static List<String> _splitChips(String raw) {
+    final parts = raw
+        .split(RegExp(r'[,\n;•]'))
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toList();
+    return parts.isEmpty ? [raw.trim()] : parts;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -2059,7 +2082,7 @@ class _LeadDetailRow extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
-          label.toUpperCase(),
+          field.label.toUpperCase(),
           style: TextStyle(
             fontSize: 9.5,
             fontWeight: FontWeight.w700,
@@ -2067,18 +2090,80 @@ class _LeadDetailRow extends StatelessWidget {
             color: context.fomraTextSecondary,
           ),
         ),
-        const SizedBox(height: 2),
-        Text(
-          value,
+        const SizedBox(height: 3),
+        _value(context),
+      ],
+    );
+  }
+
+  Widget _value(BuildContext context) {
+    switch (field.style) {
+      case _FieldStyle.badge:
+        final color = field.color ?? AppColors.primary;
+        return Align(
+          alignment: Alignment.centerLeft,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              field.value,
+              style: TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w800,
+                color: color,
+              ),
+            ),
+          ),
+        );
+      case _FieldStyle.accent:
+        return Text(
+          field.value,
+          style: const TextStyle(
+            fontSize: 13.5,
+            height: 1.2,
+            fontWeight: FontWeight.w800,
+            color: AppColors.purple,
+          ),
+        );
+      case _FieldStyle.chips:
+        return Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: [
+            for (final chip in _splitChips(field.value))
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                decoration: BoxDecoration(
+                  color: context.fomraSurfaceVar,
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: context.fomraBorder),
+                ),
+                child: Text(
+                  chip,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: context.fomraTextPrimary,
+                  ),
+                ),
+              ),
+          ],
+        );
+      case _FieldStyle.plain:
+        return Text(
+          field.value,
           style: TextStyle(
             fontSize: 13,
             height: 1.25,
             fontWeight: FontWeight.w600,
             color: context.fomraTextPrimary,
           ),
-        ),
-      ],
-    );
+        );
+    }
   }
 }
 
