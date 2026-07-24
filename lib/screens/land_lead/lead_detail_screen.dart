@@ -2418,8 +2418,8 @@ class _StageStatusField extends StatelessWidget {
                     status.label,
                     style: TextStyle(
                       fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: context.fomraTextPrimary,
+                      fontWeight: FontWeight.w700,
+                      color: status.color,
                     ),
                   ),
                 ),
@@ -2457,6 +2457,7 @@ class _StageStatusField extends StatelessWidget {
                       color: status.color.withValues(alpha: 0.45),
                     ),
                     borderRadius: BorderRadius.circular(10),
+                    color: status.color.withValues(alpha: 0.06),
                   ),
                   child: Row(
                     children: [
@@ -2467,8 +2468,8 @@ class _StageStatusField extends StatelessWidget {
                           status.label,
                           style: TextStyle(
                             fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: context.fomraTextPrimary,
+                            fontWeight: FontWeight.w700,
+                            color: status.color,
                           ),
                         ),
                       ),

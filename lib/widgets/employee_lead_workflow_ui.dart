@@ -41,31 +41,34 @@ class EmployeeLeadGuidanceBanners extends StatelessWidget {
                 ? (label: 'Medium', color: AppColors.warning)
                 : (label: 'Normal', color: AppColors.info);
 
+    final nextAction = _NextActionBanner(
+      action: insight.nextAction,
+      stage: insight.stage,
+      priority: priority,
+      onTap: onNextActionTap,
+    );
+    final statusTime = _StatusTimeCard(
+      stage: insight.stage,
+      pendingSinceDays: insight.tasks.pendingSinceDays,
+    );
+    final tasksCard = _TasksCard(summary: insight.tasks, onTap: onOpenTasks);
+
     return LayoutBuilder(
       builder: (context, c) {
-        // Wide enough: Next Action on the left, the three KPIs stacked in a
-        // single column to its right. Narrow: stack, KPIs as a 3-across row.
-        final sideBySide = c.maxWidth >= 520;
-        final nextAction = _NextActionBanner(
-          action: insight.nextAction,
-          stage: insight.stage,
-          priority: priority,
-          onTap: onNextActionTap,
-        );
-        final kpis = _PendingTaskBanner(
-          summary: insight.tasks,
-          onTap: onOpenTasks,
-          vertical: sideBySide,
-        );
-
-        if (sideBySide) {
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(child: nextAction),
-              const SizedBox(width: 10),
-              SizedBox(width: 190, child: kpis),
-            ],
+        // Three equal columns when wide: Next Action · Status & Time · Tasks.
+        // Medium: Next Action on top, Status & Time beside Tasks. Narrow: stack.
+        if (c.maxWidth >= 640) {
+          return IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(child: nextAction),
+                const SizedBox(width: 10),
+                Expanded(child: statusTime),
+                const SizedBox(width: 10),
+                Expanded(child: tasksCard),
+              ],
+            ),
           );
         }
         return Column(
@@ -73,10 +76,60 @@ class EmployeeLeadGuidanceBanners extends StatelessWidget {
           children: [
             nextAction,
             const SizedBox(height: 8),
-            kpis,
+            if (c.maxWidth >= 360)
+              IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(child: statusTime),
+                    const SizedBox(width: 8),
+                    Expanded(child: tasksCard),
+                  ],
+                ),
+              )
+            else ...[
+              statusTime,
+              const SizedBox(height: 8),
+              tasksCard,
+            ],
           ],
         );
       },
+    );
+  }
+}
+
+/// Shared header row for a guidance card: a tinted icon and a tiny caps title.
+class _CardHeader extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final Color color;
+  final Widget? trailing;
+
+  const _CardHeader({
+    required this.icon,
+    required this.title,
+    required this.color,
+    this.trailing,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, size: 15, color: color),
+        const SizedBox(width: 5),
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: 9.5,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0.6,
+            color: color,
+          ),
+        ),
+        if (trailing != null) ...[const Spacer(), trailing!],
+      ],
     );
   }
 }
@@ -117,50 +170,40 @@ class _NextActionBanner extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  Icon(Icons.bolt_rounded, size: 15, color: accent),
-                  const SizedBox(width: 5),
-                  Text(
-                    'NEXT ACTION',
-                    style: TextStyle(
-                      fontSize: 9.5,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.6,
-                      color: accent,
-                    ),
-                  ),
-                  const Spacer(),
-                  if (priority != null)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: priority!.color.withValues(alpha: 0.14),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.flag_rounded,
-                              size: 11, color: priority!.color),
-                          const SizedBox(width: 4),
-                          Text(
-                            priority!.label,
-                            style: TextStyle(
-                              color: priority!.color,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w800,
+              _CardHeader(
+                icon: Icons.bolt_rounded,
+                title: 'NEXT ACTION',
+                color: accent,
+                trailing: priority == null
+                    ? null
+                    : Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: priority!.color.withValues(alpha: 0.14),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.flag_rounded,
+                                size: 11, color: priority!.color),
+                            const SizedBox(width: 4),
+                            Text(
+                              priority!.label,
+                              style: TextStyle(
+                                color: priority!.color,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w800,
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
-                ],
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 10),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -205,38 +248,130 @@ class _NextActionBanner extends StatelessWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Status & Time card — the lead's current stage plus how long it has been
+/// pending, sitting between Next Action and Tasks.
+class _StatusTimeCard extends StatelessWidget {
+  final LeadStatus stage;
+  final int pendingSinceDays;
+
+  const _StatusTimeCard({
+    required this.stage,
+    required this.pendingSinceDays,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: context.fomraSurface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: context.fomraBorder),
+      ),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _CardHeader(
+            icon: Icons.timeline_rounded,
+            title: 'STATUS & TIME',
+            color: stage.color,
+          ),
+          const SizedBox(height: 10),
+          const _MicroLabel('Current Stage'),
+          const SizedBox(height: 4),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: stage.color.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                stage.label,
+                style: TextStyle(
+                  color: stage.color,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          const _MicroLabel('Pending Since'),
+          const SizedBox(height: 2),
+          Text(
+            pendingSinceDays <= 0 ? '—' : '$pendingSinceDays days',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w800,
+              color: context.fomraTextPrimary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Tasks card — the lead's Due Today and Overdue counts; taps through to tasks.
+class _TasksCard extends StatelessWidget {
+  final EmployeePendingTaskSummary summary;
+  final VoidCallback? onTap;
+
+  const _TasksCard({required this.summary, this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Ink(
+          decoration: BoxDecoration(
+            color: context.fomraSurface,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: context.fomraBorder),
+          ),
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _CardHeader(
+                icon: Icons.check_circle_outline_rounded,
+                title: 'TASKS',
+                color: AppColors.primary,
+                trailing: onTap == null
+                    ? null
+                    : Icon(Icons.chevron_right_rounded,
+                        size: 16, color: context.fomraTextSecondary),
+              ),
+              const SizedBox(height: 10),
               Row(
                 children: [
-                  Text(
-                    'Current Stage:',
-                    style: TextStyle(
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.w600,
-                      color: context.fomraTextSecondary,
+                  Expanded(
+                    child: _TaskStat(
+                      label: 'Due Today',
+                      value: '${summary.dueToday}',
+                      color: AppColors.warning,
                     ),
                   ),
-                  const SizedBox(width: 6),
-                  Flexible(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: stage.color.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        stage.label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: stage.color,
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _TaskStat(
+                      label: 'Overdue',
+                      value: '${summary.overdue}',
+                      color: AppColors.error,
                     ),
                   ),
                 ],
@@ -249,66 +384,20 @@ class _NextActionBanner extends StatelessWidget {
   }
 }
 
-class _PendingTaskBanner extends StatelessWidget {
-  final EmployeePendingTaskSummary summary;
-  final VoidCallback? onTap;
-
-  /// When true, the three KPIs stack in a single column (used beside the Next
-  /// Action on wide layouts); otherwise they sit in a 3-across row.
-  final bool vertical;
-
-  const _PendingTaskBanner({
-    required this.summary,
-    this.onTap,
-    this.vertical = false,
-  });
+/// Tiny muted caps label used inside the Status & Time card.
+class _MicroLabel extends StatelessWidget {
+  final String text;
+  const _MicroLabel(this.text);
 
   @override
   Widget build(BuildContext context) {
-    // Three compact KPI cards (point 5), each self-contained with its accent.
-    final dueToday = _TaskStat(
-      label: 'Due Today',
-      value: '${summary.dueToday}',
-      color: AppColors.warning,
-    );
-    final overdue = _TaskStat(
-      label: 'Overdue',
-      value: '${summary.overdue}',
-      color: AppColors.error,
-    );
-    final pending = _TaskStat(
-      label: 'Pending Since',
-      value: summary.pendingSinceDays <= 0
-          ? '—'
-          : '${summary.pendingSinceDays}d',
-      color: AppColors.info,
-    );
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: vertical
-            ? Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  dueToday,
-                  const SizedBox(height: 8),
-                  overdue,
-                  const SizedBox(height: 8),
-                  pending,
-                ],
-              )
-            : Row(
-                children: [
-                  Expanded(child: dueToday),
-                  const SizedBox(width: 8),
-                  Expanded(child: overdue),
-                  const SizedBox(width: 8),
-                  Expanded(child: pending),
-                ],
-              ),
+    return Text(
+      text.toUpperCase(),
+      style: TextStyle(
+        fontSize: 9,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 0.4,
+        color: context.fomraTextSecondary,
       ),
     );
   }
