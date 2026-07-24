@@ -601,7 +601,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
               ),
               const SizedBox(height: 2),
               Text(
-                'Build enterprise reports, preview, and export as PDF, Excel or CSV.',
+                'Build enterprise reports, preview, and export as PDF or Excel.',
                 style:
                     TextStyle(fontSize: 13, color: context.fomraTextSecondary),
               ),
@@ -1017,11 +1017,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
                 value: ReportFormat.excel,
                 label: Text('Excel'),
                 icon: Icon(Icons.table_chart_outlined, size: 16),
-              ),
-              ButtonSegment(
-                value: ReportFormat.csv,
-                label: Text('CSV'),
-                icon: Icon(Icons.grid_on_outlined, size: 16),
               ),
             ],
             selected: {_format},
