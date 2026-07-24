@@ -64,7 +64,13 @@ class LandLead {
   final List<OwnerContact> additionalOwners;
   final String brokerName;
   final String brokerContact;
+  /// Name/mobile of the source contact for Landowner, Referral and Internal
+  /// Team input sources (Broker keeps using [brokerName]/[brokerContact]).
+  final String sourceContactName;
+  final String sourceContactNumber;
   final LandType landType;
+  /// User-entered land type when [landType] is [LandType.other].
+  final String landTypeOther;
   final String roadWidth;
   final String accessDetails;
   final String notes;
@@ -96,7 +102,10 @@ class LandLead {
     this.additionalOwners = const [],
     this.brokerName = '',
     this.brokerContact = '',
+    this.sourceContactName = '',
+    this.sourceContactNumber = '',
     required this.landType,
+    this.landTypeOther = '',
     required this.roadWidth,
     required this.accessDetails,
     required this.notes,
@@ -130,7 +139,10 @@ class LandLead {
     List<OwnerContact>? additionalOwners,
     String? brokerName,
     String? brokerContact,
+    String? sourceContactName,
+    String? sourceContactNumber,
     LandType? landType,
+    String? landTypeOther,
     String? roadWidth,
     String? accessDetails,
     String? notes,
@@ -159,7 +171,10 @@ class LandLead {
         additionalOwners: additionalOwners ?? this.additionalOwners,
         brokerName: brokerName ?? this.brokerName,
         brokerContact: brokerContact ?? this.brokerContact,
+        sourceContactName: sourceContactName ?? this.sourceContactName,
+        sourceContactNumber: sourceContactNumber ?? this.sourceContactNumber,
         landType: landType ?? this.landType,
+        landTypeOther: landTypeOther ?? this.landTypeOther,
         roadWidth: roadWidth ?? this.roadWidth,
         accessDetails: accessDetails ?? this.accessDetails,
         notes: notes ?? this.notes,

@@ -516,12 +516,18 @@ class AddLeadStickyFooter extends StatelessWidget {
   final VoidCallback onCancel;
   final VoidCallback onSave;
   final bool saving;
+  /// Whether all mandatory fields are currently filled in. When false the
+  /// Save button is dimmed as a visual cue, but stays tappable — pressing it
+  /// still runs validation, which scrolls to and highlights what's missing
+  /// instead of doing nothing.
+  final bool enabled;
 
   const AddLeadStickyFooter({
     super.key,
     required this.onCancel,
     required this.onSave,
     this.saving = false,
+    this.enabled = true,
   });
 
   @override
@@ -562,7 +568,9 @@ class AddLeadStickyFooter extends StatelessWidget {
                   onPressed: saving ? null : onSave,
                   style: FilledButton.styleFrom(
                     minimumSize: const Size(0, 44),
-                    backgroundColor: AppColors.primary,
+                    backgroundColor: enabled
+                        ? AppColors.primary
+                        : AppColors.primary.withValues(alpha: 0.45),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -1352,13 +1360,13 @@ class _AddLeadPhotoUploadState extends State<AddLeadPhotoUpload> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Icon(
-                  Icons.cloud_upload_outlined,
+                  Icons.photo_camera_outlined,
                   size: _total == 0 ? 32 : 24,
                   color: AppColors.primary.withValues(alpha: 0.85),
                 ),
                 SizedBox(height: _total == 0 ? 10 : 6),
                 Text(
-                  _total == 0 ? 'Drop photos here or click to upload' : 'Add another photo',
+                  _total == 0 ? 'Tap to take a photo' : 'Take another photo',
                   style: const TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
@@ -1368,7 +1376,7 @@ class _AddLeadPhotoUploadState extends State<AddLeadPhotoUpload> {
                 if (_total == 0) ...[
                   const SizedBox(height: 4),
                   Text(
-                    'JPG or PNG · up to ${widget.maxPhotos} photos',
+                    'Camera only · up to ${widget.maxPhotos} photos',
                     style: TextStyle(
                       fontSize: 11,
                       color: context.fomraTextSecondary,

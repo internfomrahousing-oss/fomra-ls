@@ -1,6 +1,4 @@
 import 'dart:async';
-import 'package:file_picker/file_picker.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
@@ -99,6 +97,12 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
   InputSource? _inputSource;
   final _brokerNameCtrl = TextEditingController();
   final _brokerContactCtrl = TextEditingController();
+  // Used for every non-Broker, non-Existing-Database source (Landowner,
+  // Referral, Internal Team) — Broker keeps its own dedicated controllers
+  // above so existing broker-specific reports/filters stay unaffected.
+  final _sourceContactNameCtrl = TextEditingController();
+  final _sourceContactNumberCtrl = TextEditingController();
+  final _landTypeOtherCtrl = TextEditingController();
 
   // Section 2 — location fill-up
   final _locationCtrl   = TextEditingController();
@@ -152,9 +156,15 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
 
   void _onInputSourceChanged(InputSource? source) {
     setState(() {
-      if (_inputSource == InputSource.broker && source != InputSource.broker) {
+      if (source != InputSource.broker) {
         _brokerNameCtrl.clear();
         _brokerContactCtrl.clear();
+      }
+      if (source == null ||
+          source == InputSource.existingDatabase ||
+          source == InputSource.broker) {
+        _sourceContactNameCtrl.clear();
+        _sourceContactNumberCtrl.clear();
       }
       _inputSource = source;
     });
@@ -175,6 +185,34 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
 
   bool get _isBrokerSource => _inputSource == InputSource.broker;
 
+  /// Broker, Landowner, Referral and Internal Team all ask for the source's
+  /// name and mobile number right after the dropdown — only Existing
+  /// Database skips it.
+  bool get _needsSourceContact =>
+      _inputSource != null && _inputSource != InputSource.existingDatabase;
+
+  TextEditingController get _activeSourceNameCtrl =>
+      _isBrokerSource ? _brokerNameCtrl : _sourceContactNameCtrl;
+
+  TextEditingController get _activeSourceNumberCtrl =>
+      _isBrokerSource ? _brokerContactCtrl : _sourceContactNumberCtrl;
+
+  String get _sourceContactNameLabel => switch (_inputSource) {
+        InputSource.broker => 'Broker Name',
+        InputSource.landowner => 'Owner Name',
+        InputSource.referral => 'Referral Name',
+        InputSource.internalTeam => 'Internal Team Member Name',
+        _ => 'Name',
+      };
+
+  String get _sourceContactNumberLabel => switch (_inputSource) {
+        InputSource.broker => 'Broker Number',
+        InputSource.landowner => 'Owner Number',
+        InputSource.referral => 'Referral Number',
+        InputSource.internalTeam => 'Internal Team Member Number',
+        _ => 'Number',
+      };
+
   bool get _isEdit => widget.existingLead != null;
 
   static const _kProgressLabels = [
@@ -182,6 +220,7 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
     'Data Captured',
     'Terms',
     'Site Photos',
+    'Owner Details',
   ];
 
   @override
@@ -189,12 +228,27 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
     super.initState();
     _scrollController.addListener(_onScroll);
     _gpsCtrl.addListener(_onGpsTextChanged);
+    // Keep the Save button's enabled/dimmed state live as mandatory fields
+    // are filled in, without a rebuild on every keystroke across the form.
+    for (final c in [
+      _locationCtrl,
+      _extentValueCtrl,
+      _landTypeOtherCtrl,
+      _brokerNameCtrl,
+      _brokerContactCtrl,
+      _sourceContactNameCtrl,
+      _sourceContactNumberCtrl,
+    ]) {
+      c.addListener(_onMandatoryFieldChanged);
+    }
     final existing = widget.existingLead;
     if (existing == null) return;
 
     _inputSource = existing.inputSource;
     _brokerNameCtrl.text = existing.brokerName;
     _brokerContactCtrl.text = existing.brokerContact;
+    _sourceContactNameCtrl.text = existing.sourceContactName;
+    _sourceContactNumberCtrl.text = existing.sourceContactNumber;
     _locationCtrl.text = existing.location;
     _gpsCtrl.text = existing.gpsCoordinates;
     _verifiedGps = GpsFix.tryParse(existing.gpsCoordinates);
@@ -214,6 +268,7 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
     }
     _roadWidthCtrl.text = existing.roadWidth;
     _landType = existing.landType;
+    _landTypeOtherCtrl.text = existing.landTypeOther;
     if (existing.accessDetails.isNotEmpty) {
       _termsType = existing.accessDetails;
     }
@@ -236,9 +291,22 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
     for (final c in [
+      _locationCtrl,
+      _extentValueCtrl,
+      _landTypeOtherCtrl,
+      _brokerNameCtrl,
+      _brokerContactCtrl,
+      _sourceContactNameCtrl,
+      _sourceContactNumberCtrl,
+    ]) {
+      c.removeListener(_onMandatoryFieldChanged);
+    }
+    for (final c in [
       _locationCtrl, _gpsCtrl, _villageCtrl, _talukCtrl, _districtCtrl,
       _pincodeCtrl, _surveyCtrl, _subDivCtrl, _extentValueCtrl,
-      _brokerNameCtrl, _brokerContactCtrl, _roadWidthCtrl,
+      _brokerNameCtrl, _brokerContactCtrl,
+      _sourceContactNameCtrl, _sourceContactNumberCtrl,
+      _roadWidthCtrl, _landTypeOtherCtrl,
       _notesCtrl,
     ]) {
       c.dispose();
@@ -254,6 +322,24 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
 
   void _onGpsTextChanged() {
     // Typed / pasted GPS is rejected — live capture only.
+  }
+
+  void _onMandatoryFieldChanged() {
+    if (mounted) setState(() {});
+  }
+
+  /// Whether every currently-required field is filled — drives the Save
+  /// button's enabled/dimmed look. Mirrors the checks [_submit] enforces.
+  bool get _mandatoryComplete {
+    if (!_sectionCompleted(0) || !_sectionCompleted(1)) return false;
+    final existing = widget.existingLead;
+    final gpsText = _gpsCtrl.text.trim();
+    final keepingExistingGps = _isEdit &&
+        existing != null &&
+        existing.gpsCoordinates.trim().isNotEmpty &&
+        gpsText == existing.gpsCoordinates.trim();
+    if (keepingExistingGps) return true;
+    return _verifiedGps != null && _verifiedGps!.isLive;
   }
 
   Future<void> _applyGpsFromText() async {
@@ -633,90 +719,27 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
 
   // ── Photo picker ───────────────────────────────────────────────────────────
 
-  /// Mobile (Android/iOS) offers Camera + Gallery via the native picker;
-  /// desktop and web keep the standard file picker.
-  bool get _mobileNativePickers =>
-      !kIsWeb &&
-      (defaultTargetPlatform == TargetPlatform.android ||
-          defaultTargetPlatform == TargetPlatform.iOS);
-
+  /// Site photos must be taken live with the camera (no gallery/file picker)
+  /// on both web and mobile.
   Future<void> _pickPhoto() async {
     if (_keptPhotoUrls.length + _photos.length >= _kMaxSitePhotos) {
       AppFeedback.warning(context, 'Maximum $_kMaxSitePhotos photos per lead');
       return;
     }
 
-    if (_mobileNativePickers) {
-      final source = await _choosePhotoSource();
-      if (source == null || !mounted) return;
-      try {
-        final picked = await ImagePicker().pickImage(
-          source: source,
-          maxWidth: 2400,
-          imageQuality: 90,
-        );
-        if (picked == null) return;
-        final bytes = await picked.readAsBytes();
-        await _addPhotoBytes(bytes, picked.name);
-      } catch (e) {
-        if (!mounted) return;
-        AppFeedback.error(
-            context, e.toString().replaceFirst('Exception: ', ''));
-      }
-      return;
+    try {
+      final picked = await ImagePicker().pickImage(
+        source: ImageSource.camera,
+        maxWidth: 2400,
+        imageQuality: 90,
+      );
+      if (picked == null || !mounted) return;
+      final bytes = await picked.readAsBytes();
+      await _addPhotoBytes(bytes, picked.name);
+    } catch (e) {
+      if (!mounted) return;
+      AppFeedback.error(context, e.toString().replaceFirst('Exception: ', ''));
     }
-
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.image,
-      allowMultiple: false,
-      withData: true,
-    );
-    if (result == null || result.files.isEmpty) return;
-    final file = result.files.first;
-    if (file.bytes == null) return;
-    await _addPhotoBytes(file.bytes!, file.name);
-  }
-
-  Future<ImageSource?> _choosePhotoSource() {
-    return showModalBottomSheet<ImageSource>(
-      context: context,
-      backgroundColor: context.fomraSurface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 8),
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: context.fomraBorder,
-                borderRadius: BorderRadius.circular(999),
-              ),
-            ),
-            const SizedBox(height: 8),
-            ListTile(
-              leading: const Icon(Icons.photo_camera_outlined,
-                  color: AppColors.primary),
-              title: const Text('Take photo'),
-              subtitle: const Text('Open camera'),
-              onTap: () => Navigator.pop(ctx, ImageSource.camera),
-            ),
-            ListTile(
-              leading: const Icon(Icons.photo_library_outlined,
-                  color: AppColors.primary),
-              title: const Text('Choose from gallery'),
-              subtitle: const Text('Pick an existing photo'),
-              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
-            ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
-    );
   }
 
   Future<void> _addPhotoBytes(Uint8List bytes, String name) async {
@@ -782,19 +805,23 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
     switch (index) {
       case 0:
         if (_inputSource == null) return false;
-        if (_isBrokerSource) {
-          return _brokerNameCtrl.text.trim().isNotEmpty &&
-              _brokerContactCtrl.text.trim().isNotEmpty;
+        if (_needsSourceContact) {
+          return _activeSourceNameCtrl.text.trim().isNotEmpty &&
+              _activeSourceNumberCtrl.text.trim().isNotEmpty;
         }
         return true;
       case 1:
         return _locationCtrl.text.trim().isNotEmpty &&
             _extentValueCtrl.text.trim().isNotEmpty &&
-            _extentUnit != null;
+            _extentUnit != null &&
+            (_landType != LandType.other ||
+                _landTypeOtherCtrl.text.trim().isNotEmpty);
       case 2:
         return (_termsType ?? '').isNotEmpty;
       case 3:
         return _photos.isNotEmpty || _keptPhotoUrls.isNotEmpty;
+      case 4:
+        return _owners.isNotEmpty && _owners[0].nameCtrl.text.trim().isNotEmpty;
       default:
         return false;
     }
@@ -835,10 +862,18 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
       return;
     }
     if (_inputSource == null) {
+      _scrollToSection(0);
       AppFeedback.error(context, 'Please select an Input Source');
       return;
     }
-    if (!_formKey.currentState!.validate()) return;
+    if (!_sectionCompleted(0)) {
+      _scrollToSection(0);
+      AppFeedback.error(
+        context,
+        'Please fill in the $_sourceContactNameLabel and $_sourceContactNumberLabel before saving.',
+      );
+      return;
+    }
 
     final existing = widget.existingLead;
     final gpsText = _gpsCtrl.text.trim();
@@ -855,8 +890,29 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
 
     // Require a live GPS fix (reject manual pins / typed coords).
     if (!keepingExistingGps && (liveFix == null || !liveFix.isLive)) {
+      _scrollToSection(1);
       AppFeedback.error(context,
           'Capture live GPS before saving. Manual pins are not allowed.');
+      return;
+    }
+
+    if (!_sectionCompleted(1)) {
+      _scrollToSection(1);
+      AppFeedback.error(
+        context,
+        'Please fill in all required fields (Location, Measurement, Land Type) before saving.',
+      );
+      return;
+    }
+
+    if (!_formKey.currentState!.validate()) {
+      AppFeedback.error(
+          context, 'Please correct the highlighted fields before saving.');
+      _scrollController.animateTo(
+        0,
+        duration: AddLeadUi.motion,
+        curve: AddLeadUi.curve,
+      );
       return;
     }
 
@@ -894,7 +950,15 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
       additionalOwners: additionalOwners,
       brokerName: _isBrokerSource ? _brokerNameCtrl.text.trim() : '',
       brokerContact: _isBrokerSource ? _brokerContactCtrl.text.trim() : '',
+      sourceContactName: (_needsSourceContact && !_isBrokerSource)
+          ? _sourceContactNameCtrl.text.trim()
+          : '',
+      sourceContactNumber: (_needsSourceContact && !_isBrokerSource)
+          ? _sourceContactNumberCtrl.text.trim()
+          : '',
       landType: _landType,
+      landTypeOther:
+          _landType == LandType.other ? _landTypeOtherCtrl.text.trim() : '',
       roadWidth: _roadWidthCtrl.text.trim(),
       accessDetails: _termsType ?? '',
       notes: combinedNotes,
@@ -996,6 +1060,7 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
         onCancel: () => Navigator.pop(context),
         onSave: _submit,
         saving: _saving,
+        enabled: _mandatoryComplete,
       ),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1040,27 +1105,29 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
                                 value: _inputSource,
                                 onChanged: _onInputSourceChanged,
                               ),
-                              if (_isBrokerSource) ...[
+                              if (_needsSourceContact) ...[
                                 const SizedBox(height: AddLeadUi.fieldGap),
                                 addLeadFormRow(
                                   context,
                                   _Field(
-                                    ctrl: _brokerNameCtrl,
-                                    label: 'Broker Name',
-                                    hint: 'Full name of the broker',
+                                    key: ValueKey('source-name-$_inputSource'),
+                                    ctrl: _activeSourceNameCtrl,
+                                    label: _sourceContactNameLabel,
+                                    hint: 'Full name',
                                     icon: Icons.person_outline_rounded,
                                     required: true,
                                   ),
                                   _Field(
-                                    ctrl: _brokerContactCtrl,
-                                    label: 'Broker Number',
+                                    key: ValueKey('source-number-$_inputSource'),
+                                    ctrl: _activeSourceNumberCtrl,
+                                    label: _sourceContactNumberLabel,
                                     hint: '10-digit phone number',
                                     icon: Icons.phone_outlined,
                                     keyboardType: TextInputType.phone,
                                     required: true,
                                     inputFormatters: PhoneValidation.inputFormatters,
                                     validator: PhoneValidation.validator(
-                                      'Broker Number',
+                                      _sourceContactNumberLabel,
                                       required: true,
                                     ),
                                   ),
@@ -1254,14 +1321,7 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
                                       setState(() => _extentUnit = v),
                                 ),
                               ),
-                              const SizedBox(height: AddLeadUi.sectionGap),
-                              _OwnerContactSection(
-                                owners: _owners,
-                                maxOwners: _kMaxOwners,
-                                onAdd: _addOwner,
-                                onRemove: _removeOwner,
-                              ),
-                              const SizedBox(height: AddLeadUi.sectionGap),
+                              const SizedBox(height: AddLeadUi.fieldGap),
                               addLeadFormRow(
                                 context,
                                 _LandTypeDropdown(
@@ -1276,6 +1336,16 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
                                   icon: Icons.open_in_full_rounded,
                                 ),
                               ),
+                              if (_landType == LandType.other) ...[
+                                const SizedBox(height: AddLeadUi.fieldGap),
+                                _Field(
+                                  ctrl: _landTypeOtherCtrl,
+                                  label: 'Please specify Land Type',
+                                  hint: 'Enter the land type',
+                                  icon: Icons.edit_outlined,
+                                  required: true,
+                                ),
+                              ],
                             ],
                           ),
                         ),
@@ -1300,6 +1370,23 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
                       _sectionAnchor(
                         3,
                         _buildSitePhotosSection('4'),
+                      ),
+                      const SizedBox(height: AddLeadUi.sectionGap),
+                      _sectionAnchor(
+                        4,
+                        AddLeadSectionCard(
+                          number: '5',
+                          title: 'Owner Details',
+                          subtitle: 'Land owner name and contact number',
+                          icon: Icons.person_pin_circle_outlined,
+                          compact: true,
+                          child: _OwnerContactSection(
+                            owners: _owners,
+                            maxOwners: _kMaxOwners,
+                            onAdd: _addOwner,
+                            onRemove: _removeOwner,
+                          ),
+                        ),
                       ),
                       const SizedBox(height: AddLeadUi.sectionGap),
                       const SizedBox(height: 8),
@@ -1410,6 +1497,7 @@ class _Field extends StatelessWidget {
   final FormFieldValidator<String>? validator;
 
   const _Field({
+    super.key,
     required this.ctrl,
     required this.label,
     required this.hint,
@@ -1595,31 +1683,21 @@ class _OwnerContactSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                'Owner Contact Details',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: context.fomraTextPrimary,
-                ),
+        if (owners.length < maxOwners) ...[
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: onAdd,
+              icon: const Icon(Icons.add_circle_outline_rounded, size: 18),
+              label: const Text('Add Owner'),
+              style: TextButton.styleFrom(
+                foregroundColor: AppColors.primary,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
               ),
             ),
-            if (owners.length < maxOwners)
-              TextButton.icon(
-                onPressed: onAdd,
-                icon: const Icon(Icons.add_circle_outline_rounded, size: 18),
-                label: const Text('Add Owner'),
-                style: TextButton.styleFrom(
-                  foregroundColor: AppColors.primary,
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                ),
-              ),
-          ],
-        ),
-        const SizedBox(height: 10),
+          ),
+          const SizedBox(height: 4),
+        ],
         for (var i = 0; i < owners.length; i++) ...[
           if (i > 0) const SizedBox(height: AddLeadUi.fieldGap),
           _OwnerFields(
