@@ -1016,8 +1016,10 @@ class _PropertyPopup extends StatelessWidget {
                 Expanded(
                   child: FilledButton.icon(
                     onPressed: () {
-                      onClose();
+                      // Open the lead first, then clear the pin. Closing first
+                      // would null out the selected pin the navigation reads.
                       onOpenSite();
+                      onClose();
                     },
                     icon: const Icon(Icons.open_in_new_rounded, size: 18),
                     label: const Text('View Details',

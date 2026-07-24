@@ -670,8 +670,11 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
                                 child: Row(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
+                                    // Compact reference column — slightly
+                                    // narrower so the work column gets more
+                                    // usable width and the two columns balance.
                                     Expanded(
-                                      flex: 2,
+                                      flex: 3,
                                       child: Column(
                                         crossAxisAlignment:
                                             CrossAxisAlignment.stretch,
@@ -684,7 +687,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
                                     ),
                                     const SizedBox(width: 12),
                                     Expanded(
-                                      flex: 3,
+                                      flex: 5,
                                       child: Column(
                                         crossAxisAlignment:
                                             CrossAxisAlignment.stretch,
@@ -1719,23 +1722,25 @@ class _ActivityTimelineState extends State<_ActivityTimeline> {
           ),
         for (final e in filtered)
           Padding(
-            padding: const EdgeInsets.only(bottom: 10),
+            padding: const EdgeInsets.only(bottom: 12),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(e.icon, size: 18, color: AppColors.purple),
-                const SizedBox(width: 10),
+                _TimelineAvatar(icon: e.icon),
+                const SizedBox(width: 11),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(e.title,
-                          style: const TextStyle(fontWeight: FontWeight.w700)),
+                          style: const TextStyle(
+                              fontSize: 13, fontWeight: FontWeight.w700)),
                       const SizedBox(height: 2),
                       Text(
                         e.subtitle,
                         style: TextStyle(
                           fontSize: 12,
+                          height: 1.35,
                           color: context.fomraTextSecondary,
                         ),
                       ),
@@ -1757,23 +1762,25 @@ class _ActivityTimelineState extends State<_ActivityTimeline> {
         if (_filter == _ActivityFilter.all)
           for (final e in staticEvents)
             Padding(
-              padding: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.only(bottom: 12),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(e.icon, size: 18, color: AppColors.purple),
-                  const SizedBox(width: 10),
+                  _TimelineAvatar(icon: e.icon, muted: true),
+                  const SizedBox(width: 11),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(e.title,
-                            style: const TextStyle(fontWeight: FontWeight.w700)),
+                            style: const TextStyle(
+                                fontSize: 13, fontWeight: FontWeight.w700)),
                         const SizedBox(height: 2),
                         Text(
                           e.subtitle,
                           style: TextStyle(
                             fontSize: 12,
+                            height: 1.35,
                             color: context.fomraTextSecondary,
                           ),
                         ),
@@ -1784,6 +1791,31 @@ class _ActivityTimelineState extends State<_ActivityTimeline> {
               ),
             ),
       ],
+    );
+  }
+}
+
+/// Circular avatar for a timeline entry — a tinted disc holding the entry's
+/// icon, giving the timeline a richer, more scannable enterprise look. Static
+/// milestones render [muted] so real logged activity stands out.
+class _TimelineAvatar extends StatelessWidget {
+  final IconData icon;
+  final bool muted;
+
+  const _TimelineAvatar({required this.icon, this.muted = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final tint = muted ? context.fomraTextSecondary : AppColors.purple;
+    return Container(
+      width: 32,
+      height: 32,
+      decoration: BoxDecoration(
+        color: tint.withValues(alpha: muted ? 0.10 : 0.12),
+        shape: BoxShape.circle,
+        border: Border.all(color: tint.withValues(alpha: 0.22)),
+      ),
+      child: Icon(icon, size: 16, color: tint),
     );
   }
 }
@@ -1951,6 +1983,10 @@ class _LeadInfoCard extends StatelessWidget {
     required this.rows,
   });
 
+  /// A field spans the full card width when its value is long or free-text
+  /// (addresses, terms, drop notes) so it never crams into a half-width cell.
+  static bool _isWideField(String value) => value.trim().length > 18;
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -1960,7 +1996,8 @@ class _LeadInfoCard extends StatelessWidget {
         border: Border.all(color: context.fomraBorder),
         boxShadow: context.fomraCardShadow,
       ),
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      // Tighter padding keeps the left column compact without feeling cramped.
+      padding: const EdgeInsets.fromLTRB(14, 11, 14, 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1978,34 +2015,37 @@ class _LeadInfoCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 10),
-          _LeadDetailsColumn(rows: rows),
+          const SizedBox(height: 11),
+          // Two key-value pairs per row on comfortable widths, single column on
+          // narrow ones — packs short fields together to cut vertical height.
+          LayoutBuilder(
+            builder: (context, c) {
+              const gap = 14.0;
+              final twoCol = c.maxWidth >= 300;
+              final cellW = twoCol ? (c.maxWidth - gap) / 2 : c.maxWidth;
+              return Wrap(
+                spacing: gap,
+                runSpacing: 10,
+                children: [
+                  for (final row in rows)
+                    SizedBox(
+                      width: (!twoCol || _isWideField(row.$2))
+                          ? c.maxWidth
+                          : cellW,
+                      child: _LeadDetailRow(label: row.$1, value: row.$2),
+                    ),
+                ],
+              );
+            },
+          ),
         ],
       ),
     );
   }
 }
 
-class _LeadDetailsColumn extends StatelessWidget {
-  final List<(String, String)> rows;
-
-  const _LeadDetailsColumn({required this.rows});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        for (final row in rows)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: _LeadDetailRow(label: row.$1, value: row.$2),
-          ),
-      ],
-    );
-  }
-}
-
+/// Compact stacked key-value cell — a small muted label above a prominent
+/// value, so a card reads as a dense two-column grid of facts.
 class _LeadDetailRow extends StatelessWidget {
   final String label;
   final String value;
@@ -2014,27 +2054,27 @@ class _LeadDetailRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
       children: [
-        SizedBox(
-          width: 92,
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              color: context.fomraTextSecondary,
-            ),
+        Text(
+          label.toUpperCase(),
+          style: TextStyle(
+            fontSize: 9.5,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.4,
+            color: context.fomraTextSecondary,
           ),
         ),
-        Expanded(
-          child: Text(
-            value,
-            style: TextStyle(
-              fontSize: 12,
-              color: context.fomraTextPrimary,
-            ),
+        const SizedBox(height: 2),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 13,
+            height: 1.25,
+            fontWeight: FontWeight.w600,
+            color: context.fomraTextPrimary,
           ),
         ),
       ],
