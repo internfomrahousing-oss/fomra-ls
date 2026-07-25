@@ -704,8 +704,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             ],
           );
         }
+        // Stretch equalises the two boxes to the taller one during normal
+        // layout (no IntrinsicHeight), so they align top and bottom.
         return Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Expanded(
               child: PortalFadeSection(index: 1, child: todayTasks),
