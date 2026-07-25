@@ -4,7 +4,7 @@ import '../../analytics/business_module_metrics.dart';
 import '../../models/land_lead.dart';
 import '../../analytics/monthly_target_progress.dart';
 import '../../models/land_lead_meeting.dart';
-import '../../models/monthly_target.dart';
+import '../../models/monthly_target_submission.dart';
 import '../../services/management_bi_activity_service.dart';
 import '../land_lead/add_lead_screen.dart';
 import '../../models/lead_list_filter.dart';
@@ -21,6 +21,7 @@ import '../../services/team_hierarchy.dart';
 import '../employee_management/team_management_screen.dart';
 import '../../services/land_lead_service.dart';
 import '../../services/monthly_target_service.dart';
+import '../../services/monthly_target_submission_service.dart';
 import '../../services/lead_drop_approval_service.dart';
 import '../../services/land_lead_signed_service.dart';
 import '../../services/land_lead_site_visit_service.dart';
@@ -34,6 +35,7 @@ import '../../theme/fomra_theme_context.dart';
 import '../../models/app_notification.dart';
 import '../../models/land_lead_signed_request.dart';
 import '../../models/land_lead_site_visit.dart';
+import '../settings/employee_monthly_targets_page.dart';
 import '../../widgets/fomra_app_bar.dart';
 import '../../widgets/fomra_app_shell.dart';
 import '../../widgets/ui/app_feedback.dart';
@@ -66,14 +68,22 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   /// Meeting history behind the management "No Future Activity" quick action.
   List<LandLeadMeeting> _meetings = const [];
 
-  /// This employee's progress against the common monthly target. Null until the
+  /// This employee's progress against their monthly target. Null until the
   /// first load lands; management never loads it.
   MonthlyTargetProgress? _monthlyProgress;
 
-  /// The fetched target, cached so the progress can be recomputed locally from
-  /// visibleLeads whenever the store or scope changes (without re-hitting the
-  /// network).
-  MonthlyTarget? _monthlyTarget;
+  /// The resolved target number (from an approved employee submission when
+  /// present, otherwise the management-set common/personal target). Cached so
+  /// progress can be recomputed locally from visibleLeads without re-fetching.
+  int _monthlyTargetCount = 0;
+
+  /// True when the resolved target came from the employee's own approved
+  /// submission rather than a management-set row.
+  bool _monthlyTargetFromEmployee = false;
+
+  /// True when the employee has submitted this month but it is still pending
+  /// approval (so the card can explain why no target is active yet).
+  bool _monthlyTargetPendingApproval = false;
 
   List<LandLead> get _noFutureActivityLeads => NoFutureActivityAnalytics.select(
         AppStore.instance.visibleLeads,
@@ -123,17 +133,56 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (mounted) setState(() => _meetings = meetings);
   }
 
-  /// This employee's progress against the common monthly target. Achieved is
-  /// counted locally from the leads they've sourced this month (see
-  /// [_recomputeMonthlyProgress]); this just fetches the target. Degrades to a
-  /// null target rather than throwing.
+  /// Resolves this employee's monthly target for the progress card.
+  ///
+  /// Prefer an **approved** self-set submission (Settings › My Monthly Targets);
+  /// fall back to the management-set common/personal target. Pending
+  /// submissions never count — they only change the empty-state copy.
   Future<void> _loadMonthlyTarget() async {
     final now = DateTime.now();
-    final myEmail = (AuthService.instance.currentUser?.email ?? '').trim();
-    final target =
-        await MonthlyTargetService.resolveForEmployee(myEmail, now: now);
+    final myEmail =
+        (AuthService.instance.currentUser?.email ?? '').trim().toLowerCase();
+
+    var targetCount = 0;
+    var fromEmployee = false;
+    var pendingApproval = false;
+
+    try {
+      final history =
+          await MonthlyTargetSubmissionService.getForEmployee(myEmail);
+      final period =
+          MonthlyTargetSubmission.periodOf(now.year, now.month);
+      MonthlyTargetSubmission? current;
+      for (final s in history) {
+        if (s.period == period) {
+          current = s;
+          break;
+        }
+      }
+      if (current != null && current.isApproved) {
+        final n = current.sitesProgressTarget;
+        if (n > 0) {
+          targetCount = n;
+          fromEmployee = true;
+        }
+      } else if (current != null && current.isPending) {
+        pendingApproval = true;
+      }
+    } catch (_) {
+      // Submission table may be missing — fall through to management target.
+    }
+
+    if (targetCount <= 0) {
+      final target =
+          await MonthlyTargetService.resolveForEmployee(myEmail, now: now);
+      targetCount = target?.target ?? 0;
+      fromEmployee = false;
+    }
+
     if (!mounted) return;
-    _monthlyTarget = target;
+    _monthlyTargetCount = targetCount;
+    _monthlyTargetFromEmployee = fromEmployee;
+    _monthlyTargetPendingApproval = pendingApproval && targetCount <= 0;
     _recomputeMonthlyProgress();
   }
 
@@ -153,10 +202,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     ];
     setState(() {
       _monthlyProgress = MonthlyTargetProgress.forMonth(
-        target: _monthlyTarget?.target ?? 0,
+        target: _monthlyTargetCount,
         now: now,
         completedOn: completedOn,
       );
+    });
+  }
+
+  void _openMyMonthlyTargets() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const EmployeeMonthlyTargetsPage()),
+    ).then((_) {
+      if (mounted && !_isManagement) _loadMonthlyTarget();
     });
   }
 
@@ -655,11 +713,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       title: 'Monthly Target Progress',
                       subtitle: canManageTeam && ViewScope.instance.isTeam
                           ? "Your team's sites this month against the target"
-                          : 'Your sites this month against the target',
+                          : (_monthlyTargetFromEmployee
+                              ? 'Your approved targets · sites this month'
+                              : 'Your sites this month against the target'),
                       icon: Icons.flag_outlined,
                       child: MonthlyTargetProgressCard(
                         progress: _monthlyProgress!,
                         month: DateTime.now(),
+                        pendingApproval: _monthlyTargetPendingApproval,
+                        onSetTarget: _openMyMonthlyTargets,
                       ),
                     ),
                   ),

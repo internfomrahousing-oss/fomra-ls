@@ -19,6 +19,7 @@ Future<void> _pump(
   WidgetTester tester,
   MonthlyTargetProgress progress, {
   double width = 600,
+  bool pendingApproval = false,
 }) async {
   tester.view.physicalSize = const Size(1200, 2000);
   tester.view.devicePixelRatio = 1.0;
@@ -29,7 +30,11 @@ Future<void> _pump(
       body: SingleChildScrollView(
         child: SizedBox(
           width: width,
-          child: MonthlyTargetProgressCard(progress: progress, month: _now),
+          child: MonthlyTargetProgressCard(
+            progress: progress,
+            month: _now,
+            pendingApproval: pendingApproval,
+          ),
         ),
       ),
     ),
@@ -105,7 +110,19 @@ void main() {
     expect(tester.takeException(), isNull);
 
     expect(find.text('No target set'), findsOneWidget);
+    expect(find.textContaining('My Monthly Targets'), findsOneWidget);
     expect(find.byType(LineChart), findsNothing);
+  });
+
+  testWidgets('pending approval empty state explains the wait', (tester) async {
+    await _pump(
+      tester,
+      _progress(target: 0, done: 0),
+      pendingApproval: true,
+    );
+    expect(tester.takeException(), isNull);
+    expect(find.text('Awaiting approval'), findsOneWidget);
+    expect(find.textContaining('awaiting management approval'), findsOneWidget);
   });
 
   testWidgets('lays out on a narrow phone without overflowing', (tester) async {

@@ -7,8 +7,8 @@ import '../theme/app_theme.dart';
 import '../theme/fomra_theme_context.dart';
 import 'ui/app_components.dart';
 
-/// An employee's progress against the common monthly target: the headline
-/// numbers, then actual vs the ideal run-rate across the days of the month.
+/// An employee's progress against their monthly target: the headline numbers,
+/// then actual vs the ideal run-rate across the days of the month.
 ///
 /// Green when at or above the run-rate, orange when behind.
 class MonthlyTargetProgressCard extends StatelessWidget {
@@ -17,10 +17,19 @@ class MonthlyTargetProgressCard extends StatelessWidget {
   /// The month being shown — for the "no target" wording.
   final DateTime month;
 
+  /// When true, the employee has submitted targets that are still awaiting
+  /// management approval — so the empty state can explain the wait.
+  final bool pendingApproval;
+
+  /// Opens Settings › My Monthly Targets so the employee can propose/resubmit.
+  final VoidCallback? onSetTarget;
+
   const MonthlyTargetProgressCard({
     super.key,
     required this.progress,
     required this.month,
+    this.pendingApproval = false,
+    this.onSetTarget,
   });
 
   Color get _accent =>
@@ -31,13 +40,38 @@ class MonthlyTargetProgressCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (!progress.hasTarget) {
+      final monthLabel = MonthlyTarget.monthName(month.month);
+      final message = pendingApproval
+          ? 'Your $monthLabel targets are awaiting management approval.'
+          : 'No target set for $monthLabel yet. Propose yours under '
+              'Settings › My Monthly Targets.';
       return AppCard(
         interactive: false,
-        child: EmptyState(
-          icon: Icons.flag_outlined,
-          title: 'No target set',
-          message:
-              'Management has not set a target for ${MonthlyTarget.monthName(month.month)} yet.',
+        child: Column(
+          children: [
+            EmptyState(
+              icon: pendingApproval
+                  ? Icons.hourglass_top_outlined
+                  : Icons.flag_outlined,
+              title: pendingApproval ? 'Awaiting approval' : 'No target set',
+              message: message,
+            ),
+            if (onSetTarget != null) ...[
+              const SizedBox(height: 4),
+              TextButton.icon(
+                onPressed: onSetTarget,
+                icon: Icon(
+                  pendingApproval
+                      ? Icons.visibility_outlined
+                      : Icons.flag_outlined,
+                  size: 18,
+                ),
+                label: Text(
+                  pendingApproval ? 'View my submission' : 'Set my targets',
+                ),
+              ),
+            ],
+          ],
         ),
       );
     }

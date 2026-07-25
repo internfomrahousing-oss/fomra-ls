@@ -121,6 +121,15 @@ class MonthlyTargetSubmission {
   /// The values in force: approved when present, otherwise what was submitted.
   Map<String, int> get effectiveValues => approvedValues ?? submittedValues;
 
+  /// Number used by the home Monthly Target Progress card (sites sourced).
+  /// Prefers Leads, then Site Visits — matching what the card actually counts.
+  int get sitesProgressTarget {
+    final v = effectiveValues;
+    return v[TargetCategory.leads.key] ??
+        v[TargetCategory.siteVisits.key] ??
+        0;
+  }
+
   int get year => int.tryParse(period.split('-').first) ?? 0;
   int get month => int.tryParse(period.split('-').last) ?? 1;
 
