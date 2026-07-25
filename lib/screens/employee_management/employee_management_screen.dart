@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../models/employee_profile.dart';
+import '../../services/access_as_user.dart';
 import '../../services/app_store.dart';
 import '../../services/auth_service.dart';
 import '../../services/employee_service.dart';
@@ -9,11 +10,32 @@ import '../../theme/app_theme.dart';
 import '../../theme/fomra_layout.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../widgets/employee_management_ui.dart';
+import '../../widgets/fomra_breadcrumb.dart';
 import '../../widgets/ui/app_feedback.dart';
 import '../../widgets/portal_home_sections.dart';
 import '../../widgets/portal_page_layout.dart';
 import '../../widgets/ui/app_components.dart';
 import 'add_employee_screen.dart';
+
+/// Role chips shown under the search bar — same filter set as the former
+/// Access as User page (All / Executive / Reporting Manager / Head).
+enum _RoleFilter { all, executive, reportingManager, head }
+
+extension on _RoleFilter {
+  String get label => switch (this) {
+        _RoleFilter.all => 'All',
+        _RoleFilter.executive => 'Executive',
+        _RoleFilter.reportingManager => 'Reporting Manager',
+        _RoleFilter.head => 'Head',
+      };
+
+  bool matches(EmployeeProfile e) => switch (this) {
+        _RoleFilter.all => true,
+        _RoleFilter.executive => e.isExecutive,
+        _RoleFilter.reportingManager => e.isReportingManager,
+        _RoleFilter.head => e.isHead,
+      };
+}
 
 class EmployeeManagementScreen extends StatefulWidget {
   final bool isTab;
@@ -28,6 +50,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
   bool _loading = true;
   String? _loadError;
   String _search = '';
+  _RoleFilter _roleFilter = _RoleFilter.all;
 
   @override
   void initState() {
@@ -177,17 +200,91 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
     }
   }
 
+  /// Access the app as [employee] from this page — no separate Access as User
+  /// screen. Confirmation + audit log via [AccessAsUser].
+  Future<void> _accessAsUser(EmployeeProfile employee) async {
+    if (employee.status != EmployeeStatus.active) {
+      AppFeedback.info(context, 'Only active users can be accessed.');
+      return;
+    }
+    final role = employee.designation.trim().isEmpty
+        ? EmployeeDesignations.executive
+        : employee.designation.trim();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        icon: const Icon(Icons.visibility_outlined, color: AppColors.warning),
+        title: const Text('Access as this user?'),
+        content: Text(
+          'You will use the app exactly as ${employee.fullName} '
+          '($role) sees it — their dashboard, menus, leads and reports. '
+          'A banner will let you return to management anytime.',
+          style: TextStyle(fontSize: 13, color: context.fomraTextSecondary),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.warning),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Access'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    await AccessAsUser.start(employee);
+    if (!mounted) return;
+    fomraNavigateHome(context);
+  }
+
   List<EmployeeProfile> get _employees => AppStore.instance.employees;
 
   List<EmployeeProfile> get _filtered {
     final q = _search.trim().toLowerCase();
-    if (q.isEmpty) return _employees;
     return _employees.where((e) {
+      if (!_roleFilter.matches(e)) return false;
+      if (q.isEmpty) return true;
       return e.fullName.toLowerCase().contains(q) ||
           e.email.toLowerCase().contains(q) ||
           e.phone.contains(q) ||
           e.designation.toLowerCase().contains(q);
     }).toList();
+  }
+
+  Widget _roleFilterChips(BuildContext context) {
+    return SizedBox(
+      height: 34,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        children: [
+          for (final f in _RoleFilter.values) ...[
+            ChoiceChip(
+              label: Text(f.label),
+              selected: _roleFilter == f,
+              onSelected: (_) => setState(() => _roleFilter = f),
+              showCheckmark: false,
+              labelStyle: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: _roleFilter == f
+                    ? Colors.white
+                    : context.fomraTextSecondary,
+              ),
+              backgroundColor: context.fomraSurfaceVar.withValues(alpha: 0.7),
+              selectedColor: AppColors.primary,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(999),
+                side: BorderSide.none,
+              ),
+            ),
+            const SizedBox(width: 8),
+          ],
+        ],
+      ),
+    );
   }
 
   @override
@@ -211,37 +308,44 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
       padding: pagePad.copyWith(bottom: 8),
       child: PortalFadeSection(
         index: 0,
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final stacked = constraints.maxWidth < 640;
-            if (stacked) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  EmployeeManagementSearchBar(
-                    onChanged: (v) => setState(() => _search = v),
-                  ),
-                  const SizedBox(height: 10),
-                  EmployeeManagementAddButton(
-                    onPressed: _openAddEmployee,
-                  ),
-                ],
-              );
-            }
-            return Row(
-              children: [
-                Expanded(
-                  child: EmployeeManagementSearchBar(
-                    onChanged: (v) => setState(() => _search = v),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                EmployeeManagementAddButton(
-                  onPressed: _openAddEmployee,
-                ),
-              ],
-            );
-          },
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final stacked = constraints.maxWidth < 640;
+                if (stacked) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      EmployeeManagementSearchBar(
+                        onChanged: (v) => setState(() => _search = v),
+                      ),
+                      const SizedBox(height: 10),
+                      EmployeeManagementAddButton(
+                        onPressed: _openAddEmployee,
+                      ),
+                    ],
+                  );
+                }
+                return Row(
+                  children: [
+                    Expanded(
+                      child: EmployeeManagementSearchBar(
+                        onChanged: (v) => setState(() => _search = v),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    EmployeeManagementAddButton(
+                      onPressed: _openAddEmployee,
+                    ),
+                  ],
+                );
+              },
+            ),
+            const SizedBox(height: 12),
+            _roleFilterChips(context),
+          ],
         ),
       ),
     );
@@ -283,7 +387,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                                     : 'No matches',
                                 message: _employees.isEmpty
                                     ? 'Add an employee profile to get started.'
-                                    : 'Try a different search term.',
+                                    : 'Try a different search or role filter.',
                                 action: _employees.isEmpty
                                     ? PrimaryButton(
                                         label: 'Add Employee',
@@ -310,6 +414,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                                         _confirmRemoveAccess(_filtered[i]),
                                     onResendInvite: () =>
                                         _resendInvite(_filtered[i]),
+                                    onAccess: () => _accessAsUser(_filtered[i]),
                                   ),
                                 ),
                               ),
@@ -320,7 +425,6 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
       },
     );
   }
-
 }
 
 class _EmployeeLoadingSkeleton extends StatelessWidget {

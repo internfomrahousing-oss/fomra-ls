@@ -5,6 +5,7 @@ import '../models/land_lead.dart';
 import '../models/notification_type_ext.dart';
 import '../screens/land_lead/lead_detail_screen.dart';
 import '../screens/land_lead/management_visit_review_dialog.dart';
+import '../screens/settings/monthly_target_approvals_page.dart';
 import '../services/app_store.dart';
 import '../services/auth_service.dart';
 import '../services/land_lead_site_visit_service.dart';
@@ -13,6 +14,9 @@ import '../services/push_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/fomra_theme_context.dart';
 import 'ui/app_components.dart';
+
+bool _isMonthlyTargetNotification(AppNotification n) =>
+    n.title.trim().toLowerCase().startsWith('monthly target');
 
 /// The notification bell in [FomraAppBar] — one per page, all reading the same
 /// [NotificationHub], so the badge and panel are identical everywhere.
@@ -89,6 +93,17 @@ class _FomraNotificationBellState extends State<FomraNotificationBell> {
   Future<void> _openNotification(AppNotification n) async {
     _hide();
     final isManagement = AuthService.instance.isManagement;
+    if (_isMonthlyTargetNotification(n) &&
+        (n.type == NotificationType.pendingApproval ||
+            n.type == NotificationType.siteVisit) &&
+        isManagement) {
+      if (!mounted) return;
+      await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const MonthlyTargetApprovalsPage()),
+      );
+      return;
+    }
     if ((n.type == NotificationType.siteVisit ||
             n.type == NotificationType.pendingApproval) &&
         isManagement) {

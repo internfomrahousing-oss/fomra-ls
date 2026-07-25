@@ -8,12 +8,17 @@ import '../../theme/fomra_layout.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../widgets/fomra_app_bar.dart';
 import '../../widgets/fomra_app_shell.dart';
+import '../../widgets/fomra_breadcrumb.dart';
+import '../../widgets/portal_page_layout.dart';
 import '../../widgets/ui/app_components.dart';
 import '../../widgets/ui/app_loader.dart';
 
 /// Immutable audit trail — User, Timestamp, Old Value, New Value.
 class AuditTrailScreen extends StatefulWidget {
-  const AuditTrailScreen({super.key});
+  /// When opened from Settings, use sub-page chrome (back + Settings crumbs).
+  final bool asSettingsChild;
+
+  const AuditTrailScreen({super.key, this.asSettingsChild = false});
 
   @override
   State<AuditTrailScreen> createState() => _AuditTrailScreenState();
@@ -267,9 +272,19 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
       ),
     );
 
+    final PreferredSizeWidget appBar;
+    if (widget.asSettingsChild) {
+      appBar = FomraSubPageAppBar(
+        title: 'Audit Trail',
+        breadcrumbs: FomraBreadcrumbs.forSettingsChild('Audit Trail'),
+      );
+    } else {
+      appBar = const FomraAppBar(moduleName: 'Audit');
+    }
+
     return FomraAppShell(
-      currentRoute: '/audit-trail',
-      appBar: const FomraAppBar(moduleName: 'Audit'),
+      currentRoute: widget.asSettingsChild ? '/settings' : '/audit-trail',
+      appBar: appBar,
       body: body,
     );
   }

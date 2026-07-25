@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/employee_profile.dart';
 import '../screens/home/home_screen.dart';
-import '../screens/settings/access_as_user_page.dart';
+import '../screens/employee_management/employee_management_portal_screen.dart';
 import '../services/access_as_user.dart';
 import '../services/auth_service.dart';
 import '../services/notification_hub.dart';
@@ -22,15 +22,14 @@ class ImpersonationBanner extends StatelessWidget {
     // management session.
     NotificationHub.instance.stop();
     ViewScope.instance.reset();
-    // Land back where management launched it — the Access as User page — with
-    // Home as the base so Back still works. The whole app rebuilds as
-    // management (the banner is gone now).
+    // Land back on User Management (Access lives there now) with Home as the
+    // base so Back still works.
     navigator.pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const HomeScreen()),
       (_) => false,
     );
     navigator.push(
-      MaterialPageRoute(builder: (_) => const AccessAsUserPage()),
+      MaterialPageRoute(builder: (_) => const UserManagementPage()),
     );
   }
 

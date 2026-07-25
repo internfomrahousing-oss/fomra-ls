@@ -8,8 +8,9 @@ import '../../services/monthly_target_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_input.dart';
 import '../../theme/fomra_theme_context.dart';
-import '../../widgets/fomra_app_bar.dart';
 import '../../widgets/fomra_app_shell.dart';
+import '../../widgets/fomra_breadcrumb.dart';
+import '../../widgets/portal_page_layout.dart';
 import '../../widgets/ui/app_components.dart';
 import '../../widgets/ui/app_feedback.dart';
 
@@ -177,7 +178,10 @@ class _MonthlyTargetsPageState extends State<MonthlyTargetsPage> {
   Widget build(BuildContext context) {
     return FomraAppShell(
       currentRoute: '/settings',
-      appBar: const FomraAppBar(moduleName: 'Monthly Targets'),
+      appBar: FomraSubPageAppBar(
+        title: 'Monthly Targets',
+        breadcrumbs: FomraBreadcrumbs.forSettingsChild('Monthly Targets'),
+      ),
       backgroundColor: context.fomraPageBg,
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),

@@ -4,7 +4,7 @@ import '../../analytics/business_module_metrics.dart';
 import '../../models/land_lead.dart';
 import '../../analytics/monthly_target_progress.dart';
 import '../../models/land_lead_meeting.dart';
-import '../../models/monthly_target.dart';
+import '../../models/monthly_target_submission.dart';
 import '../../services/management_bi_activity_service.dart';
 import '../land_lead/add_lead_screen.dart';
 import '../../models/lead_list_filter.dart';
@@ -21,6 +21,7 @@ import '../../services/team_hierarchy.dart';
 import '../employee_management/team_management_screen.dart';
 import '../../services/land_lead_service.dart';
 import '../../services/monthly_target_service.dart';
+import '../../services/monthly_target_submission_service.dart';
 import '../../services/lead_drop_approval_service.dart';
 import '../../services/land_lead_signed_service.dart';
 import '../../services/land_lead_site_visit_service.dart';
@@ -34,6 +35,8 @@ import '../../theme/fomra_theme_context.dart';
 import '../../models/app_notification.dart';
 import '../../models/land_lead_signed_request.dart';
 import '../../models/land_lead_site_visit.dart';
+import '../settings/employee_monthly_targets_page.dart';
+import '../settings/monthly_target_approvals_page.dart';
 import '../../widgets/fomra_app_bar.dart';
 import '../../widgets/fomra_app_shell.dart';
 import '../../widgets/ui/app_feedback.dart';
@@ -61,19 +64,28 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   List<LandLeadSiteVisit> _pendingApprovals = [];
   List<LandLeadSignedRequest> _pendingSigned = [];
   List<LeadDropApprovalRequest> _pendingDropApprovals = [];
+  List<MonthlyTargetSubmission> _pendingMonthlyTargets = [];
   bool _loadingApprovals = false;
 
   /// Meeting history behind the management "No Future Activity" quick action.
   List<LandLeadMeeting> _meetings = const [];
 
-  /// This employee's progress against the common monthly target. Null until the
+  /// This employee's progress against their monthly target. Null until the
   /// first load lands; management never loads it.
   MonthlyTargetProgress? _monthlyProgress;
 
-  /// The fetched target, cached so the progress can be recomputed locally from
-  /// visibleLeads whenever the store or scope changes (without re-hitting the
-  /// network).
-  MonthlyTarget? _monthlyTarget;
+  /// The resolved target number (from an approved employee submission when
+  /// present, otherwise the management-set common/personal target). Cached so
+  /// progress can be recomputed locally from visibleLeads without re-fetching.
+  int _monthlyTargetCount = 0;
+
+  /// True when the resolved target came from the employee's own approved
+  /// submission rather than a management-set row.
+  bool _monthlyTargetFromEmployee = false;
+
+  /// True when the employee has submitted this month but it is still pending
+  /// approval (so the card can explain why no target is active yet).
+  bool _monthlyTargetPendingApproval = false;
 
   List<LandLead> get _noFutureActivityLeads => NoFutureActivityAnalytics.select(
         AppStore.instance.visibleLeads,
@@ -123,17 +135,72 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (mounted) setState(() => _meetings = meetings);
   }
 
-  /// This employee's progress against the common monthly target. Achieved is
-  /// counted locally from the leads they've sourced this month (see
-  /// [_recomputeMonthlyProgress]); this just fetches the target. Degrades to a
-  /// null target rather than throwing.
+  /// Resolves this employee's monthly target for the progress card.
+  ///
+  /// Prefer an **approved** self-set submission (Settings › My Monthly Targets).
+  /// While a submission is **pending**, do not fall back to a management-set
+  /// target — show the awaiting-approval empty state instead. Only fall back
+  /// to the management-set common/personal target when there is no current
+  /// submission (or the last one was rejected).
   Future<void> _loadMonthlyTarget() async {
     final now = DateTime.now();
-    final myEmail = (AuthService.instance.currentUser?.email ?? '').trim();
-    final target =
-        await MonthlyTargetService.resolveForEmployee(myEmail, now: now);
+    final myEmail =
+        (AuthService.instance.currentUser?.email ?? '').trim().toLowerCase();
+
+    var targetCount = 0;
+    var fromEmployee = false;
+    var pendingApproval = false;
+
+    try {
+      // Prefer the dedicated approved lookup, then fall back to history so a
+      // pending/rejected row can still drive the empty-state copy.
+      final approved =
+          await MonthlyTargetSubmissionService.approvedForEmployee(
+        myEmail,
+        now: now,
+      );
+      if (approved != null) {
+        fromEmployee = true;
+        targetCount = approved.sitesProgressTarget;
+      } else {
+        final history =
+            await MonthlyTargetSubmissionService.getForEmployee(myEmail);
+        final period =
+            MonthlyTargetSubmission.periodOf(now.year, now.month);
+        MonthlyTargetSubmission? current;
+        for (final s in history) {
+          if (s.period == period) {
+            current = s;
+            break;
+          }
+        }
+        if (current != null) {
+          if (current.isPending) {
+            pendingApproval = true;
+          } else if (current.isApproved) {
+            fromEmployee = true;
+            targetCount = current.sitesProgressTarget;
+          }
+          // Rejected → fall through to management target below.
+        }
+      }
+    } catch (_) {
+      // Submission table may be missing — fall through to management target.
+    }
+
+    // Only use the management-set target when the employee has nothing in
+    // flight for this month (no pending / no approved submission).
+    if (!fromEmployee && !pendingApproval) {
+      final target =
+          await MonthlyTargetService.resolveForEmployee(myEmail, now: now);
+      targetCount = target?.target ?? 0;
+      fromEmployee = false;
+    }
+
     if (!mounted) return;
-    _monthlyTarget = target;
+    _monthlyTargetCount = pendingApproval ? 0 : targetCount;
+    _monthlyTargetFromEmployee = fromEmployee && !pendingApproval;
+    _monthlyTargetPendingApproval = pendingApproval;
     _recomputeMonthlyProgress();
   }
 
@@ -153,10 +220,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     ];
     setState(() {
       _monthlyProgress = MonthlyTargetProgress.forMonth(
-        target: _monthlyTarget?.target ?? 0,
+        target: _monthlyTargetCount,
         now: now,
         completedOn: completedOn,
       );
+    });
+  }
+
+  void _openMyMonthlyTargets() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const EmployeeMonthlyTargetsPage()),
+    ).then((_) {
+      if (mounted && !_isManagement) _loadMonthlyTarget();
     });
   }
 
@@ -213,7 +289,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     // Leads just changed in the store — refresh the Monthly Target's signed
     // count from the new visibleLeads (recompute calls setState). Management
     // doesn't show the card, so a plain rebuild is enough for it.
-    if (!_isManagement && _monthlyTarget != null) {
+    if (!_isManagement && _monthlyProgress != null) {
       _recomputeMonthlyProgress();
     } else {
       setState(() {});
@@ -242,11 +318,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     try {
       dropRequests = await LeadDropApprovalService.getPending();
     } catch (_) {/* notification storage may not exist yet */}
+    List<MonthlyTargetSubmission> monthlyTargets = const [];
+    try {
+      monthlyTargets = await MonthlyTargetSubmissionService.getPending();
+    } catch (_) {/* table may not exist yet */}
     if (mounted) {
       setState(() {
         _pendingApprovals = visits;
         _pendingSigned = signed;
         _pendingDropApprovals = dropRequests;
+        _pendingMonthlyTargets = monthlyTargets;
         _loadingApprovals = false;
       });
     }
@@ -359,6 +440,119 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     await _reviewPendingVisit(visit);
   }
 
+  Future<void> _approveMonthlyTarget(MonthlyTargetSubmission s) async {
+    try {
+      await MonthlyTargetSubmissionService.approve(submission: s);
+      if (!mounted) return;
+      AppFeedback.success(context, 'Targets approved.');
+      await _loadPendingApprovals();
+    } catch (e) {
+      if (!mounted) return;
+      AppFeedback.error(context, 'Could not approve targets: $e');
+    }
+  }
+
+  Future<void> _rejectMonthlyTarget(MonthlyTargetSubmission s) async {
+    final ctrl = TextEditingController();
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Reject targets'),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          minLines: 2,
+          maxLines: 4,
+          decoration: const InputDecoration(
+            labelText: 'Reason (optional)',
+            hintText: 'Why are these targets being rejected?',
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
+            child: const Text('Reject'),
+          ),
+        ],
+      ),
+    );
+    if (reason == null) return;
+    try {
+      await MonthlyTargetSubmissionService.reject(
+          submission: s, reason: reason);
+      if (!mounted) return;
+      AppFeedback.info(context, 'Targets rejected.');
+      await _loadPendingApprovals();
+    } catch (e) {
+      if (!mounted) return;
+      AppFeedback.error(context, 'Could not reject targets: $e');
+    }
+  }
+
+  Future<void> _editMonthlyTarget(MonthlyTargetSubmission s) async {
+    final result = await showMonthlyTargetEditDialog(context, s);
+    if (result == null) return;
+    try {
+      switch (result.action) {
+        case MonthlyTargetEditAction.save:
+          await MonthlyTargetSubmissionService.saveEdits(
+              submission: s, values: result.values);
+          if (!mounted) return;
+          AppFeedback.success(
+              context, 'Changes saved — still pending approval.');
+        case MonthlyTargetEditAction.approve:
+          await MonthlyTargetSubmissionService.approve(
+              submission: s, approvedValues: result.values);
+          if (!mounted) return;
+          AppFeedback.success(context, 'Targets approved.');
+        case MonthlyTargetEditAction.reject:
+          final ctrl = TextEditingController();
+          final reason = await showDialog<String>(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16)),
+              title: const Text('Reject targets'),
+              content: TextField(
+                controller: ctrl,
+                autofocus: true,
+                minLines: 2,
+                maxLines: 4,
+                decoration: const InputDecoration(
+                  labelText: 'Reason (optional)',
+                  hintText: 'Why are these targets being rejected?',
+                ),
+              ),
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('Cancel')),
+                FilledButton(
+                  onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+                  style:
+                      FilledButton.styleFrom(backgroundColor: AppColors.error),
+                  child: const Text('Reject'),
+                ),
+              ],
+            ),
+          );
+          if (reason == null) return;
+          await MonthlyTargetSubmissionService.reject(
+              submission: s, reason: reason);
+          if (!mounted) return;
+          AppFeedback.info(context, 'Targets rejected.');
+      }
+      await _loadPendingApprovals();
+    } catch (e) {
+      if (!mounted) return;
+      AppFeedback.error(context, 'Action failed: $e');
+    }
+  }
+
   void _goTo(String route) => Navigator.pushNamed(context, route);
 
   void _openAllProjectsMap(List<LandLead> leads) {
@@ -436,6 +630,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   visits: _pendingApprovals,
                   signedRequests: _pendingSigned,
                   dropRequests: _pendingDropApprovals,
+                  monthlyTargets: _pendingMonthlyTargets,
                   leads: AppStore.instance.leads,
                   loading: _loadingApprovals,
                   onReview: (v) => wrap(() => _reviewPendingVisit(v)),
@@ -445,6 +640,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   onRejectSigned: (r) => wrap(() => _rejectSignedRequest(r)),
                   onApproveDrop: (r) => wrap(() => _approveDropRequest(r)),
                   onRejectDrop: (r) => wrap(() => _rejectDropRequest(r)),
+                  onApproveMonthlyTarget: (s) =>
+                      wrap(() => _approveMonthlyTarget(s)),
+                  onRejectMonthlyTarget: (s) =>
+                      wrap(() => _rejectMonthlyTarget(s)),
+                  onEditMonthlyTarget: (s) =>
+                      wrap(() => _editMonthlyTarget(s)),
                 ),
               ],
             ),
@@ -473,8 +674,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final teamRows = buildPortalTeamPerformance(leads);
 
     final dropApprovalPending = _pendingDropApprovals.length;
-    final approvalCount =
-      _pendingApprovals.length + _pendingSigned.length + dropApprovalPending;
+    final approvalCount = _pendingApprovals.length +
+        _pendingSigned.length +
+        dropApprovalPending +
+        _pendingMonthlyTargets.length;
 
     final pendingApprovalItems = <PendingApprovalItem>[
       for (final v in _pendingApprovals)
@@ -494,6 +697,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           leadId: d.leadId,
           label: 'Drop request',
           since: d.createdAt,
+        ),
+      for (final t in _pendingMonthlyTargets)
+        PendingApprovalItem(
+          leadId: t.id,
+          label: 'Monthly Target Approval',
+          since: t.submittedAt,
         ),
     ];
 
@@ -655,11 +864,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       title: 'Monthly Target Progress',
                       subtitle: canManageTeam && ViewScope.instance.isTeam
                           ? "Your team's sites this month against the target"
-                          : 'Your sites this month against the target',
+                          : (_monthlyTargetFromEmployee
+                              ? 'Your approved targets · sites this month'
+                              : 'Your sites this month against the target'),
                       icon: Icons.flag_outlined,
                       child: MonthlyTargetProgressCard(
                         progress: _monthlyProgress!,
                         month: DateTime.now(),
+                        pendingApproval: _monthlyTargetPendingApproval,
+                        onSetTarget: _openMyMonthlyTargets,
                       ),
                     ),
                   ),

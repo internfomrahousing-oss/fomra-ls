@@ -14,13 +14,14 @@ import '../../theme/fomra_layout.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../widgets/fomra_app_bar.dart';
 import '../../widgets/fomra_app_shell.dart';
+import '../../widgets/fomra_breadcrumb.dart';
 import '../../widgets/ui/app_components.dart';
 import '../../widgets/ui/app_feedback.dart';
 import '../../widgets/change_password_section.dart';
 import '../../widgets/portal_page_layout.dart';
 import '../audit/audit_trail_screen.dart';
+import '../employee_management/employee_management_portal_screen.dart';
 import '../employee_management/employee_management_screen.dart';
-import 'access_as_user_page.dart';
 import 'employee_monthly_targets_page.dart';
 import 'monthly_target_approvals_page.dart';
 import 'monthly_targets_page.dart';
@@ -114,7 +115,7 @@ class SettingsScreen extends StatelessWidget {
                   onTap: () => Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => const _UserManagementPage(),
+                      builder: (_) => const UserManagementPage(),
                     ),
                   ),
                 ),
@@ -126,7 +127,8 @@ class SettingsScreen extends StatelessWidget {
                   onTap: () => Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => const AuditTrailScreen(),
+                      builder: (_) =>
+                          const AuditTrailScreen(asSettingsChild: true),
                     ),
                   ),
                 ),
@@ -151,18 +153,6 @@ class SettingsScreen extends StatelessWidget {
                     context,
                     MaterialPageRoute(
                       builder: (_) => const MonthlyTargetsPage(),
-                    ),
-                  ),
-                ),
-              if (isManagement)
-                _SettingsTile(
-                  icon: Icons.visibility_outlined,
-                  label: 'Access as User',
-                  accent: AppColors.info,
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const AccessAsUserPage(),
                     ),
                   ),
                 ),
@@ -291,20 +281,6 @@ class _SettingsTileState extends State<_SettingsTile> {
   }
 }
 
-class _UserManagementPage extends StatelessWidget {
-  const _UserManagementPage();
-
-  @override
-  Widget build(BuildContext context) {
-    return FomraAppShell(
-      currentRoute: '/settings',
-      backgroundColor: context.fomraPageBg,
-      appBar: const FomraSubPageAppBar(title: 'User Management'),
-      body: const EmployeeManagementScreen(isTab: true),
-    );
-  }
-}
-
 class _DroppedReasonsPage extends StatefulWidget {
   const _DroppedReasonsPage();
 
@@ -398,8 +374,9 @@ class _DroppedReasonsPageState extends State<_DroppedReasonsPage> {
     final reasons = _catalog.current;
     return FomraAppShell(
       currentRoute: '/settings',
-      appBar: const FomraAppBar(
-        moduleName: 'Dropped Reasons',
+      appBar: FomraSubPageAppBar(
+        title: 'Dropped Reasons',
+        breadcrumbs: FomraBreadcrumbs.forSettingsChild('Dropped Reasons'),
       ),
       backgroundColor: context.fomraPageBg,
       body: ListView(
@@ -513,8 +490,9 @@ class _BulkLeadImportPageState extends State<_BulkLeadImportPage> {
   Widget build(BuildContext context) {
     return FomraAppShell(
       currentRoute: '/settings',
-      appBar: const FomraAppBar(
-        moduleName: 'Bulk Lead Import',
+      appBar: FomraSubPageAppBar(
+        title: 'Bulk Lead Import',
+        breadcrumbs: FomraBreadcrumbs.forSettingsChild('Bulk Lead Import'),
       ),
       backgroundColor: context.fomraPageBg,
       body: ListView(

@@ -169,6 +169,14 @@ abstract final class FomraBreadcrumbs {
         FomraBreadcrumbItem.current(label),
       ];
 
+  /// `Home > Settings > [label]` for pages opened from Settings. Tapping
+  /// Settings pops back to the Settings hub; Home resets to the dashboard.
+  static List<FomraBreadcrumbItem> forSettingsChild(String label) => [
+        home,
+        const FomraBreadcrumbItem.pop('Settings'),
+        FomraBreadcrumbItem.current(label),
+      ];
+
   /// `Home > [label]` for a page whose title is dynamic (a lead, a filtered
   /// list). [ancestors] is accepted for call-site compatibility but no longer
   /// inserted — the trail stays flat.

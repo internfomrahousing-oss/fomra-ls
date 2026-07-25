@@ -17,8 +17,12 @@ import '../../widgets/ui/app_components.dart';
 import '../../widgets/ui/app_loader.dart';
 import '../land_lead/lead_detail_screen.dart';
 import '../land_lead/management_visit_review_dialog.dart';
+import '../settings/monthly_target_approvals_page.dart';
 
 enum _NotifFilter { all, unread, read }
+
+bool _isMonthlyTargetNotification(AppNotification n) =>
+    n.title.trim().toLowerCase().startsWith('monthly target');
 
 /// Full Notification Center — Read / Unread / Mark All Read.
 class NotificationCenterScreen extends StatefulWidget {
@@ -144,6 +148,17 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen> {
   Future<void> _open(AppNotification n) async {
     await _markRead(n);
     if (!mounted) return;
+
+    if (_isMonthlyTargetNotification(n) &&
+        (n.type == NotificationType.siteVisit ||
+            n.type == NotificationType.pendingApproval) &&
+        AuthService.instance.isManagement) {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const MonthlyTargetApprovalsPage()),
+      );
+      return;
+    }
 
     if (n.type == NotificationType.siteVisit ||
         n.type == NotificationType.pendingApproval) {

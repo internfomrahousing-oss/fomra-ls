@@ -7,9 +7,10 @@ import '../../services/employee_service.dart';
 import '../../services/monthly_target_submission_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_theme_context.dart';
-import '../../widgets/fomra_app_bar.dart';
 import '../../widgets/fomra_app_shell.dart';
+import '../../widgets/fomra_breadcrumb.dart';
 import '../../widgets/monthly_target_editor.dart';
+import '../../widgets/portal_page_layout.dart';
 import '../../widgets/ui/app_components.dart';
 import '../../widgets/ui/app_feedback.dart';
 
@@ -112,7 +113,10 @@ class _EmployeeMonthlyTargetsPageState
   Widget build(BuildContext context) {
     return FomraAppShell(
       currentRoute: '/settings',
-      appBar: const FomraAppBar(moduleName: 'My Monthly Targets'),
+      appBar: FomraSubPageAppBar(
+        title: 'My Monthly Targets',
+        breadcrumbs: FomraBreadcrumbs.forSettingsChild('My Monthly Targets'),
+      ),
       backgroundColor: context.fomraPageBg,
       body: _loading
           ? const Center(child: CircularProgressIndicator())
