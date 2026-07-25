@@ -271,7 +271,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     // Leads just changed in the store — refresh the Monthly Target's signed
     // count from the new visibleLeads (recompute calls setState). Management
     // doesn't show the card, so a plain rebuild is enough for it.
-    if (!_isManagement && _monthlyTarget != null) {
+    if (!_isManagement && _monthlyProgress != null) {
       _recomputeMonthlyProgress();
     } else {
       setState(() {});
