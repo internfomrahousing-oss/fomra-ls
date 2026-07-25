@@ -63,25 +63,6 @@ const _kCategories = [
   _PoiCategory('Petrol Stations', Icons.local_gas_station_outlined, Color(0xFF558B2F), 'amenity', 'fuel'),
   _PoiCategory('Govt. Offices', Icons.account_balance_wallet_outlined, Color(0xFF795548), 'amenity', 'townhall'),
   _PoiCategory('Worship Places', Icons.temple_hindu_outlined, Color(0xFF880E4F), 'amenity', 'place_of_worship'),
-  // Site-context categories the backend also returns; captured here so the
-  // Location Intelligence panel can show them (they never affect scoring).
-  _PoiCategory('Water Bodies', Icons.water_outlined, Color(0xFF0277BD), 'natural', 'water'),
-  _PoiCategory('Cemeteries', Icons.local_florist_outlined, Color(0xFF546E7A), 'landuse', 'cemetery'),
-];
-
-/// Location Intelligence uses a fixed 500 m display radius, independent of the
-/// infrastructure-score radius (which the API restricts to 2/5/10 km). Places
-/// are filtered client-side on the `distance` (km) each POI carries.
-const _kLocIntelRadiusM = 500;
-const _kLocIntelRadiusKm = 0.5;
-
-/// Categories pinned to the compact summary card, in display order.
-const _kLocIntelSummary = [
-  'Schools',
-  'Hospitals',
-  'Bus Stops',
-  'Water Bodies',
-  'Cemeteries',
 ];
 
 /// Overall infrastructure weights from idea.txt
@@ -210,9 +191,6 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
   String? _poiError;
   bool _poisCollected = false;
   Map<String, double> _infraScoreMap = {};
-  DateTime? _poiFetchedAt;
-  // Categories the user expanded via "View All" in the Location Intelligence panel.
-  final Set<String> _locIntelExpanded = {};
   int _poiFetchSeq = 0;
   int _tngisFetchSeq = 0;
 
@@ -869,8 +847,6 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
         _poiPlaces = places;
         _infraScoreMap = scores;
         _poisCollected = scores.isNotEmpty;
-        _poiFetchedAt = DateTime.now();
-        _locIntelExpanded.clear();
       });
     } on ApiException catch (e) {
       if (!mounted || fetchSeq != _poiFetchSeq) return;
@@ -2944,6 +2920,16 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
 
   // â”€â”€ Section: POI Collection â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
+  void _showPoiList(_PoiCategory cat) {
+    final places = _poiPlaces[cat.name] ?? [];
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _PoiListSheet(category: cat, places: places),
+    );
+  }
+
   Widget _buildInfrastructureSection() {
     final scores = _infraScores;
     final overall = scores['Overall Location'] ?? 0;
@@ -3319,478 +3305,70 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
               ),
             ),
             if (_poiCounts.isNotEmpty) ...[
-              const SizedBox(height: 18),
+              const SizedBox(height: 8),
               const Divider(),
-              const SizedBox(height: 16),
-              // Infrastructure shows EVERYTHING found within the selected
-              // radius; Location Intelligence (below) narrows to 500 m.
-              _buildNearbyAmenitiesFull(),
-              const SizedBox(height: 18),
-              const Divider(),
-              const SizedBox(height: 16),
-              _buildLocationIntelligence(),
+              const SizedBox(height: 8),
+              Text(
+                'Nearby amenities (tap for Google Maps)',
+                style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: context.fomraTextSecondary),
+              ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _kCategories.map((cat) {
+                  final count = _poiCounts[cat.name] ?? 0;
+                  return Material(
+                    color: cat.color.withValues(alpha: 0.07),
+                    borderRadius: BorderRadius.circular(20),
+                    child: InkWell(
+                      onTap: () => _showPoiList(cat),
+                      borderRadius: BorderRadius.circular(20),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: cat.color.withValues(alpha: 0.28),
+                          ),
+                        ),
+                        child: Row(mainAxisSize: MainAxisSize.min, children: [
+                          Icon(cat.icon, color: cat.color, size: 13),
+                          const SizedBox(width: 5),
+                          Text(
+                            '$count',
+                            style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w800,
+                                color: cat.color),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            cat.name,
+                            style: TextStyle(
+                                fontSize: 10,
+                                color: context.fomraTextSecondary),
+                          ),
+                          const SizedBox(width: 3),
+                          Icon(Icons.chevron_right,
+                              size: 12,
+                              color: cat.color.withValues(alpha: 0.6)),
+                        ]),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
             ],
           ],
         ],
       ),
-    );
-  }
-
-  // ── Section: Location Intelligence (500 m nearby places) ──────────────────
-  //
-  // Reuses the already-fetched POI data (`_poiPlaces`) but shows only what sits
-  // within 500 m of the site. The infrastructure API caps `radiusKm` at 2/5/10,
-  // so the 500 m window is applied here as a client-side filter on each place's
-  // `distance` (km); the scoring above is left on the full radius, untouched.
-
-  /// Places for [categoryName] whose distance is known and ≤ 500 m, nearest first.
-  List<Map<String, dynamic>> _placesWithin500(String categoryName) {
-    final all = _poiPlaces[categoryName] ?? const [];
-    final within = [
-      for (final p in all)
-        if ((p['distance'] as num?) != null &&
-            (p['distance'] as num).toDouble() <= _kLocIntelRadiusKm)
-          p,
-    ];
-    within.sort((a, b) =>
-        ((a['distance'] as num).toDouble()).compareTo((b['distance'] as num).toDouble()));
-    return within;
-  }
-
-  _PoiCategory _catByName(String name) =>
-      _kCategories.firstWhere((c) => c.name == name);
-
-  /// Distance label: metres under 1 km, otherwise one-decimal km.
-  static String _fmtDistance(double km) =>
-      km < 1 ? '${(km * 1000).round()} m' : '${km.toStringAsFixed(1)} km';
-
-  static const _kMonths = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-  ];
-
-  static String _fmtTimestamp(DateTime d) {
-    final h12 = d.hour % 12 == 0 ? 12 : d.hour % 12;
-    final ampm = d.hour < 12 ? 'AM' : 'PM';
-    final mm = d.minute.toString().padLeft(2, '0');
-    return '${d.day} ${_kMonths[d.month - 1]} ${d.year}, $h12:$mm $ampm';
-  }
-
-  /// Infrastructure's full amenities view — every category found within the
-  /// selected radius (2/5/10 km), shown as compact count chips. This is the
-  /// "everything" companion to the 500 m Location Intelligence panel.
-  Widget _buildNearbyAmenitiesFull() {
-    final radiusLabel = '$_selectedRadius km';
-    final cats = [
-      for (final cat in _kCategories)
-        if ((_poiCounts[cat.name] ?? 0) > 0) cat,
-    ];
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(Icons.travel_explore_outlined,
-                size: 18, color: AppColors.primary),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Nearby Amenities',
-                    style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                        color: context.fomraTextPrimary)),
-                Text('Everything within $radiusLabel of this site',
-                    style: TextStyle(
-                        fontSize: 12, color: context.fomraTextSecondary)),
-              ],
-            ),
-          ),
-        ]),
-        const SizedBox(height: 14),
-        if (cats.isEmpty)
-          Text('No amenities found within $radiusLabel.',
-              style:
-                  TextStyle(fontSize: 12.5, color: context.fomraTextSecondary))
-        else
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [for (final cat in cats) _amenityCountChip(cat)],
-          ),
-      ],
-    );
-  }
-
-  Widget _amenityCountChip(_PoiCategory cat) {
-    final count = _poiCounts[cat.name] ?? 0;
-    final places = _poiPlaces[cat.name] ?? const [];
-    final nearest =
-        places.isNotEmpty ? (places.first['distance'] as num?)?.toDouble() : null;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
-      decoration: BoxDecoration(
-        color: cat.color.withValues(alpha: 0.07),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: cat.color.withValues(alpha: 0.25)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(cat.icon, size: 14, color: cat.color),
-          const SizedBox(width: 6),
-          Text(cat.name,
-              style: TextStyle(
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w600,
-                  color: context.fomraTextPrimary)),
-          const SizedBox(width: 6),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
-            decoration: BoxDecoration(
-              color: cat.color.withValues(alpha: 0.16),
-              borderRadius: BorderRadius.circular(999),
-            ),
-            child: Text('$count',
-                style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                    color: cat.color)),
-          ),
-          if (nearest != null) ...[
-            const SizedBox(width: 6),
-            Text(_fmtDistance(nearest),
-                style: TextStyle(
-                    fontSize: 10.5, color: context.fomraTextSecondary)),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildLocationIntelligence() {
-    // Detail cards: the pinned summary categories always appear (so an empty one
-    // can state it plainly), then any other category with places within 500 m.
-    final extras = [
-      for (final c in _kCategories)
-        if (!_kLocIntelSummary.contains(c.name) &&
-            _placesWithin500(c.name).isNotEmpty)
-          c.name,
-    ];
-    final detailCats = [..._kLocIntelSummary, ...extras];
-    final anyNearby =
-        detailCats.any((name) => _placesWithin500(name).isNotEmpty);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(Icons.explore_outlined,
-                size: 18, color: AppColors.primary),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Location Intelligence',
-                    style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                        color: context.fomraTextPrimary)),
-                Text('Places within ${_kLocIntelRadiusM} m of this site',
-                    style: TextStyle(
-                        fontSize: 12, color: context.fomraTextSecondary)),
-              ],
-            ),
-          ),
-        ]),
-        const SizedBox(height: 14),
-        _locIntelSummaryCard(),
-        const SizedBox(height: 16),
-        if (!anyNearby)
-          _locIntelEmptyBanner()
-        else
-          LayoutBuilder(builder: (context, c) {
-            final twoCol = c.maxWidth >= 520;
-            const gap = 12.0;
-            final cellW = twoCol ? (c.maxWidth - gap) / 2 : c.maxWidth;
-            return Wrap(
-              spacing: gap,
-              runSpacing: gap,
-              children: [
-                for (final name in detailCats)
-                  SizedBox(width: cellW, child: _locIntelCategoryCard(name)),
-              ],
-            );
-          }),
-        if (_poiFetchedAt != null) ...[
-          const SizedBox(height: 14),
-          Row(children: [
-            Icon(Icons.schedule_outlined,
-                size: 13, color: context.fomraTextSecondary),
-            const SizedBox(width: 6),
-            Text('Last updated: ${_fmtTimestamp(_poiFetchedAt!)}',
-                style: TextStyle(
-                    fontSize: 11, color: context.fomraTextSecondary)),
-          ]),
-        ],
-      ],
-    );
-  }
-
-  Widget _locIntelSummaryCard() {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
-      decoration: BoxDecoration(
-        color: context.fomraSurfaceVar,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: context.fomraBorder),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Location Intelligence Summary',
-              style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w800,
-                  color: context.fomraTextPrimary)),
-          const SizedBox(height: 12),
-          for (final name in _kLocIntelSummary)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: _locIntelSummaryRow(name),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _locIntelSummaryRow(String name) {
-    final cat = _catByName(name);
-    final count = _placesWithin500(name).length;
-    return Row(children: [
-      Icon(cat.icon, size: 16, color: cat.color),
-      const SizedBox(width: 8),
-      Text(name,
-          style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: context.fomraTextPrimary)),
-      const SizedBox(width: 8),
-      Expanded(
-        child: CustomPaint(
-          size: const Size(double.infinity, 1),
-          painter: _DottedLeaderPainter(context.fomraTextSecondary),
-        ),
-      ),
-      const SizedBox(width: 8),
-      Text('$count',
-          style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w800,
-              color: count == 0 ? context.fomraTextSecondary : cat.color)),
-    ]);
-  }
-
-  Widget _locIntelEmptyBanner() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
-      decoration: BoxDecoration(
-        color: context.fomraSurfaceVar,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: context.fomraBorder),
-      ),
-      child: Column(children: [
-        Icon(Icons.location_off_outlined,
-            size: 26, color: context.fomraTextSecondary),
-        const SizedBox(height: 8),
-        Text('No nearby locations within ${_kLocIntelRadiusM} m.',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-                fontSize: 12.5,
-                fontWeight: FontWeight.w600,
-                color: context.fomraTextSecondary)),
-      ]),
-    );
-  }
-
-  Widget _locIntelCategoryCard(String name) {
-    final cat = _catByName(name);
-    final places = _placesWithin500(name);
-    final count = places.length;
-    final expanded = _locIntelExpanded.contains(name);
-    final shown = expanded ? places : places.take(3).toList();
-
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: cat.color.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: cat.color.withValues(alpha: 0.22)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(children: [
-            Container(
-              padding: const EdgeInsets.all(7),
-              decoration: BoxDecoration(
-                color: cat.color.withValues(alpha: 0.14),
-                borderRadius: BorderRadius.circular(9),
-              ),
-              child: Icon(cat.icon, size: 16, color: cat.color),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(name,
-                  style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w800,
-                      color: context.fomraTextPrimary)),
-            ),
-            Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
-              decoration: BoxDecoration(
-                color: cat.color.withValues(alpha: 0.16),
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Text('$count',
-                  style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w800,
-                      color: cat.color)),
-            ),
-          ]),
-          const SizedBox(height: 12),
-          if (count == 0)
-            Text('No nearby locations within ${_kLocIntelRadiusM} m.',
-                style: TextStyle(
-                    fontSize: 12,
-                    color: context.fomraTextSecondary))
-          else ...[
-            _locIntelNearestChip(cat, places.first),
-            const SizedBox(height: 10),
-            for (final p in shown)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 7),
-                child: _locIntelPlaceRow(cat, p),
-              ),
-            if (count > 3)
-              GestureDetector(
-                onTap: () => setState(() {
-                  if (expanded) {
-                    _locIntelExpanded.remove(name);
-                  } else {
-                    _locIntelExpanded.add(name);
-                  }
-                }),
-                behavior: HitTestBehavior.opaque,
-                child: Padding(
-                  padding: const EdgeInsets.only(top: 2),
-                  child: Row(mainAxisSize: MainAxisSize.min, children: [
-                    Text(expanded ? 'Show less' : 'View All ($count)',
-                        style: TextStyle(
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w700,
-                            color: cat.color)),
-                    const SizedBox(width: 3),
-                    Icon(
-                        expanded
-                            ? Icons.expand_less_rounded
-                            : Icons.expand_more_rounded,
-                        size: 17,
-                        color: cat.color),
-                  ]),
-                ),
-              ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _locIntelNearestChip(_PoiCategory cat, Map<String, dynamic> place) {
-    final name = (place['name'] ?? 'Unnamed').toString();
-    final dist = (place['distance'] as num).toDouble();
-    return Row(children: [
-      Text('Nearest:',
-          style: TextStyle(
-              fontSize: 11.5,
-              fontWeight: FontWeight.w700,
-              color: context.fomraTextSecondary)),
-      const SizedBox(width: 6),
-      Expanded(
-        child: Text(name,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-                fontSize: 12.5,
-                fontWeight: FontWeight.w700,
-                color: context.fomraTextPrimary)),
-      ),
-      const SizedBox(width: 6),
-      _distanceBadge(cat, dist, filled: true),
-    ]);
-  }
-
-  Widget _locIntelPlaceRow(_PoiCategory cat, Map<String, dynamic> place) {
-    final name = (place['name'] ?? 'Unnamed').toString();
-    final dist = (place['distance'] as num).toDouble();
-    final lat = (place['lat'] as num?)?.toDouble();
-    final lon = (place['lon'] as num?)?.toDouble();
-    return InkWell(
-      onTap: () => _openPlaceOnGoogleMaps(context,
-          placeName: name, lat: lat, lon: lon),
-      borderRadius: BorderRadius.circular(8),
-      child: Row(children: [
-        Container(
-          width: 5,
-          height: 5,
-          margin: const EdgeInsets.only(right: 8),
-          decoration: BoxDecoration(color: cat.color, shape: BoxShape.circle),
-        ),
-        Expanded(
-          child: Text(name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                  fontSize: 12.5, color: context.fomraTextPrimary)),
-        ),
-        const SizedBox(width: 8),
-        _distanceBadge(cat, dist),
-      ]),
-    );
-  }
-
-  Widget _distanceBadge(_PoiCategory cat, double km, {bool filled = false}) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(
-        color: cat.color.withValues(alpha: filled ? 0.16 : 0.10),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(_fmtDistance(km),
-          style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              color: cat.color)),
     );
   }
 
@@ -3959,32 +3537,138 @@ Future<void> _openPlaceOnGoogleMaps(
   }
 }
 
-// â”€â”€ Small Widgets â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-/// Dotted leader between a label and its value in the summary card.
-class _DottedLeaderPainter extends CustomPainter {
-  final Color color;
-  const _DottedLeaderPainter(this.color);
+class _PoiListSheet extends StatelessWidget {
+  final _PoiCategory category;
+  final List<Map<String, dynamic>> places;
+  const _PoiListSheet({required this.category, required this.places});
 
   @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color.withValues(alpha: 0.35)
-      ..strokeWidth = 1;
-    const dash = 2.0;
-    const gap = 3.0;
-    final y = size.height / 2;
-    double x = 0;
-    while (x < size.width) {
-      canvas.drawLine(Offset(x, y), Offset(x + dash, y), paint);
-      x += dash + gap;
-    }
-  }
-
-  @override
-  bool shouldRepaint(_DottedLeaderPainter oldDelegate) =>
-      oldDelegate.color != color;
+  Widget build(BuildContext context) => DraggableScrollableSheet(
+        initialChildSize: 0.6,
+        maxChildSize: 0.9,
+        minChildSize: 0.3,
+        expand: false,
+        builder: (_, ctrl) => Container(
+          decoration: BoxDecoration(
+            color: context.fomraSurface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Column(children: [
+            _Handle(),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+              child: Row(children: [
+                Container(
+                  padding: const EdgeInsets.all(9),
+                  decoration: BoxDecoration(
+                    color: category.color.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Icon(category.icon, color: category.color, size: 22),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(category.name,
+                            style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                                color: context.fomraTextPrimary)),
+                        Text('${places.length} found nearby',
+                            style: TextStyle(
+                                fontSize: 12,
+                                color: context.fomraTextSecondary)),
+                      ]),
+                ),
+                IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: Icon(Icons.close,
+                      size: 20, color: context.fomraTextSecondary),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+              ]),
+            ),
+            Divider(height: 1, color: context.fomraBorder),
+            Expanded(
+              child: places.isEmpty
+                  ? Center(
+                      child: Text('No places found in this category.',
+                          style:
+                              TextStyle(color: context.fomraTextSecondary)))
+                  : ListView.separated(
+                      controller: ctrl,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 8),
+                      itemCount: places.length,
+                      separatorBuilder: (_, __) =>
+                          Divider(height: 1, indent: 52, color: context.fomraBorder),
+                      itemBuilder: (_, i) {
+                        final p = places[i];
+                        final dist = p['distance'] as double?;
+                        final name = p['name'] as String;
+                        final lat = (p['lat'] as num?)?.toDouble();
+                        final lon = (p['lon'] as num?)?.toDouble();
+                        return Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: () => _openPlaceOnGoogleMaps(
+                              context,
+                              placeName: name,
+                              lat: lat,
+                              lon: lon,
+                            ),
+                            borderRadius: BorderRadius.circular(AppColors.radiusSm),
+                            child: Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(vertical: 8),
+                              child: Row(children: [
+                                Container(
+                                  width: 36,
+                                  height: 36,
+                                  decoration: BoxDecoration(
+                                    color: category.color
+                                        .withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Icon(category.icon,
+                                      color: category.color, size: 18),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(name,
+                                      style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
+                                          color: context.fomraTextPrimary)),
+                                ),
+                                if (dist != null) ...[
+                                  const SizedBox(width: 8),
+                                  Text('${dist.toStringAsFixed(1)} km',
+                                      style: TextStyle(
+                                          fontSize: 11,
+                                          color: context.fomraTextSecondary)),
+                                ],
+                                const SizedBox(width: 6),
+                                Icon(Icons.map_outlined,
+                                    size: 14,
+                                    color: category.color
+                                        .withValues(alpha: 0.7)),
+                              ]),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ]),
+        ),
+      );
 }
+
+// â”€â”€ Small Widgets â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _SectionCard extends StatelessWidget {
   final String title;
@@ -4235,6 +3919,23 @@ class _FieldLabel extends StatelessWidget {
             fontSize: 14,
             fontWeight: FontWeight.w600,
             color: context.fomraTextSecondary,
+          ),
+        ),
+      );
+}
+
+class _Handle extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(top: 10, bottom: 4),
+        child: Center(
+          child: Container(
+            width: 36,
+            height: 4,
+            decoration: BoxDecoration(
+              color: context.fomraBorder,
+              borderRadius: BorderRadius.circular(2),
+            ),
           ),
         ),
       );
