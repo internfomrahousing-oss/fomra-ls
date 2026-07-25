@@ -59,44 +59,10 @@ class MonthlyTargetProgressCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (!progress.hasTarget) {
-      final monthLabel = MonthlyTarget.monthName(month.month);
-      final message = pendingApproval
-          ? 'Your $monthLabel targets are awaiting management approval.'
-          : 'No target set for $monthLabel yet. Propose yours under '
-              'Settings › Set Monthly Targets.';
-      return AppCard(
-        interactive: false,
-        child: Column(
-          children: [
-            EmptyState(
-              icon: pendingApproval
-                  ? Icons.hourglass_top_outlined
-                  : Icons.flag_outlined,
-              title: pendingApproval ? 'Awaiting approval' : 'No target set',
-              message: message,
-            ),
-            if (onSetTarget != null) ...[
-              const SizedBox(height: 4),
-              TextButton.icon(
-                onPressed: onSetTarget,
-                icon: Icon(
-                  pendingApproval
-                      ? Icons.visibility_outlined
-                      : Icons.flag_outlined,
-                  size: 18,
-                ),
-                label: Text(
-                  pendingApproval ? 'View my submission' : 'Set my targets',
-                ),
-              ),
-            ],
-          ],
-        ),
-      );
-    }
+    // Only the per-category (Leads / Site Visits / Meetings) view is shown.
+    // Without approved per-category targets, prompt the user to set them.
+    if (categories.isEmpty) return _setTargetMessage(context);
 
-    final multi = categories.isNotEmpty;
     return AppCard(
       interactive: false,
       child: Column(
@@ -104,18 +70,49 @@ class MonthlyTargetProgressCard extends StatelessWidget {
         children: [
           _header(context),
           const SizedBox(height: AppSpacing.md),
-          if (multi) ...[
-            _categoryBoxes(context),
-            const SizedBox(height: AppSpacing.md),
-            SizedBox(height: 190, child: _multiChart(context)),
-            const SizedBox(height: AppSpacing.sm),
-            _multiLegend(context),
-          ] else ...[
-            _summary(context),
-            const SizedBox(height: AppSpacing.md),
-            SizedBox(height: 190, child: _chart(context)),
-            const SizedBox(height: AppSpacing.sm),
-            _legend(context),
+          _categoryBoxes(context),
+          const SizedBox(height: AppSpacing.md),
+          SizedBox(height: 190, child: _multiChart(context)),
+          const SizedBox(height: AppSpacing.sm),
+          _multiLegend(context),
+        ],
+      ),
+    );
+  }
+
+  /// Shown when there are no approved per-category targets to graph: either the
+  /// submission is awaiting approval, or the user hasn't set targets yet.
+  Widget _setTargetMessage(BuildContext context) {
+    final monthLabel = MonthlyTarget.monthName(month.month);
+    final message = pendingApproval
+        ? 'Your $monthLabel targets are awaiting management approval.'
+        : 'Set your monthly targets under Settings › Set Monthly Targets to '
+            'track your Leads, Site Visits and Meetings here.';
+    return AppCard(
+      interactive: false,
+      child: Column(
+        children: [
+          EmptyState(
+            icon: pendingApproval
+                ? Icons.hourglass_top_outlined
+                : Icons.flag_outlined,
+            title: pendingApproval ? 'Awaiting approval' : 'Set your targets',
+            message: message,
+          ),
+          if (onSetTarget != null) ...[
+            const SizedBox(height: 4),
+            TextButton.icon(
+              onPressed: onSetTarget,
+              icon: Icon(
+                pendingApproval
+                    ? Icons.visibility_outlined
+                    : Icons.flag_outlined,
+                size: 18,
+              ),
+              label: Text(
+                pendingApproval ? 'View my submission' : 'Set my targets',
+              ),
+            ),
           ],
         ],
       ),
@@ -308,166 +305,6 @@ class MonthlyTargetProgressCard extends StatelessWidget {
               ),
             ),
           ),
-        ],
-      );
-
-  Widget _summary(BuildContext context) {
-    final pct = progress.completionPercent;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.baseline,
-          textBaseline: TextBaseline.alphabetic,
-          children: [
-            Text(
-              '${progress.achieved}',
-              style: TextStyle(
-                fontSize: 30,
-                fontWeight: FontWeight.w800,
-                color: context.fomraTextPrimary,
-              ),
-            ),
-            const SizedBox(width: 4),
-            Text(
-              '/ ${progress.target} sites',
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: context.fomraTextSecondary,
-              ),
-            ),
-            const Spacer(),
-            Text(
-              '${pct.toStringAsFixed(0)}%',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-                color: _accent,
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _chart(BuildContext context) {
-    final target = progress.target.toDouble();
-    final maxAchieved = progress.actualByDay.isEmpty
-        ? 0
-        : progress.actualByDay.reduce((a, b) => a > b ? a : b);
-    // Headroom so a line that beats the target isn't clipped.
-    final maxY = (maxAchieved > target ? maxAchieved.toDouble() : target) * 1.1;
-
-    return LineChart(
-      LineChartData(
-        minX: 1,
-        maxX: progress.daysInMonth.toDouble(),
-        minY: 0,
-        maxY: maxY <= 0 ? 1 : maxY,
-        gridData: FlGridData(
-          show: true,
-          drawVerticalLine: false,
-          getDrawingHorizontalLine: (_) => FlLine(
-            color: context.fomraBorder.withValues(alpha: 0.6),
-            strokeWidth: 1,
-          ),
-        ),
-        borderData: FlBorderData(show: false),
-        titlesData: FlTitlesData(
-          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          rightTitles:
-              const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          leftTitles: AxisTitles(
-            sideTitles: SideTitles(
-              showTitles: true,
-              reservedSize: 28,
-              getTitlesWidget: (v, meta) {
-                if (v != v.roundToDouble() || v == meta.max) {
-                  return const SizedBox.shrink();
-                }
-                return Text(
-                  '${v.toInt()}',
-                  style: TextStyle(fontSize: 9, color: context.fomraTextTertiary),
-                );
-              },
-            ),
-          ),
-          bottomTitles: AxisTitles(
-            sideTitles: SideTitles(
-              showTitles: true,
-              reservedSize: 22,
-              // Every 5th day keeps the axis readable on a phone.
-              interval: 5,
-              getTitlesWidget: (v, _) => Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Text(
-                  '${v.toInt()}',
-                  style: TextStyle(fontSize: 9, color: context.fomraTextTertiary),
-                ),
-              ),
-            ),
-          ),
-        ),
-        lineTouchData: LineTouchData(
-          touchTooltipData: LineTouchTooltipData(
-            getTooltipItems: (spots) => [
-              for (final s in spots)
-                LineTooltipItem(
-                  '${s.barIndex == 0 ? 'Achieved' : 'Target'}: '
-                  '${s.y.toStringAsFixed(s.barIndex == 0 ? 0 : 1)}',
-                  TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: s.barIndex == 0 ? _accent : context.fomraTextSecondary,
-                  ),
-                ),
-            ],
-          ),
-        ),
-        lineBarsData: [
-          // Actual progress.
-          LineChartBarData(
-            spots: [
-              for (var i = 0; i < progress.actualByDay.length; i++)
-                FlSpot((i + 1).toDouble(), progress.actualByDay[i].toDouble()),
-            ],
-            isCurved: false,
-            color: _accent,
-            barWidth: 2.5,
-            dotData: const FlDotData(show: false),
-            belowBarData: BarAreaData(
-              show: true,
-              color: _accent.withValues(alpha: 0.10),
-            ),
-          ),
-          // Ideal run-rate.
-          LineChartBarData(
-            spots: [
-              for (var i = 0; i < progress.targetByDay.length; i++)
-                FlSpot((i + 1).toDouble(), progress.targetByDay[i]),
-            ],
-            isCurved: false,
-            color: context.fomraTextTertiary,
-            barWidth: 1.5,
-            dashArray: const [5, 4],
-            dotData: const FlDotData(show: false),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // Wraps rather than a Row: the two labels don't fit side by side on a narrow
-  // phone once the text scales up.
-  Widget _legend(BuildContext context) => Wrap(
-        spacing: 14,
-        runSpacing: 4,
-        children: [
-          _legendDot(context, _accent, 'Actual progress', dashed: false),
-          _legendDot(context, context.fomraTextTertiary, 'Target progress',
-              dashed: true),
         ],
       );
 
