@@ -87,6 +87,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   /// approval (so the card can explain why no target is active yet).
   bool _monthlyTargetPendingApproval = false;
 
+  /// Approved per-category targets (leads / site_visits / meetings) when the
+  /// active target is the employee's own approved submission — drives the
+  /// per-category boxes and lines on the progress card.
+  Map<String, int> _approvedTargetValues = const {};
+  List<LandLeadMeeting> _targetMeetings = const [];
+  List<LandLeadSiteVisit> _targetSiteVisits = const [];
+  List<MonthlyTargetCategoryProgress> _monthlyCategories = const [];
+
   List<LandLead> get _noFutureActivityLeads => NoFutureActivityAnalytics.select(
         AppStore.instance.visibleLeads,
         _meetings,
@@ -122,6 +130,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (_isManagement) _loadMeetings();
     if (!_isManagement) {
       _loadMonthlyTarget();
+      _loadTargetActivity();
       // Re-scope the Monthly Target card when the Team / Individual toggle flips.
       ViewScope.instance.addListener(_loadMonthlyTarget);
     }
@@ -150,6 +159,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     var targetCount = 0;
     var fromEmployee = false;
     var pendingApproval = false;
+    Map<String, int> approvedValues = const {};
 
     try {
       // Prefer the dedicated approved lookup, then fall back to history so a
@@ -162,6 +172,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       if (approved != null) {
         fromEmployee = true;
         targetCount = approved.sitesProgressTarget;
+        approvedValues = approved.effectiveValues;
       } else {
         final history =
             await MonthlyTargetSubmissionService.getForEmployee(myEmail);
@@ -180,6 +191,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           } else if (current.isApproved) {
             fromEmployee = true;
             targetCount = current.sitesProgressTarget;
+            approvedValues = current.effectiveValues;
           }
           // Rejected → fall through to management target below.
         }
@@ -201,6 +213,21 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _monthlyTargetCount = pendingApproval ? 0 : targetCount;
     _monthlyTargetFromEmployee = fromEmployee && !pendingApproval;
     _monthlyTargetPendingApproval = pendingApproval;
+    _approvedTargetValues = pendingApproval ? const {} : approvedValues;
+    _recomputeMonthlyProgress();
+  }
+
+  /// Loads the meeting + employee site-visit history that feeds the per-category
+  /// progress boxes/lines. Bulk reads, scoped to the executive's visible leads
+  /// at compute time. Best-effort — an empty result just shows zero achieved.
+  Future<void> _loadTargetActivity() async {
+    final results = await Future.wait([
+      ManagementBiActivityService.loadMeetings(),
+      ManagementBiActivityService.loadSiteVisits(),
+    ]);
+    if (!mounted) return;
+    _targetMeetings = results[0] as List<LandLeadMeeting>;
+    _targetSiteVisits = results[1] as List<LandLeadSiteVisit>;
     _recomputeMonthlyProgress();
   }
 
@@ -215,15 +242,59 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void _recomputeMonthlyProgress() {
     if (_isManagement) return;
     final now = DateTime.now();
-    final completedOn = [
-      for (final l in AppStore.instance.visibleLeads) l.addedOn,
-    ];
+    final visible = AppStore.instance.visibleLeads;
+    final visibleIds = {for (final l in visible) l.leadId};
+    final leadDates = [for (final l in visible) l.addedOn];
+
+    final overall = MonthlyTargetProgress.forMonth(
+      target: _monthlyTargetCount,
+      now: now,
+      completedOn: leadDates,
+    );
+
+    // Per-category boxes/lines only when the target is the employee's approved
+    // submission. Brokers is intentionally excluded — the card tracks Leads,
+    // Site Visits (employee visits only) and Meetings.
+    var categories = const <MonthlyTargetCategoryProgress>[];
+    final tv = _approvedTargetValues;
+    if (_monthlyTargetFromEmployee && tv.isNotEmpty) {
+      final visitDates = [
+        for (final v in _targetSiteVisits)
+          if (v.visitType == LandLeadSiteVisitType.employee &&
+              visibleIds.contains(v.leadId))
+            v.visitedAt,
+      ];
+      final meetingDates = [
+        for (final m in _targetMeetings)
+          if (visibleIds.contains(m.leadId)) m.metAt,
+      ];
+      categories = [
+        MonthlyTargetCategoryProgress(
+          label: 'Leads',
+          color: AppColors.primary,
+          progress: MonthlyTargetProgress.forMonth(
+              target: tv['leads'] ?? 0, now: now, completedOn: leadDates),
+        ),
+        MonthlyTargetCategoryProgress(
+          label: 'Site Visits',
+          color: AppColors.success,
+          progress: MonthlyTargetProgress.forMonth(
+              target: tv['site_visits'] ?? 0,
+              now: now,
+              completedOn: visitDates),
+        ),
+        MonthlyTargetCategoryProgress(
+          label: 'Meetings',
+          color: AppColors.warning,
+          progress: MonthlyTargetProgress.forMonth(
+              target: tv['meetings'] ?? 0, now: now, completedOn: meetingDates),
+        ),
+      ];
+    }
+
     setState(() {
-      _monthlyProgress = MonthlyTargetProgress.forMonth(
-        target: _monthlyTargetCount,
-        now: now,
-        completedOn: completedOn,
-      );
+      _monthlyProgress = overall;
+      _monthlyCategories = categories;
     });
   }
 
@@ -921,6 +992,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         month: DateTime.now(),
                         pendingApproval: _monthlyTargetPendingApproval,
                         onSetTarget: _openMyMonthlyTargets,
+                        categories: _monthlyCategories,
                       ),
                     ),
                   ),

@@ -60,6 +60,9 @@ class ManagementBiActivityService {
   /// the call and site-visit queries. Degrades to an empty list on failure.
   static Future<List<LandLeadMeeting>> loadMeetings() => _safeMeetings();
 
+  /// Site visits only. Degrades to an empty list on failure.
+  static Future<List<LandLeadSiteVisit>> loadSiteVisits() => _safeVisits();
+
   static Future<List<LandLeadMeeting>> _safeMeetings() async {
     try {
       final rows = await _db
