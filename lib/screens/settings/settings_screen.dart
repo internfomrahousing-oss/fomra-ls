@@ -21,6 +21,8 @@ import '../../widgets/portal_page_layout.dart';
 import '../audit/audit_trail_screen.dart';
 import '../employee_management/employee_management_screen.dart';
 import 'access_as_user_page.dart';
+import 'employee_monthly_targets_page.dart';
+import 'monthly_target_approvals_page.dart';
 import 'monthly_targets_page.dart';
 import '../../services/csv_saver_stub.dart'
     if (dart.library.html) '../../services/csv_saver_web.dart'
@@ -79,6 +81,31 @@ class SettingsScreen extends StatelessWidget {
                 accent: AppColors.purple,
                 onTap: () => showResetPasswordDialog(context),
               ),
+              // Employees propose their own monthly targets for approval.
+              if (!isManagement)
+                _SettingsTile(
+                  icon: Icons.flag_outlined,
+                  label: 'My Monthly Targets',
+                  accent: AppColors.warning,
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const EmployeeMonthlyTargetsPage(),
+                    ),
+                  ),
+                ),
+              if (isManagement)
+                _SettingsTile(
+                  icon: Icons.fact_check_outlined,
+                  label: 'Target Approvals',
+                  accent: AppColors.success,
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const MonthlyTargetApprovalsPage(),
+                    ),
+                  ),
+                ),
               if (isManagement)
                 _SettingsTile(
                   icon: Icons.groups_outlined,
