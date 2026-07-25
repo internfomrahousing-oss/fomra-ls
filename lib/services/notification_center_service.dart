@@ -7,6 +7,7 @@ import '../screens/task_management/task_management_screen.dart';
 import '../services/app_store.dart';
 import '../services/auth_service.dart';
 import '../services/field_calendar_service.dart';
+import '../services/lead_follow_up_service.dart';
 import '../services/management_bi_activity_service.dart';
 import '../services/notifications_service.dart';
 
@@ -104,6 +105,7 @@ abstract final class NotificationCenterService {
     }
 
     n += await _syncOverdueTasks(audience, forUser: null);
+    n += await _syncFollowUpReminders(audience);
     return n;
   }
 
@@ -146,6 +148,34 @@ abstract final class NotificationCenterService {
 
     n += await _syncCalendarReminders(audience);
     n += await _syncOverdueTasks(audience, forUser: me);
+    n += await _syncFollowUpReminders(audience);
+    return n;
+  }
+
+  /// Turns due, pending follow-ups (created by the signed-in user) into
+  /// `reminder` notifications — surfaced in the panel/badge/toast, linking back
+  /// to the lead. Daily dedupe via [_emitOnce] keeps a due follow-up to one ping.
+  static Future<int> _syncFollowUpReminders(String audience) async {
+    var n = 0;
+    final myEmail =
+        (AuthService.instance.currentUser?.email ?? '').trim().toLowerCase();
+    if (myEmail.isEmpty) return 0;
+    try {
+      final due = await LeadFollowUpService.dueForUser(myEmail);
+      for (final f in due.take(10)) {
+        final ok = await _emitOnce(
+          key: 'followup_${f.id}',
+          audience: audience,
+          title: 'Follow-up Reminder',
+          message:
+              'Lead #${f.leadId}\n${f.title}\n\nScheduled:\n${f.scheduledLabel}',
+          type: 'reminder',
+          leadId: f.leadId,
+          referenceId: f.id,
+        );
+        if (ok) n++;
+      }
+    } catch (_) {}
     return n;
   }
 

@@ -40,6 +40,7 @@ import '../market_intelligence/market_intelligence_screen.dart';
 import '../task_management/task_management_screen.dart';
 import 'add_lead_screen.dart';
 import 'calls_log_dialog.dart';
+import 'follow_up_dialog.dart';
 import 'lead_drop_reason_dialog.dart';
 import 'legal_documents_dialog.dart';
 import 'meeting_log_dialog.dart';
@@ -531,6 +532,11 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
     if (mounted) setState(() {});
   }
 
+  Future<void> _openFollowUp() async {
+    await showFollowUpDialog(context, lead.leadId);
+    if (mounted) setState(() {});
+  }
+
   Future<void> _navigateToProperty() async {
     final ok = await MapsNavigation.navigateFromGpsString(
       lead.gpsCoordinates,
@@ -779,7 +785,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
       onTimelineFilterSelected: _onTimelineFilterSelected,
       onSiteVisitScopeSelected: _onSiteVisitScopeSelected,
       onClearFilter: _clearActivityFilter,
-      onOpenTasks: _openViewTasks,
+      onFollowUp: _openFollowUp,
       shouldLoadMiTab: _shouldLoadMiTab,
     );
 
@@ -1250,7 +1256,7 @@ class _WorkspacePanel extends StatelessWidget {
   final ValueChanged<_ActivityFilter> onTimelineFilterSelected;
   final ValueChanged<_SiteVisitScope> onSiteVisitScopeSelected;
   final VoidCallback onClearFilter;
-  final VoidCallback onOpenTasks;
+  final VoidCallback onFollowUp;
   final bool Function(int tabIndex) shouldLoadMiTab;
   final String readOnlyNote;
 
@@ -1277,7 +1283,7 @@ class _WorkspacePanel extends StatelessWidget {
     required this.onTimelineFilterSelected,
     required this.onSiteVisitScopeSelected,
     required this.onClearFilter,
-    required this.onOpenTasks,
+    required this.onFollowUp,
     required this.shouldLoadMiTab,
   });
 
@@ -1328,7 +1334,7 @@ class _WorkspacePanel extends StatelessWidget {
               const SizedBox(height: 10),
               _ActionToolbar(
                 onAction: onDetailAction,
-                onOpenTasks: onOpenTasks,
+                onFollowUp: onFollowUp,
               ),
               const SizedBox(height: 16),
             ] else ...[
@@ -1352,7 +1358,7 @@ class _WorkspacePanel extends StatelessWidget {
               const SizedBox(height: 10),
               _ActionToolbar(
                 onAction: onDetailAction,
-                onOpenTasks: onOpenTasks,
+                onFollowUp: onFollowUp,
               ),
               const SizedBox(height: 16),
             ],
@@ -1451,11 +1457,11 @@ class _WorkspacePanel extends StatelessWidget {
 
 class _ActionToolbar extends StatelessWidget {
   final ValueChanged<String> onAction;
-  final VoidCallback onOpenTasks;
+  final VoidCallback onFollowUp;
 
   const _ActionToolbar({
     required this.onAction,
-    required this.onOpenTasks,
+    required this.onFollowUp,
   });
 
   @override
@@ -1466,8 +1472,8 @@ class _ActionToolbar extends StatelessWidget {
       (Icons.location_on_outlined, 'Site visit', AppColors.purple),
       (Icons.apartment_outlined, 'Management site visit', AppColors.purple),
       (Icons.groups_outlined, 'Meeting', AppColors.purple),
-      // Tasks opens the task list rather than an activity dialog.
-      (Icons.checklist_rounded, 'Tasks', AppColors.purple),
+      // Follow-up opens the reminder window rather than an activity dialog.
+      (Icons.notifications_active_outlined, 'Follow-up', AppColors.purple),
       (Icons.gavel_outlined, 'Legal', AppColors.purple),
       (Icons.draw_outlined, 'Signed', AppColors.purple),
     ];
@@ -1485,7 +1491,7 @@ class _ActionToolbar extends StatelessWidget {
           borderRadius: BorderRadius.circular(12),
           child: InkWell(
             onTap: () =>
-                action.$2 == 'Tasks' ? onOpenTasks() : onAction(action.$2),
+                action.$2 == 'Follow-up' ? onFollowUp() : onAction(action.$2),
             borderRadius: BorderRadius.circular(12),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
@@ -2040,7 +2046,7 @@ class _ActivityTimeline extends StatelessWidget {
             ? 'Voice note'
             : (isGps
                 ? 'GPS check-in'
-                : (isAuto ? 'Nearby information' : 'Note')),
+                : (isAuto ? 'Location Intelligence' : 'Note')),
         subtitle: entry,
         icon: isVoice
             ? Icons.mic_none_rounded

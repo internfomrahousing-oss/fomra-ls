@@ -22,7 +22,11 @@ class NearbyFeature {
 /// [mergeInto] can be used to decide whether a write is needed at all.
 abstract final class LeadAutoNotes {
   /// Opens the block, and is how it is recognised in [LandLead.notes].
-  static const marker = '[Auto Generated Nearby Information]';
+  static const marker = '[Location Intelligence]';
+
+  /// The previous block header, still recognised so a lead written by the old
+  /// code has its block replaced in place rather than duplicated.
+  static const _legacyBlockMarker = '[Auto Generated Nearby Information]';
 
   /// The pre-consolidation format: one marked line per category. Still stripped
   /// on merge, so a lead written by the old code picks up the single block.
@@ -41,8 +45,12 @@ abstract final class LeadAutoNotes {
     (label: 'Places of Worship', sources: ['Worship Places']),
   ];
 
-  /// Whether [entry] is the auto-generated note (or its opening line).
-  static bool isAutoEntry(String entry) => entry.trimLeft().startsWith(marker);
+  /// Whether [entry] is the auto-generated note (or its opening line) — the
+  /// current header or the legacy one, so old blocks are still recognised.
+  static bool isAutoEntry(String entry) {
+    final t = entry.trimLeft();
+    return t.startsWith(marker) || t.startsWith(_legacyBlockMarker);
+  }
 
   static bool _isLegacyAutoLine(String line) =>
       line.trimLeft().startsWith(legacyMarker);

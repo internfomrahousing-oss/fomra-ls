@@ -124,7 +124,8 @@ class _FomraNotificationBellState extends State<FomraNotificationBell> {
       }
     }
     if (n.type != NotificationType.lead &&
-        n.type != NotificationType.siteVisit) {
+        n.type != NotificationType.siteVisit &&
+        n.type != NotificationType.reminder) {
       return;
     }
     LandLead? lead;
