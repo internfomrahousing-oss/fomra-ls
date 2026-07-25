@@ -2659,9 +2659,10 @@ class _LeadInfoCard extends StatelessWidget {
     required this.fields,
   });
 
-  /// A field takes the full card width when flagged [wide] or its plain value
-  /// is long, so it never crams into a half-width cell.
-  static bool _isWide(_Field f) => f.wide || f.value.trim().length > 18;
+  /// A field takes the full card width when flagged [wide] or its value is long.
+  /// Inline cells pack a bit more, so the threshold is generous before spanning.
+  static bool _isWide(_Field f) =>
+      f.wide || f.style == _FieldStyle.chips || f.value.trim().length > 22;
 
   @override
   Widget build(BuildContext context) {
@@ -2672,7 +2673,7 @@ class _LeadInfoCard extends StatelessWidget {
         border: Border.all(color: context.fomraBorder),
         boxShadow: context.fomraCardShadow,
       ),
-      // Tighter padding keeps the left column compact without feeling cramped.
+      // Tight, uniform padding keeps the left column dense but readable.
       padding: const EdgeInsets.fromLTRB(14, 11, 14, 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2691,17 +2692,17 @@ class _LeadInfoCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 11),
-          // Two key-value pairs per row on comfortable widths, single column on
-          // narrow ones — packs short fields together to cut vertical height.
+          const SizedBox(height: 10),
+          // Two inline key-value pairs per row on comfortable widths, single
+          // column on narrow ones — packs short fields to cut vertical height.
           LayoutBuilder(
             builder: (context, c) {
-              const gap = 14.0;
+              const gap = 16.0;
               final twoCol = c.maxWidth >= 300;
               final cellW = twoCol ? (c.maxWidth - gap) / 2 : c.maxWidth;
               return Wrap(
                 spacing: gap,
-                runSpacing: 10,
+                runSpacing: 9,
                 children: [
                   for (final f in fields)
                     SizedBox(
@@ -2736,21 +2737,33 @@ class _LeadDetailRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
+    final label = Text(
+      field.label.toUpperCase(),
+      style: TextStyle(
+        fontSize: 9.5,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 0.4,
+        color: context.fomraTextSecondary,
+      ),
+    );
+
+    // Chips (Terms) stay stacked so they can wrap under a full-width label;
+    // everything else reads inline as LABEL  value for a denser grid.
+    if (field.style == _FieldStyle.chips) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [label, const SizedBox(height: 4), _value(context)],
+      );
+    }
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Text(
-          field.label.toUpperCase(),
-          style: TextStyle(
-            fontSize: 9.5,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.4,
-            color: context.fomraTextSecondary,
-          ),
+        label,
+        const SizedBox(width: 8),
+        Expanded(
+          child: Align(alignment: Alignment.centerLeft, child: _value(context)),
         ),
-        const SizedBox(height: 3),
-        _value(context),
       ],
     );
   }
