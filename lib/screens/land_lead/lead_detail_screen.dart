@@ -632,12 +632,14 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
   }
 
   void _handleStatCardTap(_StatCardKind kind) {
+    // Statistics cards drive the Activity Timeline filter chips directly.
     switch (kind) {
       case _StatCardKind.conductedSiteVisits:
-        // Show every completed site visit (executive + management).
+        // Matches the "Site Visits" chip (Myself / completed visits).
         _applyActivityFilter(
           filter: _ActivityFilter.siteVisits,
-          siteVisitScope: _SiteVisitScope.all,
+          siteVisitScope: _SiteVisitScope.self,
+          callStatFilter: _CallStatFilter.none,
           quickAction: 'Site visit',
         );
       case _StatCardKind.outgoingNotAnswered:
@@ -1750,9 +1752,10 @@ class _ActivitySummaryRow extends StatelessWidget {
   });
 
   bool _isSelected(_StatCardKind kind) => switch (kind) {
+        // Conducted Site Visits highlights whenever the Site Visits timeline
+        // filter is active (Myself / Management / All).
         _StatCardKind.conductedSiteVisits =>
           activityFilter == _ActivityFilter.siteVisits &&
-              siteVisitScope == _SiteVisitScope.all &&
               callStatFilter == _CallStatFilter.none,
         _StatCardKind.outgoingNotAnswered =>
           callStatFilter == _CallStatFilter.outgoingNotAnswered,
@@ -1804,38 +1807,42 @@ class _ActivitySummaryRow extends StatelessWidget {
       ),
     ];
 
-    // Compact stat card: icon + value on one line, label beneath — shorter and
-    // easier to scan than the old tall centred cell.
+    // Compact, fully-tappable stat card. InkWell is the outer hit target so the
+    // whole tile responds on web + mobile (decoration alone does not).
     Widget cell(int i) {
       final selected = _isSelected(cells[i].kind);
-      return AnimatedContainer(
-        duration: const Duration(milliseconds: 220),
-        curve: Curves.easeOutCubic,
-        padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 10),
-        decoration: BoxDecoration(
-          color: selected
-              ? cells[i].color.withValues(alpha: 0.14)
-              : context.fomraSurfaceVar.withValues(alpha: 0.6),
+      final accent = cells[i].color;
+      return Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          onTap: () => onStatCardTap(cells[i].kind),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: selected
-                ? cells[i].color.withValues(alpha: 0.55)
-                : context.fomraBorder,
-            width: selected ? 1.4 : 1,
-          ),
-        ),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: () => onStatCardTap(cells[i].kind),
-            borderRadius: BorderRadius.circular(12),
+          mouseCursor: SystemMouseCursors.click,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOutCubic,
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 10),
+            decoration: BoxDecoration(
+              color: selected
+                  ? accent.withValues(alpha: 0.14)
+                  : context.fomraSurfaceVar.withValues(alpha: 0.6),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: selected
+                    ? accent.withValues(alpha: 0.55)
+                    : context.fomraBorder,
+                width: selected ? 1.4 : 1,
+              ),
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
                 Row(
                   children: [
-                    Icon(cells[i].icon, size: 15, color: cells[i].color),
+                    Icon(cells[i].icon, size: 15, color: accent),
                     const SizedBox(width: 6),
                     Text(
                       cells[i].value,
@@ -1860,9 +1867,7 @@ class _ActivitySummaryRow extends StatelessWidget {
                     height: 1.15,
                     fontWeight:
                         selected ? FontWeight.w800 : FontWeight.w600,
-                    color: selected
-                        ? cells[i].color
-                        : context.fomraTextSecondary,
+                    color: selected ? accent : context.fomraTextSecondary,
                   ),
                 ),
               ],
