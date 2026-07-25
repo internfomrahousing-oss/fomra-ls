@@ -198,19 +198,20 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
     _CallStatFilter callStatFilter = _CallStatFilter.none,
     String? quickAction,
   }) async {
+    // Switch tab synchronously so the timeline mounts before we scroll to it.
     final needsTabSwitch = !_viewOnly && _tabController.index != 0;
+    if (needsTabSwitch) {
+      _tabController.index = 0;
+    }
     setState(() {
       _activityFilter = filter;
       if (siteVisitScope != null) _siteVisitScope = siteVisitScope;
       _callStatFilter = callStatFilter;
       _selectedQuickAction = quickAction;
     });
-    if (needsTabSwitch) {
-      _tabController.animateTo(0);
-    }
     await _scrollToTimeline(
       delay: needsTabSwitch
-          ? const Duration(milliseconds: 320)
+          ? const Duration(milliseconds: 120)
           : const Duration(milliseconds: 16),
     );
   }
@@ -420,6 +421,11 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
 
   CallActivityMetrics get _callMetrics =>
       CallActivityMetrics.fromLogs(_callLogs);
+
+  /// Non-rejected site visits — matches what Conducted Site Visits filters to.
+  int get _conductedSiteVisitCount => _siteVisits
+      .where((v) => v.approvalStatus != SiteVisitApprovalStatus.rejected)
+      .length;
 
   Future<void> _openEdit() async {
     if (!_canEditSite) return;
@@ -633,12 +639,19 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
 
   void _handleStatCardTap(_StatCardKind kind) {
     // Statistics cards drive the Activity Timeline filter chips directly.
+    // Jump to the Activity tab immediately (no animation race) so the filtered
+    // timeline is visible as soon as state updates.
+    if (!_viewOnly && _tabController.index != 0) {
+      _tabController.index = 0;
+    }
+
     switch (kind) {
       case _StatCardKind.conductedSiteVisits:
-        // Matches the "Site Visits" chip (Myself / completed visits).
+        // Card counts every non-rejected visit (executive + management), so the
+        // timeline filter must use the matching "all" scope — not Myself only.
         _applyActivityFilter(
           filter: _ActivityFilter.siteVisits,
-          siteVisitScope: _SiteVisitScope.self,
+          siteVisitScope: _SiteVisitScope.all,
           callStatFilter: _CallStatFilter.none,
           quickAction: 'Site visit',
         );
@@ -840,7 +853,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
           : 'View-only for management. Tap an activity to open its full history.',
       tabController: _tabController,
       tabs: _tabs,
-      siteVisitCount: _siteVisits.length,
+      siteVisitCount: _conductedSiteVisitCount,
       callMetrics: _callMetrics,
       callLogs: _callLogs,
       siteVisits: _siteVisits,
@@ -1752,8 +1765,8 @@ class _ActivitySummaryRow extends StatelessWidget {
   });
 
   bool _isSelected(_StatCardKind kind) => switch (kind) {
-        // Conducted Site Visits highlights whenever the Site Visits timeline
-        // filter is active (Myself / Management / All).
+        // Conducted Site Visits highlights for any Site Visits scope (including
+        // the card's own "all" scope).
         _StatCardKind.conductedSiteVisits =>
           activityFilter == _ActivityFilter.siteVisits &&
               callStatFilter == _CallStatFilter.none,
@@ -1807,8 +1820,8 @@ class _ActivitySummaryRow extends StatelessWidget {
       ),
     ];
 
-    // Compact, fully-tappable stat card. InkWell is the outer hit target so the
-    // whole tile responds on web + mobile (decoration alone does not).
+    // Opaque GestureDetector so the whole tile is a reliable hit target on web
+    // (decoration alone is not tappable; InkWell alone can miss nested hits).
     Widget cell(int i) {
       final selected = _isSelected(cells[i].kind);
       final accent = cells[i].color;
@@ -2191,44 +2204,42 @@ class _ActivityTimeline extends StatelessWidget {
               : events.where((e) => e.category == f).length,
     };
 
-    // "Site Visits" resolves to the executive's own, management, or all
-    // completed visits based on the selected scope.
-    final filtered = filter == _ActivityFilter.all
-        ? events
-        : events.where((e) {
-            if (callStatFilter != _CallStatFilter.none) {
-              if (e.category != _ActivityFilter.calls) return false;
-              if (e.direction == null || e.outcome == null) return false;
-              return switch (callStatFilter) {
-                _CallStatFilter.outgoingNotAnswered =>
-                  e.direction == CallDirection.outgoing &&
-                      e.outcome == CallOutcome.notAnswered,
-                _CallStatFilter.outgoingAnswered =>
-                  e.direction == CallDirection.outgoing &&
-                      e.outcome == CallOutcome.answered,
-                _CallStatFilter.incomingNotAnswered =>
-                  e.direction == CallDirection.incoming &&
-                      e.outcome == CallOutcome.notAnswered,
-                _CallStatFilter.incomingAnswered =>
-                  e.direction == CallDirection.incoming &&
-                      e.outcome == CallOutcome.answered,
-                _CallStatFilter.none => true,
-              };
-            }
-            if (filter == _ActivityFilter.siteVisits) {
-              final isVisit = e.category == _ActivityFilter.siteVisits ||
-                  e.category == _ActivityFilter.managementSiteVisits;
-              if (!isVisit || !e.completedVisit) return false;
-              return switch (siteVisitScope) {
-                _SiteVisitScope.self =>
-                  e.category == _ActivityFilter.siteVisits,
-                _SiteVisitScope.management =>
-                  e.category == _ActivityFilter.managementSiteVisits,
-                _SiteVisitScope.all => true,
-              };
-            }
-            return e.category == filter;
-          }).toList();
+    // Apply filters independently: call-stat cards win when set; otherwise the
+    // selected chip (including Site Visits scope) drives the list.
+    final filtered = events.where((e) {
+      if (callStatFilter != _CallStatFilter.none) {
+        if (e.category != _ActivityFilter.calls) return false;
+        if (e.direction == null || e.outcome == null) return false;
+        return switch (callStatFilter) {
+          _CallStatFilter.outgoingNotAnswered =>
+            e.direction == CallDirection.outgoing &&
+                e.outcome == CallOutcome.notAnswered,
+          _CallStatFilter.outgoingAnswered =>
+            e.direction == CallDirection.outgoing &&
+                e.outcome == CallOutcome.answered,
+          _CallStatFilter.incomingNotAnswered =>
+            e.direction == CallDirection.incoming &&
+                e.outcome == CallOutcome.notAnswered,
+          _CallStatFilter.incomingAnswered =>
+            e.direction == CallDirection.incoming &&
+                e.outcome == CallOutcome.answered,
+          _CallStatFilter.none => true,
+        };
+      }
+      if (filter == _ActivityFilter.all) return true;
+      if (filter == _ActivityFilter.siteVisits) {
+        final isVisit = e.category == _ActivityFilter.siteVisits ||
+            e.category == _ActivityFilter.managementSiteVisits;
+        if (!isVisit || !e.completedVisit) return false;
+        return switch (siteVisitScope) {
+          _SiteVisitScope.self => e.category == _ActivityFilter.siteVisits,
+          _SiteVisitScope.management =>
+            e.category == _ActivityFilter.managementSiteVisits,
+          _SiteVisitScope.all => true,
+        };
+      }
+      return e.category == filter;
+    }).toList();
 
     final staticEvents = <({String title, String subtitle, IconData icon})>[
       (
@@ -2475,6 +2486,17 @@ class _ActivityFilterBar extends StatelessWidget {
   ];
 
   String _chipLabel(_ActivityFilter f) {
+    if (f == _ActivityFilter.calls &&
+        callStatFilter != _CallStatFilter.none) {
+      final sub = switch (callStatFilter) {
+        _CallStatFilter.outgoingNotAnswered => 'Outgoing Not Answered',
+        _CallStatFilter.outgoingAnswered => 'Outgoing Answered',
+        _CallStatFilter.incomingNotAnswered => 'Incoming Not Answered',
+        _CallStatFilter.incomingAnswered => 'Incoming Answered',
+        _CallStatFilter.none => 'Calls',
+      };
+      return 'Calls · $sub';
+    }
     if (f == _ActivityFilter.all) return f.label;
     final count = filterCounts[f];
     if (count == null) return f.label;
