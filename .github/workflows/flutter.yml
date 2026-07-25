@@ -1,16 +1,23 @@
+# Flutter analyze + test.
+#
+# Auto runs on push/PR are paused: GitHub Actions hosted runners for this org
+# currently fail immediately with:
+#   "The job was not started because recent account payments have failed or
+#    your spending limit needs to be increased."
+# Fix that under:
+#   https://github.com/organizations/internfomrahousing-oss/settings/billing
+# then restore the `push` / `pull_request` triggers below.
 name: Flutter CI
 
 on:
-  push:
-    branches: [main]
-  pull_request:
+  workflow_dispatch:
 
 jobs:
   test:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
 
       - uses: subosito/flutter-action@v2
         with:
