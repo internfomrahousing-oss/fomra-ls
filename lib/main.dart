@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'services/auth_link.dart';
 import 'services/auth_service.dart';
+import 'services/app_settings_service.dart';
 import 'services/session_scoped_local_storage.dart';
 import 'services/push_service.dart';
 import 'services/offline_sync_service.dart';
@@ -153,6 +154,7 @@ class _StartupScreenState extends State<_StartupScreen> {
     if (error == null) unawaited(OfflineSyncService.instance.start());
     if (error == null) unawaited(LeadDropReasonCatalogService.instance.load());
     if (error == null) unawaited(ProfilePhotoService.instance.load());
+    if (error == null) unawaited(AppSettingsService.instance.reload());
     bool loggedIn = false;
     if (error == null) {
       try {

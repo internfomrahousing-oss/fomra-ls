@@ -240,6 +240,99 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
     fomraNavigateHome(context);
   }
 
+  /// Change designation: Executive / Reporting Manager / Head.
+  Future<void> _changeRole(EmployeeProfile employee) async {
+    const roles = [
+      EmployeeDesignations.executive,
+      EmployeeDesignations.reportingManager,
+      EmployeeDesignations.head,
+    ];
+    final current = employee.designation.trim().isEmpty
+        ? EmployeeDesignations.executive
+        : employee.designation.trim();
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: context.fomraSurface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: context.fomraBorder,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                'Change role',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: context.fomraTextPrimary,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                employee.fullName,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: context.fomraTextSecondary,
+                ),
+              ),
+              const SizedBox(height: 12),
+              for (final role in roles)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(
+                    role == current
+                        ? Icons.check_circle_rounded
+                        : Icons.circle_outlined,
+                    color: role == current
+                        ? AppColors.primary
+                        : context.fomraTextTertiary,
+                  ),
+                  title: Text(
+                    role == EmployeeDesignations.executive
+                        ? 'Employee (Executive)'
+                        : role,
+                    style: TextStyle(
+                      fontWeight:
+                          role == current ? FontWeight.w800 : FontWeight.w600,
+                    ),
+                  ),
+                  onTap: () => Navigator.pop(ctx, role),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (picked == null || picked == current || !mounted) return;
+    try {
+      await EmployeeService.updateDesignation(employee.email, picked);
+      if (!mounted) return;
+      setState(() {});
+      AppFeedback.success(
+        context,
+        '${employee.fullName} is now $picked.',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      AppFeedback.error(context, e.toString().replaceFirst('Exception: ', ''));
+    }
+  }
+
   List<EmployeeProfile> get _employees => AppStore.instance.employees;
 
   List<EmployeeProfile> get _filtered {
@@ -415,6 +508,8 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                                     onResendInvite: () =>
                                         _resendInvite(_filtered[i]),
                                     onAccess: () => _accessAsUser(_filtered[i]),
+                                    onChangeRole: () =>
+                                        _changeRole(_filtered[i]),
                                   ),
                                 ),
                               ),

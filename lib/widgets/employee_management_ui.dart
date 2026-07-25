@@ -194,12 +194,16 @@ class EmployeeManagementCard extends StatelessWidget {
   /// user without leaving User Management.
   final VoidCallback? onAccess;
 
+  /// Opens the Change role sheet (Executive / Reporting Manager / Head).
+  final VoidCallback? onChangeRole;
+
   const EmployeeManagementCard({
     super.key,
     required this.employee,
     required this.onRemoveAccess,
     required this.onResendInvite,
     this.onAccess,
+    this.onChangeRole,
   });
 
   @override
@@ -309,6 +313,7 @@ class EmployeeManagementCard extends StatelessWidget {
               shadowColor: Colors.black26,
               onSelected: (v) {
                 if (v == 'access' && onAccess != null) onAccess!();
+                if (v == 'role' && onChangeRole != null) onChangeRole!();
                 if (v == 'resend') onResendInvite();
                 if (v == 'remove') onRemoveAccess();
               },
@@ -320,6 +325,15 @@ class EmployeeManagementCard extends StatelessWidget {
                       contentPadding: EdgeInsets.zero,
                       leading: Icon(Icons.visibility_outlined, size: 20),
                       title: Text('Access as user'),
+                    ),
+                  ),
+                if (onChangeRole != null)
+                  const PopupMenuItem(
+                    value: 'role',
+                    child: ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(Icons.badge_outlined, size: 20),
+                      title: Text('Change role'),
                     ),
                   ),
                 const PopupMenuItem(

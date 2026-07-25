@@ -1,4 +1,5 @@
 import '../models/employee_profile.dart';
+import 'app_settings_service.dart';
 import 'auth_service.dart';
 import 'team_hierarchy.dart';
 
@@ -50,12 +51,19 @@ class ApprovalStep {
 /// Resolves the Executive → Reporting Manager → Head → Management approval
 /// chain from the roster's reporting lines ([EmployeeProfile.reportsTo]).
 ///
-/// IMPORTANT: when a submitter has no reporting line the chain is just
-/// `[Management]` — identical to the original single-step flow — so approvals
-/// keep working exactly as before until management assigns reporting lines.
+/// When Settings › Feature Controls › Role Hierarchy is OFF, every chain is
+/// just `[Management]` so employee approvals go straight to Management.
+///
+/// When a submitter has no reporting line (hierarchy ON), the chain is also
+/// `[Management]` — identical to the original single-step flow.
 abstract final class ApprovalChain {
   /// Ordered approvers for a request submitted by [submitterEmail].
   static List<ApprovalStep> chainFor(String? submitterEmail) {
+    // Flat org mode: Employee ↔ Management only.
+    if (!AppSettingsService.instance.roleHierarchyEnabled) {
+      return const [ApprovalStep.managementStep];
+    }
+
     final steps = <ApprovalStep>[];
     final me = TeamHierarchy.byEmail(submitterEmail);
 
@@ -102,7 +110,8 @@ abstract final class ApprovalChain {
 
   /// The next approver after [current], or null when [current] was the final
   /// (Management) step.
-  static ApprovalStep? nextStepAfter(String? submitterEmail, ApprovalLevel current) {
+  static ApprovalStep? nextStepAfter(
+      String? submitterEmail, ApprovalLevel current) {
     if (current == ApprovalLevel.management) return null;
     final chain = chainFor(submitterEmail);
     final idx = chain.indexWhere((s) => s.level == current);
@@ -120,7 +129,8 @@ abstract final class ApprovalChain {
       return AuthService.instance.isManagement;
     }
     if (AuthService.instance.isManagement) return false;
-    final me = (AuthService.instance.currentUser?.email ?? '').trim().toLowerCase();
+    final me =
+        (AuthService.instance.currentUser?.email ?? '').trim().toLowerCase();
     if (me.isEmpty) return false;
     return me == pendingWith.trim().toLowerCase();
   }
