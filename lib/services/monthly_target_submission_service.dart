@@ -160,6 +160,34 @@ class MonthlyTargetSubmissionService {
     return submission;
   }
 
+  /// Persist management edits without approving — status stays pending so the
+  /// employee is not notified until Approve / Reject.
+  static Future<void> saveEdits({
+    required MonthlyTargetSubmission submission,
+    required Map<String, int> values,
+  }) async {
+    final by = _actorName;
+    final history = await _existingHistory(
+        submission.period, submission.employeeEmail)
+      ..add({
+        'at': _now(),
+        'by': by,
+        'action': 'edited',
+        'from': submission.status.dbValue,
+        'to': 'pending',
+        'values': values,
+      });
+
+    await _db.from(_table).update({
+      'approved_values': values,
+      'management_edited': true,
+      'edited_by': by,
+      'edited_at': _now(),
+      'status_history': history,
+      'updated_at': _now(),
+    }).eq('id', submission.id);
+  }
+
   /// Management approves — optionally with edited [approvedValues]. Saves both
   /// the employee-submitted and management-approved values and notifies the
   /// employee (different message when modified).
@@ -168,9 +196,12 @@ class MonthlyTargetSubmissionService {
     Map<String, int>? approvedValues,
   }) async {
     final by = _actorName;
-    final edited = approvedValues != null &&
-        !_sameValues(approvedValues, submission.submittedValues);
-    final finalValues = approvedValues ?? submission.submittedValues;
+    // Prefer explicit dialog values, then any previously saved management
+    // edits, then what the employee submitted.
+    final finalValues = approvedValues ??
+        submission.approvedValues ??
+        submission.submittedValues;
+    final edited = !_sameValues(finalValues, submission.submittedValues);
 
     final history = await _existingHistory(
         submission.period, submission.employeeEmail)
@@ -252,7 +283,8 @@ class MonthlyTargetSubmissionService {
       audience: to,
       type: type,
       title: title,
-      message: '${submission.monthLabel} · $message',
+      // Exact required copy — month context stays in the title when useful.
+      message: message,
       referenceId: submission.id,
     );
   }

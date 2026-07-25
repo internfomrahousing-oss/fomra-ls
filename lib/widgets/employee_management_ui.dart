@@ -190,15 +190,23 @@ class EmployeeManagementCard extends StatelessWidget {
   final VoidCallback onRemoveAccess;
   final VoidCallback onResendInvite;
 
+  /// When set, shows an Access button so management can open the app as this
+  /// user without leaving User Management.
+  final VoidCallback? onAccess;
+
   const EmployeeManagementCard({
     super.key,
     required this.employee,
     required this.onRemoveAccess,
     required this.onResendInvite,
+    this.onAccess,
   });
 
   @override
   Widget build(BuildContext context) {
+    final canAccess =
+        onAccess != null && employee.status == EmployeeStatus.active;
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: AppCard(
@@ -271,22 +279,49 @@ class EmployeeManagementCard extends StatelessWidget {
                       ),
                     ),
                   ],
+                  if (canAccess) ...[
+                    const SizedBox(height: 12),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: FilledButton.icon(
+                        onPressed: onAccess,
+                        icon: const Icon(Icons.login_rounded, size: 16),
+                        label: const Text('Access'),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 10),
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
             PopupMenuButton<String>(
               tooltip: 'Manage',
-              icon: Icon(Icons.more_vert_rounded, color: context.fomraTextSecondary),
+              icon: Icon(Icons.more_vert_rounded,
+                  color: context.fomraTextSecondary),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(14),
               ),
               elevation: 8,
               shadowColor: Colors.black26,
               onSelected: (v) {
+                if (v == 'access' && onAccess != null) onAccess!();
                 if (v == 'resend') onResendInvite();
                 if (v == 'remove') onRemoveAccess();
               },
               itemBuilder: (_) => [
+                if (canAccess)
+                  const PopupMenuItem(
+                    value: 'access',
+                    child: ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(Icons.visibility_outlined, size: 20),
+                      title: Text('Access as user'),
+                    ),
+                  ),
                 const PopupMenuItem(
                   value: 'resend',
                   child: ListTile(
