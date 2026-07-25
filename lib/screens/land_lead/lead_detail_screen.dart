@@ -157,12 +157,11 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
   List<LandLeadLegalDocument> _legalDocs = [];
   List<LandLeadSignedRequest> _signedRequests = [];
 
-  /// Shared Activity Timeline filter — driven by the filter chips, Quick
-  /// Actions, and statistics cards so only one filter is active at a time.
+  /// Shared Activity Timeline filter — driven by the five statistics cards and
+  /// timeline chips only. Quick Actions open dialogs and do not select filters.
   _ActivityFilter _activityFilter = _ActivityFilter.all;
   _SiteVisitScope _siteVisitScope = _SiteVisitScope.self;
   _CallStatFilter _callStatFilter = _CallStatFilter.none;
-  String? _selectedQuickAction;
 
   final GlobalKey _timelineKey = GlobalKey();
   final ScrollController _scrollController = ScrollController();
@@ -192,11 +191,12 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
   /// Applies a single Activity Timeline filter, switches to the Activity tab,
   /// and smoothly scrolls the timeline into view. Returns after the scroll has
   /// been scheduled so callers can await a short settle before opening a dialog.
+  ///
+  /// Does not highlight Quick Actions — those are independent of timeline filters.
   Future<void> _applyActivityFilter({
     required _ActivityFilter filter,
     _SiteVisitScope? siteVisitScope,
     _CallStatFilter callStatFilter = _CallStatFilter.none,
-    String? quickAction,
   }) async {
     // Switch tab synchronously so the timeline mounts before we scroll to it.
     final needsTabSwitch = !_viewOnly && _tabController.index != 0;
@@ -207,7 +207,6 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
       _activityFilter = filter;
       if (siteVisitScope != null) _siteVisitScope = siteVisitScope;
       _callStatFilter = callStatFilter;
-      _selectedQuickAction = quickAction;
     });
     await _scrollToTimeline(
       delay: needsTabSwitch
@@ -244,14 +243,13 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
   }
 
   void _clearActivityFilter() {
-    _applyActivityFilter(filter: _ActivityFilter.all, quickAction: null);
+    _applyActivityFilter(filter: _ActivityFilter.all);
   }
 
   void _onTimelineFilterSelected(_ActivityFilter filter) {
     _applyActivityFilter(
       filter: filter,
       callStatFilter: _CallStatFilter.none,
-      quickAction: _quickActionForFilter(filter, _siteVisitScope),
     );
   }
 
@@ -260,29 +258,8 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
       filter: _ActivityFilter.siteVisits,
       siteVisitScope: scope,
       callStatFilter: _CallStatFilter.none,
-      quickAction: scope == _SiteVisitScope.management
-          ? 'Management site visit'
-          : 'Site visit',
     );
   }
-
-  String? _quickActionForFilter(
-    _ActivityFilter filter,
-    _SiteVisitScope scope,
-  ) =>
-      switch (filter) {
-        _ActivityFilter.notes => 'Notes',
-        _ActivityFilter.calls => 'Calls',
-        _ActivityFilter.siteVisits => scope == _SiteVisitScope.management
-            ? 'Management site visit'
-            : 'Site visit',
-        _ActivityFilter.managementSiteVisits => 'Management site visit',
-        _ActivityFilter.meetings => 'Meeting',
-        _ActivityFilter.legal => 'Legal',
-        _ActivityFilter.followUp => null,
-        _ActivityFilter.signed => 'Signed',
-        _ActivityFilter.all => null,
-      };
 
   /// Fetches what's around the site's GPS and folds it into the lead's notes as
   /// an auto-generated block, leaving manual notes untouched.
@@ -574,71 +551,15 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
   }
 
   Future<void> _handleDetailAction(String label) async {
-    // 1) Sync Quick Actions → Activity tab + matching timeline filter + scroll
-    //    so the user can see the highlight before the log dialog opens.
-    // 2) Open the existing log dialog (logging behaviour unchanged).
-    // 3) After the dialog closes, keep the filtered timeline in view.
-    Future<void>? filterFuture;
-    switch (label) {
-      case 'Notes':
-        filterFuture = _applyActivityFilter(
-          filter: _ActivityFilter.notes,
-          quickAction: label,
-        );
-      case 'Calls':
-        filterFuture = _applyActivityFilter(
-          filter: _ActivityFilter.calls,
-          quickAction: label,
-        );
-      case 'Site visit':
-        filterFuture = _applyActivityFilter(
-          filter: _ActivityFilter.siteVisits,
-          siteVisitScope: _SiteVisitScope.self,
-          quickAction: label,
-        );
-      case 'Management site visit':
-        filterFuture = _applyActivityFilter(
-          filter: _ActivityFilter.siteVisits,
-          siteVisitScope: _SiteVisitScope.management,
-          quickAction: label,
-        );
-      case 'Meeting':
-        filterFuture = _applyActivityFilter(
-          filter: _ActivityFilter.meetings,
-          quickAction: label,
-        );
-      case 'Legal':
-        filterFuture = _applyActivityFilter(
-          filter: _ActivityFilter.legal,
-          quickAction: label,
-        );
-      case 'Signed':
-        filterFuture = _applyActivityFilter(
-          filter: _ActivityFilter.signed,
-          quickAction: label,
-        );
-      default:
-        break;
-    }
-    if (filterFuture != null) {
-      await filterFuture;
-      // Brief beat so the highlighted filter / filtered list is visible.
-      if (!mounted) return;
-      await Future<void>.delayed(const Duration(milliseconds: 180));
-    }
-    if (!mounted) return;
+    // Quick Actions only open their log/action dialog — they do NOT drive the
+    // Activity Timeline filters. Filtering is owned by the five statistics
+    // cards (Conducted Site Visits + call buckets) and the timeline chips.
     await _showActionDialog(label);
-    if (!mounted) return;
-    if (!_viewOnly && _tabController.index != 0) {
-      _tabController.animateTo(0);
-      await _scrollToTimeline(delay: const Duration(milliseconds: 280));
-    } else {
-      await _scrollToTimeline();
-    }
   }
 
   void _handleStatCardTap(_StatCardKind kind) {
     // Statistics cards drive the Activity Timeline filter chips directly.
+    // Quick Actions stay unhighlighted — filters live only on these cards + chips.
     switch (kind) {
       case _StatCardKind.conductedSiteVisits:
         // Card counts every non-rejected visit (executive + management), so the
@@ -647,31 +568,26 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
           filter: _ActivityFilter.siteVisits,
           siteVisitScope: _SiteVisitScope.all,
           callStatFilter: _CallStatFilter.none,
-          quickAction: 'Site visit',
         );
       case _StatCardKind.outgoingNotAnswered:
         _applyActivityFilter(
           filter: _ActivityFilter.calls,
           callStatFilter: _CallStatFilter.outgoingNotAnswered,
-          quickAction: 'Calls',
         );
       case _StatCardKind.outgoingAnswered:
         _applyActivityFilter(
           filter: _ActivityFilter.calls,
           callStatFilter: _CallStatFilter.outgoingAnswered,
-          quickAction: 'Calls',
         );
       case _StatCardKind.incomingNotAnswered:
         _applyActivityFilter(
           filter: _ActivityFilter.calls,
           callStatFilter: _CallStatFilter.incomingNotAnswered,
-          quickAction: 'Calls',
         );
       case _StatCardKind.incomingAnswered:
         _applyActivityFilter(
           filter: _ActivityFilter.calls,
           callStatFilter: _CallStatFilter.incomingAnswered,
-          quickAction: 'Calls',
         );
     }
   }
@@ -857,7 +773,6 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
       activityFilter: _activityFilter,
       siteVisitScope: _siteVisitScope,
       callStatFilter: _callStatFilter,
-      selectedQuickAction: _selectedQuickAction,
       timelineKey: _timelineKey,
       onDetailAction: _handleDetailAction,
       onStatCardTap: _handleStatCardTap,
@@ -1329,7 +1244,6 @@ class _WorkspacePanel extends StatelessWidget {
   final _ActivityFilter activityFilter;
   final _SiteVisitScope siteVisitScope;
   final _CallStatFilter callStatFilter;
-  final String? selectedQuickAction;
   final GlobalKey timelineKey;
   final ValueChanged<String> onDetailAction;
   final ValueChanged<_StatCardKind> onStatCardTap;
@@ -1357,7 +1271,6 @@ class _WorkspacePanel extends StatelessWidget {
     required this.activityFilter,
     required this.siteVisitScope,
     required this.callStatFilter,
-    required this.selectedQuickAction,
     required this.timelineKey,
     required this.onDetailAction,
     required this.onStatCardTap,
@@ -1416,7 +1329,6 @@ class _WorkspacePanel extends StatelessWidget {
               _ActionToolbar(
                 onAction: onDetailAction,
                 onOpenTasks: onOpenTasks,
-                selectedAction: selectedQuickAction,
               ),
               const SizedBox(height: 16),
             ] else ...[
@@ -1441,7 +1353,6 @@ class _WorkspacePanel extends StatelessWidget {
               _ActionToolbar(
                 onAction: onDetailAction,
                 onOpenTasks: onOpenTasks,
-                selectedAction: selectedQuickAction,
               ),
               const SizedBox(height: 16),
             ],
@@ -1541,12 +1452,10 @@ class _WorkspacePanel extends StatelessWidget {
 class _ActionToolbar extends StatelessWidget {
   final ValueChanged<String> onAction;
   final VoidCallback onOpenTasks;
-  final String? selectedAction;
 
   const _ActionToolbar({
     required this.onAction,
     required this.onOpenTasks,
-    this.selectedAction,
   });
 
   @override
@@ -1564,21 +1473,12 @@ class _ActionToolbar extends StatelessWidget {
     ];
 
     Widget pill((IconData, String, Color) action) {
-      final selected = selectedAction == action.$2;
-      return AnimatedContainer(
-        duration: const Duration(milliseconds: 220),
-        curve: Curves.easeOutCubic,
+      // Quick Actions never show a "selected/filter" highlight — filtering
+      // belongs to the statistics cards and timeline chips only.
+      return DecoratedBox(
         decoration: BoxDecoration(
-          color: selected
-              ? action.$3.withValues(alpha: 0.18)
-              : action.$3.withValues(alpha: 0.07),
+          color: action.$3.withValues(alpha: 0.07),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: selected
-                ? action.$3.withValues(alpha: 0.55)
-                : Colors.transparent,
-            width: 1.4,
-          ),
         ),
         child: Material(
           color: Colors.transparent,
@@ -1592,9 +1492,7 @@ class _ActionToolbar extends StatelessWidget {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(action.$1,
-                      size: 16,
-                      color: selected ? action.$3 : action.$3),
+                  Icon(action.$1, size: 16, color: action.$3),
                   const SizedBox(width: 8),
                   Flexible(
                     child: Text(
@@ -1603,11 +1501,8 @@ class _ActionToolbar extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: 12,
-                        fontWeight:
-                            selected ? FontWeight.w800 : FontWeight.w600,
-                        color: selected
-                            ? action.$3
-                            : context.fomraTextPrimary,
+                        fontWeight: FontWeight.w600,
+                        color: context.fomraTextPrimary,
                       ),
                     ),
                   ),

@@ -573,19 +573,77 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     });
   }
 
-  Widget _quickActionsSection(List<PortalQuickAction> actions) {
-    return PortalFadeSection(
-      index: 1,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const SectionHeader(
+  Widget _quickActionsSection(
+    List<PortalQuickAction> actions, {
+    int? columns,
+    bool asCard = false,
+  }) {
+    final grid = PortalQuickActionsGrid(actions: actions, columns: columns);
+    final body = asCard
+        ? PortalSectionCard(
             title: 'Quick actions',
             icon: Icons.flash_on_rounded,
-          ),
-          PortalQuickActionsGrid(actions: actions),
-        ],
-      ),
+            child: grid,
+          )
+        : Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const SectionHeader(
+                title: 'Quick actions',
+                icon: Icons.flash_on_rounded,
+              ),
+              grid,
+            ],
+          );
+    return PortalFadeSection(index: 1, child: body);
+  }
+
+  /// Employee home: Today's tasks (left) + Quick actions 2×2 (right) on wide
+  /// screens; stacked on narrow phones.
+  Widget _employeeTasksAndQuickActions({
+    required String employeeName,
+    required List<PortalQuickAction> quickActions,
+  }) {
+    final todayTasks = _EmployeeTodayTasksSection(
+      employeeName: employeeName,
+      onOpenLead: (lead) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => LeadDetailScreen(lead: lead)),
+        );
+      },
+    );
+    final quick = _quickActionsSection(
+      quickActions,
+      columns: 2,
+      asCard: true,
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final sideBySide =
+            !FomraLayout.isMobile(context) && constraints.maxWidth >= 720;
+        if (!sideBySide) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              PortalFadeSection(index: 1, child: todayTasks),
+              const SizedBox(height: AppSpacing.lg),
+              quick,
+            ],
+          );
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: PortalFadeSection(index: 1, child: todayTasks),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(child: quick),
+          ],
+        );
+      },
     );
   }
 
@@ -841,20 +899,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   ),
                 ),
               ] else ...[
-                // Employee order: Greeting, Today's Tasks, Quick Actions, Perf.
-                PortalFadeSection(
-                  index: 1,
-                  child: _EmployeeTodayTasksSection(
-                    employeeName: userName,
-                    onOpenLead: (lead) {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => LeadDetailScreen(lead: lead),
-                        ),
-                      );
-                    },
-                  ),
+                // Employee: Today's tasks (left) + Quick actions 2×2 (right).
+                _employeeTasksAndQuickActions(
+                  employeeName: userName,
+                  quickActions: quickActions,
                 ),
                 const SizedBox(height: AppSpacing.lg),
                 if (_monthlyProgress != null) ...[
@@ -878,8 +926,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   ),
                   const SizedBox(height: AppSpacing.lg),
                 ],
-                _quickActionsSection(quickActions),
-                const SizedBox(height: AppSpacing.lg),
                 PortalFadeSection(
                   index: 3,
                   child: PortalSectionCard(

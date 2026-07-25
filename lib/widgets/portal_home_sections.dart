@@ -381,7 +381,15 @@ class PortalQuickAction {
 class PortalQuickActionsGrid extends StatelessWidget {
   final List<PortalQuickAction> actions;
 
-  const PortalQuickActionsGrid({super.key, required this.actions});
+  /// When set, forces this many cards per row (e.g. `2` for a 2×2 panel).
+  /// When null, desktop packs as many as fit; mobile stays 2-up.
+  final int? columns;
+
+  const PortalQuickActionsGrid({
+    super.key,
+    required this.actions,
+    this.columns,
+  });
 
   static const _cardWidth = 272.0;
   static const _cardHeight = 92.0;
@@ -389,14 +397,16 @@ class PortalQuickActionsGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Mobile web: a 2-per-row grid instead of a horizontally scrolling strip.
-    if (FomraLayout.isMobile(context)) {
+    final forcedCols = columns;
+    // Mobile web, or an explicit column count (side-by-side home panel): a
+    // fixed N-per-row grid instead of a horizontally packing strip.
+    if (forcedCols != null || FomraLayout.isMobile(context)) {
       const gap = 12.0;
+      final perRow = forcedCols ?? 2;
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 4),
         child: LayoutBuilder(
           builder: (context, c) {
-            const perRow = 2;
             final cardW = c.maxWidth.isFinite
                 ? (c.maxWidth - gap * (perRow - 1)) / perRow
                 : _cardWidth;
@@ -407,9 +417,8 @@ class PortalQuickActionsGrid extends StatelessWidget {
                 for (final action in actions)
                   SizedBox(
                     width: cardW,
-                    // Taller than desktop's row card to fit the stacked icon +
-                    // two-line label.
-                    height: 112,
+                    // Stacked icon + label needs a bit more height in a grid.
+                    height: forcedCols != null ? 100 : 112,
                     child: _QuickActionCard(data: action),
                   ),
               ],

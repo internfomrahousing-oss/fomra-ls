@@ -2,8 +2,6 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
-
-import '../services/auth_service.dart';
 import '../screens/home/home_screen.dart';
 import '../theme/app_theme.dart';
 import '../theme/fomra_theme_context.dart';
@@ -54,14 +52,15 @@ class FomraSideNav extends StatefulWidget {
       Icons.summarize_rounded,
       'Reports',
     ));
-    if (AuthService.instance.isManagement) {
-      items.add(const FomraSideNavItem(
-        '/settings',
-        Icons.settings_outlined,
-        Icons.settings_rounded,
-        'Settings',
-      ));
-    }
+    // Settings is for everyone: employees get Reset Password + My Monthly
+    // Targets; management gets the full admin catalog. The page itself
+    // filters tiles by portal.
+    items.add(const FomraSideNavItem(
+      '/settings',
+      Icons.settings_outlined,
+      Icons.settings_rounded,
+      'Settings',
+    ));
     return items;
   }
 

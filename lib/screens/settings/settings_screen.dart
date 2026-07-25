@@ -62,7 +62,7 @@ class SettingsScreen extends StatelessWidget {
           Text(
             isManagement
                 ? 'Workspace controls, approval catalogs, and administrative tools.'
-                : 'Manage account options.',
+                : 'Manage account options and set your monthly targets.',
             style: TextStyle(
               fontSize: 13,
               color: context.fomraTextSecondary,
@@ -86,7 +86,7 @@ class SettingsScreen extends StatelessWidget {
               if (!isManagement)
                 _SettingsTile(
                   icon: Icons.flag_outlined,
-                  label: 'My Monthly Targets',
+                  label: 'Set Monthly Targets',
                   accent: AppColors.warning,
                   onTap: () => Navigator.push(
                     context,

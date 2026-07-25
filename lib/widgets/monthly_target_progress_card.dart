@@ -21,7 +21,7 @@ class MonthlyTargetProgressCard extends StatelessWidget {
   /// management approval — so the empty state can explain the wait.
   final bool pendingApproval;
 
-  /// Opens Settings › My Monthly Targets so the employee can propose/resubmit.
+  /// Opens Settings › Set Monthly Targets so the employee can propose/resubmit.
   final VoidCallback? onSetTarget;
 
   const MonthlyTargetProgressCard({
@@ -44,7 +44,7 @@ class MonthlyTargetProgressCard extends StatelessWidget {
       final message = pendingApproval
           ? 'Your $monthLabel targets are awaiting management approval.'
           : 'No target set for $monthLabel yet. Propose yours under '
-              'Settings › My Monthly Targets.';
+              'Settings › Set Monthly Targets.';
       return AppCard(
         interactive: false,
         child: Column(

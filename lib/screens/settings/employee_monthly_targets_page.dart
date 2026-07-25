@@ -114,8 +114,8 @@ class _EmployeeMonthlyTargetsPageState
     return FomraAppShell(
       currentRoute: '/settings',
       appBar: FomraSubPageAppBar(
-        title: 'My Monthly Targets',
-        breadcrumbs: FomraBreadcrumbs.forSettingsChild('My Monthly Targets'),
+        title: 'Set Monthly Targets',
+        breadcrumbs: FomraBreadcrumbs.forSettingsChild('Set Monthly Targets'),
       ),
       backgroundColor: context.fomraPageBg,
       body: _loading
