@@ -18,12 +18,16 @@ IconData _actionIcon(EmployeeNextActionKind kind) => switch (kind) {
 /// Next-action + pending-task banners for employee lead detail.
 class EmployeeLeadGuidanceBanners extends StatelessWidget {
   final EmployeeLeadWorkflowInsight insight;
+  final int leadAgeDays;
+  final String receivedOnLabel;
   final VoidCallback? onOpenTasks;
   final VoidCallback? onNextActionTap;
 
   const EmployeeLeadGuidanceBanners({
     super.key,
     required this.insight,
+    required this.leadAgeDays,
+    required this.receivedOnLabel,
     this.onOpenTasks,
     this.onNextActionTap,
   });
@@ -49,6 +53,8 @@ class EmployeeLeadGuidanceBanners extends StatelessWidget {
     );
     final statusTime = _StatusTimeCard(
       stage: insight.stage,
+      leadAgeDays: leadAgeDays,
+      receivedOnLabel: receivedOnLabel,
       pendingSinceDays: insight.tasks.pendingSinceDays,
     );
     final tasksCard = _TasksCard(summary: insight.tasks, onTap: onOpenTasks);
@@ -256,14 +262,18 @@ class _NextActionBanner extends StatelessWidget {
   }
 }
 
-/// Status & Time card — the lead's current stage plus how long it has been
-/// pending, sitting between Next Action and Tasks.
+/// Status & Timeline card — the lead's current stage, age, received date and
+/// how long it has been pending, sitting between Next Action and Tasks.
 class _StatusTimeCard extends StatelessWidget {
   final LeadStatus stage;
+  final int leadAgeDays;
+  final String receivedOnLabel;
   final int pendingSinceDays;
 
   const _StatusTimeCard({
     required this.stage,
+    required this.leadAgeDays,
+    required this.receivedOnLabel,
     required this.pendingSinceDays,
   });
 
@@ -281,7 +291,7 @@ class _StatusTimeCard extends StatelessWidget {
         children: [
           _CardHeader(
             icon: Icons.timeline_rounded,
-            title: 'STATUS & TIME',
+            title: 'STATUS & TIMELINE',
             color: stage.color,
           ),
           const SizedBox(height: 10),
@@ -306,19 +316,59 @@ class _StatusTimeCard extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(height: 10),
-          const _MicroLabel('Pending Since'),
-          const SizedBox(height: 2),
-          Text(
-            pendingSinceDays <= 0 ? '—' : '$pendingSinceDays days',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w800,
-              color: context.fomraTextPrimary,
-            ),
+          const SizedBox(height: 12),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: _StatPair(
+                  label: 'Lead Age',
+                  value: '$leadAgeDays days',
+                  color: AppColors.purple,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _StatPair(
+                  label: 'Pending Since',
+                  value: pendingSinceDays <= 0 ? '—' : '$pendingSinceDays days',
+                ),
+              ),
+            ],
           ),
+          const SizedBox(height: 10),
+          _StatPair(label: 'Received On', value: receivedOnLabel),
         ],
       ),
+    );
+  }
+}
+
+/// A small stacked label + value used inside the Status & Timeline card.
+class _StatPair extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color? color;
+
+  const _StatPair({required this.label, required this.value, this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _MicroLabel(label),
+        const SizedBox(height: 2),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w800,
+            color: color ?? context.fomraTextPrimary,
+          ),
+        ),
+      ],
     );
   }
 }

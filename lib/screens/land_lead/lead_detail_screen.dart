@@ -616,6 +616,8 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
         ? null
         : EmployeeLeadGuidanceBanners(
             insight: _workflowInsight,
+            leadAgeDays: _leadAgeDays,
+            receivedOnLabel: _formatReceivedOn(lead.addedOn),
             onOpenTasks: _openViewTasks,
             onNextActionTap: _onNextActionTap,
           );
@@ -640,7 +642,14 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
       shouldLoadMiTab: _shouldLoadMiTab,
     );
 
-    final infoCards = _LeadInfoCards(lead: lead, leadAgeDays: _leadAgeDays);
+    // The Status & Timeline card lives in the guidance row (between Next Action
+    // and Tasks) for the working executive; keep it in the left panel only when
+    // that row isn't shown (management view-only).
+    final infoCards = _LeadInfoCards(
+      lead: lead,
+      leadAgeDays: _leadAgeDays,
+      showStatusTimeline: _viewOnly,
+    );
 
     return FomraAppShell(
       currentRoute: '/land-lead',
@@ -807,9 +816,10 @@ class _LeadSummaryCard extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: context.fomraSurface,
+        // Tinted with the lead's status colour, matching the Next Action card.
+        color: lead.status.color.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: context.fomraBorder),
+        border: Border.all(color: lead.status.color.withValues(alpha: 0.35)),
         boxShadow: context.fomraCardShadow,
       ),
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
@@ -1901,9 +1911,16 @@ class _LeadInfoCards extends StatelessWidget {
   final LandLead lead;
   final int leadAgeDays;
 
+  /// Whether to include the Status & Timeline card. It moves to the guidance
+  /// row for the working executive, so the left panel only keeps it when that
+  /// row isn't shown (management view-only). Dropped leads always keep it so
+  /// the drop reason/notes stay visible.
+  final bool showStatusTimeline;
+
   const _LeadInfoCards({
     required this.lead,
     required this.leadAgeDays,
+    this.showStatusTimeline = true,
   });
 
   String _v(String raw) => raw.trim().isEmpty ? '—' : raw.trim();
@@ -1940,27 +1957,28 @@ class _LeadInfoCards extends StatelessWidget {
                 style: _FieldStyle.chips, wide: true),
         ],
       ),
-      (
-        title: 'Status & Timeline',
-        icon: Icons.timeline_outlined,
-        fields: [
-          _Field('Current Stage', lead.status.label,
-              style: _FieldStyle.badge, color: lead.status.color),
-          _Field('Lead Age', '$leadAgeDays days', style: _FieldStyle.accent),
-          _Field('Received On', _formatReceivedOn(lead.addedOn)),
-          if (lead.status == LeadStatus.dropped &&
-              lead.dropReason.trim().isNotEmpty)
-            _Field(
-              'Drop reason',
-              LeadDropReasonCatalogService.instance
-                  .displayLabelForRaw(lead.dropReason),
-              wide: true,
-            ),
-          if (lead.status == LeadStatus.dropped &&
-              lead.dropNotes.trim().isNotEmpty)
-            _Field('Drop notes', lead.dropNotes.trim(), wide: true),
-        ],
-      ),
+      if (showStatusTimeline || lead.status == LeadStatus.dropped)
+        (
+          title: 'Status & Timeline',
+          icon: Icons.timeline_outlined,
+          fields: [
+            _Field('Current Stage', lead.status.label,
+                style: _FieldStyle.badge, color: lead.status.color),
+            _Field('Lead Age', '$leadAgeDays days', style: _FieldStyle.accent),
+            _Field('Received On', _formatReceivedOn(lead.addedOn)),
+            if (lead.status == LeadStatus.dropped &&
+                lead.dropReason.trim().isNotEmpty)
+              _Field(
+                'Drop reason',
+                LeadDropReasonCatalogService.instance
+                    .displayLabelForRaw(lead.dropReason),
+                wide: true,
+              ),
+            if (lead.status == LeadStatus.dropped &&
+                lead.dropNotes.trim().isNotEmpty)
+              _Field('Drop notes', lead.dropNotes.trim(), wide: true),
+          ],
+        ),
     ];
 
     const gap = 12.0;
