@@ -135,9 +135,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   /// Resolves this employee's monthly target for the progress card.
   ///
-  /// Prefer an **approved** self-set submission (Settings › My Monthly Targets);
-  /// fall back to the management-set common/personal target. Pending
-  /// submissions never count — they only change the empty-state copy.
+  /// Prefer an **approved** self-set submission (Settings › My Monthly Targets).
+  /// While a submission is **pending**, do not fall back to a management-set
+  /// target — show the awaiting-approval empty state instead. Only fall back
+  /// to the management-set common/personal target when there is no current
+  /// submission (or the last one was rejected).
   Future<void> _loadMonthlyTarget() async {
     final now = DateTime.now();
     final myEmail =
@@ -148,31 +150,45 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     var pendingApproval = false;
 
     try {
-      final history =
-          await MonthlyTargetSubmissionService.getForEmployee(myEmail);
-      final period =
-          MonthlyTargetSubmission.periodOf(now.year, now.month);
-      MonthlyTargetSubmission? current;
-      for (final s in history) {
-        if (s.period == period) {
-          current = s;
-          break;
+      // Prefer the dedicated approved lookup, then fall back to history so a
+      // pending/rejected row can still drive the empty-state copy.
+      final approved =
+          await MonthlyTargetSubmissionService.approvedForEmployee(
+        myEmail,
+        now: now,
+      );
+      if (approved != null) {
+        fromEmployee = true;
+        targetCount = approved.sitesProgressTarget;
+      } else {
+        final history =
+            await MonthlyTargetSubmissionService.getForEmployee(myEmail);
+        final period =
+            MonthlyTargetSubmission.periodOf(now.year, now.month);
+        MonthlyTargetSubmission? current;
+        for (final s in history) {
+          if (s.period == period) {
+            current = s;
+            break;
+          }
         }
-      }
-      if (current != null && current.isApproved) {
-        final n = current.sitesProgressTarget;
-        if (n > 0) {
-          targetCount = n;
-          fromEmployee = true;
+        if (current != null) {
+          if (current.isPending) {
+            pendingApproval = true;
+          } else if (current.isApproved) {
+            fromEmployee = true;
+            targetCount = current.sitesProgressTarget;
+          }
+          // Rejected → fall through to management target below.
         }
-      } else if (current != null && current.isPending) {
-        pendingApproval = true;
       }
     } catch (_) {
       // Submission table may be missing — fall through to management target.
     }
 
-    if (targetCount <= 0) {
+    // Only use the management-set target when the employee has nothing in
+    // flight for this month (no pending / no approved submission).
+    if (!fromEmployee && !pendingApproval) {
       final target =
           await MonthlyTargetService.resolveForEmployee(myEmail, now: now);
       targetCount = target?.target ?? 0;
@@ -180,9 +196,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
 
     if (!mounted) return;
-    _monthlyTargetCount = targetCount;
-    _monthlyTargetFromEmployee = fromEmployee;
-    _monthlyTargetPendingApproval = pendingApproval && targetCount <= 0;
+    _monthlyTargetCount = pendingApproval ? 0 : targetCount;
+    _monthlyTargetFromEmployee = fromEmployee && !pendingApproval;
+    _monthlyTargetPendingApproval = pendingApproval;
     _recomputeMonthlyProgress();
   }
 

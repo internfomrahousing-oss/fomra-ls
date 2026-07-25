@@ -190,13 +190,14 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
   }
 
   /// Applies a single Activity Timeline filter, switches to the Activity tab,
-  /// and smoothly scrolls the timeline into view.
-  void _applyActivityFilter({
+  /// and smoothly scrolls the timeline into view. Returns after the scroll has
+  /// been scheduled so callers can await a short settle before opening a dialog.
+  Future<void> _applyActivityFilter({
     required _ActivityFilter filter,
     _SiteVisitScope? siteVisitScope,
     _CallStatFilter callStatFilter = _CallStatFilter.none,
     String? quickAction,
-  }) {
+  }) async {
     final needsTabSwitch = !_viewOnly && _tabController.index != 0;
     setState(() {
       _activityFilter = filter;
@@ -207,37 +208,38 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
     if (needsTabSwitch) {
       _tabController.animateTo(0);
     }
-    _scrollToTimeline(delay: needsTabSwitch
-        ? const Duration(milliseconds: 280)
-        : Duration.zero);
+    await _scrollToTimeline(
+      delay: needsTabSwitch
+          ? const Duration(milliseconds: 320)
+          : const Duration(milliseconds: 16),
+    );
   }
 
-  void _scrollToTimeline({Duration delay = Duration.zero}) {
-    Future<void>.delayed(delay, () {
-      if (!mounted) return;
+  /// Scrolls the Activity Timeline into view. Retries a few frames so a just-
+  /// switched Activity tab has time to mount under [_timelineKey].
+  Future<void> _scrollToTimeline({Duration delay = Duration.zero}) async {
+    if (delay > Duration.zero) {
+      await Future<void>.delayed(delay);
+    }
+    if (!mounted) return;
+
+    for (var attempt = 0; attempt < 5; attempt++) {
       final ctx = _timelineKey.currentContext;
-      if (ctx == null) {
-        // Timeline may still be mounting after a tab change — retry once.
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted) return;
-          final retryCtx = _timelineKey.currentContext;
-          if (retryCtx == null) return;
-          Scrollable.ensureVisible(
-            retryCtx,
-            duration: const Duration(milliseconds: 420),
-            curve: Curves.easeInOut,
-            alignment: 0.08,
-          );
-        });
+      if (ctx != null) {
+        await Scrollable.ensureVisible(
+          ctx,
+          duration: const Duration(milliseconds: 420),
+          curve: Curves.easeInOut,
+          alignment: 0.08,
+        );
         return;
       }
-      Scrollable.ensureVisible(
-        ctx,
-        duration: const Duration(milliseconds: 420),
-        curve: Curves.easeInOut,
-        alignment: 0.08,
-      );
-    });
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      if (!mounted) return;
+      // Give the framework one frame between retries.
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted) return;
+    }
   }
 
   void _clearActivityFilter() {
@@ -566,66 +568,76 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
   }
 
   Future<void> _handleDetailAction(String label) async {
-    // Sync Quick Actions with the Activity Timeline filter, then open the
-    // existing log dialog so logging behaviour is unchanged.
+    // 1) Sync Quick Actions → Activity tab + matching timeline filter + scroll
+    //    so the user can see the highlight before the log dialog opens.
+    // 2) Open the existing log dialog (logging behaviour unchanged).
+    // 3) After the dialog closes, keep the filtered timeline in view.
+    Future<void>? filterFuture;
     switch (label) {
       case 'Notes':
-        _applyActivityFilter(
+        filterFuture = _applyActivityFilter(
           filter: _ActivityFilter.notes,
           quickAction: label,
         );
       case 'Calls':
-        _applyActivityFilter(
+        filterFuture = _applyActivityFilter(
           filter: _ActivityFilter.calls,
           quickAction: label,
         );
       case 'Site visit':
-        _applyActivityFilter(
+        filterFuture = _applyActivityFilter(
           filter: _ActivityFilter.siteVisits,
           siteVisitScope: _SiteVisitScope.self,
           quickAction: label,
         );
       case 'Management site visit':
-        _applyActivityFilter(
+        filterFuture = _applyActivityFilter(
           filter: _ActivityFilter.siteVisits,
           siteVisitScope: _SiteVisitScope.management,
           quickAction: label,
         );
       case 'Meeting':
-        _applyActivityFilter(
+        filterFuture = _applyActivityFilter(
           filter: _ActivityFilter.meetings,
           quickAction: label,
         );
       case 'Legal':
-        _applyActivityFilter(
+        filterFuture = _applyActivityFilter(
           filter: _ActivityFilter.legal,
           quickAction: label,
         );
       case 'Signed':
-        _applyActivityFilter(
+        filterFuture = _applyActivityFilter(
           filter: _ActivityFilter.signed,
           quickAction: label,
         );
       default:
         break;
     }
+    if (filterFuture != null) {
+      await filterFuture;
+      // Brief beat so the highlighted filter / filtered list is visible.
+      if (!mounted) return;
+      await Future<void>.delayed(const Duration(milliseconds: 180));
+    }
+    if (!mounted) return;
     await _showActionDialog(label);
     if (!mounted) return;
-    // After the dialog closes, keep the Activity tab + filtered timeline in view.
     if (!_viewOnly && _tabController.index != 0) {
       _tabController.animateTo(0);
-      _scrollToTimeline(delay: const Duration(milliseconds: 280));
+      await _scrollToTimeline(delay: const Duration(milliseconds: 280));
     } else {
-      _scrollToTimeline();
+      await _scrollToTimeline();
     }
   }
 
   void _handleStatCardTap(_StatCardKind kind) {
     switch (kind) {
       case _StatCardKind.conductedSiteVisits:
+        // Show every completed site visit (executive + management).
         _applyActivityFilter(
           filter: _ActivityFilter.siteVisits,
-          siteVisitScope: _SiteVisitScope.self,
+          siteVisitScope: _SiteVisitScope.all,
           quickAction: 'Site visit',
         );
       case _StatCardKind.outgoingNotAnswered:
@@ -1740,7 +1752,7 @@ class _ActivitySummaryRow extends StatelessWidget {
   bool _isSelected(_StatCardKind kind) => switch (kind) {
         _StatCardKind.conductedSiteVisits =>
           activityFilter == _ActivityFilter.siteVisits &&
-              siteVisitScope == _SiteVisitScope.self &&
+              siteVisitScope == _SiteVisitScope.all &&
               callStatFilter == _CallStatFilter.none,
         _StatCardKind.outgoingNotAnswered =>
           callStatFilter == _CallStatFilter.outgoingNotAnswered,
@@ -1926,8 +1938,9 @@ extension on _ActivityFilter {
 
 /// The sub-scope of the unified "Site Visits" filter. [self] means the working
 /// executive's own visits ("Myself" on the employee portal, "Executive" on
-/// management); [management] means management site visits.
-enum _SiteVisitScope { self, management }
+/// management); [management] means management site visits; [all] means every
+/// completed visit (used by the Conducted Site Visits statistics card).
+enum _SiteVisitScope { self, management, all }
 
 /// Site Visits stays a single dropdown chip; Legal / Follow-up / Signed sit
 /// beside the original categories so Quick Actions can target them directly.
@@ -2173,13 +2186,8 @@ class _ActivityTimeline extends StatelessWidget {
               : events.where((e) => e.category == f).length,
     };
 
-    // "Site Visits" resolves to the executive's own or management visits based
-    // on the selected scope; every other filter matches its own category.
-    final effectiveCategory = filter == _ActivityFilter.siteVisits &&
-            siteVisitScope == _SiteVisitScope.management
-        ? _ActivityFilter.managementSiteVisits
-        : filter;
-
+    // "Site Visits" resolves to the executive's own, management, or all
+    // completed visits based on the selected scope.
     final filtered = filter == _ActivityFilter.all
         ? events
         : events.where((e) {
@@ -2202,14 +2210,19 @@ class _ActivityTimeline extends StatelessWidget {
                 _CallStatFilter.none => true,
               };
             }
-            if (e.category != effectiveCategory) return false;
-            // Conducted Site Visits (and the Site Visits chip) show completed
-            // visits only — rejected management visits stay hidden.
-            if (effectiveCategory == _ActivityFilter.siteVisits ||
-                effectiveCategory == _ActivityFilter.managementSiteVisits) {
-              return e.completedVisit;
+            if (filter == _ActivityFilter.siteVisits) {
+              final isVisit = e.category == _ActivityFilter.siteVisits ||
+                  e.category == _ActivityFilter.managementSiteVisits;
+              if (!isVisit || !e.completedVisit) return false;
+              return switch (siteVisitScope) {
+                _SiteVisitScope.self =>
+                  e.category == _ActivityFilter.siteVisits,
+                _SiteVisitScope.management =>
+                  e.category == _ActivityFilter.managementSiteVisits,
+                _SiteVisitScope.all => true,
+              };
             }
-            return true;
+            return e.category == filter;
           }).toList();
 
     final staticEvents = <({String title, String subtitle, IconData icon})>[
@@ -2437,11 +2450,24 @@ class _ActivityFilterBar extends StatelessWidget {
   /// The label for the "own visits" scope differs by portal.
   String get _selfLabel => isManagement ? 'Executive' : 'Myself';
 
-  String _scopeLabel(_SiteVisitScope s) =>
-      s == _SiteVisitScope.management ? 'Management' : _selfLabel;
+  String _scopeLabel(_SiteVisitScope s) => switch (s) {
+        _SiteVisitScope.management => 'Management',
+        _SiteVisitScope.self => _selfLabel,
+        _SiteVisitScope.all => 'All',
+      };
 
-  int _scopeCount(_SiteVisitScope s) =>
-      s == _SiteVisitScope.management ? managementVisitCount : selfVisitCount;
+  int _scopeCount(_SiteVisitScope s) => switch (s) {
+        _SiteVisitScope.management => managementVisitCount,
+        _SiteVisitScope.self => selfVisitCount,
+        _SiteVisitScope.all => selfVisitCount + managementVisitCount,
+      };
+
+  /// Scopes offered in the Site Visits dropdown (Conducted-card "all" is not
+  /// listed here — it is reached from the statistics row).
+  static const _dropdownScopes = [
+    _SiteVisitScope.self,
+    _SiteVisitScope.management,
+  ];
 
   String _chipLabel(_ActivityFilter f) {
     if (f == _ActivityFilter.all) return f.label;
@@ -2541,7 +2567,7 @@ class _ActivityFilterBar extends StatelessWidget {
       position: PopupMenuPosition.under,
       onSelected: onSiteVisitScope,
       itemBuilder: (_) => [
-        for (final s in _SiteVisitScope.values)
+        for (final s in _dropdownScopes)
           PopupMenuItem(
             value: s,
             child: Row(

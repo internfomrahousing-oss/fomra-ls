@@ -122,12 +122,23 @@ class MonthlyTargetSubmission {
   Map<String, int> get effectiveValues => approvedValues ?? submittedValues;
 
   /// Number used by the home Monthly Target Progress card (sites sourced).
-  /// Prefers Leads, then Site Visits — matching what the card actually counts.
+  /// Walks Leads → Site Visits → Meetings → Brokers and returns the first
+  /// positive value so an approved submission always surfaces on home.
   int get sitesProgressTarget {
     final v = effectiveValues;
-    return v[TargetCategory.leads.key] ??
-        v[TargetCategory.siteVisits.key] ??
-        0;
+    for (final key in [
+      TargetCategory.leads.key,
+      TargetCategory.siteVisits.key,
+      TargetCategory.meetings.key,
+      TargetCategory.brokers.key,
+    ]) {
+      final n = v[key];
+      if (n != null && n > 0) return n;
+    }
+    // Explicit zeros still mean "a target was approved" — return 0 rather than
+    // pretending nothing was submitted.
+    if (v.isNotEmpty) return v.values.first;
+    return 0;
   }
 
   int get year => int.tryParse(period.split('-').first) ?? 0;
