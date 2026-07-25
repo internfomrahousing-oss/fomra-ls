@@ -88,8 +88,6 @@ class MonthlyTargetProgressCard extends StatelessWidget {
           SizedBox(height: 190, child: _chart(context)),
           const SizedBox(height: AppSpacing.sm),
           _legend(context),
-          const Divider(height: AppSpacing.lg * 1.2),
-          _footStats(context),
         ],
       ),
     );
@@ -161,16 +159,6 @@ class MonthlyTargetProgressCard extends StatelessWidget {
               ),
             ),
           ],
-        ),
-        const SizedBox(height: AppSpacing.xs),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(999),
-          child: LinearProgressIndicator(
-            value: pct / 100,
-            minHeight: 8,
-            backgroundColor: context.fomraSurfaceVar,
-            valueColor: AlwaysStoppedAnimation(_accent),
-          ),
         ),
       ],
     );
@@ -317,64 +305,4 @@ class MonthlyTargetProgressCard extends StatelessWidget {
         ],
       );
 
-  Widget _footStats(BuildContext context) {
-    final stats = <({String label, String value, Color color})>[
-      (
-        label: 'Current target',
-        value: '${progress.target}',
-        color: context.fomraTextPrimary
-      ),
-      (label: 'Achieved', value: '${progress.achieved}', color: _accent),
-      (
-        label: 'Remaining',
-        value: '${progress.remaining}',
-        color: context.fomraTextPrimary
-      ),
-      (
-        label: 'Expected today',
-        // Display only — the underlying expectedToday stays a precise double
-        // and still drives isOnTrack/variance.
-        value: '${progress.expectedToday.round()}',
-        color: context.fomraTextSecondary
-      ),
-    ];
-
-    return LayoutBuilder(
-      builder: (context, c) {
-        // Two rows of two on a phone, one row of four with room.
-        final perRow = c.maxWidth < 420 ? 2 : 4;
-        return Wrap(
-          spacing: AppSpacing.sm,
-          runSpacing: AppSpacing.sm,
-          children: [
-            for (final s in stats)
-              SizedBox(
-                width: (c.maxWidth - AppSpacing.sm * (perRow - 1)) / perRow,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      s.value,
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                        color: s.color,
-                      ),
-                    ),
-                    Text(
-                      s.label,
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                        color: context.fomraTextSecondary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-          ],
-        );
-      },
-    );
-  }
 }
