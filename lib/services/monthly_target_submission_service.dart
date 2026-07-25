@@ -76,6 +76,87 @@ class MonthlyTargetSubmissionService {
     }
   }
 
+  /// Every submission for a period (all employees), for the management Target
+  /// tab. Newest submitted first.
+  static Future<List<MonthlyTargetSubmission>> allForPeriod(
+      String period) async {
+    try {
+      final rows = await _db
+          .from(_table)
+          .select()
+          .eq('period', period)
+          .order('submitted_at', ascending: false);
+      return (rows as List)
+          .map((r) =>
+              MonthlyTargetSubmission.fromJson(Map<String, dynamic>.from(r)))
+          .toList();
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  /// Management sets/edits an employee's target directly (Target tab). Upserts
+  /// an approved row for (period, employee) with both submitted and approved
+  /// values set to [values]. Notifies the employee it was set by management.
+  static Future<MonthlyTargetSubmission> setByManagement({
+    required int year,
+    required int month,
+    required Map<String, int> values,
+    required String employeeEmail,
+    required String employeeName,
+    String employeeCode = '',
+    String department = '',
+    String designation = '',
+  }) async {
+    final email = employeeEmail.trim().toLowerCase();
+    final period = MonthlyTargetSubmission.periodOf(year, month);
+    final by = _actorName;
+
+    final history = await _existingHistory(period, email)
+      ..add({
+        'at': _now(),
+        'by': by,
+        'action': 'set_by_management',
+        'to': 'approved',
+        'values': values,
+      });
+
+    final row = await _db
+        .from(_table)
+        .upsert({
+          'period': period,
+          'employee_email': email,
+          'employee_name': employeeName.trim(),
+          'employee_code': employeeCode.trim(),
+          'department': department.trim(),
+          'designation': designation.trim(),
+          'submitted_values': values,
+          'approved_values': values,
+          'status': 'approved',
+          'management_edited': true,
+          'submitted_by': by,
+          'submitted_at': _now(),
+          'edited_by': by,
+          'edited_at': _now(),
+          'approved_by': by,
+          'approved_at': _now(),
+          'status_history': history,
+          'updated_at': _now(),
+        }, onConflict: 'period,employee_email')
+        .select()
+        .single();
+
+    final submission =
+        MonthlyTargetSubmission.fromJson(Map<String, dynamic>.from(row));
+    await _notifyEmployee(
+      submission,
+      title: 'Monthly targets set',
+      message: 'Your monthly targets have been set by Management.',
+      type: 'verification',
+    );
+    return submission;
+  }
+
   static Future<List<dynamic>> _existingHistory(
       String period, String email) async {
     try {

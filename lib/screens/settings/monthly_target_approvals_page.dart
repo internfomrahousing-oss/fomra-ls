@@ -33,7 +33,11 @@ Future<MonthlyTargetEditResult?> showMonthlyTargetEditDialog(
 /// Management page listing pending monthly-target submissions. Each can be
 /// approved, rejected, or edited (save stays pending; approve notifies).
 class MonthlyTargetApprovalsPage extends StatefulWidget {
-  const MonthlyTargetApprovalsPage({super.key});
+  /// When embedded as a tab, drop the app shell/header and section heading and
+  /// render just the pending list.
+  final bool embedded;
+
+  const MonthlyTargetApprovalsPage({super.key, this.embedded = false});
 
   @override
   State<MonthlyTargetApprovalsPage> createState() =>
@@ -158,6 +162,39 @@ class _MonthlyTargetApprovalsPageState
 
   @override
   Widget build(BuildContext context) {
+    final body = RefreshIndicator(
+      onRefresh: _load,
+      child: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : ListView(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+              children: [
+                if (!widget.embedded)
+                  const SectionHeader(
+                    title: 'Monthly Target Approvals',
+                    subtitle:
+                        'Review, edit, approve, or reject the monthly targets employees submit.',
+                    icon: Icons.fact_check_outlined,
+                  ),
+                if (_pending.isEmpty)
+                  const AppCard(
+                    interactive: false,
+                    child: EmptyState(
+                      icon: Icons.inbox_outlined,
+                      title: 'No pending submissions',
+                      message:
+                          'Employee target submissions awaiting approval appear here.',
+                    ),
+                  )
+                else
+                  for (final s in _pending) ...[
+                    _card(context, s),
+                    const SizedBox(height: AppSpacing.md),
+                  ],
+              ],
+            ),
+    );
+    if (widget.embedded) return body;
     return FomraAppShell(
       currentRoute: '/settings',
       appBar: FomraSubPageAppBar(
@@ -165,37 +202,7 @@ class _MonthlyTargetApprovalsPageState
         breadcrumbs: FomraBreadcrumbs.forSettingsChild('Target Approvals'),
       ),
       backgroundColor: context.fomraPageBg,
-      body: RefreshIndicator(
-        onRefresh: _load,
-        child: _loading
-            ? const Center(child: CircularProgressIndicator())
-            : ListView(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-                children: [
-                  const SectionHeader(
-                    title: 'Monthly Target Approvals',
-                    subtitle:
-                        'Review, edit, approve, or reject the monthly targets employees submit.',
-                    icon: Icons.fact_check_outlined,
-                  ),
-                  if (_pending.isEmpty)
-                    const AppCard(
-                      interactive: false,
-                      child: EmptyState(
-                        icon: Icons.inbox_outlined,
-                        title: 'No pending submissions',
-                        message:
-                            'Employee target submissions awaiting approval appear here.',
-                      ),
-                    )
-                  else
-                    for (final s in _pending) ...[
-                      _card(context, s),
-                      const SizedBox(height: AppSpacing.md),
-                    ],
-                ],
-              ),
-      ),
+      body: body,
     );
   }
 

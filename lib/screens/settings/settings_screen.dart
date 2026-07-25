@@ -21,11 +21,9 @@ import '../../widgets/change_password_section.dart';
 import '../../widgets/portal_page_layout.dart';
 import '../audit/audit_trail_screen.dart';
 import '../employee_management/employee_management_portal_screen.dart';
-import '../employee_management/employee_management_screen.dart';
 import 'employee_monthly_targets_page.dart';
 import 'feature_controls_page.dart';
-import 'monthly_target_approvals_page.dart';
-import 'monthly_targets_page.dart';
+import 'monthly_targets_management_page.dart';
 import '../../services/csv_saver_stub.dart'
     if (dart.library.html) '../../services/csv_saver_web.dart'
     if (dart.library.io) '../../services/csv_saver_io.dart';
@@ -110,13 +108,13 @@ class SettingsScreen extends StatelessWidget {
                 ),
               if (isManagement)
                 _SettingsTile(
-                  icon: Icons.fact_check_outlined,
-                  label: 'Target Approvals',
-                  accent: AppColors.success,
+                  icon: Icons.flag_outlined,
+                  label: 'Monthly Targets',
+                  accent: AppColors.warning,
                   onTap: () => Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => const MonthlyTargetApprovalsPage(),
+                      builder: (_) => const MonthlyTargetsManagementPage(),
                     ),
                   ),
                 ),
@@ -154,18 +152,6 @@ class SettingsScreen extends StatelessWidget {
                     context,
                     MaterialPageRoute(
                       builder: (_) => const _DroppedReasonsPage(),
-                    ),
-                  ),
-                ),
-              if (isManagement)
-                _SettingsTile(
-                  icon: Icons.flag_outlined,
-                  label: 'Monthly Targets',
-                  accent: AppColors.warning,
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const MonthlyTargetsPage(),
                     ),
                   ),
                 ),
