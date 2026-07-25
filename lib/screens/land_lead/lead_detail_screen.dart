@@ -639,12 +639,6 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
 
   void _handleStatCardTap(_StatCardKind kind) {
     // Statistics cards drive the Activity Timeline filter chips directly.
-    // Jump to the Activity tab immediately (no animation race) so the filtered
-    // timeline is visible as soon as state updates.
-    if (!_viewOnly && _tabController.index != 0) {
-      _tabController.index = 0;
-    }
-
     switch (kind) {
       case _StatCardKind.conductedSiteVisits:
         // Card counts every non-rejected visit (executive + management), so the
