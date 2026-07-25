@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../widgets/fomra_app_bar.dart';
 import '../../widgets/fomra_app_shell.dart';
+import '../../widgets/fomra_breadcrumb.dart';
 import '../../widgets/portal_page_layout.dart';
 import 'employee_management_screen.dart';
 
@@ -16,7 +17,10 @@ class UserManagementPage extends StatelessWidget {
     return FomraAppShell(
       currentRoute: '/settings',
       backgroundColor: context.fomraPageBg,
-      appBar: const FomraSubPageAppBar(title: 'User Management'),
+      appBar: FomraSubPageAppBar(
+        title: 'User Management',
+        breadcrumbs: FomraBreadcrumbs.forSettingsChild('User Management'),
+      ),
       body: const EmployeeManagementScreen(isTab: true),
     );
   }

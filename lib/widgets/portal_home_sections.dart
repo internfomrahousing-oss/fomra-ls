@@ -6,6 +6,7 @@ import '../models/land_lead.dart';
 import '../models/land_lead_signed_request.dart';
 import '../models/land_lead_site_visit.dart';
 import '../models/lead_list_filter.dart';
+import '../models/monthly_target_submission.dart';
 import '../services/lead_drop_approval_service.dart';
 import '../services/app_store.dart';
 import '../services/profile_photo_service.dart';
@@ -641,6 +642,7 @@ class PortalApprovalsSection extends StatelessWidget {
   final List<LandLeadSiteVisit> visits;
   final List<LandLeadSignedRequest> signedRequests;
   final List<LeadDropApprovalRequest> dropRequests;
+  final List<MonthlyTargetSubmission> monthlyTargets;
   final List<LandLead> leads;
   final bool loading;
   final Future<void> Function(LandLeadSiteVisit visit) onReview;
@@ -650,12 +652,19 @@ class PortalApprovalsSection extends StatelessWidget {
   final Future<void> Function(LandLeadSignedRequest request)? onRejectSigned;
   final Future<void> Function(LeadDropApprovalRequest request)? onApproveDrop;
   final Future<void> Function(LeadDropApprovalRequest request)? onRejectDrop;
+  final Future<void> Function(MonthlyTargetSubmission submission)?
+      onApproveMonthlyTarget;
+  final Future<void> Function(MonthlyTargetSubmission submission)?
+      onRejectMonthlyTarget;
+  final Future<void> Function(MonthlyTargetSubmission submission)?
+      onEditMonthlyTarget;
 
   const PortalApprovalsSection({
     super.key,
     required this.visits,
     this.signedRequests = const [],
     this.dropRequests = const [],
+    this.monthlyTargets = const [],
     required this.leads,
     required this.loading,
     required this.onReview,
@@ -665,6 +674,9 @@ class PortalApprovalsSection extends StatelessWidget {
     this.onRejectSigned,
     this.onApproveDrop,
     this.onRejectDrop,
+    this.onApproveMonthlyTarget,
+    this.onRejectMonthlyTarget,
+    this.onEditMonthlyTarget,
   });
 
   LandLead? _leadFor(String leadId) {
@@ -676,6 +688,10 @@ class PortalApprovalsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final empty = visits.isEmpty &&
+        signedRequests.isEmpty &&
+        dropRequests.isEmpty &&
+        monthlyTargets.isEmpty;
     return AppCard(
       padding: const EdgeInsets.all(AppSpacing.md),
       radius: AppColors.radiusLg,
@@ -685,7 +701,8 @@ class PortalApprovalsSection extends StatelessWidget {
         children: [
           const SectionHeader(
             title: 'Approvals',
-            subtitle: 'Pending site visit, project signed, and drop requests',
+            subtitle:
+                'Pending site visit, project signed, drop, and monthly target requests',
             icon: Icons.verified_outlined,
             padding: EdgeInsets.only(bottom: AppSpacing.sm),
           ),
@@ -700,7 +717,7 @@ class PortalApprovalsSection extends StatelessWidget {
                 ),
               ),
             )
-          else if (visits.isEmpty && signedRequests.isEmpty && dropRequests.isEmpty)
+          else if (empty)
             const PortalEmptyHint(
               hint: 'No pending approvals — new requests will appear here.',
             )
@@ -736,7 +753,9 @@ class PortalApprovalsSection extends StatelessWidget {
                         ),
                       ],
                       for (var i = 0; i < dropRequests.length; i++) ...[
-                        if (i > 0 || visits.isNotEmpty || signedRequests.isNotEmpty)
+                        if (i > 0 ||
+                            visits.isNotEmpty ||
+                            signedRequests.isNotEmpty)
                           const SizedBox(height: 6),
                         _ApprovalDropRow(
                           request: dropRequests[i],
@@ -749,11 +768,229 @@ class PortalApprovalsSection extends StatelessWidget {
                               : () => onRejectDrop!(dropRequests[i]),
                         ),
                       ],
+                      for (var i = 0; i < monthlyTargets.length; i++) ...[
+                        if (i > 0 ||
+                            visits.isNotEmpty ||
+                            signedRequests.isNotEmpty ||
+                            dropRequests.isNotEmpty)
+                          const SizedBox(height: 6),
+                        _ApprovalMonthlyTargetRow(
+                          submission: monthlyTargets[i],
+                          onApprove: onApproveMonthlyTarget == null
+                              ? null
+                              : () =>
+                                  onApproveMonthlyTarget!(monthlyTargets[i]),
+                          onReject: onRejectMonthlyTarget == null
+                              ? null
+                              : () =>
+                                  onRejectMonthlyTarget!(monthlyTargets[i]),
+                          onEdit: onEditMonthlyTarget == null
+                              ? null
+                              : () => onEditMonthlyTarget!(monthlyTargets[i]),
+                        ),
+                      ],
                     ],
                   ),
                 ),
               ),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ApprovalMonthlyTargetRow extends StatefulWidget {
+  final MonthlyTargetSubmission submission;
+  final Future<void> Function()? onApprove;
+  final Future<void> Function()? onReject;
+  final Future<void> Function()? onEdit;
+
+  const _ApprovalMonthlyTargetRow({
+    required this.submission,
+    required this.onApprove,
+    required this.onReject,
+    required this.onEdit,
+  });
+
+  @override
+  State<_ApprovalMonthlyTargetRow> createState() =>
+      _ApprovalMonthlyTargetRowState();
+}
+
+class _ApprovalMonthlyTargetRowState extends State<_ApprovalMonthlyTargetRow> {
+  bool _busy = false;
+
+  Future<void> _act(Future<void> Function()? fn) async {
+    if (fn == null || _busy) return;
+    setState(() => _busy = true);
+    try {
+      await fn();
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  String _valuesSummary(Map<String, int> values) {
+    final parts = [
+      for (final c in TargetCategory.values)
+        if (values.containsKey(c.key)) '${c.label} ${values[c.key]}',
+    ];
+    return parts.isEmpty ? '—' : parts.join(' · ');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.submission;
+    final name =
+        s.employeeName.isEmpty ? s.employeeEmail : s.employeeName;
+    final meta = [
+      if (s.employeeCode.isNotEmpty) 'ID ${s.employeeCode}',
+      if (s.department.isNotEmpty) s.department,
+      if (s.designation.isNotEmpty) s.designation,
+      s.monthLabel,
+      'Submitted ${s.submittedAt.day}/${s.submittedAt.month}/${s.submittedAt.year}',
+    ].join(' · ');
+    final values = s.approvedValues ?? s.submittedValues;
+    final statusColor = s.status.color;
+
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: statusColor.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: statusColor.withValues(alpha: 0.24)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                alignment: Alignment.center,
+                child: Icon(Icons.flag_outlined, color: statusColor, size: 18),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: context.fomraTextPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      meta,
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: context.fomraTextSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  s.status.label,
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: statusColor,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            _valuesSummary(values),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 12,
+              color: context.fomraTextSecondary,
+            ),
+          ),
+          const SizedBox(height: 10),
+          LayoutBuilder(builder: (context, c) {
+            final edit = OutlinedButton(
+              onPressed: _busy ? null : () => _act(widget.onEdit),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+              ),
+              child: const Text('Edit Targets'),
+            );
+            final reject = OutlinedButton(
+              onPressed: _busy ? null : () => _act(widget.onReject),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.error,
+                side: BorderSide(
+                    color: AppColors.error.withValues(alpha: 0.4)),
+                padding: const EdgeInsets.symmetric(vertical: 8),
+              ),
+              child: const Text('Reject'),
+            );
+            final approve = FilledButton(
+              onPressed: _busy ? null : () => _act(widget.onApprove),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.success,
+                padding: const EdgeInsets.symmetric(vertical: 8),
+              ),
+              child: _busy
+                  ? const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Text('Approve'),
+            );
+            if (c.maxWidth < 360) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  approve,
+                  const SizedBox(height: 8),
+                  Row(children: [
+                    Expanded(child: edit),
+                    const SizedBox(width: 8),
+                    Expanded(child: reject),
+                  ]),
+                ],
+              );
+            }
+            return Row(
+              children: [
+                Expanded(child: edit),
+                const SizedBox(width: 8),
+                Expanded(child: reject),
+                const SizedBox(width: 8),
+                Expanded(child: approve),
+              ],
+            );
+          }),
         ],
       ),
     );

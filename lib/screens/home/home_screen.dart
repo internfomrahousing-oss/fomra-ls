@@ -36,6 +36,7 @@ import '../../models/app_notification.dart';
 import '../../models/land_lead_signed_request.dart';
 import '../../models/land_lead_site_visit.dart';
 import '../settings/employee_monthly_targets_page.dart';
+import '../settings/monthly_target_approvals_page.dart';
 import '../../widgets/fomra_app_bar.dart';
 import '../../widgets/fomra_app_shell.dart';
 import '../../widgets/ui/app_feedback.dart';
@@ -63,6 +64,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   List<LandLeadSiteVisit> _pendingApprovals = [];
   List<LandLeadSignedRequest> _pendingSigned = [];
   List<LeadDropApprovalRequest> _pendingDropApprovals = [];
+  List<MonthlyTargetSubmission> _pendingMonthlyTargets = [];
   bool _loadingApprovals = false;
 
   /// Meeting history behind the management "No Future Activity" quick action.
@@ -316,11 +318,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     try {
       dropRequests = await LeadDropApprovalService.getPending();
     } catch (_) {/* notification storage may not exist yet */}
+    List<MonthlyTargetSubmission> monthlyTargets = const [];
+    try {
+      monthlyTargets = await MonthlyTargetSubmissionService.getPending();
+    } catch (_) {/* table may not exist yet */}
     if (mounted) {
       setState(() {
         _pendingApprovals = visits;
         _pendingSigned = signed;
         _pendingDropApprovals = dropRequests;
+        _pendingMonthlyTargets = monthlyTargets;
         _loadingApprovals = false;
       });
     }
@@ -433,6 +440,119 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     await _reviewPendingVisit(visit);
   }
 
+  Future<void> _approveMonthlyTarget(MonthlyTargetSubmission s) async {
+    try {
+      await MonthlyTargetSubmissionService.approve(submission: s);
+      if (!mounted) return;
+      AppFeedback.success(context, 'Targets approved.');
+      await _loadPendingApprovals();
+    } catch (e) {
+      if (!mounted) return;
+      AppFeedback.error(context, 'Could not approve targets: $e');
+    }
+  }
+
+  Future<void> _rejectMonthlyTarget(MonthlyTargetSubmission s) async {
+    final ctrl = TextEditingController();
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Reject targets'),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          minLines: 2,
+          maxLines: 4,
+          decoration: const InputDecoration(
+            labelText: 'Reason (optional)',
+            hintText: 'Why are these targets being rejected?',
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
+            child: const Text('Reject'),
+          ),
+        ],
+      ),
+    );
+    if (reason == null) return;
+    try {
+      await MonthlyTargetSubmissionService.reject(
+          submission: s, reason: reason);
+      if (!mounted) return;
+      AppFeedback.info(context, 'Targets rejected.');
+      await _loadPendingApprovals();
+    } catch (e) {
+      if (!mounted) return;
+      AppFeedback.error(context, 'Could not reject targets: $e');
+    }
+  }
+
+  Future<void> _editMonthlyTarget(MonthlyTargetSubmission s) async {
+    final result = await showMonthlyTargetEditDialog(context, s);
+    if (result == null) return;
+    try {
+      switch (result.action) {
+        case MonthlyTargetEditAction.save:
+          await MonthlyTargetSubmissionService.saveEdits(
+              submission: s, values: result.values);
+          if (!mounted) return;
+          AppFeedback.success(
+              context, 'Changes saved — still pending approval.');
+        case MonthlyTargetEditAction.approve:
+          await MonthlyTargetSubmissionService.approve(
+              submission: s, approvedValues: result.values);
+          if (!mounted) return;
+          AppFeedback.success(context, 'Targets approved.');
+        case MonthlyTargetEditAction.reject:
+          final ctrl = TextEditingController();
+          final reason = await showDialog<String>(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16)),
+              title: const Text('Reject targets'),
+              content: TextField(
+                controller: ctrl,
+                autofocus: true,
+                minLines: 2,
+                maxLines: 4,
+                decoration: const InputDecoration(
+                  labelText: 'Reason (optional)',
+                  hintText: 'Why are these targets being rejected?',
+                ),
+              ),
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('Cancel')),
+                FilledButton(
+                  onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+                  style:
+                      FilledButton.styleFrom(backgroundColor: AppColors.error),
+                  child: const Text('Reject'),
+                ),
+              ],
+            ),
+          );
+          if (reason == null) return;
+          await MonthlyTargetSubmissionService.reject(
+              submission: s, reason: reason);
+          if (!mounted) return;
+          AppFeedback.info(context, 'Targets rejected.');
+      }
+      await _loadPendingApprovals();
+    } catch (e) {
+      if (!mounted) return;
+      AppFeedback.error(context, 'Action failed: $e');
+    }
+  }
+
   void _goTo(String route) => Navigator.pushNamed(context, route);
 
   void _openAllProjectsMap(List<LandLead> leads) {
@@ -510,6 +630,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   visits: _pendingApprovals,
                   signedRequests: _pendingSigned,
                   dropRequests: _pendingDropApprovals,
+                  monthlyTargets: _pendingMonthlyTargets,
                   leads: AppStore.instance.leads,
                   loading: _loadingApprovals,
                   onReview: (v) => wrap(() => _reviewPendingVisit(v)),
@@ -519,6 +640,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   onRejectSigned: (r) => wrap(() => _rejectSignedRequest(r)),
                   onApproveDrop: (r) => wrap(() => _approveDropRequest(r)),
                   onRejectDrop: (r) => wrap(() => _rejectDropRequest(r)),
+                  onApproveMonthlyTarget: (s) =>
+                      wrap(() => _approveMonthlyTarget(s)),
+                  onRejectMonthlyTarget: (s) =>
+                      wrap(() => _rejectMonthlyTarget(s)),
+                  onEditMonthlyTarget: (s) =>
+                      wrap(() => _editMonthlyTarget(s)),
                 ),
               ],
             ),
@@ -547,8 +674,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final teamRows = buildPortalTeamPerformance(leads);
 
     final dropApprovalPending = _pendingDropApprovals.length;
-    final approvalCount =
-      _pendingApprovals.length + _pendingSigned.length + dropApprovalPending;
+    final approvalCount = _pendingApprovals.length +
+        _pendingSigned.length +
+        dropApprovalPending +
+        _pendingMonthlyTargets.length;
 
     final pendingApprovalItems = <PendingApprovalItem>[
       for (final v in _pendingApprovals)
@@ -568,6 +697,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           leadId: d.leadId,
           label: 'Drop request',
           since: d.createdAt,
+        ),
+      for (final t in _pendingMonthlyTargets)
+        PendingApprovalItem(
+          leadId: t.id,
+          label: 'Monthly Target Approval',
+          since: t.submittedAt,
         ),
     ];
 

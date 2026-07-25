@@ -14,6 +14,7 @@ import '../../theme/fomra_layout.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../widgets/fomra_app_bar.dart';
 import '../../widgets/fomra_app_shell.dart';
+import '../../widgets/fomra_breadcrumb.dart';
 import '../../widgets/ui/app_components.dart';
 import '../../widgets/ui/app_feedback.dart';
 import '../../widgets/change_password_section.dart';
@@ -126,7 +127,8 @@ class SettingsScreen extends StatelessWidget {
                   onTap: () => Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => const AuditTrailScreen(),
+                      builder: (_) =>
+                          const AuditTrailScreen(asSettingsChild: true),
                     ),
                   ),
                 ),
@@ -372,8 +374,9 @@ class _DroppedReasonsPageState extends State<_DroppedReasonsPage> {
     final reasons = _catalog.current;
     return FomraAppShell(
       currentRoute: '/settings',
-      appBar: const FomraAppBar(
-        moduleName: 'Dropped Reasons',
+      appBar: FomraSubPageAppBar(
+        title: 'Dropped Reasons',
+        breadcrumbs: FomraBreadcrumbs.forSettingsChild('Dropped Reasons'),
       ),
       backgroundColor: context.fomraPageBg,
       body: ListView(
@@ -487,8 +490,9 @@ class _BulkLeadImportPageState extends State<_BulkLeadImportPage> {
   Widget build(BuildContext context) {
     return FomraAppShell(
       currentRoute: '/settings',
-      appBar: const FomraAppBar(
-        moduleName: 'Bulk Lead Import',
+      appBar: FomraSubPageAppBar(
+        title: 'Bulk Lead Import',
+        breadcrumbs: FomraBreadcrumbs.forSettingsChild('Bulk Lead Import'),
       ),
       backgroundColor: context.fomraPageBg,
       body: ListView(
