@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
@@ -139,12 +140,19 @@ class _SignedProjectDialogState extends State<SignedProjectDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final screen = MediaQuery.sizeOf(context);
+    final isMobile = screen.width < 600;
+    // Keep the dialog within the screen on phones so it never overflows.
+    final maxHeight = math.min(640.0, screen.height * 0.9);
     return Dialog(
-      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      insetPadding: EdgeInsets.symmetric(
+        horizontal: isMobile ? 14 : 24,
+        vertical: 24,
+      ),
       backgroundColor: context.fomraSurface,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 460, maxHeight: 640),
+        constraints: BoxConstraints(maxWidth: 460, maxHeight: maxHeight),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 18, 12, 16),
           child: Column(
@@ -209,30 +217,61 @@ class _SignedProjectDialogState extends State<SignedProjectDialog> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      OutlinedButton.icon(
-                        onPressed: _submitting ? null : _pickFiles,
-                        icon: const Icon(Icons.upload_file_outlined, size: 18),
-                        label: Text(
-                          _files.isEmpty
-                              ? 'Upload documents / photos'
-                              : 'Add more (${_files.length}/$_maxFiles)',
-                        ),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: AppColors.purple,
-                          side: BorderSide(color: context.fomraBorder),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 14, vertical: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                      // Prominent tap-anywhere upload zone — reads clearly as a
+                      // file drop area on mobile instead of a thin button.
+                      Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: _submitting ? null : _pickFiles,
+                          borderRadius: BorderRadius.circular(14),
+                          child: Ink(
+                            decoration: BoxDecoration(
+                              color: AppColors.purple.withValues(alpha: 0.05),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: AppColors.purple.withValues(alpha: 0.35),
+                                width: 1.4,
+                              ),
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 18),
+                            child: Column(
+                              children: [
+                                Container(
+                                  width: 46,
+                                  height: 46,
+                                  decoration: BoxDecoration(
+                                    color: AppColors.purple
+                                        .withValues(alpha: 0.12),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(Icons.cloud_upload_outlined,
+                                      color: AppColors.purple, size: 24),
+                                ),
+                                const SizedBox(height: 10),
+                                Text(
+                                  _files.isEmpty
+                                      ? 'Upload documents / photos'
+                                      : 'Add more (${_files.length}/$_maxFiles)',
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w800,
+                                    color: AppColors.purple,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'PDF, JPG, PNG, DOC · images auto-compress',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: context.fomraTextSecondary,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        'PDF, JPG, PNG, DOC · images auto-compress before upload',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: context.fomraTextSecondary,
                         ),
                       ),
                       if (_files.isNotEmpty) ...[
