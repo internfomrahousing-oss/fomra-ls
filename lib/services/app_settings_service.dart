@@ -26,8 +26,16 @@ class AppSettingsService extends ChangeNotifier {
   bool _cameraOnlySitePhotos = true;
   bool _roleHierarchy = true;
   bool _loaded = false;
+  bool _dbReachable = false;
+
+  /// Bumped on every local write so an in-flight [reload] cannot clobber a
+  /// toggle the user just flipped.
+  int _writeGeneration = 0;
 
   bool get isLoaded => _loaded;
+
+  /// True after a successful read/write against `app_settings`.
+  bool get dbReachable => _dbReachable;
 
   /// When ON, Add Lead allows typed GPS and map pins (plus Live GPS).
   bool get manualGpsEntry => _manualGpsEntry;
@@ -45,19 +53,33 @@ class AppSettingsService extends ChangeNotifier {
     await reload();
   }
 
+  /// Always re-reads prefs + Supabase. Safe to call when opening Add Lead /
+  /// Feature Controls so every screen sees the latest toggles.
   Future<void> reload() async {
+    final gen = _writeGeneration;
     await _loadFromPrefs();
+    if (gen != _writeGeneration) return;
+
     try {
       final rows = await _db.from(_table).select('key, value');
+      if (gen != _writeGeneration) return;
+      _dbReachable = true;
+      // DB is source of truth when reachable — reset then apply rows.
+      _manualGpsEntry = false;
+      _cameraOnlySitePhotos = true;
+      _roleHierarchy = true;
       for (final raw in rows as List) {
         final m = Map<String, dynamic>.from(raw as Map);
         final key = (m['key'] as String? ?? '').trim();
-        final value = _asBool(m['value']);
-        _apply(key, value);
+        if (key.isEmpty) continue;
+        _apply(key, _asBool(m['value']));
       }
+      await _saveAllPrefs();
     } catch (_) {
-      // Table may be missing — keep prefs / defaults.
+      _dbReachable = false;
+      // Table missing / offline — keep prefs / defaults already loaded.
     }
+    if (gen != _writeGeneration) return;
     _loaded = true;
     notifyListeners();
   }
@@ -76,30 +98,42 @@ class AppSettingsService extends ChangeNotifier {
     bool value,
     void Function(bool) assign,
   ) async {
+    _writeGeneration++;
     assign(value);
+    _loaded = true;
     notifyListeners();
     await _savePref(key, value);
+
+    final by = AuthService.instance.currentUser?.email ?? '';
     try {
-      final by = AuthService.instance.currentUser?.email ?? '';
-      await _db.from(_table).upsert({
-        'key': key,
-        'value': value,
-        'updated_by': by,
-        'updated_at': DateTime.now().toUtc().toIso8601String(),
-      });
-    } catch (_) {
-      // Prefs already updated — UI stays consistent until SQL is applied.
+      await _db.from(_table).upsert(
+        {
+          'key': key,
+          // JSONB column — send a real JSON boolean, not a string.
+          'value': value,
+          'updated_by': by,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        },
+        onConflict: 'key',
+      );
+      _dbReachable = true;
+    } catch (e) {
+      _dbReachable = false;
+      // Local + prefs already updated so this device stays consistent.
+      throw Exception(
+        'Saved on this device only. Run supabase/app_settings.sql in Supabase '
+        'so the toggle syncs for everyone.\n\n$e',
+      );
     }
   }
 
   void _apply(String key, bool value) {
-    switch (key) {
-      case keyManualGpsEntry:
-        _manualGpsEntry = value;
-      case keyCameraOnlySitePhotos:
-        _cameraOnlySitePhotos = value;
-      case keyRoleHierarchy:
-        _roleHierarchy = value;
+    if (key == keyManualGpsEntry) {
+      _manualGpsEntry = value;
+    } else if (key == keyCameraOnlySitePhotos) {
+      _cameraOnlySitePhotos = value;
+    } else if (key == keyRoleHierarchy) {
+      _roleHierarchy = value;
     }
   }
 
@@ -114,6 +148,12 @@ class AppSettingsService extends ChangeNotifier {
     } catch (_) {}
   }
 
+  Future<void> _saveAllPrefs() async {
+    await _savePref(keyManualGpsEntry, _manualGpsEntry);
+    await _savePref(keyCameraOnlySitePhotos, _cameraOnlySitePhotos);
+    await _savePref(keyRoleHierarchy, _roleHierarchy);
+  }
+
   Future<void> _savePref(String key, bool value) async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -125,9 +165,14 @@ class AppSettingsService extends ChangeNotifier {
     if (raw is bool) return raw;
     if (raw is String) {
       final t = raw.trim().toLowerCase();
-      return t == 'true' || t == '1';
+      return t == 'true' || t == '1' || t == 'yes' || t == 'on';
     }
     if (raw is num) return raw != 0;
+    // Some PostgREST payloads wrap scalars.
+    if (raw is Map) {
+      if (raw.containsKey('value')) return _asBool(raw['value']);
+      if (raw.containsKey('bool')) return _asBool(raw['bool']);
+    }
     return false;
   }
 }

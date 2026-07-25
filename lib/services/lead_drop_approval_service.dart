@@ -1,6 +1,7 @@
 import '../models/app_notification.dart';
 import '../models/land_lead.dart';
 import '../models/lead_drop_reason.dart';
+import '../services/app_settings_service.dart';
 import '../services/app_store.dart';
 import '../services/approval_chain.dart';
 import '../services/auth_service.dart';
@@ -70,6 +71,7 @@ class LeadDropApprovalService {
         (AuthService.instance.currentUser?.email ?? '').trim().toLowerCase();
     // Route to the first approver in the chain. The request IS the
     // notification, so its audience is who it currently waits on.
+    await AppSettingsService.instance.ensureLoaded();
     final step = ApprovalChain.firstStepFor(byEmail);
 
     final created = await NotificationsService.createAndReturn(

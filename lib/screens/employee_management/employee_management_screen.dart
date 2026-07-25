@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../models/employee_profile.dart';
 import '../../services/access_as_user.dart';
+import '../../services/app_settings_service.dart';
 import '../../services/app_store.dart';
 import '../../services/auth_service.dart';
 import '../../services/employee_service.dart';
@@ -56,16 +59,29 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
   void initState() {
     super.initState();
     AppStore.instance.addListener(_onStoreUpdate);
+    AppSettingsService.instance.addListener(_onStoreUpdate);
+    unawaited(AppSettingsService.instance.reload());
     _loadEmployees();
   }
 
   @override
   void dispose() {
     AppStore.instance.removeListener(_onStoreUpdate);
+    AppSettingsService.instance.removeListener(_onStoreUpdate);
     super.dispose();
   }
 
-  void _onStoreUpdate() => setState(() {});
+  void _onStoreUpdate() {
+    if (!AppSettingsService.instance.roleHierarchyEnabled &&
+        (_roleFilter == _RoleFilter.reportingManager ||
+            _roleFilter == _RoleFilter.head)) {
+      _roleFilter = _RoleFilter.all;
+    }
+    setState(() {});
+  }
+
+  bool get _hierarchyOn =>
+      AppSettingsService.instance.roleHierarchyEnabled;
 
   Future<void> _loadEmployees() async {
     setState(() {
@@ -240,13 +256,18 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
     fomraNavigateHome(context);
   }
 
-  /// Change designation: Executive / Reporting Manager / Head.
+  /// Change designation. With Role Hierarchy ON: Executive / RM / Head.
+  /// With Role Hierarchy OFF: Employee only (flat org).
   Future<void> _changeRole(EmployeeProfile employee) async {
-    const roles = [
-      EmployeeDesignations.executive,
-      EmployeeDesignations.reportingManager,
-      EmployeeDesignations.head,
-    ];
+    final roles = _hierarchyOn
+        ? const [
+            EmployeeDesignations.executive,
+            EmployeeDesignations.reportingManager,
+            EmployeeDesignations.head,
+          ]
+        : const [
+            EmployeeDesignations.executive,
+          ];
     final current = employee.designation.trim().isEmpty
         ? EmployeeDesignations.executive
         : employee.designation.trim();
@@ -284,7 +305,10 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
               ),
               const SizedBox(height: 4),
               Text(
-                employee.fullName,
+                _hierarchyOn
+                    ? employee.fullName
+                    : '${employee.fullName} · Role Hierarchy is off '
+                        '(Employee ↔ Management only)',
                 style: TextStyle(
                   fontSize: 13,
                   color: context.fomraTextSecondary,
@@ -313,6 +337,28 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                   ),
                   onTap: () => Navigator.pop(ctx, role),
                 ),
+              if (!_hierarchyOn &&
+                  (current == EmployeeDesignations.reportingManager ||
+                      current == EmployeeDesignations.head)) ...[
+                const SizedBox(height: 4),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(
+                    Icons.arrow_downward_rounded,
+                    color: AppColors.warning,
+                  ),
+                  title: const Text('Set to Employee (Executive)'),
+                  subtitle: Text(
+                    'Currently $current — hierarchy roles are disabled.',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: context.fomraTextSecondary,
+                    ),
+                  ),
+                  onTap: () =>
+                      Navigator.pop(ctx, EmployeeDesignations.executive),
+                ),
+              ],
             ],
           ),
         ),
@@ -348,14 +394,21 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
   }
 
   Widget _roleFilterChips(BuildContext context) {
+    final filters = _hierarchyOn
+        ? _RoleFilter.values
+        : const [_RoleFilter.all, _RoleFilter.executive];
     return SizedBox(
       height: 34,
       child: ListView(
         scrollDirection: Axis.horizontal,
         children: [
-          for (final f in _RoleFilter.values) ...[
+          for (final f in filters) ...[
             ChoiceChip(
-              label: Text(f.label),
+              label: Text(
+                f == _RoleFilter.executive && !_hierarchyOn
+                    ? 'Employee'
+                    : f.label,
+              ),
               selected: _roleFilter == f,
               onSelected: (_) => setState(() => _roleFilter = f),
               showCheckmark: false,

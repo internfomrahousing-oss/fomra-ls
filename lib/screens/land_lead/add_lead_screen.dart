@@ -236,7 +236,9 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
   void initState() {
     super.initState();
     AppSettingsService.instance.addListener(_onSettingsChanged);
-    unawaited(AppSettingsService.instance.ensureLoaded());
+    // Always re-fetch so Feature Controls toggles apply immediately on this
+    // screen (not a stale in-memory snapshot from app start).
+    unawaited(AppSettingsService.instance.reload());
     _scrollController.addListener(_onScroll);
     _gpsCtrl.addListener(_onGpsTextChanged);
     // Keep the Save button's enabled/dimmed state live as mandatory fields
@@ -765,7 +767,7 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
   // ── Photo picker ───────────────────────────────────────────────────────────
 
   /// Site photos: camera-only when Feature Controls says so; otherwise the user
-  /// may pick camera or gallery.
+  /// may pick camera or gallery. The sheet always reflects the live toggle.
   Future<void> _pickPhoto() async {
     if (_keptPhotoUrls.length + _photos.length >= _kMaxSitePhotos) {
       AppFeedback.warning(context, 'Maximum $_kMaxSitePhotos photos per lead');
@@ -773,35 +775,47 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
     }
 
     try {
-      ImageSource source = ImageSource.camera;
-      if (!_cameraOnlyPhotos) {
-        final pickedSource = await showModalBottomSheet<ImageSource>(
-          context: context,
-          backgroundColor: context.fomraSurface,
-          shape: const RoundedRectangleBorder(
-            borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-          ),
-          builder: (ctx) => SafeArea(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ListTile(
-                  leading: const Icon(Icons.photo_camera_outlined),
-                  title: const Text('Take photo'),
-                  onTap: () => Navigator.pop(ctx, ImageSource.camera),
+      final cameraOnly = AppSettingsService.instance.cameraOnlySitePhotos;
+      final source = await showModalBottomSheet<ImageSource>(
+        context: context,
+        backgroundColor: context.fomraSurface,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        ),
+        builder: (ctx) => SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
+                child: Text(
+                  cameraOnly
+                      ? 'Camera only (Feature Controls)'
+                      : 'Camera or gallery',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: context.fomraTextSecondary,
+                  ),
                 ),
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_camera_outlined),
+                title: const Text('Take photo'),
+                onTap: () => Navigator.pop(ctx, ImageSource.camera),
+              ),
+              if (!cameraOnly)
                 ListTile(
                   leading: const Icon(Icons.photo_library_outlined),
                   title: const Text('Choose from gallery'),
                   onTap: () => Navigator.pop(ctx, ImageSource.gallery),
                 ),
-              ],
-            ),
+              const SizedBox(height: 8),
+            ],
           ),
-        );
-        if (pickedSource == null) return;
-        source = pickedSource;
-      }
+        ),
+      );
+      if (source == null) return;
       final picked = await ImagePicker().pickImage(
         source: source,
         maxWidth: 2400,
@@ -1246,13 +1260,31 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              Text(
-                                _manualGpsAllowed
-                                    ? 'Use Live GPS or switch to Manual to type coordinates / tap the map.'
-                                    : 'Live GPS only — map pins and typed coordinates are rejected.',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: context.fomraTextSecondary,
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 10),
+                                decoration: BoxDecoration(
+                                  color: (_manualGpsAllowed
+                                          ? AppColors.info
+                                          : AppColors.warning)
+                                      .withValues(alpha: 0.08),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: (_manualGpsAllowed
+                                            ? AppColors.info
+                                            : AppColors.warning)
+                                        .withValues(alpha: 0.28),
+                                  ),
+                                ),
+                                child: Text(
+                                  _manualGpsAllowed
+                                      ? 'Manual GPS Entry is ON — use Live GPS or switch to Manual to type coordinates / tap the map.'
+                                      : 'Manual GPS Entry is OFF — Live GPS only. Map pins and typed coordinates are blocked.',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: context.fomraTextPrimary,
+                                  ),
                                 ),
                               ),
                               if (_manualGpsAllowed) ...[

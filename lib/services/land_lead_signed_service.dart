@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/land_lead.dart';
 import '../models/land_lead_signed_request.dart';
 import '../models/land_lead_site_visit.dart' show SiteVisitApprovalStatus;
+import 'app_settings_service.dart';
 import 'app_store.dart';
 import 'approval_chain.dart';
 import 'auth_service.dart';
@@ -29,8 +30,8 @@ class LandLeadSignedService {
     final byEmail =
         (AuthService.instance.currentUser?.email ?? '').trim().toLowerCase();
 
-    // Route to the first approver in the submitter's chain. With no reporting
-    // line this is Management — i.e. the original single-step behaviour.
+    // Honour Feature Controls › Role Hierarchy (flat mode → Management).
+    await AppSettingsService.instance.ensureLoaded();
     final step = ApprovalChain.firstStepFor(byEmail);
 
     final row = await _db

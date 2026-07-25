@@ -39,7 +39,8 @@ class _FeatureControlsPageState extends State<FeatureControlsPage> {
   }
 
   Future<void> _bootstrap() async {
-    await _settings.ensureLoaded();
+    // Always refresh so this page shows org-wide values, not a stale cache.
+    await _settings.reload();
     if (mounted) setState(() => _loading = false);
   }
 
@@ -54,7 +55,11 @@ class _FeatureControlsPageState extends State<FeatureControlsPage> {
       AppFeedback.success(context, okMessage);
     } catch (e) {
       if (!mounted) return;
-      AppFeedback.error(context, 'Could not save setting: $e');
+      // Value is already applied locally — warn so they still run the SQL.
+      AppFeedback.warning(
+        context,
+        e.toString().replaceFirst('Exception: ', ''),
+      );
     }
   }
 
@@ -78,21 +83,48 @@ class _FeatureControlsPageState extends State<FeatureControlsPage> {
                       'Turn capture and approval rules on or off for the whole workspace.',
                   icon: Icons.tune_rounded,
                 ),
+                if (!_settings.dbReachable) ...[
+                  const SizedBox(height: 12),
+                  AppCard(
+                    interactive: false,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.info_outline_rounded,
+                            color: AppColors.warning, size: 22),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            'Supabase table `app_settings` is missing or unreachable. '
+                            'Toggles still apply on this device — run '
+                            'supabase/app_settings.sql so every user gets them.',
+                            style: TextStyle(
+                              fontSize: 12,
+                              height: 1.35,
+                              color: context.fomraTextSecondary,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 12),
                 _ToggleCard(
                   icon: Icons.edit_location_alt_outlined,
                   accent: AppColors.info,
                   title: 'Manual GPS Entry',
                   subtitle:
-                      'When on, Add Lead allows typing coordinates or tapping the map. '
-                      'When off, only live GPS capture is accepted.',
+                      'When on, Add Lead shows Live / Manual and allows typing '
+                      'coordinates or tapping the map. When off, only Live GPS '
+                      'capture is accepted.',
                   value: _settings.manualGpsEntry,
                   onChanged: (v) => _toggle(
                     setter: _settings.setManualGpsEntry,
                     next: v,
                     okMessage: v
-                        ? 'Manual GPS entry enabled.'
-                        : 'Manual GPS entry disabled — live GPS only.',
+                        ? 'Manual GPS entry enabled — open Add Lead to use it.'
+                        : 'Manual GPS entry disabled — live GPS only on Add Lead.',
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -102,7 +134,7 @@ class _FeatureControlsPageState extends State<FeatureControlsPage> {
                   title: 'Camera-Only Site Photos',
                   subtitle:
                       'When on, site photos on Add Lead must be taken with the camera. '
-                      'When off, camera or gallery is allowed.',
+                      'When off, Add Lead offers Camera or Gallery.',
                   value: _settings.cameraOnlySitePhotos,
                   onChanged: (v) => _toggle(
                     setter: _settings.setCameraOnlySitePhotos,
@@ -119,7 +151,8 @@ class _FeatureControlsPageState extends State<FeatureControlsPage> {
                   title: 'Role Hierarchy',
                   subtitle:
                       'When on, approvals follow Employee → Reporting Manager → Head → Management. '
-                      'When off, the org is Employee and Management only — employee approvals go straight to Management.',
+                      'When off, only Employee and Management — approvals go straight to Management, '
+                      'and Change role hides RM / Head.',
                   value: _settings.roleHierarchyEnabled,
                   onChanged: (v) => _toggle(
                     setter: _settings.setRoleHierarchyEnabled,
@@ -174,13 +207,28 @@ class _ToggleCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w800,
-                    color: context.fomraTextPrimary,
-                  ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                          color: context.fomraTextPrimary,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      value ? 'ON' : 'OFF',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.4,
+                        color: value ? accent : context.fomraTextTertiary,
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 4),
                 Text(

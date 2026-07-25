@@ -1,6 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/land_lead_site_visit.dart';
+import 'app_settings_service.dart';
 import 'app_store.dart';
 import 'approval_chain.dart';
 import 'audit_log_service.dart';
@@ -99,7 +100,8 @@ class LandLeadSiteVisitService {
         visitType == LandLeadSiteVisitType.management && isEmployee;
 
     // Route to the first approver in the submitter's chain (Management when
-    // they have no reporting line — the original behaviour).
+    // Role Hierarchy is off or they have no reporting line).
+    await AppSettingsService.instance.ensureLoaded();
     final step = ApprovalChain.firstStepFor(loggedByEmail);
 
     final row = await _db

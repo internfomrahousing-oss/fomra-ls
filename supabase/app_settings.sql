@@ -29,8 +29,12 @@ CREATE POLICY "anyone can manage app settings"
   WITH CHECK (true);
 
 -- Defaults (ON for hierarchy + camera-only; OFF for manual GPS).
+-- DO NOTHING on conflict so later Feature Controls toggles are preserved.
 INSERT INTO app_settings (key, value) VALUES
   ('manual_gps_entry', 'false'::jsonb),
   ('camera_only_site_photos', 'true'::jsonb),
   ('role_hierarchy', 'true'::jsonb)
 ON CONFLICT (key) DO NOTHING;
+
+-- Helpful check after toggling in the app:
+--   SELECT key, value, updated_at, updated_by FROM app_settings ORDER BY key;
