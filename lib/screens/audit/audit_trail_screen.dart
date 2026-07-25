@@ -272,14 +272,16 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
       ),
     );
 
+    final PreferredSizeWidget appBar = widget.asSettingsChild
+        ? FomraSubPageAppBar(
+            title: 'Audit Trail',
+            breadcrumbs: FomraBreadcrumbs.forSettingsChild('Audit Trail'),
+          )
+        : const FomraAppBar(moduleName: 'Audit');
+
     return FomraAppShell(
       currentRoute: widget.asSettingsChild ? '/settings' : '/audit-trail',
-      appBar: widget.asSettingsChild
-          ? FomraSubPageAppBar(
-              title: 'Audit Trail',
-              breadcrumbs: FomraBreadcrumbs.forSettingsChild('Audit Trail'),
-            )
-          : const FomraAppBar(moduleName: 'Audit'),
+      appBar: appBar,
       body: body,
     );
   }
