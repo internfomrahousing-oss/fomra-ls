@@ -101,6 +101,24 @@ class LandLeadSignedService {
     }
   }
 
+  /// Signed requests logged against a single lead (pending, approved, rejected).
+  /// Returns an empty list when the table is missing so the lead detail page
+  /// can still render its Activity Timeline.
+  static Future<List<LandLeadSignedRequest>> getForLead(String leadId) async {
+    try {
+      final rows = await _db
+          .from(_table)
+          .select()
+          .eq('lead_id', leadId)
+          .order('created_at', ascending: false);
+      return (rows as List)
+          .map((r) => LandLeadSignedRequest.fromJson(r as Map<String, dynamic>))
+          .toList();
+    } catch (_) {
+      return const [];
+    }
+  }
+
   /// Requests approved between [from] and [to] — the sites/deals actually closed
   /// in that window, which is what monthly target progress counts. A lead only
   /// reaches Signed through this workflow, so `reviewed_at` is the completion

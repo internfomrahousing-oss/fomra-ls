@@ -13,9 +13,11 @@ import '../../services/auth_service.dart';
 import '../../services/role_access.dart';
 import '../../services/lead_drop_approval_service.dart';
 import '../../services/lead_drop_reason_catalog_service.dart';
+import '../../models/land_lead_signed_request.dart';
 import '../../services/land_lead_legal_service.dart';
 import '../../services/land_lead_meeting_service.dart';
 import '../../services/land_lead_service.dart';
+import '../../services/land_lead_signed_service.dart';
 import '../../services/nearby_features_service.dart';
 import '../../utils/lead_auto_notes.dart';
 import '../../utils/lead_location_parser.dart';
@@ -117,13 +119,13 @@ List<
         Icons.apartment_outlined, _ActivityFilter.managementSiteVisits),
     e(9, 'Legal Update', 'Legal Desk', 'Verified',
         'Patta and Chitta collected; FMB sketch has been requested.',
-        Icons.gavel_outlined, _ActivityFilter.notes),
-    e(10, 'Task Created', 'Priya S', 'Open',
+        Icons.gavel_outlined, _ActivityFilter.legal),
+    e(10, 'Follow-up', 'Priya S', 'Scheduled',
         'Follow up on the pending EC before starting negotiation.',
-        Icons.checklist_rounded, _ActivityFilter.notes),
+        Icons.event_available_outlined, _ActivityFilter.followUp),
     e(12, 'Project Signed', 'Arun Kumar', 'Submitted for approval',
         'Signing package submitted and awaiting management approval.',
-        Icons.draw_outlined, _ActivityFilter.notes),
+        Icons.draw_outlined, _ActivityFilter.signed),
   ];
 }
 
@@ -153,6 +155,17 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
   List<LandLeadSiteVisit> _siteVisits = [];
   List<LandLeadMeeting> _meetings = [];
   List<LandLeadLegalDocument> _legalDocs = [];
+  List<LandLeadSignedRequest> _signedRequests = [];
+
+  /// Shared Activity Timeline filter — driven by the filter chips, Quick
+  /// Actions, and statistics cards so only one filter is active at a time.
+  _ActivityFilter _activityFilter = _ActivityFilter.all;
+  _SiteVisitScope _siteVisitScope = _SiteVisitScope.self;
+  _CallStatFilter _callStatFilter = _CallStatFilter.none;
+  String? _selectedQuickAction;
+
+  final GlobalKey _timelineKey = GlobalKey();
+  final ScrollController _scrollController = ScrollController();
 
   /// Competitor Projects sits beside Land Records, but only management may see
   /// it — an executive, RM or Head never gets the tab at all.
@@ -175,6 +188,98 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
     _loadActivityData();
     _refreshAutoNotes();
   }
+
+  /// Applies a single Activity Timeline filter, switches to the Activity tab,
+  /// and smoothly scrolls the timeline into view.
+  void _applyActivityFilter({
+    required _ActivityFilter filter,
+    _SiteVisitScope? siteVisitScope,
+    _CallStatFilter callStatFilter = _CallStatFilter.none,
+    String? quickAction,
+  }) {
+    final needsTabSwitch = !_viewOnly && _tabController.index != 0;
+    setState(() {
+      _activityFilter = filter;
+      if (siteVisitScope != null) _siteVisitScope = siteVisitScope;
+      _callStatFilter = callStatFilter;
+      _selectedQuickAction = quickAction;
+    });
+    if (needsTabSwitch) {
+      _tabController.animateTo(0);
+    }
+    _scrollToTimeline(delay: needsTabSwitch
+        ? const Duration(milliseconds: 280)
+        : Duration.zero);
+  }
+
+  void _scrollToTimeline({Duration delay = Duration.zero}) {
+    Future<void>.delayed(delay, () {
+      if (!mounted) return;
+      final ctx = _timelineKey.currentContext;
+      if (ctx == null) {
+        // Timeline may still be mounting after a tab change — retry once.
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          final retryCtx = _timelineKey.currentContext;
+          if (retryCtx == null) return;
+          Scrollable.ensureVisible(
+            retryCtx,
+            duration: const Duration(milliseconds: 420),
+            curve: Curves.easeInOut,
+            alignment: 0.08,
+          );
+        });
+        return;
+      }
+      Scrollable.ensureVisible(
+        ctx,
+        duration: const Duration(milliseconds: 420),
+        curve: Curves.easeInOut,
+        alignment: 0.08,
+      );
+    });
+  }
+
+  void _clearActivityFilter() {
+    _applyActivityFilter(filter: _ActivityFilter.all, quickAction: null);
+  }
+
+  void _onTimelineFilterSelected(_ActivityFilter filter) {
+    _applyActivityFilter(
+      filter: filter,
+      callStatFilter: _CallStatFilter.none,
+      quickAction: _quickActionForFilter(filter, _siteVisitScope),
+    );
+  }
+
+  void _onSiteVisitScopeSelected(_SiteVisitScope scope) {
+    _applyActivityFilter(
+      filter: _ActivityFilter.siteVisits,
+      siteVisitScope: scope,
+      callStatFilter: _CallStatFilter.none,
+      quickAction: scope == _SiteVisitScope.management
+          ? 'Management site visit'
+          : 'Site visit',
+    );
+  }
+
+  String? _quickActionForFilter(
+    _ActivityFilter filter,
+    _SiteVisitScope scope,
+  ) =>
+      switch (filter) {
+        _ActivityFilter.notes => 'Notes',
+        _ActivityFilter.calls => 'Calls',
+        _ActivityFilter.siteVisits => scope == _SiteVisitScope.management
+            ? 'Management site visit'
+            : 'Site visit',
+        _ActivityFilter.managementSiteVisits => 'Management site visit',
+        _ActivityFilter.meetings => 'Meeting',
+        _ActivityFilter.legal => 'Legal',
+        _ActivityFilter.followUp => null,
+        _ActivityFilter.signed => 'Signed',
+        _ActivityFilter.all => null,
+      };
 
   /// Fetches what's around the site's GPS and folds it into the lead's notes as
   /// an auto-generated block, leaving manual notes untouched.
@@ -214,6 +319,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
         LandLeadSiteVisitService.getAllForLead(lead.leadId),
         LandLeadMeetingService.getForLead(lead.leadId),
         LandLeadLegalService.getDocuments(lead.leadId),
+        LandLeadSignedService.getForLead(lead.leadId),
       ]);
       if (!mounted) return;
       setState(() {
@@ -221,6 +327,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
         _siteVisits = results[1] as List<LandLeadSiteVisit>;
         _meetings = results[2] as List<LandLeadMeeting>;
         _legalDocs = results[3] as List<LandLeadLegalDocument>;
+        _signedRequests = results[4] as List<LandLeadSignedRequest>;
       });
     } catch (_) {
       // Tables may not exist yet — keep counts at zero.
@@ -285,6 +392,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
   void dispose() {
     _tabController.removeListener(_onTabChanged);
     _tabController.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -457,8 +565,94 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
     return _readOnly && label != 'Management site visit';
   }
 
-  void _handleDetailAction(String label) {
-    _showActionDialog(label);
+  Future<void> _handleDetailAction(String label) async {
+    // Sync Quick Actions with the Activity Timeline filter, then open the
+    // existing log dialog so logging behaviour is unchanged.
+    switch (label) {
+      case 'Notes':
+        _applyActivityFilter(
+          filter: _ActivityFilter.notes,
+          quickAction: label,
+        );
+      case 'Calls':
+        _applyActivityFilter(
+          filter: _ActivityFilter.calls,
+          quickAction: label,
+        );
+      case 'Site visit':
+        _applyActivityFilter(
+          filter: _ActivityFilter.siteVisits,
+          siteVisitScope: _SiteVisitScope.self,
+          quickAction: label,
+        );
+      case 'Management site visit':
+        _applyActivityFilter(
+          filter: _ActivityFilter.siteVisits,
+          siteVisitScope: _SiteVisitScope.management,
+          quickAction: label,
+        );
+      case 'Meeting':
+        _applyActivityFilter(
+          filter: _ActivityFilter.meetings,
+          quickAction: label,
+        );
+      case 'Legal':
+        _applyActivityFilter(
+          filter: _ActivityFilter.legal,
+          quickAction: label,
+        );
+      case 'Signed':
+        _applyActivityFilter(
+          filter: _ActivityFilter.signed,
+          quickAction: label,
+        );
+      default:
+        break;
+    }
+    await _showActionDialog(label);
+    if (!mounted) return;
+    // After the dialog closes, keep the Activity tab + filtered timeline in view.
+    if (!_viewOnly && _tabController.index != 0) {
+      _tabController.animateTo(0);
+      _scrollToTimeline(delay: const Duration(milliseconds: 280));
+    } else {
+      _scrollToTimeline();
+    }
+  }
+
+  void _handleStatCardTap(_StatCardKind kind) {
+    switch (kind) {
+      case _StatCardKind.conductedSiteVisits:
+        _applyActivityFilter(
+          filter: _ActivityFilter.siteVisits,
+          siteVisitScope: _SiteVisitScope.self,
+          quickAction: 'Site visit',
+        );
+      case _StatCardKind.outgoingNotAnswered:
+        _applyActivityFilter(
+          filter: _ActivityFilter.calls,
+          callStatFilter: _CallStatFilter.outgoingNotAnswered,
+          quickAction: 'Calls',
+        );
+      case _StatCardKind.outgoingAnswered:
+        _applyActivityFilter(
+          filter: _ActivityFilter.calls,
+          callStatFilter: _CallStatFilter.outgoingAnswered,
+          quickAction: 'Calls',
+        );
+      case _StatCardKind.incomingNotAnswered:
+        _applyActivityFilter(
+          filter: _ActivityFilter.calls,
+          callStatFilter: _CallStatFilter.incomingNotAnswered,
+          quickAction: 'Calls',
+        );
+      case _StatCardKind.incomingAnswered:
+        _applyActivityFilter(
+          filter: _ActivityFilter.calls,
+          callStatFilter: _CallStatFilter.incomingAnswered,
+          quickAction: 'Calls',
+        );
+    }
   }
 
   Future<void> _showActionDialog(String label) async {
@@ -522,6 +716,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
                 },
         ),
       );
+      await _loadActivityData();
       return;
     }
 
@@ -637,7 +832,17 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
       siteVisits: _siteVisits,
       meetings: _meetings,
       legalDocs: _legalDocs,
+      signedRequests: _signedRequests,
+      activityFilter: _activityFilter,
+      siteVisitScope: _siteVisitScope,
+      callStatFilter: _callStatFilter,
+      selectedQuickAction: _selectedQuickAction,
+      timelineKey: _timelineKey,
       onDetailAction: _handleDetailAction,
+      onStatCardTap: _handleStatCardTap,
+      onTimelineFilterSelected: _onTimelineFilterSelected,
+      onSiteVisitScopeSelected: _onSiteVisitScopeSelected,
+      onClearFilter: _clearActivityFilter,
       onOpenTasks: _openViewTasks,
       shouldLoadMiTab: _shouldLoadMiTab,
     );
@@ -684,6 +889,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
                             // action + KPIs + workspace) so width is filled and
                             // no section leaves a large empty gap.
                             ? SingleChildScrollView(
+                                controller: _scrollController,
                                 child: Row(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
@@ -723,6 +929,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
                             // Mobile: one natural top-to-bottom flow — summary →
                             // next action → KPIs → workspace → information.
                             : ListView(
+                                controller: _scrollController,
                                 children: [
                                   summary,
                                   if (guidance != null) ...[
@@ -1097,7 +1304,17 @@ class _WorkspacePanel extends StatelessWidget {
   final List<LandLeadSiteVisit> siteVisits;
   final List<LandLeadMeeting> meetings;
   final List<LandLeadLegalDocument> legalDocs;
+  final List<LandLeadSignedRequest> signedRequests;
+  final _ActivityFilter activityFilter;
+  final _SiteVisitScope siteVisitScope;
+  final _CallStatFilter callStatFilter;
+  final String? selectedQuickAction;
+  final GlobalKey timelineKey;
   final ValueChanged<String> onDetailAction;
+  final ValueChanged<_StatCardKind> onStatCardTap;
+  final ValueChanged<_ActivityFilter> onTimelineFilterSelected;
+  final ValueChanged<_SiteVisitScope> onSiteVisitScopeSelected;
+  final VoidCallback onClearFilter;
   final VoidCallback onOpenTasks;
   final bool Function(int tabIndex) shouldLoadMiTab;
   final String readOnlyNote;
@@ -1115,10 +1332,38 @@ class _WorkspacePanel extends StatelessWidget {
     required this.siteVisits,
     this.meetings = const [],
     this.legalDocs = const [],
+    this.signedRequests = const [],
+    required this.activityFilter,
+    required this.siteVisitScope,
+    required this.callStatFilter,
+    required this.selectedQuickAction,
+    required this.timelineKey,
     required this.onDetailAction,
+    required this.onStatCardTap,
+    required this.onTimelineFilterSelected,
+    required this.onSiteVisitScopeSelected,
+    required this.onClearFilter,
     required this.onOpenTasks,
     required this.shouldLoadMiTab,
   });
+
+  Widget _timeline() => KeyedSubtree(
+        key: timelineKey,
+        child: _ActivityTimeline(
+          lead: lead,
+          callLogs: callLogs,
+          siteVisits: siteVisits,
+          meetings: meetings,
+          legalDocs: legalDocs,
+          signedRequests: signedRequests,
+          filter: activityFilter,
+          siteVisitScope: siteVisitScope,
+          callStatFilter: callStatFilter,
+          onFilterSelected: onTimelineFilterSelected,
+          onSiteVisitScopeSelected: onSiteVisitScopeSelected,
+          onClearFilter: onClearFilter,
+        ),
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -1148,7 +1393,10 @@ class _WorkspacePanel extends StatelessWidget {
               ),
               const SizedBox(height: 10),
               _ActionToolbar(
-                  onAction: onDetailAction, onOpenTasks: onOpenTasks),
+                onAction: onDetailAction,
+                onOpenTasks: onOpenTasks,
+                selectedAction: selectedQuickAction,
+              ),
               const SizedBox(height: 16),
             ] else ...[
               Text(
@@ -1170,22 +1418,23 @@ class _WorkspacePanel extends StatelessWidget {
               ),
               const SizedBox(height: 10),
               _ActionToolbar(
-                  onAction: onDetailAction, onOpenTasks: onOpenTasks),
+                onAction: onDetailAction,
+                onOpenTasks: onOpenTasks,
+                selectedAction: selectedQuickAction,
+              ),
               const SizedBox(height: 16),
             ],
             _ActivitySummaryRow(
               siteVisitCount: siteVisitCount,
               callMetrics: callMetrics,
+              activityFilter: activityFilter,
+              siteVisitScope: siteVisitScope,
+              callStatFilter: callStatFilter,
+              onStatCardTap: onStatCardTap,
             ),
             const SizedBox(height: 14),
             if (readOnly) ...[
-              _ActivityTimeline(
-                lead: lead,
-                callLogs: callLogs,
-                siteVisits: siteVisits,
-                meetings: meetings,
-                legalDocs: legalDocs,
-              ),
+              _timeline(),
             ] else ...[
               // Modern enterprise segmented tabs — the active segment is a
               // filled accent pill inside a bordered track.
@@ -1231,13 +1480,7 @@ class _WorkspacePanel extends StatelessWidget {
                 builder: (context, _) {
                   switch (tabController.index) {
                     case 0:
-                      return _ActivityTimeline(
-                        lead: lead,
-                        callLogs: callLogs,
-                        siteVisits: siteVisits,
-                        meetings: meetings,
-                        legalDocs: legalDocs,
-                      );
+                      return _timeline();
                     case 1:
                       return _SitePhotosTab(lead: lead);
                     case 2:
@@ -1277,8 +1520,13 @@ class _WorkspacePanel extends StatelessWidget {
 class _ActionToolbar extends StatelessWidget {
   final ValueChanged<String> onAction;
   final VoidCallback onOpenTasks;
+  final String? selectedAction;
 
-  const _ActionToolbar({required this.onAction, required this.onOpenTasks});
+  const _ActionToolbar({
+    required this.onAction,
+    required this.onOpenTasks,
+    this.selectedAction,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1295,33 +1543,55 @@ class _ActionToolbar extends StatelessWidget {
     ];
 
     Widget pill((IconData, String, Color) action) {
-      return Material(
-        color: action.$3.withValues(alpha: 0.07),
-        borderRadius: BorderRadius.circular(12),
-        child: InkWell(
-          onTap: () =>
-              action.$2 == 'Tasks' ? onOpenTasks() : onAction(action.$2),
+      final selected = selectedAction == action.$2;
+      return AnimatedContainer(
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+        decoration: BoxDecoration(
+          color: selected
+              ? action.$3.withValues(alpha: 0.18)
+              : action.$3.withValues(alpha: 0.07),
           borderRadius: BorderRadius.circular(12),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(action.$1, size: 16, color: action.$3),
-                const SizedBox(width: 8),
-                Flexible(
-                  child: Text(
-                    action.$2,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: context.fomraTextPrimary,
+          border: Border.all(
+            color: selected
+                ? action.$3.withValues(alpha: 0.55)
+                : Colors.transparent,
+            width: 1.4,
+          ),
+        ),
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+          child: InkWell(
+            onTap: () =>
+                action.$2 == 'Tasks' ? onOpenTasks() : onAction(action.$2),
+            borderRadius: BorderRadius.circular(12),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(action.$1,
+                      size: 16,
+                      color: selected ? action.$3 : action.$3),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      action.$2,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight:
+                            selected ? FontWeight.w800 : FontWeight.w600,
+                        color: selected
+                            ? action.$3
+                            : context.fomraTextPrimary,
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -1453,66 +1723,142 @@ class _LeadActionDialog extends StatelessWidget {
 class _ActivitySummaryRow extends StatelessWidget {
   final int siteVisitCount;
   final CallActivityMetrics callMetrics;
+  final _ActivityFilter activityFilter;
+  final _SiteVisitScope siteVisitScope;
+  final _CallStatFilter callStatFilter;
+  final ValueChanged<_StatCardKind> onStatCardTap;
 
   const _ActivitySummaryRow({
     required this.siteVisitCount,
     required this.callMetrics,
+    required this.activityFilter,
+    required this.siteVisitScope,
+    required this.callStatFilter,
+    required this.onStatCardTap,
   });
+
+  bool _isSelected(_StatCardKind kind) => switch (kind) {
+        _StatCardKind.conductedSiteVisits =>
+          activityFilter == _ActivityFilter.siteVisits &&
+              siteVisitScope == _SiteVisitScope.self &&
+              callStatFilter == _CallStatFilter.none,
+        _StatCardKind.outgoingNotAnswered =>
+          callStatFilter == _CallStatFilter.outgoingNotAnswered,
+        _StatCardKind.outgoingAnswered =>
+          callStatFilter == _CallStatFilter.outgoingAnswered,
+        _StatCardKind.incomingNotAnswered =>
+          callStatFilter == _CallStatFilter.incomingNotAnswered,
+        _StatCardKind.incomingAnswered =>
+          callStatFilter == _CallStatFilter.incomingAnswered,
+      };
 
   @override
   Widget build(BuildContext context) {
     final cells = [
-      (label: 'Conducted\nSite Visits', value: '$siteVisitCount', icon: Icons.location_on_outlined, color: AppColors.purple),
-      (label: 'Outgoing\nNot Answered', value: '${callMetrics.outgoingNotAnswered}', icon: CallOutcome.notAnswered.icon, color: AppColors.warning),
-      (label: 'Outgoing\nAnswered', value: '${callMetrics.outgoingAnswered}', icon: CallOutcome.answered.icon, color: AppColors.success),
-      (label: 'Incoming\nNot Answered', value: '${callMetrics.incomingNotAnswered}', icon: CallOutcome.notAnswered.icon, color: AppColors.warning),
-      (label: 'Incoming\nAnswered', value: '${callMetrics.incomingAnswered}', icon: CallOutcome.answered.icon, color: AppColors.success),
+      (
+        kind: _StatCardKind.conductedSiteVisits,
+        label: 'Conducted\nSite Visits',
+        value: '$siteVisitCount',
+        icon: Icons.location_on_outlined,
+        color: AppColors.purple,
+      ),
+      (
+        kind: _StatCardKind.outgoingNotAnswered,
+        label: 'Outgoing\nNot Answered',
+        value: '${callMetrics.outgoingNotAnswered}',
+        icon: CallOutcome.notAnswered.icon,
+        color: AppColors.warning,
+      ),
+      (
+        kind: _StatCardKind.outgoingAnswered,
+        label: 'Outgoing\nAnswered',
+        value: '${callMetrics.outgoingAnswered}',
+        icon: CallOutcome.answered.icon,
+        color: AppColors.success,
+      ),
+      (
+        kind: _StatCardKind.incomingNotAnswered,
+        label: 'Incoming\nNot Answered',
+        value: '${callMetrics.incomingNotAnswered}',
+        icon: CallOutcome.notAnswered.icon,
+        color: AppColors.warning,
+      ),
+      (
+        kind: _StatCardKind.incomingAnswered,
+        label: 'Incoming\nAnswered',
+        value: '${callMetrics.incomingAnswered}',
+        icon: CallOutcome.answered.icon,
+        color: AppColors.success,
+      ),
     ];
 
     // Compact stat card: icon + value on one line, label beneath — shorter and
     // easier to scan than the old tall centred cell.
-    Widget cell(int i) => Container(
-          padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 10),
-          decoration: BoxDecoration(
-            color: context.fomraSurfaceVar.withValues(alpha: 0.6),
+    Widget cell(int i) {
+      final selected = _isSelected(cells[i].kind);
+      return AnimatedContainer(
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+        padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 10),
+        decoration: BoxDecoration(
+          color: selected
+              ? cells[i].color.withValues(alpha: 0.14)
+              : context.fomraSurfaceVar.withValues(alpha: 0.6),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: selected
+                ? cells[i].color.withValues(alpha: 0.55)
+                : context.fomraBorder,
+            width: selected ? 1.4 : 1,
+          ),
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: () => onStatCardTap(cells[i].kind),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: context.fomraBorder),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                children: [
-                  Icon(cells[i].icon, size: 15, color: cells[i].color),
-                  const SizedBox(width: 6),
-                  Text(
-                    cells[i].value,
-                    style: TextStyle(
-                      fontSize: 17,
-                      height: 1,
-                      fontWeight: FontWeight.w800,
-                      color:
-                          i == 0 ? AppColors.purple : context.fomraTextPrimary,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Icon(cells[i].icon, size: 15, color: cells[i].color),
+                    const SizedBox(width: 6),
+                    Text(
+                      cells[i].value,
+                      style: TextStyle(
+                        fontSize: 17,
+                        height: 1,
+                        fontWeight: FontWeight.w800,
+                        color: i == 0
+                            ? AppColors.purple
+                            : context.fomraTextPrimary,
+                      ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 5),
-              Text(
-                cells[i].label.replaceAll('\n', ' '),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 10,
-                  height: 1.15,
-                  fontWeight: FontWeight.w600,
-                  color: context.fomraTextSecondary,
+                  ],
                 ),
-              ),
-            ],
+                const SizedBox(height: 5),
+                Text(
+                  cells[i].label.replaceAll('\n', ' '),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 10,
+                    height: 1.15,
+                    fontWeight:
+                        selected ? FontWeight.w800 : FontWeight.w600,
+                    color: selected
+                        ? cells[i].color
+                        : context.fomraTextSecondary,
+                  ),
+                ),
+              ],
+            ),
           ),
-        );
+        ),
+      );
+    }
 
     // One responsive grid at every width — all five across on desktop, wrapping
     // to 2–3 columns as space tightens. Cards keep an equal width.
@@ -1535,6 +1881,23 @@ class _ActivitySummaryRow extends StatelessWidget {
   }
 }
 
+enum _StatCardKind {
+  conductedSiteVisits,
+  outgoingNotAnswered,
+  outgoingAnswered,
+  incomingNotAnswered,
+  incomingAnswered,
+}
+
+/// Fine-grained Calls filter applied by the statistics cards.
+enum _CallStatFilter {
+  none,
+  outgoingNotAnswered,
+  outgoingAnswered,
+  incomingNotAnswered,
+  incomingAnswered,
+}
+
 enum _ActivityFilter {
   all,
   calls,
@@ -1542,6 +1905,9 @@ enum _ActivityFilter {
   managementSiteVisits,
   meetings,
   notes,
+  legal,
+  followUp,
+  signed,
 }
 
 extension on _ActivityFilter {
@@ -1552,6 +1918,9 @@ extension on _ActivityFilter {
         _ActivityFilter.managementSiteVisits => 'Management Site Visits',
         _ActivityFilter.meetings => 'Meetings',
         _ActivityFilter.notes => 'Notes',
+        _ActivityFilter.legal => 'Legal',
+        _ActivityFilter.followUp => 'Follow-up',
+        _ActivityFilter.signed => 'Signed',
       };
 }
 
@@ -1560,22 +1929,32 @@ extension on _ActivityFilter {
 /// management); [management] means management site visits.
 enum _SiteVisitScope { self, management }
 
-/// The two separate Site Visit chips are replaced by one dropdown, so only
-/// these filters get a chip — [managementSiteVisits] is reached via the scope.
+/// Site Visits stays a single dropdown chip; Legal / Follow-up / Signed sit
+/// beside the original categories so Quick Actions can target them directly.
 const _kChipFilters = [
   _ActivityFilter.all,
   _ActivityFilter.calls,
   _ActivityFilter.siteVisits,
   _ActivityFilter.meetings,
   _ActivityFilter.notes,
+  _ActivityFilter.legal,
+  _ActivityFilter.followUp,
+  _ActivityFilter.signed,
 ];
 
-class _ActivityTimeline extends StatefulWidget {
+class _ActivityTimeline extends StatelessWidget {
   final LandLead lead;
   final List<LeadCallLog> callLogs;
   final List<LandLeadSiteVisit> siteVisits;
   final List<LandLeadMeeting> meetings;
   final List<LandLeadLegalDocument> legalDocs;
+  final List<LandLeadSignedRequest> signedRequests;
+  final _ActivityFilter filter;
+  final _SiteVisitScope siteVisitScope;
+  final _CallStatFilter callStatFilter;
+  final ValueChanged<_ActivityFilter> onFilterSelected;
+  final ValueChanged<_SiteVisitScope> onSiteVisitScopeSelected;
+  final VoidCallback onClearFilter;
 
   const _ActivityTimeline({
     required this.lead,
@@ -1583,25 +1962,20 @@ class _ActivityTimeline extends StatefulWidget {
     required this.siteVisits,
     this.meetings = const [],
     this.legalDocs = const [],
+    this.signedRequests = const [],
+    required this.filter,
+    required this.siteVisitScope,
+    required this.callStatFilter,
+    required this.onFilterSelected,
+    required this.onSiteVisitScopeSelected,
+    required this.onClearFilter,
   });
 
-  @override
-  State<_ActivityTimeline> createState() => _ActivityTimelineState();
-}
-
-class _ActivityTimelineState extends State<_ActivityTimeline> {
-  _ActivityFilter _filter = _ActivityFilter.all;
-  // Default scope: Myself (employee) / Executive (management) — both map to the
-  // working executive's own visits.
-  _SiteVisitScope _siteVisitScope = _SiteVisitScope.self;
+  bool _isCompletedVisit(LandLeadSiteVisit visit) =>
+      visit.approvalStatus != SiteVisitApprovalStatus.rejected;
 
   @override
   Widget build(BuildContext context) {
-    final lead = widget.lead;
-    final callLogs = widget.callLogs;
-    final siteVisits = widget.siteVisits;
-    final meetings = widget.meetings;
-
     final events = <({
       DateTime at,
       String title,
@@ -1609,6 +1983,9 @@ class _ActivityTimelineState extends State<_ActivityTimeline> {
       IconData icon,
       String? audioUrl,
       _ActivityFilter category,
+      CallDirection? direction,
+      CallOutcome? outcome,
+      bool completedVisit,
     })>[];
 
     for (final log in callLogs) {
@@ -1625,13 +2002,35 @@ class _ActivityTimelineState extends State<_ActivityTimeline> {
         icon: log.outcome.icon,
         audioUrl: null,
         category: _ActivityFilter.calls,
+        direction: log.direction,
+        outcome: log.outcome,
+        completedVisit: false,
       ));
+      if (log.needsFollowUp && log.followUpAt != null) {
+        events.add((
+          at: log.followUpAt!,
+          title: 'Follow-up',
+          subtitle: [
+            _formatReceivedOn(log.followUpAt!),
+            '${log.direction.label} call · ${log.outcome.label}',
+            if (log.details.isNotEmpty) log.details,
+            if (log.loggedByName.isNotEmpty) log.loggedByName,
+          ].join('\n'),
+          icon: Icons.event_available_outlined,
+          audioUrl: null,
+          category: _ActivityFilter.followUp,
+          direction: log.direction,
+          outcome: log.outcome,
+          completedVisit: false,
+        ));
+      }
     }
 
     for (final visit in siteVisits) {
       final isManagementVisit =
           visit.visitType == LandLeadSiteVisitType.management;
-      final approval = isManagementVisit ? '\n${visit.approvalStatus.label}' : '';
+      final approval =
+          isManagementVisit ? '\n${visit.approvalStatus.label}' : '';
       events.add((
         at: visit.visitedAt,
         title: visit.visitType.label,
@@ -1645,6 +2044,9 @@ class _ActivityTimelineState extends State<_ActivityTimeline> {
         category: isManagementVisit
             ? _ActivityFilter.managementSiteVisits
             : _ActivityFilter.siteVisits,
+        direction: null,
+        outcome: null,
+        completedVisit: _isCompletedVisit(visit),
       ));
     }
 
@@ -1661,6 +2063,46 @@ class _ActivityTimelineState extends State<_ActivityTimeline> {
         icon: Icons.groups_outlined,
         audioUrl: null,
         category: _ActivityFilter.meetings,
+        direction: null,
+        outcome: null,
+        completedVisit: false,
+      ));
+    }
+
+    for (final doc in legalDocs) {
+      events.add((
+        at: doc.verifiedAt,
+        title: 'Legal document',
+        subtitle: [
+          _formatReceivedOn(doc.verifiedAt),
+          if (doc.fileName.isNotEmpty) doc.fileName,
+          if (doc.loggedByName.isNotEmpty) doc.loggedByName,
+        ].join('\n'),
+        icon: Icons.gavel_outlined,
+        audioUrl: null,
+        category: _ActivityFilter.legal,
+        direction: null,
+        outcome: null,
+        completedVisit: false,
+      ));
+    }
+
+    for (final request in signedRequests) {
+      events.add((
+        at: request.reviewedAt ?? request.createdAt,
+        title: 'Project Signed',
+        subtitle: [
+          _formatReceivedOn(request.reviewedAt ?? request.createdAt),
+          request.status.label,
+          if (request.note.isNotEmpty) request.note,
+          if (request.requestedByName.isNotEmpty) request.requestedByName,
+        ].join('\n'),
+        icon: Icons.draw_outlined,
+        audioUrl: null,
+        category: _ActivityFilter.signed,
+        direction: null,
+        outcome: null,
+        completedVisit: false,
       ));
     }
 
@@ -1670,9 +2112,8 @@ class _ActivityTimelineState extends State<_ActivityTimeline> {
       final isAuto = LeadAutoNotes.isAutoEntry(entry);
       final isVoice = entry.contains('[Voice Note]');
       final isGps = entry.contains('[GPS Check-in]');
-      final audioUrl = isVoice
-          ? VoiceNoteService.audioUrlFromNotesLine(entry)
-          : null;
+      final audioUrl =
+          isVoice ? VoiceNoteService.audioUrlFromNotesLine(entry) : null;
       events.add((
         at: lead.addedOn,
         title: isVoice
@@ -1690,6 +2131,9 @@ class _ActivityTimelineState extends State<_ActivityTimeline> {
                     : Icons.notes_outlined)),
         audioUrl: audioUrl,
         category: _ActivityFilter.notes,
+        direction: null,
+        outcome: null,
+        completedVisit: false,
       ));
     }
 
@@ -1697,29 +2141,76 @@ class _ActivityTimelineState extends State<_ActivityTimeline> {
     // sample timeline so the page isn't empty in demos. Guarded by kDebugMode,
     // rendered locally and NEVER written to Supabase — zero production impact.
     if (kDebugMode && events.isEmpty) {
-      events.addAll(_demoTimelineEvents(lead));
+      for (final e in _demoTimelineEvents(lead)) {
+        events.add((
+          at: e.at,
+          title: e.title,
+          subtitle: e.subtitle,
+          icon: e.icon,
+          audioUrl: e.audioUrl,
+          category: e.category,
+          direction: null,
+          outcome: null,
+          completedVisit: e.category == _ActivityFilter.siteVisits ||
+              e.category == _ActivityFilter.managementSiteVisits,
+        ));
+      }
     }
 
     events.sort((a, b) => b.at.compareTo(a.at));
 
-    // Counts drive the Site Visits dropdown labels and update live with the
-    // records shown.
+    // Counts drive the filter chip labels and update live with the records shown.
     final selfVisitCount =
         events.where((e) => e.category == _ActivityFilter.siteVisits).length;
     final mgmtVisitCount = events
         .where((e) => e.category == _ActivityFilter.managementSiteVisits)
         .length;
+    final filterCounts = <_ActivityFilter, int>{
+      for (final f in _ActivityFilter.values)
+        if (f != _ActivityFilter.managementSiteVisits)
+          f: f == _ActivityFilter.all
+              ? events.length
+              : events.where((e) => e.category == f).length,
+    };
 
     // "Site Visits" resolves to the executive's own or management visits based
     // on the selected scope; every other filter matches its own category.
-    final effectiveCategory = _filter == _ActivityFilter.siteVisits &&
-            _siteVisitScope == _SiteVisitScope.management
+    final effectiveCategory = filter == _ActivityFilter.siteVisits &&
+            siteVisitScope == _SiteVisitScope.management
         ? _ActivityFilter.managementSiteVisits
-        : _filter;
+        : filter;
 
-    final filtered = _filter == _ActivityFilter.all
+    final filtered = filter == _ActivityFilter.all
         ? events
-        : events.where((e) => e.category == effectiveCategory).toList();
+        : events.where((e) {
+            if (callStatFilter != _CallStatFilter.none) {
+              if (e.category != _ActivityFilter.calls) return false;
+              if (e.direction == null || e.outcome == null) return false;
+              return switch (callStatFilter) {
+                _CallStatFilter.outgoingNotAnswered =>
+                  e.direction == CallDirection.outgoing &&
+                      e.outcome == CallOutcome.notAnswered,
+                _CallStatFilter.outgoingAnswered =>
+                  e.direction == CallDirection.outgoing &&
+                      e.outcome == CallOutcome.answered,
+                _CallStatFilter.incomingNotAnswered =>
+                  e.direction == CallDirection.incoming &&
+                      e.outcome == CallOutcome.notAnswered,
+                _CallStatFilter.incomingAnswered =>
+                  e.direction == CallDirection.incoming &&
+                      e.outcome == CallOutcome.answered,
+                _CallStatFilter.none => true,
+              };
+            }
+            if (e.category != effectiveCategory) return false;
+            // Conducted Site Visits (and the Site Visits chip) show completed
+            // visits only — rejected management visits stay hidden.
+            if (effectiveCategory == _ActivityFilter.siteVisits ||
+                effectiveCategory == _ActivityFilter.managementSiteVisits) {
+              return e.completedVisit;
+            }
+            return true;
+          }).toList();
 
     final staticEvents = <({String title, String subtitle, IconData icon})>[
       (
@@ -1740,6 +2231,9 @@ class _ActivityTimelineState extends State<_ActivityTimeline> {
       ),
     ];
 
+    final hasActiveFilter =
+        filter != _ActivityFilter.all || callStatFilter != _CallStatFilter.none;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -1753,71 +2247,64 @@ class _ActivityTimelineState extends State<_ActivityTimeline> {
         ),
         const SizedBox(height: 10),
         _ActivityFilterBar(
-          selected: _filter,
-          onSelected: (f) => setState(() => _filter = f),
-          siteVisitScope: _siteVisitScope,
-          onSiteVisitScope: (s) => setState(() {
-            _filter = _ActivityFilter.siteVisits;
-            _siteVisitScope = s;
-          }),
+          selected: filter,
+          onSelected: onFilterSelected,
+          siteVisitScope: siteVisitScope,
+          onSiteVisitScope: onSiteVisitScopeSelected,
           isManagement: AuthService.instance.isManagement,
           selfVisitCount: selfVisitCount,
           managementVisitCount: mgmtVisitCount,
+          filterCounts: filterCounts,
+          callStatFilter: callStatFilter,
         ),
         const SizedBox(height: 10),
         if (filtered.isEmpty)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Text(
-              events.isEmpty
-                  ? 'No activity yet — use quick actions to log the first step.'
-                  : 'No ${_filter.label.toLowerCase()} activity yet.',
-              style: TextStyle(
-                fontSize: 12,
-                color: context.fomraTextSecondary,
+          _ActivityEmptyState(
+            hasActiveFilter: hasActiveFilter,
+            onClearFilter: onClearFilter,
+          )
+        else
+          for (final e in filtered)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _TimelineAvatar(icon: e.icon),
+                  const SizedBox(width: 11),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(e.title,
+                            style: const TextStyle(
+                                fontSize: 13, fontWeight: FontWeight.w700)),
+                        const SizedBox(height: 2),
+                        Text(
+                          e.subtitle,
+                          style: TextStyle(
+                            fontSize: 12,
+                            height: 1.35,
+                            color: context.fomraTextSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (e.audioUrl != null && e.audioUrl!.isNotEmpty)
+                    IconButton(
+                      tooltip: 'Play voice note',
+                      icon: const Icon(Icons.play_circle_outline, size: 22),
+                      onPressed: () async {
+                        final player = AudioPlayer();
+                        await player.play(UrlSource(e.audioUrl!));
+                      },
+                    ),
+                ],
               ),
             ),
-          ),
-        for (final e in filtered)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _TimelineAvatar(icon: e.icon),
-                const SizedBox(width: 11),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(e.title,
-                          style: const TextStyle(
-                              fontSize: 13, fontWeight: FontWeight.w700)),
-                      const SizedBox(height: 2),
-                      Text(
-                        e.subtitle,
-                        style: TextStyle(
-                          fontSize: 12,
-                          height: 1.35,
-                          color: context.fomraTextSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                if (e.audioUrl != null && e.audioUrl!.isNotEmpty)
-                  IconButton(
-                    tooltip: 'Play voice note',
-                    icon: const Icon(Icons.play_circle_outline, size: 22),
-                    onPressed: () async {
-                      final player = AudioPlayer();
-                      await player.play(UrlSource(e.audioUrl!));
-                    },
-                  ),
-              ],
-            ),
-          ),
-        if (_filter == _ActivityFilter.all)
+        if (filter == _ActivityFilter.all &&
+            callStatFilter == _CallStatFilter.none)
           for (final e in staticEvents)
             Padding(
               padding: const EdgeInsets.only(bottom: 12),
@@ -1849,6 +2336,52 @@ class _ActivityTimelineState extends State<_ActivityTimeline> {
               ),
             ),
       ],
+    );
+  }
+}
+
+class _ActivityEmptyState extends StatelessWidget {
+  final bool hasActiveFilter;
+  final VoidCallback onClearFilter;
+
+  const _ActivityEmptyState({
+    required this.hasActiveFilter,
+    required this.onClearFilter,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 18),
+      child: Column(
+        children: [
+          Icon(
+            Icons.filter_alt_off_outlined,
+            size: 28,
+            color: context.fomraTextSecondary.withValues(alpha: 0.7),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            hasActiveFilter
+                ? 'No matching activities found.'
+                : 'No activity yet — use quick actions to log the first step.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: context.fomraTextSecondary,
+            ),
+          ),
+          if (hasActiveFilter) ...[
+            const SizedBox(height: 12),
+            TextButton.icon(
+              onPressed: onClearFilter,
+              icon: const Icon(Icons.clear_all_rounded, size: 18),
+              label: const Text('Clear Filter'),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }
@@ -1886,6 +2419,8 @@ class _ActivityFilterBar extends StatelessWidget {
   final bool isManagement;
   final int selfVisitCount;
   final int managementVisitCount;
+  final Map<_ActivityFilter, int> filterCounts;
+  final _CallStatFilter callStatFilter;
 
   const _ActivityFilterBar({
     required this.selected,
@@ -1895,6 +2430,8 @@ class _ActivityFilterBar extends StatelessWidget {
     required this.isManagement,
     required this.selfVisitCount,
     required this.managementVisitCount,
+    required this.filterCounts,
+    required this.callStatFilter,
   });
 
   /// The label for the "own visits" scope differs by portal.
@@ -1905,6 +2442,13 @@ class _ActivityFilterBar extends StatelessWidget {
 
   int _scopeCount(_SiteVisitScope s) =>
       s == _SiteVisitScope.management ? managementVisitCount : selfVisitCount;
+
+  String _chipLabel(_ActivityFilter f) {
+    if (f == _ActivityFilter.all) return f.label;
+    final count = filterCounts[f];
+    if (count == null) return f.label;
+    return '${f.label} ($count)';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1917,10 +2461,14 @@ class _ActivityFilterBar extends StatelessWidget {
         itemBuilder: (context, i) {
           final f = _kChipFilters[i];
           if (f == _ActivityFilter.siteVisits) return _siteVisitsChip(context);
+          // Calls chip stays highlighted for call-stat sub-filters too.
+          final selectedChip = f == selected ||
+              (f == _ActivityFilter.calls &&
+                  callStatFilter != _CallStatFilter.none);
           return _chip(
             context,
-            label: f.label,
-            isSelected: f == selected,
+            label: _chipLabel(f),
+            isSelected: selectedChip,
             onTap: () => onSelected(f),
           );
         },
@@ -1937,7 +2485,9 @@ class _ActivityFilterBar extends StatelessWidget {
     required bool isSelected,
     Widget? trailing,
   }) {
-    return Container(
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
       decoration: BoxDecoration(
         color: isSelected
             ? AppColors.purple
@@ -1984,7 +2534,8 @@ class _ActivityFilterBar extends StatelessWidget {
   /// Unified Site Visits chip: tapping opens a dropdown to pick the scope
   /// (Myself/Executive · Management), each showing its live count.
   Widget _siteVisitsChip(BuildContext context) {
-    final isSelected = selected == _ActivityFilter.siteVisits;
+    final isSelected = selected == _ActivityFilter.siteVisits &&
+        callStatFilter == _CallStatFilter.none;
     return PopupMenuButton<_SiteVisitScope>(
       tooltip: 'Filter site visits',
       position: PopupMenuPosition.under,
