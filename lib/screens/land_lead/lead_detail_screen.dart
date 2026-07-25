@@ -816,10 +816,9 @@ class _LeadSummaryCard extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        // Tinted with the lead's status colour, matching the Next Action card.
-        color: lead.status.color.withValues(alpha: 0.08),
+        color: context.fomraSurface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: lead.status.color.withValues(alpha: 0.35)),
+        border: Border.all(color: context.fomraBorder),
         boxShadow: context.fomraCardShadow,
       ),
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
