@@ -1223,6 +1223,7 @@ class AddLeadPhotoUpload extends StatefulWidget {
   final List<AddLeadPhotoDraft> photos;
   final int maxPhotos;
   final bool compressing;
+  final bool cameraOnly;
   final VoidCallback onPick;
   final ValueChanged<int> onRemove;
   final ValueChanged<int>? onRemoveExisting;
@@ -1233,6 +1234,7 @@ class AddLeadPhotoUpload extends StatefulWidget {
     required this.photos,
     required this.maxPhotos,
     required this.compressing,
+    this.cameraOnly = true,
     required this.onPick,
     required this.onRemove,
     this.onRemoveExisting,
@@ -1366,7 +1368,13 @@ class _AddLeadPhotoUploadState extends State<AddLeadPhotoUpload> {
                 ),
                 SizedBox(height: _total == 0 ? 10 : 6),
                 Text(
-                  _total == 0 ? 'Tap to take a photo' : 'Take another photo',
+                  _total == 0
+                      ? (widget.cameraOnly
+                          ? 'Tap to take a photo'
+                          : 'Tap to add a photo')
+                      : (widget.cameraOnly
+                          ? 'Take another photo'
+                          : 'Add another photo'),
                   style: const TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
@@ -1376,7 +1384,9 @@ class _AddLeadPhotoUploadState extends State<AddLeadPhotoUpload> {
                 if (_total == 0) ...[
                   const SizedBox(height: 4),
                   Text(
-                    'Camera only · up to ${widget.maxPhotos} photos',
+                    widget.cameraOnly
+                        ? 'Camera only · up to ${widget.maxPhotos} photos'
+                        : 'Camera or gallery · up to ${widget.maxPhotos} photos',
                     style: TextStyle(
                       fontSize: 11,
                       color: context.fomraTextSecondary,

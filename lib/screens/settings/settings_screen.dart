@@ -23,6 +23,7 @@ import '../audit/audit_trail_screen.dart';
 import '../employee_management/employee_management_portal_screen.dart';
 import '../employee_management/employee_management_screen.dart';
 import 'employee_monthly_targets_page.dart';
+import 'feature_controls_page.dart';
 import 'monthly_target_approvals_page.dart';
 import 'monthly_targets_page.dart';
 import '../../services/csv_saver_stub.dart'
@@ -92,6 +93,18 @@ class SettingsScreen extends StatelessWidget {
                     context,
                     MaterialPageRoute(
                       builder: (_) => const EmployeeMonthlyTargetsPage(),
+                    ),
+                  ),
+                ),
+              if (isManagement)
+                _SettingsTile(
+                  icon: Icons.tune_rounded,
+                  label: 'Feature Controls',
+                  accent: AppColors.info,
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const FeatureControlsPage(),
                     ),
                   ),
                 ),

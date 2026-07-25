@@ -317,6 +317,53 @@ class EmployeeService {
     if (touched) await _saveCache(cached);
   }
 
+  /// Updates [employeeEmail]'s designation (Executive / Reporting Manager /
+  /// Head). Clears [reportsTo] when the new role cannot keep the old manager
+  /// link (e.g. promoting to Head).
+  static Future<void> updateDesignation(
+    String employeeEmail,
+    String designation,
+  ) async {
+    final emp = employeeEmail.trim().toLowerCase();
+    final next = designation.trim();
+    if (emp.isEmpty || next.isEmpty) {
+      throw Exception('Employee and designation are required.');
+    }
+    if (!EmployeeDesignations.all.contains(next) ||
+        next == EmployeeDesignations.management) {
+      throw Exception('Pick Executive, Reporting Manager, or Head.');
+    }
+
+    List rows;
+    try {
+      rows = await _db
+          .from('employee_profiles')
+          .update({'designation': next})
+          .eq('email', emp)
+          .select() as List;
+    } catch (e) {
+      throw Exception('Could not update the role: $e');
+    }
+    if (rows.isEmpty) {
+      throw Exception(
+        'That employee could not be found — refresh and try again.',
+      );
+    }
+
+    final cached = await _loadCache();
+    final idx = cached.indexWhere((e) => e.email.trim().toLowerCase() == emp);
+    if (idx != -1) {
+      cached[idx] = cached[idx].copyWith(designation: next);
+      await _saveCache(cached);
+    }
+    final roster = List<EmployeeProfile>.from(AppStore.instance.employees);
+    final ri = roster.indexWhere((e) => e.email.trim().toLowerCase() == emp);
+    if (ri != -1) {
+      roster[ri] = roster[ri].copyWith(designation: next);
+      AppStore.instance.setEmployees(roster);
+    }
+  }
+
   /// Assigns [employeeEmail] to report to [managerEmail] (empty to unassign).
   ///
   /// Persists to the DB and throws on failure — a silent cache-only "success"

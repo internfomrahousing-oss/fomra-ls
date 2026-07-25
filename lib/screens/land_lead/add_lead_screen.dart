@@ -18,6 +18,7 @@ import '../../widgets/fomra_breadcrumb.dart';
 import '../../widgets/portal_page_layout.dart';
 import '../../widgets/tngis_parcel_summary.dart';
 import '../../widgets/ui/app_feedback.dart';
+import '../../services/app_settings_service.dart';
 import '../../services/gps_verification_service.dart';
 import '../../services/land_lead_service.dart';
 import '../../services/offline_sync_service.dart';
@@ -28,7 +29,7 @@ import '../../utils/phone_validation.dart';
 import '../../utils/reverse_geocode.dart';
 import '../../utils/tngis_parcel_lookup.dart';
 
-enum _LocationMode { live }
+enum _LocationMode { live, manual }
 
 const _kMaxSitePhotos = 4;
 
@@ -215,6 +216,14 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
 
   bool get _isEdit => widget.existingLead != null;
 
+  void _onSettingsChanged() {
+    if (!mounted) return;
+    if (!_manualGpsAllowed && _locationMode == _LocationMode.manual) {
+      _locationMode = _LocationMode.live;
+    }
+    setState(() {});
+  }
+
   static const _kProgressLabels = [
     'Input Source',
     'Data Captured',
@@ -226,6 +235,8 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
   @override
   void initState() {
     super.initState();
+    AppSettingsService.instance.addListener(_onSettingsChanged);
+    unawaited(AppSettingsService.instance.ensureLoaded());
     _scrollController.addListener(_onScroll);
     _gpsCtrl.addListener(_onGpsTextChanged);
     // Keep the Save button's enabled/dimmed state live as mandatory fields
@@ -315,13 +326,20 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
       o.dispose();
     }
     _mapController.dispose();
+    AppSettingsService.instance.removeListener(_onSettingsChanged);
     super.dispose();
   }
 
   // ── Location fill from coordinates ─────────────────────────────────────────
 
+  bool get _manualGpsAllowed => AppSettingsService.instance.manualGpsEntry;
+
+  bool get _cameraOnlyPhotos =>
+      AppSettingsService.instance.cameraOnlySitePhotos;
+
   void _onGpsTextChanged() {
-    // Typed / pasted GPS is rejected — live capture only.
+    if (_suppressGpsListener || !_manualGpsAllowed) return;
+    if (_locationMode != _LocationMode.manual) return;
   }
 
   void _onMandatoryFieldChanged() {
@@ -339,19 +357,35 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
         existing.gpsCoordinates.trim().isNotEmpty &&
         gpsText == existing.gpsCoordinates.trim();
     if (keepingExistingGps) return true;
-    return _verifiedGps != null && _verifiedGps!.isLive;
+    if (_verifiedGps != null && _verifiedGps!.isLive) return true;
+    if (_manualGpsAllowed && parseLeadGps(gpsText) != null) return true;
+    return false;
   }
 
   Future<void> _applyGpsFromText() async {
     if (!mounted) return;
-    // Restore verified live storage if the user tried to edit the field.
-    if (_verifiedGps != null) {
-      _suppressGpsListener = true;
-      _gpsCtrl.text = _verifiedGps!.toStorage();
-      _suppressGpsListener = false;
+    if (!_manualGpsAllowed || _locationMode != _LocationMode.manual) {
+      if (_verifiedGps != null) {
+        _suppressGpsListener = true;
+        _gpsCtrl.text = _verifiedGps!.toStorage();
+        _suppressGpsListener = false;
+      }
+      AppFeedback.error(
+          context, 'Manual GPS entry is not allowed. Capture live GPS.');
+      return;
     }
-    AppFeedback.error(
-        context, 'Manual GPS entry is not allowed. Capture live GPS.');
+    final point = parseLeadGps(_gpsCtrl.text);
+    if (point == null) {
+      AppFeedback.error(context, 'Enter valid coordinates (lat, lng).');
+      return;
+    }
+    _verifiedGps = null;
+    await _placePinAndFetchDetails(point);
+    if (!mounted) return;
+    _suppressGpsListener = true;
+    _gpsCtrl.text = formatLeadGps(point.latitude, point.longitude);
+    _suppressGpsListener = false;
+    setState(() {});
   }
 
   void _clearPinDerivedFields() {
@@ -551,7 +585,11 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
   }
 
   void _onLocationModeChanged(_LocationMode mode) {
-    setState(() => _locationMode = _LocationMode.live);
+    if (!_manualGpsAllowed) {
+      setState(() => _locationMode = _LocationMode.live);
+      return;
+    }
+    setState(() => _locationMode = mode);
   }
 
   void _onMapReady() {
@@ -578,10 +616,17 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
   }
 
   Future<void> _onMapPin(LatLng point) async {
-    // Manual map pins are rejected — live GPS only.
-    if (!mounted) return;
-    AppFeedback.error(
-        context, 'Manual map pins are not allowed. Capture live GPS.');
+    if (!_manualGpsAllowed || _locationMode != _LocationMode.manual) {
+      if (!mounted) return;
+      AppFeedback.error(
+          context, 'Manual map pins are not allowed. Capture live GPS.');
+      return;
+    }
+    _verifiedGps = null;
+    _suppressGpsListener = true;
+    _gpsCtrl.text = formatLeadGps(point.latitude, point.longitude);
+    _suppressGpsListener = false;
+    await _placePinAndFetchDetails(point);
   }
 
   Future<void> _placePinAndFetchDetails(LatLng point) async {
@@ -719,8 +764,8 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
 
   // ── Photo picker ───────────────────────────────────────────────────────────
 
-  /// Site photos must be taken live with the camera (no gallery/file picker)
-  /// on both web and mobile.
+  /// Site photos: camera-only when Feature Controls says so; otherwise the user
+  /// may pick camera or gallery.
   Future<void> _pickPhoto() async {
     if (_keptPhotoUrls.length + _photos.length >= _kMaxSitePhotos) {
       AppFeedback.warning(context, 'Maximum $_kMaxSitePhotos photos per lead');
@@ -728,8 +773,37 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
     }
 
     try {
+      ImageSource source = ImageSource.camera;
+      if (!_cameraOnlyPhotos) {
+        final pickedSource = await showModalBottomSheet<ImageSource>(
+          context: context,
+          backgroundColor: context.fomraSurface,
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+          ),
+          builder: (ctx) => SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.photo_camera_outlined),
+                  title: const Text('Take photo'),
+                  onTap: () => Navigator.pop(ctx, ImageSource.camera),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.photo_library_outlined),
+                  title: const Text('Choose from gallery'),
+                  onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+                ),
+              ],
+            ),
+          ),
+        );
+        if (pickedSource == null) return;
+        source = pickedSource;
+      }
       final picked = await ImagePicker().pickImage(
-        source: ImageSource.camera,
+        source: source,
         maxWidth: 2400,
         imageQuality: 90,
       );
@@ -844,6 +918,7 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
         photos: _photos,
         maxPhotos: _kMaxSitePhotos,
         compressing: _compressingPhoto,
+        cameraOnly: _cameraOnlyPhotos,
         onPick: _pickPhoto,
         onRemove: _removePhoto,
         onRemoveExisting: _isEdit ? _removeExistingPhoto : null,
@@ -888,11 +963,18 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
         existing.gpsCoordinates.trim().isNotEmpty &&
         gpsText == existing.gpsCoordinates.trim();
 
-    // Require a live GPS fix (reject manual pins / typed coords).
-    if (!keepingExistingGps && (liveFix == null || !liveFix.isLive)) {
+    // Live GPS required unless Manual GPS Entry is enabled and coords parse.
+    final manualOk =
+        _manualGpsAllowed && parseLeadGps(gpsText) != null;
+    final liveOk = liveFix != null && liveFix.isLive;
+    if (!keepingExistingGps && !liveOk && !manualOk) {
       _scrollToSection(1);
-      AppFeedback.error(context,
-          'Capture live GPS before saving. Manual pins are not allowed.');
+      AppFeedback.error(
+        context,
+        _manualGpsAllowed
+            ? 'Capture live GPS or enter valid coordinates before saving.'
+            : 'Capture live GPS before saving. Manual pins are not allowed.',
+      );
       return;
     }
 
@@ -1165,28 +1247,43 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
                               Text(
-                                'Live GPS only — map pins and typed coordinates are rejected.',
+                                _manualGpsAllowed
+                                    ? 'Use Live GPS or switch to Manual to type coordinates / tap the map.'
+                                    : 'Live GPS only — map pins and typed coordinates are rejected.',
                                 style: TextStyle(
                                   fontSize: 12,
                                   color: context.fomraTextSecondary,
                                 ),
                               ),
+                              if (_manualGpsAllowed) ...[
+                                const SizedBox(height: AddLeadUi.fieldGap),
+                                AddLeadLocationSegment(
+                                  mode: _locationMode == _LocationMode.manual
+                                      ? AddLeadLocationMode.manual
+                                      : AddLeadLocationMode.live,
+                                  onChanged: (m) => _onLocationModeChanged(
+                                    m == AddLeadLocationMode.manual
+                                        ? _LocationMode.manual
+                                        : _LocationMode.live,
+                                  ),
+                                ),
+                              ],
                               const SizedBox(height: AddLeadUi.fieldGap),
-                              AddLeadLiveLocationCard(
-                                fetching: _fetchingLocation,
-                                status: _locationStatus,
-                                onTap: _fetchingLocation
-                                    ? null
-                                    : _fetchLiveLocation,
-                              ),
-                              // The captured site, read-only. Tied to
-                              // _pinnedPoint, which is only ever set from live
-                              // GPS (or the saved coordinates when editing), so
-                              // the pin always matches what gets saved — and it
-                              // disappears with the pin if GPS is cleared.
-                              // Re-capturing moves this same map rather than
-                              // building another one.
-                              if (_pinnedPoint != null) ...[
+                              if (_locationMode == _LocationMode.live ||
+                                  !_manualGpsAllowed)
+                                AddLeadLiveLocationCard(
+                                  fetching: _fetchingLocation,
+                                  status: _locationStatus,
+                                  onTap: _fetchingLocation
+                                      ? null
+                                      : _fetchLiveLocation,
+                                ),
+                              // Map: read-only after live capture, or tappable
+                              // when Manual GPS Entry is on and Manual mode.
+                              if (_pinnedPoint != null ||
+                                  (_manualGpsAllowed &&
+                                      _locationMode ==
+                                          _LocationMode.manual)) ...[
                                 const SizedBox(height: AddLeadUi.fieldGap),
                                 AddLeadMapPicker(
                                   mapController: _mapController,
@@ -1195,6 +1292,14 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
                                   pinnedPoint: _pinnedPoint,
                                   resolving: _resolvingPin,
                                   onMapReady: _onMapReady,
+                                  onTap: _manualGpsAllowed &&
+                                          _locationMode == _LocationMode.manual
+                                      ? _onMapPin
+                                      : null,
+                                  onMyLocation: _manualGpsAllowed &&
+                                          _locationMode == _LocationMode.manual
+                                      ? _fetchLiveLocation
+                                      : null,
                                 ),
                               ],
                               if (_verifiedGps != null) ...[
@@ -1239,11 +1344,35 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
                               ],
                               _Field(
                                 ctrl: _gpsCtrl,
-                                label: 'GPS (live verified)',
-                                hint: 'Capture live GPS above — manual entry blocked',
+                                label: _manualGpsAllowed &&
+                                        _locationMode == _LocationMode.manual
+                                    ? 'GPS coordinates'
+                                    : 'GPS (live verified)',
+                                hint: _manualGpsAllowed &&
+                                        _locationMode == _LocationMode.manual
+                                    ? 'lat, lng — tap map or type, then apply'
+                                    : 'Capture live GPS above — manual entry blocked',
                                 icon: Icons.gps_fixed_rounded,
-                                readOnly: true,
+                                readOnly: !(_manualGpsAllowed &&
+                                    _locationMode == _LocationMode.manual),
+                                onFieldSubmitted: _manualGpsAllowed &&
+                                        _locationMode == _LocationMode.manual
+                                    ? (_) => _applyGpsFromText()
+                                    : null,
                               ),
+                              if (_manualGpsAllowed &&
+                                  _locationMode == _LocationMode.manual) ...[
+                                const SizedBox(height: 8),
+                                Align(
+                                  alignment: Alignment.centerRight,
+                                  child: TextButton.icon(
+                                    onPressed: _applyGpsFromText,
+                                    icon: const Icon(Icons.check_rounded,
+                                        size: 16),
+                                    label: const Text('Apply coordinates'),
+                                  ),
+                                ),
+                              ],
                               const SizedBox(height: AddLeadUi.fieldGap),
                               _Field(
                                 ctrl: _locationCtrl,
@@ -1507,7 +1636,8 @@ class _Field extends StatelessWidget {
     this.inputFormatters,
     this.readOnly = false,
     this.validator,
-  }) : maxLines = 1, maxLength = null, light = false, onFieldSubmitted = null;
+    this.onFieldSubmitted,
+  }) : maxLines = 1, maxLength = null, light = false;
 
   @override
   Widget build(BuildContext context) {
