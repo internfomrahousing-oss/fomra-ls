@@ -1555,6 +1555,21 @@ extension on _ActivityFilter {
       };
 }
 
+/// The sub-scope of the unified "Site Visits" filter. [self] means the working
+/// executive's own visits ("Myself" on the employee portal, "Executive" on
+/// management); [management] means management site visits.
+enum _SiteVisitScope { self, management }
+
+/// The two separate Site Visit chips are replaced by one dropdown, so only
+/// these filters get a chip — [managementSiteVisits] is reached via the scope.
+const _kChipFilters = [
+  _ActivityFilter.all,
+  _ActivityFilter.calls,
+  _ActivityFilter.siteVisits,
+  _ActivityFilter.meetings,
+  _ActivityFilter.notes,
+];
+
 class _ActivityTimeline extends StatefulWidget {
   final LandLead lead;
   final List<LeadCallLog> callLogs;
@@ -1576,6 +1591,9 @@ class _ActivityTimeline extends StatefulWidget {
 
 class _ActivityTimelineState extends State<_ActivityTimeline> {
   _ActivityFilter _filter = _ActivityFilter.all;
+  // Default scope: Myself (employee) / Executive (management) — both map to the
+  // working executive's own visits.
+  _SiteVisitScope _siteVisitScope = _SiteVisitScope.self;
 
   @override
   Widget build(BuildContext context) {
@@ -1684,9 +1702,24 @@ class _ActivityTimelineState extends State<_ActivityTimeline> {
 
     events.sort((a, b) => b.at.compareTo(a.at));
 
+    // Counts drive the Site Visits dropdown labels and update live with the
+    // records shown.
+    final selfVisitCount =
+        events.where((e) => e.category == _ActivityFilter.siteVisits).length;
+    final mgmtVisitCount = events
+        .where((e) => e.category == _ActivityFilter.managementSiteVisits)
+        .length;
+
+    // "Site Visits" resolves to the executive's own or management visits based
+    // on the selected scope; every other filter matches its own category.
+    final effectiveCategory = _filter == _ActivityFilter.siteVisits &&
+            _siteVisitScope == _SiteVisitScope.management
+        ? _ActivityFilter.managementSiteVisits
+        : _filter;
+
     final filtered = _filter == _ActivityFilter.all
         ? events
-        : events.where((e) => e.category == _filter).toList();
+        : events.where((e) => e.category == effectiveCategory).toList();
 
     final staticEvents = <({String title, String subtitle, IconData icon})>[
       (
@@ -1722,6 +1755,14 @@ class _ActivityTimelineState extends State<_ActivityTimeline> {
         _ActivityFilterBar(
           selected: _filter,
           onSelected: (f) => setState(() => _filter = f),
+          siteVisitScope: _siteVisitScope,
+          onSiteVisitScope: (s) => setState(() {
+            _filter = _ActivityFilter.siteVisits;
+            _siteVisitScope = s;
+          }),
+          isManagement: AuthService.instance.isManagement,
+          selfVisitCount: selfVisitCount,
+          managementVisitCount: mgmtVisitCount,
         ),
         const SizedBox(height: 10),
         if (filtered.isEmpty)
@@ -1840,11 +1881,30 @@ class _TimelineAvatar extends StatelessWidget {
 class _ActivityFilterBar extends StatelessWidget {
   final _ActivityFilter selected;
   final ValueChanged<_ActivityFilter> onSelected;
+  final _SiteVisitScope siteVisitScope;
+  final ValueChanged<_SiteVisitScope> onSiteVisitScope;
+  final bool isManagement;
+  final int selfVisitCount;
+  final int managementVisitCount;
 
   const _ActivityFilterBar({
     required this.selected,
     required this.onSelected,
+    required this.siteVisitScope,
+    required this.onSiteVisitScope,
+    required this.isManagement,
+    required this.selfVisitCount,
+    required this.managementVisitCount,
   });
+
+  /// The label for the "own visits" scope differs by portal.
+  String get _selfLabel => isManagement ? 'Executive' : 'Myself';
+
+  String _scopeLabel(_SiteVisitScope s) =>
+      s == _SiteVisitScope.management ? 'Management' : _selfLabel;
+
+  int _scopeCount(_SiteVisitScope s) =>
+      s == _SiteVisitScope.management ? managementVisitCount : selfVisitCount;
 
   @override
   Widget build(BuildContext context) {
@@ -1852,31 +1912,114 @@ class _ActivityFilterBar extends StatelessWidget {
       height: 34,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
-        itemCount: _ActivityFilter.values.length,
+        itemCount: _kChipFilters.length,
         separatorBuilder: (_, __) => const SizedBox(width: 8),
         itemBuilder: (context, i) {
-          final f = _ActivityFilter.values[i];
-          final isSelected = f == selected;
-          return ChoiceChip(
-            label: Text(f.label),
-            selected: isSelected,
-            onSelected: (_) => onSelected(f),
-            showCheckmark: false,
-            labelStyle: TextStyle(
+          final f = _kChipFilters[i];
+          if (f == _ActivityFilter.siteVisits) return _siteVisitsChip(context);
+          return _chip(
+            context,
+            label: f.label,
+            isSelected: f == selected,
+            onTap: () => onSelected(f),
+          );
+        },
+      ),
+    );
+  }
+
+  /// The chip's padded, coloured body — shared by the tappable chips and the
+  /// Site Visits dropdown (whose tap is handled by PopupMenuButton, so it must
+  /// not carry its own InkWell).
+  Widget _chipBody(
+    BuildContext context, {
+    required String label,
+    required bool isSelected,
+    Widget? trailing,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: isSelected
+            ? AppColors.purple
+            : context.fomraSurfaceVar.withValues(alpha: 0.7),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w700,
               color: isSelected ? Colors.white : context.fomraTextSecondary,
             ),
-            backgroundColor: context.fomraSurfaceVar.withValues(alpha: 0.7),
-            selectedColor: AppColors.purple,
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(999),
-              side: BorderSide.none,
+          ),
+          if (trailing != null) ...[const SizedBox(width: 4), trailing],
+        ],
+      ),
+    );
+  }
+
+  Widget _chip(
+    BuildContext context, {
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+    Widget? trailing,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(999),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(999),
+        child: _chipBody(context,
+            label: label, isSelected: isSelected, trailing: trailing),
+      ),
+    );
+  }
+
+  /// Unified Site Visits chip: tapping opens a dropdown to pick the scope
+  /// (Myself/Executive · Management), each showing its live count.
+  Widget _siteVisitsChip(BuildContext context) {
+    final isSelected = selected == _ActivityFilter.siteVisits;
+    return PopupMenuButton<_SiteVisitScope>(
+      tooltip: 'Filter site visits',
+      position: PopupMenuPosition.under,
+      onSelected: onSiteVisitScope,
+      itemBuilder: (_) => [
+        for (final s in _SiteVisitScope.values)
+          PopupMenuItem(
+            value: s,
+            child: Row(
+              children: [
+                if (isSelected && siteVisitScope == s)
+                  const Icon(Icons.check_rounded,
+                      size: 16, color: AppColors.purple)
+                else
+                  const SizedBox(width: 16),
+                const SizedBox(width: 8),
+                Text(_scopeLabel(s)),
+                const Spacer(),
+                Text('${_scopeCount(s)}',
+                    style: TextStyle(
+                        fontSize: 12, color: context.fomraTextSecondary)),
+              ],
             ),
-          );
-        },
+          ),
+      ],
+      child: _chipBody(
+        context,
+        label:
+            'Site Visits · ${_scopeLabel(siteVisitScope)} (${_scopeCount(siteVisitScope)})',
+        isSelected: isSelected,
+        trailing: Icon(
+          Icons.arrow_drop_down_rounded,
+          size: 18,
+          color: isSelected ? Colors.white : context.fomraTextSecondary,
+        ),
       ),
     );
   }
