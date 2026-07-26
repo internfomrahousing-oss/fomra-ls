@@ -614,31 +614,17 @@ class _LandWorkspaceSearchBarState extends State<LandWorkspaceSearchBar> {
             ),
           );
 
-    // Mobile: search takes the full width with the Filter button stacked
-    // full-width beneath it. Tablet/desktop keep them side by side.
-    final Widget content;
-    if (isMobile) {
-      content = Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          searchField,
-          if (filterButton != null) ...[
-            const SizedBox(height: 8),
-            SizedBox(width: double.infinity, child: filterButton),
-          ],
+    // Search and Filter share one line on every width — the search field takes
+    // the remaining space and the Filter button sits beside it.
+    final content = Row(
+      children: [
+        Expanded(child: searchField),
+        if (filterButton != null) ...[
+          const SizedBox(width: 10),
+          filterButton,
         ],
-      );
-    } else {
-      content = Row(
-        children: [
-          Expanded(child: searchField),
-          if (filterButton != null) ...[
-            const SizedBox(width: 10),
-            filterButton,
-          ],
-        ],
-      );
-    }
+      ],
+    );
 
     return AnimatedContainer(
       duration: AppMotion.normal,
