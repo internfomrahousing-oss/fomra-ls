@@ -185,6 +185,16 @@ abstract final class FomraBreadcrumbs {
     String label,
   ) =>
       [home, FomraBreadcrumbItem.current(label)];
+
+  /// `Home > Land Workspace > [label]` for a lead detail. A lead always belongs
+  /// to the Land Workspace, so its trail names it even when the lead is opened
+  /// from elsewhere (Home, search, a map, a report). Tapping Land Workspace
+  /// returns to the leads list.
+  static List<FomraBreadcrumbItem> forLead(String label) => [
+        home,
+        landWorkspace,
+        FomraBreadcrumbItem.current(label),
+      ];
 }
 
 /// The breadcrumb bar shown under a page header. Renders the fixed module

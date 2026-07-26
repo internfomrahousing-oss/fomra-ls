@@ -829,7 +829,11 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
       appBar: FomraSubPageAppBar(
         title: 'Lead #${lead.leadId}',
         subtitle: _displayName == 'Lead #${lead.leadId}' ? null : _displayName,
-        breadcrumbs: widget.breadcrumbs,
+        // Default to Home > Land Workspace > Lead #id when a caller didn't pass
+        // an explicit trail, so the lead always reads as living under the
+        // workspace.
+        breadcrumbs: widget.breadcrumbs ??
+            FomraBreadcrumbs.forLead('Lead #${lead.leadId}'),
       ),
       body: SafeArea(
         child: LayoutBuilder(
