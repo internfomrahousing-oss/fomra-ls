@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
 
-/// The four target categories an employee can propose for a month.
-enum TargetCategory { leads, siteVisits, meetings, brokers }
+/// The target categories an employee can propose for a month.
+enum TargetCategory { leads, siteVisits, meetings }
 
 extension TargetCategoryX on TargetCategory {
   /// Stable storage key (also the JSON key in submitted/approved values).
@@ -11,21 +11,18 @@ extension TargetCategoryX on TargetCategory {
         TargetCategory.leads => 'leads',
         TargetCategory.siteVisits => 'site_visits',
         TargetCategory.meetings => 'meetings',
-        TargetCategory.brokers => 'brokers',
       };
 
   String get label => switch (this) {
         TargetCategory.leads => 'Leads',
         TargetCategory.siteVisits => 'Site Visits',
         TargetCategory.meetings => 'Meetings',
-        TargetCategory.brokers => 'Brokers',
       };
 
   IconData get icon => switch (this) {
         TargetCategory.leads => Icons.person_add_alt_1_outlined,
         TargetCategory.siteVisits => Icons.location_on_outlined,
         TargetCategory.meetings => Icons.groups_outlined,
-        TargetCategory.brokers => Icons.handshake_outlined,
       };
 
   static TargetCategory? fromKey(String key) {
@@ -122,15 +119,14 @@ class MonthlyTargetSubmission {
   Map<String, int> get effectiveValues => approvedValues ?? submittedValues;
 
   /// Number used by the home Monthly Target Progress card (sites sourced).
-  /// Walks Leads → Site Visits → Meetings → Brokers and returns the first
-  /// positive value so an approved submission always surfaces on home.
+  /// Walks Leads → Site Visits → Meetings and returns the first positive value
+  /// so an approved submission always surfaces on home.
   int get sitesProgressTarget {
     final v = effectiveValues;
     for (final key in [
       TargetCategory.leads.key,
       TargetCategory.siteVisits.key,
       TargetCategory.meetings.key,
-      TargetCategory.brokers.key,
     ]) {
       final n = v[key];
       if (n != null && n > 0) return n;
