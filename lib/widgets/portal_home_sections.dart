@@ -506,9 +506,9 @@ class PortalQuickActionsFab extends StatelessWidget {
   Widget build(BuildContext context) {
     return FloatingActionButton.extended(
       onPressed: () => _open(context),
-      // A distinct purple so the home Quick actions button reads apart from the
-      // blue primary buttons (Add Lead FAB, lead action FAB).
-      backgroundColor: AppColors.purple,
+      // A warm amber — clearly apart from the blue/purple primary buttons
+      // (Add Lead FAB, lead action FAB).
+      backgroundColor: const Color(0xFFF59E0B),
       foregroundColor: Colors.white,
       icon: const Icon(Icons.flash_on_rounded),
       label: const Text(
@@ -2455,13 +2455,13 @@ class _PortalProfileMenuPanel extends StatelessWidget {
                         ProfilePhotoService.instance.hasPhotoFor(email);
                     return _PortalProfileMenuItem(
                       icon: hasPhoto
-                          ? Icons.account_circle_outlined
+                          ? Icons.edit_outlined
                           : Icons.add_a_photo_outlined,
                       label: hasPhoto
-                          ? 'View / Edit Profile Photo'
+                          ? 'Edit Profile Photo'
                           : 'Upload Profile Photo',
                       subtitle: hasPhoto
-                          ? 'Preview, re-crop or replace it'
+                          ? 'Re-crop or replace it'
                           : 'Set your account picture',
                       onTap: () => onSelect('upload_photo'),
                     );
