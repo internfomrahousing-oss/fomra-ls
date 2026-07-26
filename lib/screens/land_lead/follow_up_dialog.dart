@@ -4,6 +4,7 @@ import '../../models/lead_follow_up.dart';
 import '../../services/lead_follow_up_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_theme_context.dart';
+import '../../widgets/ui/app_components.dart';
 import '../../widgets/ui/app_feedback.dart';
 
 /// Opens the Follow-up window for a lead: schedule a reminder and review the
@@ -152,18 +153,12 @@ class _FollowUpDialogState extends State<_FollowUpDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final screen = MediaQuery.sizeOf(context);
-    final isMobile = screen.width < 600;
-    final maxHeight = (screen.height * 0.9).clamp(320.0, 720.0);
     return Dialog(
-      insetPadding: EdgeInsets.symmetric(
-        horizontal: isMobile ? 14 : 24,
-        vertical: 24,
-      ),
+      insetPadding: fomraDialogInset(context),
       backgroundColor: context.fomraSurface,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: ConstrainedBox(
-        constraints: BoxConstraints(maxWidth: 460, maxHeight: maxHeight),
+        constraints: fomraDialogConstraints(context, maxWidth: 460, maxHeight: 720),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 16, 12, 16),
           child: Column(

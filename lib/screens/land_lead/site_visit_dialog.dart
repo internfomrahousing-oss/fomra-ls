@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../widgets/ui/app_components.dart';
 
 import '../../models/land_lead_site_visit.dart';
 import '../../services/auth_service.dart';
@@ -131,11 +132,11 @@ class _SiteVisitDialogState extends State<SiteVisitDialog> {
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      insetPadding: fomraDialogInset(context),
       backgroundColor: context.fomraSurface,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 440, maxHeight: 520),
+        constraints: fomraDialogConstraints(context, maxWidth: 440, maxHeight: 520),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 18, 12, 16),
           child: Column(

@@ -1,4 +1,3 @@
-import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
@@ -10,6 +9,7 @@ import '../../services/land_lead_signed_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../utils/image_compressor.dart';
+import '../../widgets/ui/app_components.dart';
 import '../../widgets/ui/app_feedback.dart';
 
 /// "Project Signed" submission window: attach supporting photos/documents,
@@ -140,19 +140,12 @@ class _SignedProjectDialogState extends State<SignedProjectDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final screen = MediaQuery.sizeOf(context);
-    final isMobile = screen.width < 600;
-    // Keep the dialog within the screen on phones so it never overflows.
-    final maxHeight = math.min(640.0, screen.height * 0.9);
     return Dialog(
-      insetPadding: EdgeInsets.symmetric(
-        horizontal: isMobile ? 14 : 24,
-        vertical: 24,
-      ),
+      insetPadding: fomraDialogInset(context),
       backgroundColor: context.fomraSurface,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: ConstrainedBox(
-        constraints: BoxConstraints(maxWidth: 460, maxHeight: maxHeight),
+        constraints: fomraDialogConstraints(context, maxWidth: 460, maxHeight: 640),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 18, 12, 16),
           child: Column(

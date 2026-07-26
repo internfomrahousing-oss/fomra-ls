@@ -18,6 +18,32 @@ Future<T?> showFomraDialog<T>({
   );
 }
 
+/// Dialog inset padding: none on mobile (so the dialog fills the screen like a
+/// full page) and the standard gutter on desktop/tablet.
+EdgeInsets fomraDialogInset(BuildContext context) => FomraLayout.isMobile(context)
+    ? EdgeInsets.zero
+    : const EdgeInsets.symmetric(horizontal: 24, vertical: 24);
+
+/// Dialog size constraints: full-screen on mobile, a centered card otherwise.
+/// Pass the dialog's usual desktop [maxWidth] / [maxHeight].
+BoxConstraints fomraDialogConstraints(
+  BuildContext context, {
+  double maxWidth = 460,
+  double maxHeight = 640,
+}) {
+  if (!FomraLayout.isMobile(context)) {
+    return BoxConstraints(maxWidth: maxWidth, maxHeight: maxHeight);
+  }
+  // Full width, height up to the screen — dialogs with a Flexible/scrollable
+  // body fill it (a full-page feel); short ones simply don't overflow.
+  final size = MediaQuery.sizeOf(context);
+  return BoxConstraints(
+    minWidth: size.width,
+    maxWidth: size.width,
+    maxHeight: size.height,
+  );
+}
+
 /// Shows a "Sign out?" confirmation dialog. Returns true if the user confirms.
 Future<bool> confirmSignOut(BuildContext context) async {
   final ok = await showDialog<bool>(

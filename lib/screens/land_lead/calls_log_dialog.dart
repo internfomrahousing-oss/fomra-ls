@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../widgets/ui/app_components.dart';
 import 'package:flutter/services.dart';
 
 import '../../models/lead_call_log.dart';
@@ -136,11 +137,11 @@ class _CallsLogDialogState extends State<CallsLogDialog> {
         : 'with landowner';
 
     return Dialog(
-      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      insetPadding: fomraDialogInset(context),
       backgroundColor: context.fomraSurface,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 440, maxHeight: 620),
+        constraints: fomraDialogConstraints(context, maxWidth: 440, maxHeight: 620),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 18, 12, 16),
           child: Column(

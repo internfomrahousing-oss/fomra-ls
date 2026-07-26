@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../widgets/ui/app_components.dart';
 
 import '../../services/land_lead_legal_service.dart';
 import '../../theme/app_theme.dart';
@@ -158,11 +159,11 @@ class _LegalDocumentsDialogState extends State<LegalDocumentsDialog> {
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      insetPadding: fomraDialogInset(context),
       backgroundColor: context.fomraSurface,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 480, maxHeight: 620),
+        constraints: fomraDialogConstraints(context, maxWidth: 480, maxHeight: 620),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 18, 12, 16),
           child: Column(
