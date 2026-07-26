@@ -8,6 +8,7 @@ import '../../models/land_lead_legal_document.dart';
 import '../../models/land_lead_meeting.dart';
 import '../../models/land_lead_site_visit.dart';
 import '../../models/lead_call_log.dart';
+import '../../models/lead_follow_up.dart';
 import '../../services/app_store.dart';
 import '../../services/auth_service.dart';
 import '../../services/role_access.dart';
@@ -18,6 +19,7 @@ import '../../services/land_lead_legal_service.dart';
 import '../../services/land_lead_meeting_service.dart';
 import '../../services/land_lead_service.dart';
 import '../../services/land_lead_signed_service.dart';
+import '../../services/lead_follow_up_service.dart';
 import '../../services/nearby_features_service.dart';
 import '../../utils/lead_auto_notes.dart';
 import '../../utils/lead_location_parser.dart';
@@ -157,6 +159,21 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
   List<LandLeadMeeting> _meetings = [];
   List<LandLeadLegalDocument> _legalDocs = [];
   List<LandLeadSignedRequest> _signedRequests = [];
+  List<LeadFollowUp> _followUps = [];
+
+  /// The follow-up to surface in the guidance row: the soonest still-upcoming
+  /// one, or — if none is upcoming — the most recent not-yet-completed (missed)
+  /// one. Null when this lead has no active follow-up at all.
+  LeadFollowUp? get _nextFollowUp {
+    final now = DateTime.now();
+    final active = _followUps.where((f) => !f.completed).toList();
+    if (active.isEmpty) return null;
+    final upcoming = active.where((f) => f.remindAt.isAfter(now)).toList()
+      ..sort((a, b) => a.remindAt.compareTo(b.remindAt));
+    if (upcoming.isNotEmpty) return upcoming.first;
+    active.sort((a, b) => b.remindAt.compareTo(a.remindAt));
+    return active.first;
+  }
 
   /// Shared Activity Timeline filter — driven by the five statistics cards and
   /// timeline chips only. Quick Actions open dialogs and do not select filters.
@@ -301,6 +318,9 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
         LandLeadMeetingService.getForLead(lead.leadId),
         LandLeadLegalService.getDocuments(lead.leadId),
         LandLeadSignedService.getForLead(lead.leadId),
+        // getForLead already swallows a missing table (returns []), so this
+        // never breaks the batch even before lead_follow_ups is provisioned.
+        LeadFollowUpService.getForLead(lead.leadId),
       ]);
       if (!mounted) return;
       setState(() {
@@ -309,6 +329,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
         _meetings = results[2] as List<LandLeadMeeting>;
         _legalDocs = results[3] as List<LandLeadLegalDocument>;
         _signedRequests = results[4] as List<LandLeadSignedRequest>;
+        _followUps = results[5] as List<LeadFollowUp>;
       });
     } catch (_) {
       // Tables may not exist yet — keep counts at zero.
@@ -534,7 +555,8 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
 
   Future<void> _openFollowUp() async {
     await showFollowUpDialog(context, lead.leadId);
-    if (mounted) setState(() {});
+    // Reload so the guidance-row Follow-up card reflects a just-added reminder.
+    if (mounted) await _loadActivityData();
   }
 
   Future<void> _navigateToProperty() async {
@@ -754,8 +776,8 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
         ? null
         : EmployeeLeadGuidanceBanners(
             insight: _workflowInsight,
-            leadAgeDays: _leadAgeDays,
-            receivedOnLabel: _formatReceivedOn(lead.addedOn),
+            nextFollowUp: _nextFollowUp,
+            onFollowUp: _openFollowUp,
             onOpenTasks: _openViewTasks,
             onNextActionTap: _onNextActionTap,
           );
@@ -789,13 +811,13 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
       shouldLoadMiTab: _shouldLoadMiTab,
     );
 
-    // The Status & Timeline card lives in the guidance row (between Next Action
-    // and Tasks) for the working executive; keep it in the left panel only when
-    // that row isn't shown (management view-only).
+    // Status & Timeline always sits in the reference column, directly under
+    // Property Information. The guidance row now carries the Follow-up card in
+    // its place (between Next Action and Tasks).
     final infoCards = _LeadInfoCards(
       lead: lead,
       leadAgeDays: _leadAgeDays,
-      showStatusTimeline: _viewOnly,
+      showStatusTimeline: true,
     );
 
     return FomraAppShell(

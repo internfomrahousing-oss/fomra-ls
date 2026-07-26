@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/land_lead.dart';
+import '../models/lead_follow_up.dart';
 import '../theme/app_theme.dart';
 import '../theme/fomra_theme_context.dart';
 import '../utils/employee_lead_next_action.dart';
@@ -18,16 +19,21 @@ IconData _actionIcon(EmployeeNextActionKind kind) => switch (kind) {
 /// Next-action + pending-task banners for employee lead detail.
 class EmployeeLeadGuidanceBanners extends StatelessWidget {
   final EmployeeLeadWorkflowInsight insight;
-  final int leadAgeDays;
-  final String receivedOnLabel;
+
+  /// The follow-up to surface, or null when none is scheduled (empty state).
+  final LeadFollowUp? nextFollowUp;
+
+  /// Opens the follow-up dialog — tapping the Follow-up card, whether it shows a
+  /// scheduled reminder or the "add follow-up" empty state.
+  final VoidCallback? onFollowUp;
   final VoidCallback? onOpenTasks;
   final VoidCallback? onNextActionTap;
 
   const EmployeeLeadGuidanceBanners({
     super.key,
     required this.insight,
-    required this.leadAgeDays,
-    required this.receivedOnLabel,
+    this.nextFollowUp,
+    this.onFollowUp,
     this.onOpenTasks,
     this.onNextActionTap,
   });
@@ -51,18 +57,13 @@ class EmployeeLeadGuidanceBanners extends StatelessWidget {
       priority: priority,
       onTap: onNextActionTap,
     );
-    final statusTime = _StatusTimeCard(
-      stage: insight.stage,
-      leadAgeDays: leadAgeDays,
-      receivedOnLabel: receivedOnLabel,
-      pendingSinceDays: insight.tasks.pendingSinceDays,
-    );
+    final followUpCard = _FollowUpCard(followUp: nextFollowUp, onTap: onFollowUp);
     final tasksCard = _TasksCard(summary: insight.tasks, onTap: onOpenTasks);
 
     return LayoutBuilder(
       builder: (context, c) {
-        // Three equal columns when wide: Next Action · Status & Time · Tasks.
-        // Medium: Next Action on top, Status & Time beside Tasks. Narrow: stack.
+        // Three equal columns when wide: Next Action · Follow-up · Tasks.
+        // Medium: Next Action on top, Follow-up beside Tasks. Narrow: stack.
         if (c.maxWidth >= 640) {
           return IntrinsicHeight(
             child: Row(
@@ -70,7 +71,7 @@ class EmployeeLeadGuidanceBanners extends StatelessWidget {
               children: [
                 Expanded(child: nextAction),
                 const SizedBox(width: 10),
-                Expanded(child: statusTime),
+                Expanded(child: followUpCard),
                 const SizedBox(width: 10),
                 Expanded(child: tasksCard),
               ],
@@ -87,14 +88,14 @@ class EmployeeLeadGuidanceBanners extends StatelessWidget {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Expanded(child: statusTime),
+                    Expanded(child: followUpCard),
                     const SizedBox(width: 8),
                     Expanded(child: tasksCard),
                   ],
                 ),
               )
             else ...[
-              statusTime,
+              followUpCard,
               const SizedBox(height: 8),
               tasksCard,
             ],
@@ -262,89 +263,105 @@ class _NextActionBanner extends StatelessWidget {
   }
 }
 
-/// Status & Timeline card — the lead's current stage, age, received date and
-/// how long it has been pending, sitting between Next Action and Tasks.
-class _StatusTimeCard extends StatelessWidget {
-  final LeadStatus stage;
-  final int leadAgeDays;
-  final String receivedOnLabel;
-  final int pendingSinceDays;
+/// Follow-up card — the lead's next scheduled follow-up (with its status), or
+/// an "add follow-up" empty state. Taps open the follow-up dialog. Sits between
+/// Next Action and Tasks, where Status & Timeline used to be.
+class _FollowUpCard extends StatelessWidget {
+  final LeadFollowUp? followUp;
+  final VoidCallback? onTap;
 
-  const _StatusTimeCard({
-    required this.stage,
-    required this.leadAgeDays,
-    required this.receivedOnLabel,
-    required this.pendingSinceDays,
-  });
+  const _FollowUpCard({this.followUp, this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: context.fomraSurface,
+    final f = followUp;
+    final status = f?.statusAt(DateTime.now());
+    final accent = status?.color ?? AppColors.primary;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: context.fomraBorder),
-      ),
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _CardHeader(
-            icon: Icons.timeline_rounded,
-            title: 'STATUS & TIMELINE',
-            color: stage.color,
+        child: Ink(
+          decoration: BoxDecoration(
+            color: context.fomraSurface,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: context.fomraBorder),
           ),
-          const SizedBox(height: 10),
-          const _MicroLabel('Current Stage'),
-          const SizedBox(height: 4),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: stage.color.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                stage.label,
-                style: TextStyle(
-                  color: stage.color,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Row(
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: _StatPair(
-                  label: 'Lead Age',
-                  value: '$leadAgeDays days',
-                  color: AppColors.purple,
-                ),
+              _CardHeader(
+                icon: Icons.notifications_active_outlined,
+                title: 'FOLLOW-UP',
+                color: accent,
+                trailing: onTap == null
+                    ? null
+                    : Icon(
+                        f == null
+                            ? Icons.add_rounded
+                            : Icons.chevron_right_rounded,
+                        size: 16,
+                        color: context.fomraTextSecondary,
+                      ),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _StatPair(
-                  label: 'Pending Since',
-                  value: pendingSinceDays <= 0 ? '—' : '$pendingSinceDays days',
+              const SizedBox(height: 10),
+              if (f == null) ...[
+                Text(
+                  'No follow-up scheduled',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    color: context.fomraTextPrimary,
+                  ),
                 ),
-              ),
+                const SizedBox(height: 4),
+                Text(
+                  'Tap to add a follow-up reminder',
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    height: 1.3,
+                    color: context.fomraTextSecondary,
+                  ),
+                ),
+              ] else ...[
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: accent.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      status!.label,
+                      style: TextStyle(
+                        color: accent,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _StatPair(label: 'Scheduled', value: f.scheduledLabel),
+                if (f.title.trim().isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  _StatPair(label: 'About', value: f.title.trim()),
+                ],
+              ],
             ],
           ),
-          const SizedBox(height: 10),
-          _StatPair(label: 'Received On', value: receivedOnLabel),
-        ],
+        ),
       ),
     );
   }
 }
 
-/// A small stacked label + value used inside the Status & Timeline card.
+/// A small stacked label + value used inside the guidance cards.
 class _StatPair extends StatelessWidget {
   final String label;
   final String value;
