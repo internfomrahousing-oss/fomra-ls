@@ -4,18 +4,43 @@ import '../../theme/app_theme.dart';
 import '../../theme/fomra_layout.dart';
 import '../../theme/fomra_theme_context.dart';
 
-/// Centered modal with the app's lighter scrim (avoids default black54 dullness).
+/// Desktop: a centered modal with the app's lighter scrim (avoids the default
+/// black54 dullness). Mobile: opens as a full-screen page you navigate into and
+/// back out of — no dimmed backdrop, no breadcrumb — since the dialog already
+/// sizes itself to the safe screen there.
 Future<T?> showFomraDialog<T>({
   required BuildContext context,
   required WidgetBuilder builder,
   bool barrierDismissible = true,
 }) {
+  if (FomraLayout.isMobile(context)) {
+    return Navigator.of(context).push<T>(
+      MaterialPageRoute<T>(
+        fullscreenDialog: true,
+        builder: (ctx) => _FomraDialogPage(child: builder(ctx)),
+      ),
+    );
+  }
   return showDialog<T>(
     context: context,
     barrierDismissible: barrierDismissible,
     barrierColor: AppColors.modalScrim,
     builder: builder,
   );
+}
+
+/// Opaque backing for a dialog shown as a full-screen page (mobile), so the
+/// notch / home-indicator strips the dialog leaves for the safe area read as a
+/// plain page instead of black bars.
+class _FomraDialogPage extends StatelessWidget {
+  final Widget child;
+
+  const _FomraDialogPage({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(color: context.fomraSurface, child: child);
+  }
 }
 
 /// Dialog inset padding: none on mobile (so the dialog fills the screen like a

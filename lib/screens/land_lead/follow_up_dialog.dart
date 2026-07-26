@@ -10,7 +10,9 @@ import '../../widgets/ui/app_feedback.dart';
 /// Opens the Follow-up window for a lead: schedule a reminder and review the
 /// follow-up history. Returns nothing; callers can ignore the future.
 Future<void> showFollowUpDialog(BuildContext context, String leadId) {
-  return showDialog<void>(
+  // showFomraDialog opens this as a full-screen page on mobile (a centered modal
+  // on desktop), matching the lead's other action dialogs.
+  return showFomraDialog<void>(
     context: context,
     builder: (_) => _FollowUpDialog(leadId: leadId),
   );
