@@ -12,7 +12,11 @@ import '../theme/fomra_theme_context.dart';
 
 /// App-wide search field — embedded in the blue header bar.
 class FomraUniversalSearchBar extends StatefulWidget {
-  const FomraUniversalSearchBar({super.key});
+  /// When true the field is styled for a light card (the mobile search dialog):
+  /// solid surface fill and dark text. Default false = white-on-blue header.
+  final bool onSurface;
+
+  const FomraUniversalSearchBar({super.key, this.onSurface = false});
 
   @override
   State<FomraUniversalSearchBar> createState() => _FomraUniversalSearchBarState();
@@ -270,64 +274,59 @@ class _FomraUniversalSearchBarState extends State<FomraUniversalSearchBar> {
 
   InputDecoration _headerDecoration(BuildContext context) {
     final isDark = context.isDarkMode;
-    final borderColor = isDark
-        ? context.fomraBorder.withValues(alpha: 0.85)
-        : Colors.white.withValues(alpha: 0.28);
+    // The header field sits on the blue app bar (white-on-blue). In the mobile
+    // search dialog it sits on a light card, so it needs solid-surface, dark-
+    // text styling to stay readable; dark mode is already surface-styled.
+    final onSurface = widget.onSurface || isDark;
+
+    final fillColor = onSurface
+        ? (isDark
+            ? AppColors.darkSurfaceVar.withValues(alpha: _focused ? 0.95 : 0.75)
+            : const Color(0xFFF1F5F9))
+        : Colors.white.withValues(alpha: _focused ? 0.22 : 0.14);
+    final hintColor = onSurface
+        ? context.fomraTextSecondary
+        : Colors.white.withValues(alpha: 0.65);
+    final iconColor = onSurface
+        ? (_focused ? AppColors.primary : context.fomraTextSecondary)
+        : (_focused ? Colors.white : Colors.white.withValues(alpha: 0.75));
+    final borderColor =
+        onSurface ? context.fomraBorder : Colors.white.withValues(alpha: 0.28);
+    final focusedColor = onSurface
+        ? AppColors.primary.withValues(alpha: 0.65)
+        : Colors.white.withValues(alpha: 0.55);
+
     final border = OutlineInputBorder(
       borderRadius: BorderRadius.circular(10),
       borderSide: BorderSide(color: borderColor),
     );
     return InputDecoration(
       hintText: 'Lead ID, owner, mobile, village, broker, survey, doc…',
-      hintStyle: TextStyle(
-        fontSize: 12,
-        color: isDark
-            ? AppColors.darkTextTertiary
-            : Colors.white.withValues(alpha: 0.65),
-      ),
-      prefixIcon: Icon(
-        Icons.search_rounded,
-        size: 18,
-        color: isDark
-            ? (_focused ? AppColors.primary : AppColors.darkTextSecondary)
-            : (_focused ? Colors.white : Colors.white.withValues(alpha: 0.75)),
-      ),
+      hintStyle: TextStyle(fontSize: 12, color: hintColor),
+      prefixIcon: Icon(Icons.search_rounded, size: 18, color: iconColor),
       suffixIcon: _ctrl.text.isNotEmpty
           ? IconButton(
-              icon: Icon(
-                Icons.close_rounded,
-                size: 16,
-                color: isDark
-                    ? AppColors.darkTextSecondary
-                    : Colors.white.withValues(alpha: 0.85),
-              ),
+              icon: Icon(Icons.close_rounded, size: 16, color: iconColor),
               onPressed: _clear,
               tooltip: 'Clear',
             )
           : null,
       isDense: true,
       filled: true,
-      fillColor: isDark
-          ? AppColors.darkSurfaceVar.withValues(alpha: _focused ? 0.95 : 0.75)
-          : Colors.white.withValues(alpha: _focused ? 0.22 : 0.14),
+      fillColor: fillColor,
       contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
       border: border,
       enabledBorder: border,
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
-        borderSide: BorderSide(
-          color: isDark
-              ? AppColors.primary.withValues(alpha: 0.65)
-              : Colors.white.withValues(alpha: 0.55),
-          width: 1.5,
-        ),
+        borderSide: BorderSide(color: focusedColor, width: 1.5),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final isDark = context.isDarkMode;
+    final onSurface = widget.onSurface || context.isDarkMode;
     return CompositedTransformTarget(
       link: _layerLink,
       child: KeyedSubtree(
@@ -339,10 +338,10 @@ class _FomraUniversalSearchBarState extends State<FomraUniversalSearchBar> {
           textInputAction: TextInputAction.search,
           style: TextStyle(
             fontSize: 12,
-            color: isDark ? AppColors.darkTextPrimary : Colors.white,
+            color: onSurface ? context.fomraTextPrimary : Colors.white,
             fontWeight: FontWeight.w500,
           ),
-          cursorColor: isDark ? AppColors.primary : Colors.white,
+          cursorColor: onSurface ? AppColors.primary : Colors.white,
           decoration: _headerDecoration(context),
         ),
       ),

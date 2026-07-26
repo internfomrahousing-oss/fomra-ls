@@ -104,15 +104,23 @@ class FomraAppBar extends StatelessWidget implements PreferredSizeWidget {
   void _openMobileSearch(BuildContext context) {
     showDialog<void>(
       context: context,
-      barrierColor: Colors.black.withValues(alpha: 0.4),
-      builder: (ctx) => const Dialog(
+      barrierColor: Colors.black.withValues(alpha: 0.45),
+      builder: (ctx) => Dialog(
         alignment: Alignment.topCenter,
-        insetPadding: EdgeInsets.fromLTRB(12, 70, 12, 12),
+        insetPadding: const EdgeInsets.fromLTRB(12, 70, 12, 12),
         backgroundColor: Colors.transparent,
         elevation: 0,
-        child: SizedBox(
-          height: 52,
-          child: FomraUniversalSearchBar(),
+        // A solid surface card so the field is clearly readable on mobile —
+        // the header's translucent white-on-blue styling is invisible here.
+        child: Material(
+          color: ctx.fomraSurface,
+          elevation: 12,
+          shadowColor: Colors.black45,
+          borderRadius: BorderRadius.circular(16),
+          child: const Padding(
+            padding: EdgeInsets.all(10),
+            child: FomraUniversalSearchBar(onSurface: true),
+          ),
         ),
       ),
     );
@@ -154,17 +162,6 @@ class FomraAppBar extends StatelessWidget implements PreferredSizeWidget {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Container(
-                    width: 30,
-                    height: 30,
-                    decoration: BoxDecoration(
-                      color: chipBg,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: chipBorder, width: 1),
-                    ),
-                    child: Icon(Icons.house_outlined, color: fg, size: 16),
-                  ),
-                  const SizedBox(width: 10),
                   Text(
                     'Fomra LandIQ',
                     style: TextStyle(
