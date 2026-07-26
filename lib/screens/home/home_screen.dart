@@ -704,10 +704,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             ],
           );
         }
-        // Stretch equalises the two boxes to the taller one during normal
-        // layout (no IntrinsicHeight), so they align top and bottom.
+        // Top-aligned: the two boxes size to their own content. Equalising
+        // their heights isn't safe here — stretch throws in this scrollable
+        // (unbounded-height) Row, and IntrinsicHeight throws because Today's
+        // tasks uses a LayoutBuilder.
         return Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
               child: PortalFadeSection(index: 1, child: todayTasks),
