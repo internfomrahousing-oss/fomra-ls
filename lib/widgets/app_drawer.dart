@@ -9,21 +9,24 @@ class _MenuItem {
   final String title;
   final IconData icon;
   final String route;
-  final Color accent;
 
-  const _MenuItem(this.title, this.icon, this.route, this.accent);
+  const _MenuItem(this.title, this.icon, this.route);
 }
 
 /// The mobile hamburger menu: Home, Workspace, Reports, Settings.
 const _menuItems = [
-  _MenuItem('Home', Icons.home_outlined, '/home', Color(0xFF5B7FFF)),
-  _MenuItem('Land Workspace', Icons.space_dashboard_outlined, '/land-lead',
-      Color(0xFF22D3EE)),
-  _MenuItem('Reports', Icons.assessment_outlined, '/reports',
-      Color(0xFF34D399)),
-  _MenuItem('Settings', Icons.settings_outlined, '/settings',
-      Color(0xFF64748B)),
+  _MenuItem('Home', Icons.home_outlined, '/home'),
+  _MenuItem('Land Workspace', Icons.space_dashboard_outlined, '/land-lead'),
+  _MenuItem('Reports', Icons.assessment_outlined, '/reports'),
+  _MenuItem('Settings', Icons.settings_outlined, '/settings'),
 ];
+
+/// Same blue rail gradient as the web side nav, so the mobile menu matches.
+const _drawerGradient = LinearGradient(
+  begin: Alignment.topCenter,
+  end: Alignment.bottomCenter,
+  colors: [Color(0xFF3B82F6), Color(0xFF2563EB)],
+);
 
 class AppDrawer extends StatelessWidget {
   final String currentRoute;
@@ -33,25 +36,32 @@ class AppDrawer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const menuItems = _menuItems;
+    final isDark = context.isDarkMode;
 
     return Drawer(
-      child: Column(
-        children: [
-          _DrawerHeader(),
-          Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              itemCount: menuItems.length,
-              itemBuilder: (context, index) {
-                final item = menuItems[index];
-                final isActive = currentRoute == item.route ||
-                    (item.route == '/land-lead' &&
-                        currentRoute == '/task-management');
-                return _DrawerTile(item: item, isActive: isActive);
-              },
+      // Blue rail (light) / sidebar surface (dark) — no white flash behind the
+      // gradient — so the white icons read the same as the web side nav.
+      backgroundColor: isDark ? context.fomraSidebarBg : AppColors.primaryDark,
+      child: DecoratedBox(
+        decoration: BoxDecoration(gradient: isDark ? null : _drawerGradient),
+        child: Column(
+          children: [
+            _DrawerHeader(),
+            Expanded(
+              child: ListView.builder(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                itemCount: menuItems.length,
+                itemBuilder: (context, index) {
+                  final item = menuItems[index];
+                  final isActive = currentRoute == item.route ||
+                      (item.route == '/land-lead' &&
+                          currentRoute == '/task-management');
+                  return _DrawerTile(item: item, isActive: isActive);
+                },
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -154,18 +164,47 @@ class _DrawerTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = context.isDarkMode;
-    final accent = item.accent;
+
+    // Mirror the web side nav: white icons on the blue rail, and the active
+    // item as a white rounded box with a brand-blue icon.
+    final Color iconBg;
+    final Color iconColor;
+    List<BoxShadow>? iconShadow;
+    if (isDark) {
+      iconBg =
+          isActive ? AppColors.primary.withValues(alpha: 0.18) : Colors.transparent;
+      iconColor = isActive
+          ? AppColors.primaryLight
+          : AppColors.darkTextSecondary.withValues(alpha: 0.85);
+    } else {
+      iconBg = isActive ? Colors.white : Colors.transparent;
+      iconColor = isActive ? AppColors.primary : Colors.white.withValues(alpha: 0.82);
+      iconShadow = isActive
+          ? [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.18),
+                blurRadius: 12,
+                offset: const Offset(0, 3),
+              ),
+            ]
+          : null;
+    }
+
+    final textColor = isDark
+        ? (isActive
+            ? AppColors.darkTextPrimary
+            : AppColors.darkTextSecondary.withValues(alpha: 0.9))
+        : Colors.white.withValues(alpha: isActive ? 1.0 : 0.88);
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
       decoration: BoxDecoration(
         color: isActive
-            ? accent.withValues(alpha: isDark ? 0.14 : 0.18)
+            ? (isDark
+                ? AppColors.primary.withValues(alpha: 0.12)
+                : Colors.white.withValues(alpha: 0.12))
             : Colors.transparent,
         borderRadius: BorderRadius.circular(14),
-        border: isActive
-            ? Border.all(color: accent.withValues(alpha: isDark ? 0.35 : 0.25))
-            : null,
       ),
       child: ListTile(
         leading: Container(
@@ -173,23 +212,22 @@ class _DrawerTile extends StatelessWidget {
           height: 34,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: accent.withValues(alpha: isActive ? 0.22 : 0.12),
+            color: iconBg,
             borderRadius: BorderRadius.circular(9),
+            boxShadow: iconShadow,
           ),
           child: Icon(
             item.icon,
-            color: accent,
+            color: iconColor,
             size: 18,
           ),
         ),
         title: Text(
           item.title,
           style: TextStyle(
-            color: isActive
-                ? (isDark ? Colors.white : Colors.white)
-                : (isDark ? context.fomraTextPrimary : const Color(0xFFCFD8DC)),
+            color: textColor,
             fontSize: 14,
-            fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
+            fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
           ),
         ),
         onTap: () {
