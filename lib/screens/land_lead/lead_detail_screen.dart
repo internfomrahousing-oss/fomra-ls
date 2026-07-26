@@ -161,6 +161,10 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
   List<LandLeadSignedRequest> _signedRequests = [];
   List<LeadFollowUp> _followUps = [];
 
+  /// Mobile only: whether the "View more details" dropdown (Contact & Lead /
+  /// Property Information / Status & Timeline) is expanded.
+  bool _showMoreDetails = false;
+
   /// The follow-up to surface in the guidance row: the soonest still-upcoming
   /// one, or — if none is upcoming — the most recent not-yet-completed (missed)
   /// one. Null when this lead has no active follow-up at all.
@@ -754,6 +758,49 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
     );
   }
 
+  /// Tappable "View more details" bar (mobile) that expands the reference cards.
+  Widget _viewMoreDetailsHeader() {
+    final radius = BorderRadius.circular(14);
+    return Material(
+      color: context.fomraSurface,
+      borderRadius: radius,
+      child: InkWell(
+        borderRadius: radius,
+        onTap: () => setState(() => _showMoreDetails = !_showMoreDetails),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          decoration: BoxDecoration(
+            borderRadius: radius,
+            border: Border.all(color: context.fomraBorder),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.info_outline_rounded,
+                  size: 18, color: AppColors.primary),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  _showMoreDetails ? 'Hide details' : 'View more details',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                    color: context.fomraTextPrimary,
+                  ),
+                ),
+              ),
+              AnimatedRotation(
+                turns: _showMoreDetails ? 0.5 : 0,
+                duration: const Duration(milliseconds: 200),
+                child: Icon(Icons.expand_more_rounded,
+                    color: context.fomraTextSecondary),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     // ── Discrete sections, composed per breakpoint below ────────────────────
@@ -894,20 +941,27 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
                                   ],
                                 ),
                               )
-                            // Mobile: one natural top-to-bottom flow — summary →
-                            // next action → KPIs → workspace → information.
+                            // Mobile: summary → a collapsible "View more details"
+                            // (Contact & Lead / Property Information / Status &
+                            // Timeline) → next action → KPIs → workspace. The
+                            // reference cards live in the dropdown instead of as
+                            // a long tail at the bottom.
                             : ListView(
                                 controller: _scrollController,
                                 children: [
                                   summary,
+                                  const SizedBox(height: 12),
+                                  _viewMoreDetailsHeader(),
+                                  if (_showMoreDetails) ...[
+                                    const SizedBox(height: 12),
+                                    infoCards,
+                                  ],
                                   if (guidance != null) ...[
                                     const SizedBox(height: 12),
                                     guidance,
                                   ],
                                   const SizedBox(height: 12),
                                   workspace,
-                                  const SizedBox(height: 12),
-                                  infoCards,
                                 ],
                               ),
                         if (!_viewOnly)
