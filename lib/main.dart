@@ -48,6 +48,29 @@ void main() {
   });
 }
 
+/// Top-level modules a web reload may return to. Excludes auth routes
+/// (`/login`, `/set-password`, `/change-password`) so a reload never strands
+/// the user mid-auth. Keep in sync with the `routes` map below.
+const Set<String> _restorableRoutes = {
+  '/home',
+  '/employee-portal',
+  '/management-portal',
+  '/land-lead',
+  '/employee-management',
+  '/task-management',
+  '/market-intelligence',
+  '/legal-verification',
+  '/broker-management',
+  '/legal-tracker',
+  '/survey-tracker',
+  '/owner-history',
+  '/cost-calculator',
+  '/reports',
+  '/notifications',
+  '/audit-trail',
+  '/settings',
+};
+
 class FomraLSApp extends StatelessWidget {
   const FomraLSApp({super.key});
 
@@ -77,6 +100,13 @@ class FomraLSApp extends StatelessWidget {
           );
         },
         home: const _StartupScreen(),
+        // On web, a page reload hands Flutter the URL's route directly. Always
+        // boot the splash instead, so Supabase/session restore first and the
+        // real page is rebuilt with a live session (see _StartupScreen._init,
+        // which then re-opens the route the URL points at).
+        onGenerateInitialRoutes: (_) => [
+          MaterialPageRoute(builder: (_) => const _StartupScreen()),
+        ],
         routes: {
           '/login':               (_) => const LoginScreen(),
           '/set-password':        (_) => const SetPasswordScreen(),
@@ -170,10 +200,27 @@ class _StartupScreenState extends State<_StartupScreen> {
     } else if (AuthLink.isAuthCallback) {
       // Arrived from an invite / password-recovery email link.
       Navigator.of(context).pushReplacementNamed('/set-password');
+    } else if (!loggedIn) {
+      Navigator.of(context).pushReplacementNamed('/login');
     } else {
-      Navigator.of(context)
-          .pushReplacementNamed(loggedIn ? '/home' : '/login');
+      // Land on /home, then — on a web reload — re-open the module the URL
+      // still points at, layered on top so Home > Module breadcrumbs and the
+      // back button keep working. Sub-views opened over a module (e.g. a lead
+      // detail) aren't in the URL, so reload returns to the module page.
+      final nav = Navigator.of(context)..pushReplacementNamed('/home');
+      final target = _restoreRoute();
+      if (target != null && target != '/home') nav.pushNamed(target);
     }
+  }
+
+  /// The named route the app was reloaded on (hash fragment on web), limited to
+  /// safe top-level modules — never an auth route. Null when there's nothing to
+  /// restore or the fragment isn't a known module.
+  String? _restoreRoute() {
+    final frag = AuthLink.initialUri.fragment;
+    if (frag.isEmpty) return null;
+    final path = (frag.startsWith('/') ? frag : '/$frag').split('?').first;
+    return _restorableRoutes.contains(path) ? path : null;
   }
 
   @override
