@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
@@ -776,45 +777,54 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
 
     try {
       final cameraOnly = AppSettingsService.instance.cameraOnlySitePhotos;
-      final source = await showModalBottomSheet<ImageSource>(
-        context: context,
-        backgroundColor: context.fomraSurface,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-        ),
-        builder: (ctx) => SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
-                child: Text(
-                  cameraOnly
-                      ? 'Camera only (Feature Controls)'
-                      : 'Camera or gallery',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: context.fomraTextSecondary,
+      ImageSource? source;
+      if (kIsWeb) {
+        // On web the browser shows its own native Photo Library / Take Photo /
+        // Choose File menu, so our own sheet would be a redundant double-prompt.
+        // Go straight to the native picker (camera when Feature Controls forces
+        // it, otherwise the file/gallery picker which also offers the camera).
+        source = cameraOnly ? ImageSource.camera : ImageSource.gallery;
+      } else {
+        source = await showModalBottomSheet<ImageSource>(
+          context: context,
+          backgroundColor: context.fomraSurface,
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+          ),
+          builder: (ctx) => SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
+                  child: Text(
+                    cameraOnly
+                        ? 'Camera only (Feature Controls)'
+                        : 'Camera or gallery',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: context.fomraTextSecondary,
+                    ),
                   ),
                 ),
-              ),
-              ListTile(
-                leading: const Icon(Icons.photo_camera_outlined),
-                title: const Text('Take photo'),
-                onTap: () => Navigator.pop(ctx, ImageSource.camera),
-              ),
-              if (!cameraOnly)
                 ListTile(
-                  leading: const Icon(Icons.photo_library_outlined),
-                  title: const Text('Choose from gallery'),
-                  onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+                  leading: const Icon(Icons.photo_camera_outlined),
+                  title: const Text('Take photo'),
+                  onTap: () => Navigator.pop(ctx, ImageSource.camera),
                 ),
-              const SizedBox(height: 8),
-            ],
+                if (!cameraOnly)
+                  ListTile(
+                    leading: const Icon(Icons.photo_library_outlined),
+                    title: const Text('Choose from gallery'),
+                    onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+                  ),
+                const SizedBox(height: 8),
+              ],
+            ),
           ),
-        ),
-      );
+        );
+      }
       if (source == null) return;
       final picked = await ImagePicker().pickImage(
         source: source,
