@@ -506,7 +506,9 @@ class PortalQuickActionsFab extends StatelessWidget {
   Widget build(BuildContext context) {
     return FloatingActionButton.extended(
       onPressed: () => _open(context),
-      backgroundColor: AppColors.primary,
+      // A distinct purple so the home Quick actions button reads apart from the
+      // blue primary buttons (Add Lead FAB, lead action FAB).
+      backgroundColor: AppColors.purple,
       foregroundColor: Colors.white,
       icon: const Icon(Icons.flash_on_rounded),
       label: const Text(
