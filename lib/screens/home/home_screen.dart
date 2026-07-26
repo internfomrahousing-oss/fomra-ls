@@ -653,6 +653,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final body = asCard
         ? PortalSectionCard(
             title: 'Quick actions',
+            // Matches Today's tasks' subtitle so the two side-by-side boxes'
+            // headers are the same height and the cards line up.
+            subtitle: 'Common shortcuts',
             icon: Icons.flash_on_rounded,
             child: grid,
           )
