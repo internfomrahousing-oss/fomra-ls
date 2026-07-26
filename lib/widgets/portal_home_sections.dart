@@ -204,13 +204,17 @@ class PortalWelcomeHeader extends StatelessWidget {
           const SizedBox(height: AppSpacing.md),
           LayoutBuilder(
             builder: (context, constraints) {
-              final stacked = constraints.maxWidth < 640;
+              // Mobile: three compact square tiles in one row (better use of the
+              // width than full-width stacked rows). Wider screens keep the roomy
+              // horizontal tiles.
+              final square = constraints.maxWidth < 640;
               final tiles = [
                 PortalSummaryTile(
                   label: 'Total sites',
                   value: totalLeads,
                   icon: Icons.location_on_outlined,
                   accent: AppColors.primary,
+                  compact: square,
                   onTap: onSummaryTap == null
                       ? null
                       : () => onSummaryTap!(LeadListFilter.totalLeads),
@@ -220,6 +224,7 @@ class PortalWelcomeHeader extends StatelessWidget {
                   value: activeLeads,
                   icon: Icons.trending_up_rounded,
                   accent: AppColors.success,
+                  compact: square,
                   onTap: onSummaryTap == null
                       ? null
                       : () => onSummaryTap!(LeadListFilter.activeLeads),
@@ -229,24 +234,19 @@ class PortalWelcomeHeader extends StatelessWidget {
                   value: thirdValue,
                   icon: thirdIcon,
                   accent: AppColors.warning,
+                  compact: square,
                   onTap: onThirdTap,
                 ),
               ];
-              if (stacked) {
-                return Column(
-                  children: [
-                    for (var i = 0; i < tiles.length; i++) ...[
-                      tiles[i],
-                      if (i < tiles.length - 1)
-                        const SizedBox(height: AppSpacing.sm),
-                    ],
-                  ],
-                );
-              }
               return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   for (var i = 0; i < tiles.length; i++) ...[
-                    Expanded(child: tiles[i]),
+                    Expanded(
+                      child: square
+                          ? AspectRatio(aspectRatio: 1, child: tiles[i])
+                          : tiles[i],
+                    ),
                     if (i < tiles.length - 1)
                       const SizedBox(width: AppSpacing.sm),
                   ],
@@ -267,6 +267,10 @@ class PortalSummaryTile extends StatefulWidget {
   final Color accent;
   final VoidCallback? onTap;
 
+  /// Compact square layout (icon stacked over value + label) for the mobile
+  /// three-in-a-row summary. Default false = the roomy horizontal tile.
+  final bool compact;
+
   const PortalSummaryTile({
     super.key,
     required this.label,
@@ -274,6 +278,7 @@ class PortalSummaryTile extends StatefulWidget {
     required this.icon,
     required this.accent,
     this.onTap,
+    this.compact = false,
   });
 
   @override
@@ -305,60 +310,105 @@ class _PortalSummaryTileState extends State<PortalSummaryTile> {
           ),
           boxShadow: _hovered ? context.fomraCardShadow : null,
         ),
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.md,
-          vertical: AppSpacing.sm,
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: context.fomraSurface.withValues(alpha: 0.9),
-                borderRadius: BorderRadius.circular(12),
+        padding: widget.compact
+            ? const EdgeInsets.all(9)
+            : const EdgeInsets.symmetric(
+                horizontal: AppSpacing.md,
+                vertical: AppSpacing.sm,
               ),
-              alignment: Alignment.center,
-              child: Icon(
-                widget.icon,
-                color: widget.accent,
-                size: AppIconSize.small,
-              ),
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  AnimatedCounter(
-                    value: widget.value,
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
-                      color: context.fomraTextPrimary,
-                      height: 1.1,
-                    ),
-                  ),
-                  Text(
-                    widget.label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                      color: context.fomraTextSecondary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
+        child: widget.compact ? _compactBody(context) : _wideBody(context),
       ),
     );
 
     if (widget.onTap == null) return tile;
     return GestureDetector(onTap: widget.onTap, child: tile);
+  }
+
+  Widget _iconChip({double box = 40, double glyph = AppIconSize.small}) {
+    return Container(
+      width: box,
+      height: box,
+      decoration: BoxDecoration(
+        color: context.fomraSurface.withValues(alpha: 0.9),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      alignment: Alignment.center,
+      child: Icon(widget.icon, color: widget.accent, size: glyph),
+    );
+  }
+
+  /// Roomy horizontal tile — icon beside the value + label.
+  Widget _wideBody(BuildContext context) {
+    return Row(
+      children: [
+        _iconChip(),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              AnimatedCounter(
+                value: widget.value,
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  color: context.fomraTextPrimary,
+                  height: 1.1,
+                ),
+              ),
+              Text(
+                widget.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: context.fomraTextSecondary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Compact square tile — icon on top, value + label stacked below.
+  Widget _compactBody(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        _iconChip(box: 30, glyph: 16),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AnimatedCounter(
+              value: widget.value,
+              style: TextStyle(
+                fontSize: 21,
+                fontWeight: FontWeight.w800,
+                color: context.fomraTextPrimary,
+                height: 1.0,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              widget.label,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 10.5,
+                height: 1.12,
+                fontWeight: FontWeight.w500,
+                color: context.fomraTextSecondary,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
   }
 }
 
@@ -376,6 +426,95 @@ class PortalQuickAction {
     required this.accent,
     required this.onTap,
   });
+}
+
+/// A floating "Quick actions" button for the mobile home — tapping it opens a
+/// bottom sheet listing the same actions the desktop Quick actions card shows,
+/// so the card itself can be dropped on phones to reclaim the space.
+class PortalQuickActionsFab extends StatelessWidget {
+  final List<PortalQuickAction> actions;
+
+  const PortalQuickActionsFab({super.key, required this.actions});
+
+  void _open(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: context.fomraSurface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              margin: const EdgeInsets.only(top: 10, bottom: 4),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: ctx.fomraBorder,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 6),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Quick actions',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    color: ctx.fomraTextPrimary,
+                  ),
+                ),
+              ),
+            ),
+            for (final a in actions)
+              ListTile(
+                leading: Container(
+                  width: 40,
+                  height: 40,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: a.accent.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(a.icon, color: a.accent, size: 20),
+                ),
+                title: Text(
+                  a.label,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: ctx.fomraTextPrimary,
+                  ),
+                ),
+                subtitle: a.subtitle == null ? null : Text(a.subtitle!),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  a.onTap();
+                },
+              ),
+            const SizedBox(height: 12),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FloatingActionButton.extended(
+      onPressed: () => _open(context),
+      backgroundColor: AppColors.primary,
+      foregroundColor: Colors.white,
+      icon: const Icon(Icons.flash_on_rounded),
+      label: const Text(
+        'Quick actions',
+        style: TextStyle(fontWeight: FontWeight.w700),
+      ),
+    );
+  }
 }
 
 class PortalQuickActionsGrid extends StatelessWidget {

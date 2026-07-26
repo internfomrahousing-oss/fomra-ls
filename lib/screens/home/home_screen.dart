@@ -695,8 +695,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final sideBySide =
-            !FomraLayout.isMobile(context) && constraints.maxWidth >= 720;
+        final isMobile = FomraLayout.isMobile(context);
+        final sideBySide = !isMobile && constraints.maxWidth >= 720;
+        if (isMobile) {
+          // Quick actions live in the floating button on phones (see the home
+          // Scaffold's FAB), so the card is dropped here to reclaim the space.
+          return PortalFadeSection(index: 1, child: todayTasks);
+        }
         if (!sideBySide) {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -907,6 +912,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       // The notification bell now lives in the shared header for every page.
       appBar: const FomraAppBar(),
       backgroundColor: context.fomraPageBg,
+      // On phones the executive's Quick actions card is dropped in favour of a
+      // floating button that opens the same actions in a sheet.
+      floatingActionButton: (!_isManagement && FomraLayout.isMobile(context))
+          ? PortalQuickActionsFab(actions: quickActions)
+          : null,
       body: Column(
         children: [
           const OfflineStatusBanner(),
