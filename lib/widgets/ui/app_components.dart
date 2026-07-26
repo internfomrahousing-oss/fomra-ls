@@ -34,14 +34,13 @@ BoxConstraints fomraDialogConstraints(
   if (!FomraLayout.isMobile(context)) {
     return BoxConstraints(maxWidth: maxWidth, maxHeight: maxHeight);
   }
-  // Full width, height up to the screen — dialogs with a Flexible/scrollable
-  // body fill it (a full-page feel); short ones simply don't overflow.
-  final size = MediaQuery.sizeOf(context);
-  return BoxConstraints(
-    minWidth: size.width,
-    maxWidth: size.width,
-    maxHeight: size.height,
-  );
+  // Fill the whole safe screen so the dialog opens like a full page. viewPadding
+  // (device notch / home indicator) survives the dialog's SafeArea, so
+  // subtracting it fills the visible area exactly without overflowing it.
+  final mq = MediaQuery.of(context);
+  final w = mq.size.width - mq.viewPadding.horizontal;
+  final h = mq.size.height - mq.viewPadding.vertical;
+  return BoxConstraints.tightFor(width: w, height: h);
 }
 
 /// Shows a "Sign out?" confirmation dialog. Returns true if the user confirms.
