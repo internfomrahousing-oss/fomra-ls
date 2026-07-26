@@ -119,9 +119,12 @@ class MonthlyTargetProgressCard extends StatelessWidget {
     );
   }
 
-  /// A box per category showing completed / total (achieved / target).
+  /// A box per category showing completed / total (achieved / target). Uses
+  /// start (not stretch) — a stretched Row here sits in an unbounded-height
+  /// context and would force infinite height. The boxes share content shape, so
+  /// they line up anyway.
   Widget _categoryBoxes(BuildContext context) => Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           for (var i = 0; i < categories.length; i++) ...[
             if (i > 0) const SizedBox(width: AppSpacing.sm),
