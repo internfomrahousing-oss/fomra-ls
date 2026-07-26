@@ -233,21 +233,6 @@ class _StartupScreenState extends State<_StartupScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                width: 76,
-                height: 76,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.25),
-                    width: 1.5,
-                  ),
-                ),
-                child: const Icon(Icons.house_outlined,
-                    color: Colors.white, size: 42),
-              ),
-              const SizedBox(height: 20),
               const Text(
                 'Fomra LandIQ',
                 style: TextStyle(

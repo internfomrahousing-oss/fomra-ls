@@ -310,21 +310,6 @@ class _LoginScreenState extends State<LoginScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Container(
-                    width: 72,
-                    height: 72,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.3),
-                        width: 1.5,
-                      ),
-                    ),
-                    child: const Icon(Icons.house_outlined,
-                        color: Colors.white, size: 38),
-                  ),
-                  const SizedBox(height: 16),
                   const Text(
                     'Fomra LandIQ',
                     textAlign: TextAlign.center,
