@@ -658,7 +658,12 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
     _pendingMapCenter = null;
   }
 
-  Future<void> _onMapPin(LatLng point) async {
+  /// [recenterMap] moves the camera to [point] after placing the pin — wanted
+  /// for the "My Location" flow (the device may have moved far from wherever
+  /// the map was showing) but not for a direct map tap, where the map is
+  /// already centered on what the user just touched and re-centering it would
+  /// shift the marker away from their finger, making the tap look "wrong".
+  Future<void> _onMapPin(LatLng point, {bool recenterMap = true}) async {
     if (!_manualGpsAllowed || _locationMode != _LocationMode.manual) {
       if (!mounted) return;
       AppFeedback.error(
@@ -669,10 +674,13 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
     _suppressGpsListener = true;
     _gpsCtrl.text = formatLeadGps(point.latitude, point.longitude);
     _suppressGpsListener = false;
-    await _placePinAndFetchDetails(point);
+    await _placePinAndFetchDetails(point, recenterMap: recenterMap);
   }
 
-  Future<void> _placePinAndFetchDetails(LatLng point) async {
+  Future<void> _placePinAndFetchDetails(
+    LatLng point, {
+    bool recenterMap = true,
+  }) async {
     final fetchSeq = ++_pinFetchSeq;
     final firstPin = _pinnedPoint == null;
 
@@ -684,15 +692,24 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
       _resolvingPin = true;
       _locationStatus = 'Pin placed — fetching land details…';
     });
-    _centerMapOn(point, zoom: firstPin ? 16.0 : null);
-    await _fetchPinDetailsOnly(point, fetchSeq: fetchSeq);
+    // Always center for the very first pin (the map is likely still showing
+    // the far-off default center) — otherwise only when explicitly asked.
+    if (firstPin || recenterMap) {
+      _centerMapOn(point, zoom: firstPin ? 16.0 : null);
+    }
+    await _fetchPinDetailsOnly(
+      point,
+      fetchSeq: fetchSeq,
+      recenterMap: firstPin || recenterMap,
+    );
   }
 
   Future<void> _fetchPinDetailsOnly(
     LatLng point, {
     required int fetchSeq,
+    bool recenterMap = true,
   }) async {
-    _centerMapOn(point);
+    if (recenterMap) _centerMapOn(point);
     try {
       await _fillFromCoordinates(
         point.latitude,
@@ -1390,7 +1407,8 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
                                   onMapReady: _onMapReady,
                                   onTap: _manualGpsAllowed &&
                                           _locationMode == _LocationMode.manual
-                                      ? _onMapPin
+                                      ? (point) =>
+                                          _onMapPin(point, recenterMap: false)
                                       : null,
                                   onMyLocation: _manualGpsAllowed &&
                                           _locationMode == _LocationMode.manual

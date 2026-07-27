@@ -129,7 +129,12 @@ class _FullscreenLeadMapState extends State<_FullscreenLeadMap> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(widget.title)),
+      backgroundColor: AppColors.primary,
+      appBar: AppBar(
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
+        title: Text(widget.title),
+      ),
       body: Stack(
         children: [
           FlutterMap(
