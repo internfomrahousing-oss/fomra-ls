@@ -1136,6 +1136,13 @@ class _LeadListRowState extends State<_LeadListRow> {
     final priorityColor = _leadPriorityColor(lead);
     final priorityLabel = _leadPriorityLabel(lead);
     final assignee = lead.createdByName.trim();
+    // An executive only ever sees their own leads, so their own name on every
+    // card is noise — hide it (management and RM/Head still see other people's).
+    final me =
+        (AuthService.instance.currentUser?.fullName ?? '').trim().toLowerCase();
+    final showAssignee = assignee.isNotEmpty &&
+        !(!AuthService.instance.isManagement &&
+            assignee.toLowerCase() == me);
     final dateText =
         '${lead.addedOn.day}/${lead.addedOn.month}/${lead.addedOn.year}';
     final statusLabel = lead.status.isProspect
@@ -1248,7 +1255,7 @@ class _LeadListRowState extends State<_LeadListRow> {
                               landType: lead.landType.label,
                               dateText: dateText,
                             ),
-                            if (assignee.isNotEmpty) ...[
+                            if (showAssignee) ...[
                               const SizedBox(height: 5),
                               Row(
                                 children: [
