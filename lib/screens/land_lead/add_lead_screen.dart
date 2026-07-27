@@ -83,6 +83,23 @@ class _OwnerEntry {
   }
 }
 
+/// Holds the controllers for one extra survey number/sub-division pair in the
+/// dynamic multi survey-number section (beyond the primary pair in
+/// [_AddLeadScreenState._surveyCtrl]/[_AddLeadScreenState._subDivCtrl]).
+class _SurveyEntry {
+  final TextEditingController surveyCtrl;
+  final TextEditingController subDivCtrl;
+
+  _SurveyEntry({String survey = '', String subDiv = ''})
+      : surveyCtrl = TextEditingController(text: survey),
+        subDivCtrl = TextEditingController(text: subDiv);
+
+  void dispose() {
+    surveyCtrl.dispose();
+    subDivCtrl.dispose();
+  }
+}
+
 class AddLeadScreen extends StatefulWidget {
   final LandLead? existingLead;
 
@@ -122,6 +139,9 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
 
   static const _kMaxOwners = 4;
   final List<_OwnerEntry> _owners = [_OwnerEntry()];
+
+  static const _kMaxSurveyEntries = 6;
+  final List<_SurveyEntry> _extraSurveys = [];
 
   _LocationMode _locationMode = _LocationMode.live;
   GpsFix? _verifiedGps;
@@ -181,6 +201,18 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
     if (_owners.length <= 1) return;
     setState(() {
       final removed = _owners.removeAt(index);
+      removed.dispose();
+    });
+  }
+
+  void _addSurveyEntry() {
+    if (_extraSurveys.length >= _kMaxSurveyEntries - 1) return;
+    setState(() => _extraSurveys.add(_SurveyEntry()));
+  }
+
+  void _removeSurveyEntry(int index) {
+    setState(() {
+      final removed = _extraSurveys.removeAt(index);
       removed.dispose();
     });
   }
@@ -272,6 +304,11 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
     _pincodeCtrl.text = existing.pincode;
     _surveyCtrl.text = existing.surveyNumber;
     _subDivCtrl.text = existing.subDivision;
+    for (final extra in existing.additionalSurveyNumbers
+        .take(_kMaxSurveyEntries - 1)) {
+      _extraSurveys.add(
+          _SurveyEntry(survey: extra.surveyNumber, subDiv: extra.subDivision));
+    }
     final parsedExtent = _parseLandExtent(existing.landExtent);
     _extentValueCtrl.text = parsedExtent.$1;
     _extentUnit = parsedExtent.$2;
@@ -327,6 +364,9 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
     }
     for (final o in _owners) {
       o.dispose();
+    }
+    for (final s in _extraSurveys) {
+      s.dispose();
     }
     _mapController.dispose();
     AppSettingsService.instance.removeListener(_onSettingsChanged);
@@ -1043,6 +1083,15 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
               contact: o.contactCtrl.text.trim(),
             ))
         .toList();
+    final additionalSurveyNumbers = _extraSurveys
+        .where((s) =>
+            s.surveyCtrl.text.trim().isNotEmpty ||
+            s.subDivCtrl.text.trim().isNotEmpty)
+        .map((s) => SurveyEntry(
+              surveyNumber: s.surveyCtrl.text.trim(),
+              subDivision: s.subDivCtrl.text.trim(),
+            ))
+        .toList();
     final lead = LandLead(
       leadId: existing?.leadId ?? '',
       inputSource: _inputSource!,
@@ -1054,6 +1103,7 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
       pincode: _pincodeCtrl.text.trim(),
       surveyNumber: _surveyCtrl.text.trim(),
       subDivision: _subDivCtrl.text.trim(),
+      additionalSurveyNumbers: additionalSurveyNumbers,
       landExtent: landExtent,
       ownerName: _owners[0].nameCtrl.text.trim(),
       contactDetails: _owners[0].contactCtrl.text.trim(),
@@ -1479,6 +1529,13 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
                                 ),
                               ),
                               const SizedBox(height: AddLeadUi.fieldGap),
+                              _ExtraSurveySection(
+                                entries: _extraSurveys,
+                                maxEntries: _kMaxSurveyEntries,
+                                onAdd: _addSurveyEntry,
+                                onRemove: _removeSurveyEntry,
+                              ),
+                              const SizedBox(height: AddLeadUi.fieldGap),
                               addLeadFormRow(
                                 context,
                                 _Field(
@@ -1835,6 +1892,128 @@ class _MeasurementUnitDropdown extends StatelessWidget {
             ),
           )
           .toList(),
+    );
+  }
+}
+
+// ── Survey Numbers (dynamic, entry #1 above + up to 5 extra plots) ─────────
+
+class _ExtraSurveySection extends StatelessWidget {
+  final List<_SurveyEntry> entries;
+  final int maxEntries;
+  final VoidCallback onAdd;
+  final ValueChanged<int> onRemove;
+
+  const _ExtraSurveySection({
+    required this.entries,
+    required this.maxEntries,
+    required this.onAdd,
+    required this.onRemove,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (entries.length < maxEntries - 1) ...[
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: onAdd,
+              icon: const Icon(Icons.add_circle_outline_rounded, size: 18),
+              label: const Text('Add Survey Number'),
+              style: TextButton.styleFrom(
+                foregroundColor: AppColors.primary,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+              ),
+            ),
+          ),
+          if (entries.isNotEmpty) const SizedBox(height: 4),
+        ],
+        for (var i = 0; i < entries.length; i++) ...[
+          if (i > 0) const SizedBox(height: AddLeadUi.fieldGap),
+          _ExtraSurveyFields(
+            index: i,
+            entry: entries[i],
+            onRemove: () => onRemove(i),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _ExtraSurveyFields extends StatelessWidget {
+  final int index;
+  final _SurveyEntry entry;
+  final VoidCallback onRemove;
+
+  const _ExtraSurveyFields({
+    required this.index,
+    required this.entry,
+    required this.onRemove,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final fields = addLeadFormRow(
+      context,
+      _Field(
+        ctrl: entry.surveyCtrl,
+        label: 'Survey Number ${index + 2}',
+        hint: 'e.g. 42/3A  (optional)',
+        icon: Icons.tag_outlined,
+      ),
+      _Field(
+        ctrl: entry.subDivCtrl,
+        label: 'Sub Division ${index + 2}',
+        hint: 'e.g. 1  (optional)',
+        icon: Icons.call_split_outlined,
+      ),
+    );
+
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: isDark ? context.fomraSurfaceVar : const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(AddLeadUi.fieldRadius),
+        border: Border.all(color: AddLeadUi.cardBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Survey Plot ${index + 2}',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: context.fomraTextSecondary,
+                  ),
+                ),
+              ),
+              InkWell(
+                onTap: onRemove,
+                borderRadius: BorderRadius.circular(20),
+                child: const Padding(
+                  padding: EdgeInsets.all(4),
+                  child: Icon(
+                    Icons.close_rounded,
+                    size: 18,
+                    color: AppColors.error,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          fields,
+        ],
+      ),
     );
   }
 }

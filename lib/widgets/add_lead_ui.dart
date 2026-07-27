@@ -10,6 +10,7 @@ import '../config/maptiler_tiles.dart';
 import '../theme/app_theme.dart';
 import '../theme/fomra_theme_context.dart';
 import '../utils/reverse_geocode.dart';
+import 'lead_map_controls.dart';
 
 /// Design tokens for the Add Land Lead enterprise form.
 abstract final class AddLeadUi {
@@ -969,6 +970,22 @@ class AddLeadMapPicker extends StatelessWidget {
                     ),
                   ]),
               ],
+            ),
+            Positioned(
+              left: 12,
+              bottom: 12,
+              child: MapZoomControls(
+                controller: mapController,
+                onExpand: () => showFullscreenLeadMap(
+                  context,
+                  tileUrl: tileUrl,
+                  initialCenter: pinnedPoint ?? defaultCenter,
+                  initialZoom: pinnedPoint != null ? 16 : 11,
+                  pinnedPoint: pinnedPoint,
+                  onTap: _readOnly ? null : onTap,
+                  title: 'Pin Location',
+                ),
+              ),
             ),
             if (showHint)
               Positioned(

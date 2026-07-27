@@ -80,6 +80,7 @@ class LandLeadService {
         'created_by_role': createdByRole,
       },
       lead.additionalOwners,
+      lead.additionalSurveyNumbers,
     );
 
     final photos = sitePhotoBytes.where((b) => b.isNotEmpty).take(4).toList();
@@ -121,61 +122,80 @@ class LandLeadService {
     return created;
   }
 
-  /// Inserts a lead row, including `additional_owners` when the column
-  /// exists. Falls back to inserting without it on databases that haven't
-  /// had `supabase/land_lead_additional_owners.sql` applied yet.
+  /// Inserts a lead row, including `additional_owners` and
+  /// `additional_survey_numbers` when those columns exist. Falls back to
+  /// inserting without whichever column is missing on databases that
+  /// haven't had the corresponding `supabase/land_lead_*.sql` applied yet.
   static Future<Map<String, dynamic>> _insertLandLead(
     Map<String, dynamic> base,
     List<OwnerContact> additionalOwners,
+    List<SurveyEntry> additionalSurveyNumbers,
   ) async {
-    try {
-      return await _db
-          .from('land_leads')
-          .insert({
-            ...base,
-            'additional_owners':
-                additionalOwners.map((o) => o.toJson()).toList(),
-          })
-          .select()
-          .single();
-    } on PostgrestException catch (e) {
-      if (e.code == 'PGRST204' && e.message.contains('additional_owners')) {
-        return await _db.from('land_leads').insert(base).select().single();
+    var payload = {
+      ...base,
+      'additional_owners': additionalOwners.map((o) => o.toJson()).toList(),
+      'additional_survey_numbers':
+          additionalSurveyNumbers.map((s) => s.toJson()).toList(),
+    };
+    while (true) {
+      try {
+        return await _db.from('land_leads').insert(payload).select().single();
+      } on PostgrestException catch (e) {
+        final missingKey = _missingOptionalColumn(e, payload);
+        if (missingKey == null) rethrow;
+        payload = {...payload}..remove(missingKey);
       }
-      rethrow;
     }
   }
 
-  /// Updates a lead row, including `additional_owners` when the column
-  /// exists. Falls back to updating without it on databases that haven't
-  /// had `supabase/land_lead_additional_owners.sql` applied yet.
+  /// Updates a lead row, including `additional_owners` and
+  /// `additional_survey_numbers` when those columns exist. Falls back to
+  /// updating without whichever column is missing on databases that haven't
+  /// had the corresponding `supabase/land_lead_*.sql` applied yet.
   static Future<Map<String, dynamic>> _updateLandLead(
     String leadId,
     Map<String, dynamic> base,
     List<OwnerContact> additionalOwners,
+    List<SurveyEntry> additionalSurveyNumbers,
   ) async {
-    try {
-      return await _db
-          .from('land_leads')
-          .update({
-            ...base,
-            'additional_owners':
-                additionalOwners.map((o) => o.toJson()).toList(),
-          })
-          .eq('id', leadId)
-          .select()
-          .single();
-    } on PostgrestException catch (e) {
-      if (e.code == 'PGRST204' && e.message.contains('additional_owners')) {
+    var payload = {
+      ...base,
+      'additional_owners': additionalOwners.map((o) => o.toJson()).toList(),
+      'additional_survey_numbers':
+          additionalSurveyNumbers.map((s) => s.toJson()).toList(),
+    };
+    while (true) {
+      try {
         return await _db
             .from('land_leads')
-            .update(base)
+            .update(payload)
             .eq('id', leadId)
             .select()
             .single();
+      } on PostgrestException catch (e) {
+        final missingKey = _missingOptionalColumn(e, payload);
+        if (missingKey == null) rethrow;
+        payload = {...payload}..remove(missingKey);
       }
-      rethrow;
     }
+  }
+
+  /// Optional payload keys that may not exist yet on a database that hasn't
+  /// had the corresponding `supabase/land_lead_*.sql` migration applied.
+  static const _optionalColumns = ['additional_owners', 'additional_survey_numbers'];
+
+  /// Returns the payload key a `PGRST204` "column not found" error refers
+  /// to, if it's one of [_optionalColumns] present in [payload] — so callers
+  /// can retry without it.
+  static String? _missingOptionalColumn(
+    PostgrestException e,
+    Map<String, dynamic> payload,
+  ) {
+    if (e.code != 'PGRST204') return null;
+    for (final key in _optionalColumns) {
+      if (payload.containsKey(key) && e.message.contains(key)) return key;
+    }
+    return null;
   }
 
   static Future<String> _uploadSitePhoto(
@@ -398,6 +418,7 @@ class LandLeadService {
         'updated_at': DateTime.now().toUtc().toIso8601String(),
       },
       lead.additionalOwners,
+      lead.additionalSurveyNumbers,
     );
 
     final updated = _fromRow({
@@ -458,6 +479,14 @@ class LandLeadService {
             .toList()
         : <OwnerContact>[];
 
+    final additionalSurveyNumbersRaw = r['additional_survey_numbers'];
+    final additionalSurveyNumbers = additionalSurveyNumbersRaw is List
+        ? additionalSurveyNumbersRaw
+            .whereType<Map>()
+            .map((m) => SurveyEntry.fromJson(Map<String, dynamic>.from(m)))
+            .toList()
+        : <SurveyEntry>[];
+
     return LandLead(
       leadId: r['id'] as String,
       inputSource: InputSource.values.firstWhere(
@@ -472,6 +501,7 @@ class LandLeadService {
       pincode: r['pincode'] as String? ?? '',
       surveyNumber: r['survey_number'] as String? ?? '',
       subDivision: r['sub_division'] as String? ?? '',
+      additionalSurveyNumbers: additionalSurveyNumbers,
       landExtent: r['land_extent'] as String? ?? '',
       ownerName: r['owner_name'] as String,
       contactDetails: r['contact_details'] as String? ?? '',

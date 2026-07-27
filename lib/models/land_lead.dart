@@ -47,6 +47,24 @@ class OwnerContact {
       );
 }
 
+/// Extra survey number + sub-division (beyond the primary pair captured in
+/// [LandLead.surveyNumber] / [LandLead.subDivision]) for sites that span
+/// multiple survey plots.
+class SurveyEntry {
+  final String surveyNumber;
+  final String subDivision;
+
+  const SurveyEntry({required this.surveyNumber, this.subDivision = ''});
+
+  Map<String, dynamic> toJson() =>
+      {'survey_number': surveyNumber, 'sub_division': subDivision};
+
+  factory SurveyEntry.fromJson(Map<String, dynamic> json) => SurveyEntry(
+        surveyNumber: json['survey_number']?.toString() ?? '',
+        subDivision: json['sub_division']?.toString() ?? '',
+      );
+}
+
 class LandLead {
   final String leadId;
   final InputSource inputSource;
@@ -58,6 +76,7 @@ class LandLead {
   final String pincode;
   final String surveyNumber;
   final String subDivision;
+  final List<SurveyEntry> additionalSurveyNumbers;
   final String landExtent;
   final String ownerName;
   final String contactDetails;
@@ -96,6 +115,7 @@ class LandLead {
     required this.pincode,
     required this.surveyNumber,
     this.subDivision = '',
+    this.additionalSurveyNumbers = const [],
     required this.landExtent,
     required this.ownerName,
     required this.contactDetails,
@@ -133,6 +153,7 @@ class LandLead {
     String? pincode,
     String? surveyNumber,
     String? subDivision,
+    List<SurveyEntry>? additionalSurveyNumbers,
     String? landExtent,
     String? ownerName,
     String? contactDetails,
@@ -165,6 +186,8 @@ class LandLead {
         pincode: pincode ?? this.pincode,
         surveyNumber: surveyNumber ?? this.surveyNumber,
         subDivision: subDivision ?? this.subDivision,
+        additionalSurveyNumbers:
+            additionalSurveyNumbers ?? this.additionalSurveyNumbers,
         landExtent: landExtent ?? this.landExtent,
         ownerName: ownerName ?? this.ownerName,
         contactDetails: contactDetails ?? this.contactDetails,

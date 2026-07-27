@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../config/maptiler_tiles.dart';
 import '../../models/land_lead.dart';
 import '../../models/land_lead_legal_document.dart';
 import '../../models/land_lead_meeting.dart';
@@ -35,6 +36,7 @@ import '../../utils/maps_navigation.dart';
 import '../../widgets/employee_lead_workflow_ui.dart';
 import '../../widgets/fomra_app_shell.dart';
 import '../../widgets/fomra_breadcrumb.dart';
+import '../../widgets/lead_map_controls.dart';
 import '../../widgets/offline_status_banner.dart';
 import '../../widgets/portal_page_layout.dart';
 import '../../widgets/ui/app_components.dart';
@@ -867,6 +869,17 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
       showStatusTimeline: true,
     );
 
+    final leadPoint = parseLeadGps(lead.gpsCoordinates);
+    final locationMap = leadPoint == null
+        ? null
+        : LeadLocationMapCard(
+            point: leadPoint,
+            tileUrl: MapTilerTiles.standard,
+            title: _displayName == 'Lead #${lead.leadId}'
+                ? 'Lead #${lead.leadId}'
+                : _displayName,
+          );
+
     return FomraAppShell(
       currentRoute: '/land-lead',
       backgroundColor: context.fomraPageBg,
@@ -920,6 +933,10 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
                                           summary,
                                           const SizedBox(height: 12),
                                           infoCards,
+                                          if (locationMap != null) ...[
+                                            const SizedBox(height: 12),
+                                            locationMap,
+                                          ],
                                         ],
                                       ),
                                     ),
@@ -955,6 +972,10 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
                                   if (_showMoreDetails) ...[
                                     const SizedBox(height: 12),
                                     infoCards,
+                                    if (locationMap != null) ...[
+                                      const SizedBox(height: 12),
+                                      locationMap,
+                                    ],
                                   ],
                                   if (guidance != null) ...[
                                     const SizedBox(height: 12),
@@ -2646,6 +2667,27 @@ class _LeadInfoCards extends StatelessWidget {
 
   String _v(String raw) => raw.trim().isEmpty ? '—' : raw.trim();
 
+  /// Formats a survey number + sub-division pair as `survey/subDivision`, or
+  /// just `survey` when there's no sub-division.
+  String _surveyLabel(String survey, String subDivision) {
+    final s = survey.trim();
+    final sub = subDivision.trim();
+    if (s.isEmpty) return '';
+    return sub.isEmpty ? s : '$s/$sub';
+  }
+
+  /// All survey number/sub-division pairs for this lead — the primary pair
+  /// plus every entry in [LandLead.additionalSurveyNumbers] — joined for
+  /// chip display.
+  String _allSurveyNumbers() {
+    final labels = <String>[
+      _surveyLabel(lead.surveyNumber, lead.subDivision),
+      for (final extra in lead.additionalSurveyNumbers)
+        _surveyLabel(extra.surveyNumber, extra.subDivision),
+    ].where((l) => l.isNotEmpty).toList();
+    return labels.isEmpty ? '' : labels.join(', ');
+  }
+
   @override
   Widget build(BuildContext context) {
     final cards = <({String title, IconData icon, List<_Field> fields})>[
@@ -2667,8 +2709,8 @@ class _LeadInfoCards extends StatelessWidget {
         fields: [
           _Field('Village', _v(lead.village)),
           _Field('District', _v(lead.district)),
-          _Field('Survey No.', _v(lead.surveyNumber),
-              style: _FieldStyle.badge, color: AppColors.primary),
+          _Field('Survey No.', _v(_allSurveyNumbers()),
+              style: _FieldStyle.chips, wide: true),
           _Field('Land Type', lead.landType.label),
           _Field('Land Extent', _v(lead.landExtent),
               style: _FieldStyle.badge, color: AppColors.success),
