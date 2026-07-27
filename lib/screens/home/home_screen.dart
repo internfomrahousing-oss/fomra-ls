@@ -1205,18 +1205,22 @@ class _EmployeeTodayTasksSection extends StatelessWidget {
                 // Mobile: a 2×2 grid of square tiles. Wider screens keep the
                 // 2-up row cards (single column only when truly narrow).
                 final mobile = FomraLayout.isMobile(context);
+                // Match the Quick actions 2-col grid (gap 12, card height 100)
+                // exactly, so the two side-by-side boxes end at the same height
+                // without stretch/IntrinsicHeight (both crash with this Wrap).
+                const gap = 12.0;
                 final twoCols = mobile || constraints.maxWidth >= 360;
                 final cardWidth = twoCols
-                    ? (constraints.maxWidth - AppSpacing.sm) / 2
+                    ? (constraints.maxWidth - gap) / 2
                     : constraints.maxWidth;
                 return Wrap(
-                  spacing: AppSpacing.sm,
-                  runSpacing: AppSpacing.sm,
+                  spacing: gap,
+                  runSpacing: gap,
                   children: [
                     for (final c in categories)
                       SizedBox(
                         width: cardWidth,
-                        height: mobile ? cardWidth : null,
+                        height: mobile ? cardWidth : 100,
                         child: _TaskSummaryCard(
                           label: c.label,
                           count: c.leads.length,
