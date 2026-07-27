@@ -1935,19 +1935,41 @@ class _ExtraSurveySection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (entries.length < maxEntries - 1) ...[
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton.icon(
-              onPressed: onAdd,
-              icon: const Icon(Icons.add_circle_outline_rounded, size: 18),
-              label: const Text('Add Survey Number'),
-              style: TextButton.styleFrom(
-                foregroundColor: AppColors.primary,
-                padding: const EdgeInsets.symmetric(horizontal: 8),
+          Material(
+            color: AppColors.primary.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(10),
+            child: InkWell(
+              onTap: onAdd,
+              borderRadius: BorderRadius.circular(10),
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: AppColors.primary.withValues(alpha: 0.35),
+                  ),
+                ),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.add_circle_rounded,
+                        size: 18, color: AppColors.primary),
+                    SizedBox(width: 8),
+                    Text(
+                      'Add Survey Number',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
-          if (entries.isNotEmpty) const SizedBox(height: 4),
+          if (entries.isNotEmpty) const SizedBox(height: AddLeadUi.fieldGap),
         ],
         for (var i = 0; i < entries.length; i++) ...[
           if (i > 0) const SizedBox(height: AddLeadUi.fieldGap),
