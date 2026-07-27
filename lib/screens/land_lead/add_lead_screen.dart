@@ -1022,7 +1022,11 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
       return;
     }
 
-    final gpsStorage = liveFix?.toStorage() ?? existing!.gpsCoordinates.trim();
+    // liveFix is null for manually-typed/pinned coordinates (they don't use
+    // the LIVE| storage format) — fall back to the existing lead's stored
+    // GPS on edit, or the validated manual text itself for a new lead.
+    final gpsStorage = liveFix?.toStorage() ??
+        (keepingExistingGps ? existing.gpsCoordinates.trim() : gpsText);
 
     final combinedNotes = _notesCtrl.text.trim();
     final extentValue = _extentValueCtrl.text.trim();
