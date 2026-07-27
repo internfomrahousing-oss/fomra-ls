@@ -1213,7 +1213,11 @@ class _EmployeeTodayTasksSection extends StatelessWidget {
                 final cardWidth = twoCols
                     ? (constraints.maxWidth - gap) / 2
                     : constraints.maxWidth;
-                return Wrap(
+                // The Quick actions grid wraps its cards in vertical:4 padding —
+                // match it so the two side-by-side boxes are exactly equal.
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Wrap(
                   spacing: gap,
                   runSpacing: gap,
                   children: [
@@ -1238,6 +1242,7 @@ class _EmployeeTodayTasksSection extends StatelessWidget {
                         ),
                       ),
                   ],
+                  ),
                 );
               },
             ),
