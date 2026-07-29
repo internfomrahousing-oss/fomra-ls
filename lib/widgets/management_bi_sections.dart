@@ -212,16 +212,14 @@ class _PipeTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Container(
+    final radius = BorderRadius.circular(12);
+    final decoration = BoxDecoration(
+      color: context.fomraSurfaceVar.withValues(alpha: 0.55),
+      borderRadius: radius,
+      border: Border.all(color: context.fomraBorder),
+    );
+    final content = Padding(
         padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: context.fomraSurfaceVar.withValues(alpha: 0.55),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: context.fomraBorder),
-        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -269,6 +267,22 @@ class _PipeTile extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      );
+
+    if (onTap == null) {
+      return DecoratedBox(decoration: decoration, child: content);
+    }
+    // A real InkWell (not a bare GestureDetector) so the tile shows a pointer
+    // cursor + press feedback on web and the tap is reliable inside scrolls.
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: radius,
+          child: Ink(decoration: decoration, child: content),
         ),
       ),
     );
