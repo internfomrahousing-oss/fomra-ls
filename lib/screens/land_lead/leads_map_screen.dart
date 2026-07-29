@@ -328,62 +328,64 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
               ),
             ),
           ),
-        // The status legend hides while a pin's details are open.
-        if (_selectedPin == null)
+        // Bottom overlay: the tapped pin's details card floats above the status
+        // legend, which now stays visible instead of hiding. The popup is
+        // rendered here in the map's outer Stack (not inside the MarkerLayer) so
+        // its buttons receive taps reliably.
         Positioned(
           left: 12,
           right: 12,
           bottom: 12,
-          child: Material(
-            color: context.fomraSurface.withValues(alpha: 0.95),
-            borderRadius: BorderRadius.circular(16),
-            elevation: 2,
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Wrap(
-                spacing: 10,
-                runSpacing: 6,
-                children: leadStatusPipelineOrder
-                    .map((s) => Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.location_on, size: 14, color: s.color),
-                            const SizedBox(width: 4),
-                            Text(
-                              s.label,
-                              style: TextStyle(
-                                fontSize: 10,
-                                color: context.fomraTextSecondary,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ))
-                    .toList(),
-              ),
-            ),
-          ),
-        ),
-        // Rich details card for the tapped pin. Rendered here in the map's
-        // outer Stack (not inside the MarkerLayer) so its buttons receive taps
-        // reliably instead of losing them to the map's gesture recognizers.
-        if (_selectedPin != null)
-          Positioned(
-            left: 12,
-            right: 12,
-            bottom: 12,
-            child: Align(
-              alignment: Alignment.bottomCenter,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 460),
-                child: _PropertyPopup(
-                  lead: _selectedPin!.lead,
-                  onOpenSite: () => _openLead(context, _selectedPin!.lead),
-                  onClose: () => setState(() => _selectedPin = null),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (_selectedPin != null) ...[
+                Align(
+                  alignment: Alignment.bottomCenter,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 460),
+                    child: _PropertyPopup(
+                      lead: _selectedPin!.lead,
+                      onOpenSite: () => _openLead(context, _selectedPin!.lead),
+                      onClose: () => setState(() => _selectedPin = null),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+              ],
+              Material(
+                color: context.fomraSurface.withValues(alpha: 0.95),
+                borderRadius: BorderRadius.circular(16),
+                elevation: 2,
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Wrap(
+                    spacing: 10,
+                    runSpacing: 6,
+                    children: leadStatusPipelineOrder
+                        .map((s) => Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.location_on, size: 14, color: s.color),
+                                const SizedBox(width: 4),
+                                Text(
+                                  s.label,
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: context.fomraTextSecondary,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ))
+                        .toList(),
+                  ),
                 ),
               ),
-            ),
+            ],
           ),
+        ),
         if (!_mapReady) const Center(child: CircularProgressIndicator()),
       ],
     );
