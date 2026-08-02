@@ -202,6 +202,57 @@ class ManagementIntelligenceSnapshot {
 
 /// Read-only intelligence layer. Never mutates leads.
 class ManagementIntelligence {
+  /// Live, entry-time duplicate check for one candidate lead against the
+  /// already-loaded roster — same normalized owner/phone/survey/village+
+  /// owner/location matching as the retrospective dashboard duplicate
+  /// scan (_duplicates below), just evaluated for a single new-or-edited
+  /// record instead of grouping the whole list. Intended to be called from
+  /// the Add/Edit Lead form before save so a likely duplicate is caught
+  /// while the executive is still typing, not days later on a dashboard.
+  ///
+  /// [excludeLeadId] should be the lead's own id when editing, so a lead
+  /// never flags itself as its own duplicate.
+  static List<({LandLead lead, List<String> matchedFields})>
+      findLiveDuplicates(
+    LandLead candidate,
+    List<LandLead> existingLeads, {
+    String? excludeLeadId,
+  }) {
+    final owner = _normText(candidate.ownerName);
+    final phone = _normPhone(candidate.contactDetails);
+    final survey = _normText(candidate.surveyNumber);
+    final village = _normText(candidate.village);
+    final location = _normText(candidate.location);
+
+    final out = <({LandLead lead, List<String> matchedFields})>[];
+    for (final other in existingLeads) {
+      if (other.leadId == excludeLeadId) continue;
+      final matched = <String>[];
+
+      if (owner.length >= 3 && _normText(other.ownerName) == owner) {
+        matched.add('Owner Name');
+      }
+      if (phone.length >= 10 && _normPhone(other.contactDetails) == phone) {
+        matched.add('Mobile Number');
+      }
+      if (survey.length >= 2 && _normText(other.surveyNumber) == survey) {
+        matched.add('Survey Number');
+      }
+      if (village.length >= 3 &&
+          owner.length >= 3 &&
+          _normText(other.village) == village &&
+          _normText(other.ownerName) == owner) {
+        matched.add('Village + Owner');
+      }
+      if (location.length >= 5 && _normText(other.location) == location) {
+        matched.add('Location');
+      }
+
+      if (matched.isNotEmpty) out.add((lead: other, matchedFields: matched));
+    }
+    return out;
+  }
+
   static ManagementIntelligenceSnapshot build({
     required List<LandLead> leads,
     ManagementBiActivityBundle activity = ManagementBiActivityBundle.empty,

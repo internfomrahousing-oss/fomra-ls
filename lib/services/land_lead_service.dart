@@ -6,6 +6,7 @@ import '../utils/image_compressor.dart';
 import 'app_store.dart';
 import 'audit_log_service.dart';
 import 'auth_service.dart';
+import 'role_access.dart';
 
 typedef LeadSaveProgressCallback = void Function(String message);
 
@@ -307,6 +308,88 @@ class LandLeadService {
     );
   }
 
+  /// Reopens a Dropped lead back into an active stage. Admin-only, and
+  /// intentionally the *only* path in the codebase that moves a lead out of
+  /// a terminal stage — [updateStatus] still refuses that unconditionally.
+  /// Always requires a reason and always writes both a status-change audit
+  /// entry and a dedicated 'reopen' one, plus stamps reopened_at/by/reason
+  /// on the row itself so the history is visible without digging through the
+  /// audit log.
+  static Future<void> reopenDropped({
+    required String leadId,
+    required LeadStatus targetStatus,
+    required String reason,
+  }) async {
+    if (!RoleAccess.canDelete) {
+      // Reopening a terminal lead is at least as consequential as a hard
+      // delete (it un-does a locked, approved outcome) — same gate.
+      throw StateError(
+        'Only an Administrator can reopen a dropped lead.',
+      );
+    }
+    final trimmedReason = reason.trim();
+    if (trimmedReason.isEmpty) {
+      throw ArgumentError('A reason is required to reopen a dropped lead.');
+    }
+    if (targetStatus.isTerminal) {
+      throw ArgumentError('Cannot reopen a lead into a terminal stage.');
+    }
+
+    final current = await _db
+        .from('land_leads')
+        .select('status, reopen_count')
+        .eq('id', leadId)
+        .maybeSingle();
+    if (current == null) {
+      throw Exception('Lead $leadId was not found.');
+    }
+    if (current['status'] != LeadStatus.dropped.name) {
+      throw StateError('This lead is not currently Dropped.');
+    }
+    final nextReopenCount = ((current['reopen_count'] as int?) ?? 0) + 1;
+
+    final userId = _db.auth.currentUser?.id;
+    final userName = AuthService.instance.currentUser?.fullName ?? '';
+    final nowIso = DateTime.now().toUtc().toIso8601String();
+
+    final rows = await _db
+        .from('land_leads')
+        .update({
+          'status': targetStatus.name,
+          'drop_reason': '',
+          'drop_notes': '',
+          'reopened_at': nowIso,
+          'reopened_by': userId,
+          'reopened_by_name': userName,
+          'reopen_reason': trimmedReason,
+          'reopen_count': nextReopenCount,
+          'updated_at': nowIso,
+        })
+        .eq('id', leadId)
+        .eq('status', LeadStatus.dropped.name)
+        .select('id');
+    if (rows.isEmpty) {
+      throw Exception(
+        'Lead $leadId could not be reopened (not found, or no longer Dropped).',
+      );
+    }
+
+    final ctx = _auditContextFor(leadId);
+    await AuditLogService.log(
+      action: 'reopen',
+      entityType: 'lead',
+      entityId: leadId,
+      field: 'status',
+      oldValue: 'dropped',
+      newValue: '${targetStatus.name} (reopen #$nextReopenCount: $trimmedReason)',
+      module: 'Lead',
+      leadId: leadId,
+      ownerName: ctx.owner,
+      brokerName: ctx.broker,
+      executiveName: ctx.executive,
+    );
+  }
+
   static Future<void> markDropped({
     required String leadId,
     required String reasonLabel,
@@ -361,10 +444,56 @@ class LandLeadService {
     }).eq('id', leadId);
   }
 
+  /// Fields sensitive enough to warrant their own audit-log entry when
+  /// changed on an edit — ownership/identity/land-description data a legal
+  /// or compliance review would need to trace later. Deliberately narrower
+  /// than "every field" (e.g. notes/photos churn too often to be useful
+  /// signal here); the generic 'lead' entry below still covers a save as a
+  /// whole.
+  static const _auditedFields = <String, String Function(LandLead)>{
+    'owner_name': _s((l) => l.ownerName),
+    'contact_details': _s((l) => l.contactDetails),
+    'broker_name': _s((l) => l.brokerName),
+    'broker_contact': _s((l) => l.brokerContact),
+    'land_extent': _s((l) => l.landExtent),
+    'survey_number': _s((l) => l.surveyNumber),
+    'sub_division': _s((l) => l.subDivision),
+    'village': _s((l) => l.village),
+    'taluk': _s((l) => l.taluk),
+    'district': _s((l) => l.district),
+  };
+
+  static String Function(LandLead) _s(String Function(LandLead) f) => f;
+
+  static Future<void> _logFieldChanges(
+    LandLead previous,
+    LandLead updated,
+  ) async {
+    for (final entry in _auditedFields.entries) {
+      final oldValue = entry.value(previous).trim();
+      final newValue = entry.value(updated).trim();
+      if (oldValue == newValue) continue;
+      await AuditLogService.log(
+        action: 'update',
+        entityType: 'lead',
+        entityId: updated.leadId,
+        field: entry.key,
+        oldValue: oldValue,
+        newValue: newValue,
+        module: 'Lead',
+        leadId: updated.leadId,
+        ownerName: updated.ownerName,
+        brokerName: updated.brokerName,
+        executiveName: updated.createdByName,
+      );
+    }
+  }
+
   static Future<LandLead> update(
     LandLead lead, {
     List<Uint8List> sitePhotoBytes = const [],
     LeadSaveProgressCallback? onProgress,
+    LandLead? previous,
   }) async {
     onProgress?.call('Saving lead details…');
     var sitePhotoUrls = List<String>.from(lead.sitePhotoUrls);
@@ -439,6 +568,9 @@ class LandLeadService {
       brokerName: updated.brokerName,
       executiveName: updated.createdByName,
     );
+    if (previous != null) {
+      await _logFieldChanges(previous, updated);
+    }
     return updated;
   }
 
