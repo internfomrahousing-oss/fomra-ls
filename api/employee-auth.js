@@ -20,7 +20,18 @@
 // Auth: caller must send `Authorization: Bearer <management access token>`.
 // The token is validated against Supabase and must belong to MANAGEMENT_EMAIL.
 
-const DEFAULT_PASSWORD = process.env.DEFAULT_ACCOUNT_PASSWORD || 'fomra@2024';
+const crypto = require('crypto');
+
+// SECURITY: there is no fixed/shared default password. `provision` and
+// `reset` always use the password the caller supplies, or — if none is
+// supplied — a fresh cryptographically random one generated per call (see
+// generateSecurePassword). A hardcoded constant here would mean every
+// employee who ever went through the fallback path shared the same,
+// publicly-visible-in-source password.
+function generateSecurePassword() {
+  // 18 random bytes → 24 base64url chars, no separators needed for entropy.
+  return crypto.randomBytes(18).toString('base64url');
+}
 
 // Only reflect an allow-listed origin. Configure via ALLOWED_ORIGINS
 // (comma-separated); defaults to the production web app origin.
@@ -135,7 +146,8 @@ module.exports = async (req, res) => {
   const body = await readBody(req);
   const action = body.action;
   const email = (body.email || '').trim().toLowerCase();
-  const password = body.password || DEFAULT_PASSWORD;
+  const callerSuppliedPassword = typeof body.password === 'string' && body.password.length > 0;
+  const password = callerSuppliedPassword ? body.password : generateSecurePassword();
   if (!email) return res.status(400).json({ error: 'email required' });
 
   // Optional profile metadata carried onto the auth user so the account knows
