@@ -147,6 +147,12 @@ class LandLead {
   final DateTime? onHoldExpectedResume;
   final LeadStatus? onHoldPreviousStatus;
 
+  /// Set automatically the first time a meeting is logged with an attendee
+  /// type of Land Owner or Agreement Holder — survives status changes, so
+  /// reports can answer "of leads we actually met the owner for, what
+  /// happened to them" regardless of current stage.
+  final DateTime? landownerMeetingCompletedAt;
+
   LandLead({
     required this.leadId,
     required this.inputSource,
@@ -207,6 +213,7 @@ class LandLead {
     this.onHoldSince,
     this.onHoldExpectedResume,
     this.onHoldPreviousStatus,
+    this.landownerMeetingCompletedAt,
   });
 
   /// Chip / summary label: employee-posted leads use "Posted by".
@@ -271,6 +278,7 @@ class LandLead {
     DateTime? onHoldSince,
     DateTime? onHoldExpectedResume,
     LeadStatus? onHoldPreviousStatus,
+    DateTime? landownerMeetingCompletedAt,
   }) =>
       LandLead(
         leadId: leadId,
@@ -336,6 +344,8 @@ class LandLead {
         onHoldExpectedResume:
             onHoldExpectedResume ?? this.onHoldExpectedResume,
         onHoldPreviousStatus: onHoldPreviousStatus ?? this.onHoldPreviousStatus,
+        landownerMeetingCompletedAt:
+            landownerMeetingCompletedAt ?? this.landownerMeetingCompletedAt,
       );
 }
 

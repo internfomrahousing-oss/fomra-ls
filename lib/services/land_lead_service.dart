@@ -914,6 +914,7 @@ class LandLeadService {
       onHoldPreviousStatus: r['on_hold_previous_status'] != null
           ? parseLeadStatus(r['on_hold_previous_status'] as String?)
           : null,
+      landownerMeetingCompletedAt: parseTs(r['landowner_meeting_completed_at']),
     );
   }
 }
