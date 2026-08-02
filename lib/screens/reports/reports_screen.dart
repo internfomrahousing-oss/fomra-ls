@@ -574,6 +574,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
             const SizedBox(height: 20),
             _liveSummarySection(context),
             const SizedBox(height: 20),
+            _landownerMeetingOutcomeSection(context),
+            const SizedBox(height: 20),
             _lostDealAnalysisSection(context),
             const SizedBox(height: 20),
             _brokerPerformanceSection(context),
@@ -903,6 +905,116 @@ class _ReportsScreenState extends State<ReportsScreen> {
   /// Groups Dropped leads by drop_reason — the data has always been
   /// captured (lead_drop_reason.dart / the drop dialog), it just never had
   /// anywhere to be seen in aggregate before this.
+  /// The report this whole feature was built for: of leads where we
+  /// actually completed a landowner (or agreement-holder) meeting, what's
+  /// their CURRENT status — regardless of how many times it's changed
+  /// since, or whether it later went to Legal, got dropped, went on hold,
+  /// or signed. Powered by landowner_meeting_completed_at, which is set
+  /// once from the meeting log and never touched by later status changes —
+  /// see land_lead_meeting_service.dart for how it's derived.
+  Widget _landownerMeetingOutcomeSection(BuildContext context) {
+    final met = _filteredLeads
+        .where((l) => l.landownerMeetingCompletedAt != null)
+        .toList();
+
+    final byStatus = <LeadStatus, List<LandLead>>{};
+    for (final lead in met) {
+      (byStatus[lead.status] ??= []).add(lead);
+    }
+    final rows = byStatus.entries.toList()
+      ..sort((a, b) => b.value.length.compareTo(a.value.length));
+    final total = met.length;
+
+    return AppCard(
+      interactive: false,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _sectionLabel(
+              context, 'Landowner Meeting Outcome', Icons.groups_outlined,
+              trailing: '$total met'),
+          const SizedBox(height: 4),
+          Text(
+            'Of leads where we actually completed a landowner or agreement-holder '
+            'meeting, where do they stand today.',
+            style: TextStyle(fontSize: 12, color: context.fomraTextSecondary),
+          ),
+          const SizedBox(height: 12),
+          if (rows.isEmpty)
+            Text(
+              'No leads with a completed landowner meeting in the selected range.',
+              style: TextStyle(fontSize: 12.5, color: context.fomraTextSecondary),
+            )
+          else
+            for (final row in rows) ...[
+              InkWell(
+                borderRadius: BorderRadius.circular(8),
+                onTap: () => FilteredLeadsScreen.openList(
+                  context,
+                  title: '${row.key.label} — met the owner',
+                  subtitle: 'Landowner Meeting Outcome',
+                  leads: row.value,
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            width: 8,
+                            height: 8,
+                            margin: const EdgeInsets.only(right: 8),
+                            decoration: BoxDecoration(
+                              color: row.key.color,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          Expanded(
+                            child: Text(
+                              row.key.label,
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: context.fomraTextPrimary,
+                              ),
+                            ),
+                          ),
+                          Text(
+                            '${row.value.length} (${total == 0 ? 0 : (row.value.length / total * 100).round()}%)',
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w700,
+                              color: context.fomraTextSecondary,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Icon(Icons.chevron_right_rounded,
+                              size: 16, color: context.fomraTextSecondary),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: LinearProgressIndicator(
+                          value: total == 0 ? 0 : row.value.length / total,
+                          minHeight: 6,
+                          backgroundColor:
+                              context.fomraSurfaceVar.withValues(alpha: 0.5),
+                          color: row.key.color,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+        ],
+      ),
+    );
+  }
+
   Widget _lostDealAnalysisSection(BuildContext context) {
     final dropped =
         _filteredLeads.where((l) => l.status == LeadStatus.dropped).toList();
