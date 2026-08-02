@@ -140,6 +140,11 @@ class LandLead {
   final String? splitFromLeadId;
   final List<String> mergedFromLeadIds;
 
+  final bool isOnHold;
+  final String onHoldReason;
+  final DateTime? onHoldSince;
+  final DateTime? onHoldExpectedResume;
+
   LandLead({
     required this.leadId,
     required this.inputSource,
@@ -195,6 +200,10 @@ class LandLead {
     this.reopenCount = 0,
     this.splitFromLeadId,
     this.mergedFromLeadIds = const [],
+    this.isOnHold = false,
+    this.onHoldReason = '',
+    this.onHoldSince,
+    this.onHoldExpectedResume,
   });
 
   /// Chip / summary label: employee-posted leads use "Posted by".
@@ -254,6 +263,10 @@ class LandLead {
     int? reopenCount,
     String? splitFromLeadId,
     List<String>? mergedFromLeadIds,
+    bool? isOnHold,
+    String? onHoldReason,
+    DateTime? onHoldSince,
+    DateTime? onHoldExpectedResume,
   }) =>
       LandLead(
         leadId: leadId,
@@ -313,6 +326,11 @@ class LandLead {
         reopenCount: reopenCount ?? this.reopenCount,
         splitFromLeadId: splitFromLeadId ?? this.splitFromLeadId,
         mergedFromLeadIds: mergedFromLeadIds ?? this.mergedFromLeadIds,
+        isOnHold: isOnHold ?? this.isOnHold,
+        onHoldReason: onHoldReason ?? this.onHoldReason,
+        onHoldSince: onHoldSince ?? this.onHoldSince,
+        onHoldExpectedResume:
+            onHoldExpectedResume ?? this.onHoldExpectedResume,
       );
 }
 

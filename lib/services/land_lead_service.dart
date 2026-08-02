@@ -665,6 +665,87 @@ class LandLeadService {
     return updated;
   }
 
+  /// Puts an active (non-terminal) lead on hold — excluded from the "active
+  /// negotiation" reading without being counted as lost. Requires a reason.
+  static Future<LandLead> setOnHold({
+    required String leadId,
+    required String reason,
+    DateTime? expectedResume,
+  }) async {
+    final trimmedReason = reason.trim();
+    if (trimmedReason.isEmpty) {
+      throw ArgumentError('A reason is required to put a lead on hold.');
+    }
+    final row = await _db
+        .from('land_leads')
+        .update({
+          'is_on_hold': true,
+          'on_hold_reason': trimmedReason,
+          'on_hold_since': DateTime.now().toUtc().toIso8601String(),
+          'on_hold_expected_resume':
+              expectedResume?.toUtc().toIso8601String(),
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('id', leadId)
+        .eq('is_on_hold', false)
+        .select()
+        .single();
+    final updated = _fromRow(row);
+    if (updated.status.isTerminal) {
+      // Shouldn't normally be reachable (the UI hides this action on locked
+      // leads), but guard server-side too rather than trust the client.
+      throw StateError('A Signed or Dropped lead cannot be put on hold.');
+    }
+    final ctx = _auditContextFor(leadId);
+    await AuditLogService.log(
+      action: 'hold',
+      entityType: 'lead',
+      entityId: leadId,
+      field: 'is_on_hold',
+      oldValue: 'false',
+      newValue: 'true ($trimmedReason)',
+      module: 'Lead',
+      leadId: leadId,
+      ownerName: updated.ownerName,
+      brokerName: updated.brokerName,
+      executiveName: ctx.executive,
+    );
+    return updated;
+  }
+
+  /// Resumes a lead that was on hold — the lead's underlying [LeadStatus]
+  /// never changed while paused, so this is just clearing the flag.
+  static Future<LandLead> clearOnHold(String leadId) async {
+    final row = await _db
+        .from('land_leads')
+        .update({
+          'is_on_hold': false,
+          'on_hold_reason': '',
+          'on_hold_since': null,
+          'on_hold_expected_resume': null,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('id', leadId)
+        .select()
+        .single();
+    final updated = _fromRow(row);
+    final ctx = _auditContextFor(leadId);
+    await AuditLogService.log(
+      action: 'resume',
+      entityType: 'lead',
+      entityId: leadId,
+      field: 'is_on_hold',
+      oldValue: 'true',
+      newValue: 'false',
+      module: 'Lead',
+      leadId: leadId,
+      ownerName: updated.ownerName,
+      brokerName: updated.brokerName,
+      executiveName: ctx.executive,
+    );
+    return updated;
+  }
+
   static Future<void> delete(String leadId) async {
     final ctx = _auditContextFor(leadId);
     await _db.from('land_leads').delete().eq('id', leadId);
@@ -789,6 +870,10 @@ class LandLeadService {
       reopenCount: (r['reopen_count'] as num?)?.toInt() ?? 0,
       splitFromLeadId: r['split_from_lead_id'] as String?,
       mergedFromLeadIds: mergedFromLeadIds,
+      isOnHold: r['is_on_hold'] as bool? ?? false,
+      onHoldReason: r['on_hold_reason'] as String? ?? '',
+      onHoldSince: parseTs(r['on_hold_since']),
+      onHoldExpectedResume: parseTs(r['on_hold_expected_resume']),
     );
   }
 }

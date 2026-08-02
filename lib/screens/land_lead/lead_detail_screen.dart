@@ -611,6 +611,121 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
     }
   }
 
+  Future<void> _putOnHold() async {
+    final reasonCtrl = TextEditingController();
+    DateTime? expectedResume;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: const Text('Put Lead On Hold'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'The lead keeps its current stage — this just excludes it '
+                'from active-negotiation counts until resumed.',
+                style: TextStyle(fontSize: 12.5),
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: reasonCtrl,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  labelText: 'Reason (required)',
+                  border: OutlineInputBorder(),
+                  hintText: 'e.g. Owner traveling, awaiting family decision',
+                ),
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: () async {
+                  final picked = await showDatePicker(
+                    context: dialogContext,
+                    initialDate: DateTime.now().add(const Duration(days: 14)),
+                    firstDate: DateTime.now(),
+                    lastDate: DateTime(2100),
+                  );
+                  if (picked != null) {
+                    setDialogState(() => expectedResume = picked);
+                  }
+                },
+                icon: const Icon(Icons.event_outlined, size: 16),
+                label: Text(expectedResume == null
+                    ? 'Set expected resume date (optional)'
+                    : 'Resume by ${expectedResume!.day}/${expectedResume!.month}/${expectedResume!.year}'),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Put On Hold'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    if (reasonCtrl.text.trim().isEmpty) {
+      AppFeedback.warning(context, 'A reason is required.');
+      return;
+    }
+    try {
+      final updated = await LandLeadService.setOnHold(
+        leadId: lead.leadId,
+        reason: reasonCtrl.text.trim(),
+        expectedResume: expectedResume,
+      );
+      if (!mounted) return;
+      setState(() => lead = updated);
+      AppStore.instance.replaceLead(updated);
+      AppFeedback.success(context, 'Lead put on hold');
+    } catch (e) {
+      if (!mounted) return;
+      AppFeedback.error(context, 'Could not update: $e');
+    }
+  }
+
+  Future<void> _resumeFromHold() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Resume Lead'),
+        content: Text(
+          'On hold since: ${lead.onHoldReason.isEmpty ? "(no reason given)" : lead.onHoldReason}\n\n'
+          'This will resume the lead in ${lead.status.label}.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Resume'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      final updated = await LandLeadService.clearOnHold(lead.leadId);
+      if (!mounted) return;
+      setState(() => lead = updated);
+      AppStore.instance.replaceLead(updated);
+      AppFeedback.success(context, 'Lead resumed');
+    } catch (e) {
+      if (!mounted) return;
+      AppFeedback.error(context, 'Could not resume: $e');
+    }
+  }
+
   Future<void> _launchContact(String scheme) async {
     if (_readOnly) return;
     final raw = lead.contactDetails.replaceAll(RegExp(r'[^\d+]'), '');
@@ -718,6 +833,22 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
 
   Future<void> _showActionDialog(String label) async {
     final viewOnly = _isViewOnlyAction(label);
+
+    if (label == 'On Hold') {
+      if (viewOnly) {
+        AppFeedback.info(context,
+            _isLocked
+                ? 'This lead is ${lead.status.label} and locked.'
+                : 'Management view is read-only. Sign in as employee to edit.');
+        return;
+      }
+      if (lead.isOnHold) {
+        await _resumeFromHold();
+      } else {
+        await _putOnHold();
+      }
+      return;
+    }
 
     if (label == 'Deal & Risk') {
       if (viewOnly) {
@@ -1176,6 +1307,13 @@ class _LeadSummaryCard extends StatelessWidget {
       ('Type', lead.landType.label),
       if (lead.createdByName.trim().isNotEmpty)
         ('Executive', lead.createdByName.trim()),
+      if (lead.isOnHold)
+        (
+          'On Hold',
+          lead.onHoldReason.trim().isEmpty
+              ? 'Paused'
+              : lead.onHoldReason.trim(),
+        ),
     ];
 
     return Container(
@@ -1708,6 +1846,7 @@ class _ActionToolbar extends StatelessWidget {
       (Icons.gavel_outlined, 'Legal', AppColors.purple),
       (Icons.draw_outlined, 'Signed', AppColors.purple),
       (Icons.currency_rupee_rounded, 'Deal & Risk', AppColors.purple),
+      (Icons.pause_circle_outline, 'On Hold', AppColors.purple),
     ];
 
     Widget pill((IconData, String, Color) action) {
