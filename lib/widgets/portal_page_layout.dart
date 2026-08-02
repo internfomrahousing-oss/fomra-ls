@@ -285,14 +285,21 @@ class PortalKpiStrip extends StatelessWidget {
         separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.sm),
         itemBuilder: (_, i) {
           final item = items[i];
+          final tile = PortalSummaryTile(
+            label: item.label,
+            value: item.value,
+            icon: item.icon,
+            accent: item.accent,
+          );
           return SizedBox(
             width: 148,
-            child: PortalSummaryTile(
-              label: item.label,
-              value: item.value,
-              icon: item.icon,
-              accent: item.accent,
-            ),
+            child: item.onTap == null
+                ? tile
+                : InkWell(
+                    onTap: item.onTap,
+                    borderRadius: BorderRadius.circular(16),
+                    child: tile,
+                  ),
           );
         },
       ),
@@ -305,12 +312,14 @@ class PortalKpiItem {
   final int value;
   final IconData icon;
   final Color accent;
+  final VoidCallback? onTap;
 
   const PortalKpiItem({
     required this.label,
     required this.value,
     required this.icon,
     required this.accent,
+    this.onTap,
   });
 }
 
