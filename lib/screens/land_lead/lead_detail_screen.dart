@@ -47,6 +47,7 @@ import 'calls_log_dialog.dart';
 import 'follow_up_dialog.dart';
 import 'lead_drop_reason_dialog.dart';
 import 'legal_documents_dialog.dart';
+import 'deal_risk_details_dialog.dart';
 import 'meeting_log_dialog.dart';
 import 'notes_log_dialog.dart';
 import 'signed_project_dialog.dart';
@@ -521,6 +522,210 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
     }
   }
 
+  /// Admin-only escape hatch for a Dropped lead. Unlike every other status
+  /// change on this screen, this is the one path allowed to move a lead out
+  /// of a terminal stage — see LandLeadService.reopenDropped, which enforces
+  /// the same gate server-side.
+  Future<void> _reopenLead() async {
+    final reasonCtrl = TextEditingController();
+    var target = LeadStatus.prospectMeetingPending;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: const Text('Reopen Lead'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'This lead was Dropped. Reopening moves it back into an '
+                'active stage and is recorded in the audit trail.',
+                style: TextStyle(fontSize: 12.5),
+              ),
+              const SizedBox(height: 14),
+              DropdownButtonFormField<LeadStatus>(
+                initialValue: target,
+                decoration: const InputDecoration(
+                  labelText: 'Reopen into stage',
+                  border: OutlineInputBorder(),
+                ),
+                items: leadStatusPipelineOrder
+                    .where((s) => !s.isTerminal)
+                    .map((s) =>
+                        DropdownMenuItem(value: s, child: Text(s.label)))
+                    .toList(),
+                onChanged: (v) {
+                  if (v != null) setDialogState(() => target = v);
+                },
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: reasonCtrl,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  labelText: 'Reason for reopening (required)',
+                  border: OutlineInputBorder(),
+                  hintText: 'e.g. Owner reconsidered, price now negotiable',
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Reopen'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    if (reasonCtrl.text.trim().isEmpty) {
+      AppFeedback.warning(context, 'A reason is required to reopen a lead.');
+      return;
+    }
+    try {
+      await LandLeadService.reopenDropped(
+        leadId: lead.leadId,
+        targetStatus: target,
+        reason: reasonCtrl.text.trim(),
+      );
+      if (!mounted) return;
+      setState(() {
+        lead = lead.copyWith(
+          status: target,
+          dropReason: '',
+          dropNotes: '',
+        );
+      });
+      AppStore.instance.replaceLead(lead);
+      AppFeedback.success(context, 'Lead reopened into ${target.label}');
+    } catch (e) {
+      if (!mounted) return;
+      AppFeedback.error(context, 'Could not reopen lead: $e');
+    }
+  }
+
+  Future<void> _putOnHold() async {
+    final reasonCtrl = TextEditingController();
+    DateTime? expectedResume;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: const Text('Put Lead On Hold'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'The lead keeps its current stage — this just excludes it '
+                'from active-negotiation counts until resumed.',
+                style: TextStyle(fontSize: 12.5),
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: reasonCtrl,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  labelText: 'Reason (required)',
+                  border: OutlineInputBorder(),
+                  hintText: 'e.g. Owner traveling, awaiting family decision',
+                ),
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: () async {
+                  final picked = await showDatePicker(
+                    context: dialogContext,
+                    initialDate: DateTime.now().add(const Duration(days: 14)),
+                    firstDate: DateTime.now(),
+                    lastDate: DateTime(2100),
+                  );
+                  if (picked != null) {
+                    setDialogState(() => expectedResume = picked);
+                  }
+                },
+                icon: const Icon(Icons.event_outlined, size: 16),
+                label: Text(expectedResume == null
+                    ? 'Set expected resume date (optional)'
+                    : 'Resume by ${expectedResume!.day}/${expectedResume!.month}/${expectedResume!.year}'),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Put On Hold'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    if (reasonCtrl.text.trim().isEmpty) {
+      AppFeedback.warning(context, 'A reason is required.');
+      return;
+    }
+    try {
+      final updated = await LandLeadService.setOnHold(
+        leadId: lead.leadId,
+        reason: reasonCtrl.text.trim(),
+        expectedResume: expectedResume,
+      );
+      if (!mounted) return;
+      setState(() => lead = updated);
+      AppStore.instance.replaceLead(updated);
+      AppFeedback.success(context, 'Lead put on hold');
+    } catch (e) {
+      if (!mounted) return;
+      AppFeedback.error(context, 'Could not update: $e');
+    }
+  }
+
+  Future<void> _resumeFromHold() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Resume Lead'),
+        content: Text(
+          'On hold since: ${lead.onHoldReason.isEmpty ? "(no reason given)" : lead.onHoldReason}\n\n'
+          'This will resume the lead in ${lead.status.label}.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Resume'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      final updated = await LandLeadService.clearOnHold(lead.leadId);
+      if (!mounted) return;
+      setState(() => lead = updated);
+      AppStore.instance.replaceLead(updated);
+      AppFeedback.success(context, 'Lead resumed');
+    } catch (e) {
+      if (!mounted) return;
+      AppFeedback.error(context, 'Could not resume: $e');
+    }
+  }
+
   Future<void> _launchContact(String scheme) async {
     if (_readOnly) return;
     final raw = lead.contactDetails.replaceAll(RegExp(r'[^\d+]'), '');
@@ -628,6 +833,41 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
 
   Future<void> _showActionDialog(String label) async {
     final viewOnly = _isViewOnlyAction(label);
+
+    if (label == 'On Hold') {
+      if (viewOnly) {
+        AppFeedback.info(context,
+            _isLocked
+                ? 'This lead is ${lead.status.label} and locked.'
+                : 'Management view is read-only. Sign in as employee to edit.');
+        return;
+      }
+      if (lead.isOnHold) {
+        await _resumeFromHold();
+      } else {
+        await _putOnHold();
+      }
+      return;
+    }
+
+    if (label == 'Deal & Risk') {
+      if (viewOnly) {
+        AppFeedback.info(context,
+            _isLocked
+                ? 'This lead is ${lead.status.label} and locked.'
+                : 'Management view is read-only. Sign in as employee to edit.');
+        return;
+      }
+      final updated = await showFomraDialog<LandLead>(
+        context: context,
+        builder: (ctx) => DealRiskDetailsDialog(lead: lead),
+      );
+      if (updated == null || !mounted) return;
+      setState(() => lead = updated);
+      AppStore.instance.replaceLead(updated);
+      return;
+    }
+
     if (label == 'Calls') {
       await showFomraDialog<void>(
         context: context,
@@ -858,6 +1098,11 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
       onClearFilter: _clearActivityFilter,
       onFollowUp: _openFollowUp,
       shouldLoadMiTab: _shouldLoadMiTab,
+      onReopen: (_isLocked &&
+              lead.status == LeadStatus.dropped &&
+              RoleAccess.canDelete)
+          ? _reopenLead
+          : null,
     );
 
     // Status & Timeline always sits in the reference column, directly under
@@ -1062,6 +1307,13 @@ class _LeadSummaryCard extends StatelessWidget {
       ('Type', lead.landType.label),
       if (lead.createdByName.trim().isNotEmpty)
         ('Executive', lead.createdByName.trim()),
+      if (lead.isOnHold)
+        (
+          'On Hold',
+          lead.onHoldReason.trim().isEmpty
+              ? 'Paused'
+              : lead.onHoldReason.trim(),
+        ),
     ];
 
     return Container(
@@ -1360,6 +1612,9 @@ class _WorkspacePanel extends StatelessWidget {
   final VoidCallback onFollowUp;
   final bool Function(int tabIndex) shouldLoadMiTab;
   final String readOnlyNote;
+  /// Non-null only when the lead is Dropped and the signed-in user is
+  /// Admin — renders a "Reopen Lead" button under the locked note.
+  final VoidCallback? onReopen;
 
   const _WorkspacePanel({
     required this.lead,
@@ -1386,6 +1641,7 @@ class _WorkspacePanel extends StatelessWidget {
     required this.onClearFilter,
     required this.onFollowUp,
     required this.shouldLoadMiTab,
+    this.onReopen,
   });
 
   Widget _timeline() => KeyedSubtree(
@@ -1456,6 +1712,18 @@ class _WorkspacePanel extends StatelessWidget {
                   color: context.fomraTextSecondary,
                 ),
               ),
+              if (onReopen != null) ...[
+                const SizedBox(height: 10),
+                OutlinedButton.icon(
+                  onPressed: onReopen,
+                  icon: const Icon(Icons.replay_rounded, size: 16),
+                  label: const Text('Reopen Lead'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFFB45309),
+                    side: const BorderSide(color: Color(0xFFB45309)),
+                  ),
+                ),
+              ],
               const SizedBox(height: 10),
               _ActionToolbar(
                 onAction: onDetailAction,
@@ -1577,6 +1845,8 @@ class _ActionToolbar extends StatelessWidget {
       (Icons.notifications_active_outlined, 'Follow-up', AppColors.purple),
       (Icons.gavel_outlined, 'Legal', AppColors.purple),
       (Icons.draw_outlined, 'Signed', AppColors.purple),
+      (Icons.currency_rupee_rounded, 'Deal & Risk', AppColors.purple),
+      (Icons.pause_circle_outline, 'On Hold', AppColors.purple),
     ];
 
     Widget pill((IconData, String, Color) action) {

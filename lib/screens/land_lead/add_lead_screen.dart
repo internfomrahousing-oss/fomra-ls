@@ -8,6 +8,8 @@ import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import '../../models/gps_fix.dart';
 import '../../models/land_lead.dart';
+import '../../analytics/management_intelligence.dart';
+import '../../services/app_store.dart';
 import '../../theme/app_theme.dart';
 import '../../config/maptiler_tiles.dart';
 import '../../theme/fomra_layout.dart';
@@ -1011,6 +1013,65 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
 
   // ── Submit ─────────────────────────────────────────────────────────────────
 
+  /// Shows the matched existing leads and asks the executive to confirm
+  /// before saving what looks like a likely duplicate. Returns true to
+  /// proceed anyway, false/null to go back and review.
+  Future<bool?> _confirmDuplicates(
+    List<({LandLead lead, List<String> matchedFields})> duplicates,
+  ) {
+    return showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Possible duplicate lead'),
+        content: SizedBox(
+          width: 420,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'This looks like it might already be in the system:',
+                style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
+              ),
+              const SizedBox(height: 10),
+              ...duplicates.take(5).map((d) => Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${d.lead.ownerName.isEmpty ? "(no name)" : d.lead.ownerName} '
+                          '· ${d.lead.leadId}',
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        Text(
+                          'Matched on: ${d.matchedFields.join(", ")}',
+                          style: TextStyle(
+                              fontSize: 12, color: Colors.grey.shade600),
+                        ),
+                      ],
+                    ),
+                  )),
+              if (duplicates.length > 5)
+                Text('...and ${duplicates.length - 5} more.',
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Go back and review'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Save anyway'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _submit() async {
     if (_saving) return;
     if (_compressingPhoto) {
@@ -1147,6 +1208,20 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
       sitePhotoUrls: List<String>.from(_keptPhotoUrls),
     );
 
+    // Live duplicate check (Issue #9/#14) — same matching signals as the
+    // retrospective Management Intelligence dashboard scan, run here so a
+    // likely duplicate is caught before the executive finishes saving, not
+    // days later once someone else spots it on a dashboard.
+    final duplicates = ManagementIntelligence.findLiveDuplicates(
+      lead,
+      AppStore.instance.leads,
+      excludeLeadId: existing?.leadId,
+    );
+    if (duplicates.isNotEmpty) {
+      final proceed = await _confirmDuplicates(duplicates);
+      if (proceed != true || !mounted) return;
+    }
+
     final photoBytes = _photos.map((p) => p.bytes).toList();
     setState(() {
       _saving = true;
@@ -1175,6 +1250,7 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
               lead,
               sitePhotoBytes: photoBytes,
               onProgress: _onSaveProgress,
+              previous: widget.existingLead,
             )
           : await LandLeadService.create(
               lead,

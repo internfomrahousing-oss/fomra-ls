@@ -1,4 +1,6 @@
 import 'auth_service.dart';
+import 'team_hierarchy.dart';
+import '../models/employee_profile.dart';
 
 /// Application roles for RBAC. Mapped from portal + optional user metadata.
 enum AppAccessRole { admin, manager, executive }
@@ -14,12 +16,29 @@ extension AppAccessRoleX on AppAccessRole {
 /// Restrict Create / Edit / Delete / Approve / Export by role.
 abstract final class RoleAccess {
   static AppAccessRole get currentRole {
-    if (AuthService.instance.isEmployee) return AppAccessRole.executive;
-    final meta =
-        (AuthService.instance.currentUser?.role ?? '').trim().toLowerCase();
-    if (meta.contains('admin')) return AppAccessRole.admin;
-    // Management portal defaults to Manager (elevate via role metadata).
-    return AppAccessRole.manager;
+    // The shared management/admin login is unaffected by the 2026-08
+    // consolidation below — it keeps resolving exactly as before.
+    if (!AuthService.instance.isEmployee) {
+      final meta =
+          (AuthService.instance.currentUser?.role ?? '').trim().toLowerCase();
+      if (meta.contains('admin')) return AppAccessRole.admin;
+      return AppAccessRole.manager;
+    }
+    // Individual employee logins previously always resolved to Executive
+    // here, regardless of designation — even though TeamHierarchy already
+    // gives a Reporting Manager or Head team visibility and approval
+    // routing. That meant an RM/Head could see and approve their team's
+    // requests but had no way to get delete/export/audit-trail rights
+    // without being handed the single shared management login. Elevate
+    // them to Manager-tier here to match the access they already
+    // effectively have; hard delete stays Admin-only either way (see
+    // canDelete below), so this does not hand out delete rights.
+    final designation = TeamHierarchy.currentDesignation;
+    if (designation == EmployeeDesignations.reportingManager ||
+        designation == EmployeeDesignations.head) {
+      return AppAccessRole.manager;
+    }
+    return AppAccessRole.executive;
   }
 
   static bool get canCreate => true;

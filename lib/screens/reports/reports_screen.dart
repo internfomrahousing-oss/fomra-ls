@@ -573,6 +573,10 @@ class _ReportsScreenState extends State<ReportsScreen> {
             const SizedBox(height: 20),
             _liveSummarySection(context),
             const SizedBox(height: 20),
+            _lostDealAnalysisSection(context),
+            const SizedBox(height: 20),
+            _brokerPerformanceSection(context),
+            const SizedBox(height: 20),
             _previewSection(context),
             const SizedBox(height: 20),
             _exportSection(context),
@@ -894,6 +898,187 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
   int _distinctFrom(List<LandLead> leads, String Function(LandLead) pick) =>
       leads.map(pick).where((v) => v.trim().isNotEmpty).toSet().length;
+
+  /// Groups Dropped leads by drop_reason — the data has always been
+  /// captured (lead_drop_reason.dart / the drop dialog), it just never had
+  /// anywhere to be seen in aggregate before this.
+  Widget _lostDealAnalysisSection(BuildContext context) {
+    final dropped =
+        _filteredLeads.where((l) => l.status == LeadStatus.dropped).toList();
+
+    final counts = <String, int>{};
+    for (final lead in dropped) {
+      final reason = lead.dropReason.trim();
+      final key = reason.isEmpty ? 'Not specified' : reason;
+      counts[key] = (counts[key] ?? 0) + 1;
+    }
+    final rows = counts.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    final total = dropped.length;
+
+    return AppCard(
+      interactive: false,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _sectionLabel(context, 'Lost Deal Analysis', Icons.trending_down_rounded,
+              trailing: '$total dropped'),
+          const SizedBox(height: 12),
+          if (rows.isEmpty)
+            Text(
+              'No dropped leads in the selected range.',
+              style: TextStyle(fontSize: 12.5, color: context.fomraTextSecondary),
+            )
+          else
+            for (final row in rows) ...[
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            row.key,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: context.fomraTextPrimary,
+                            ),
+                          ),
+                        ),
+                        Text(
+                          '${row.value} (${total == 0 ? 0 : (row.value / total * 100).round()}%)',
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                            color: context.fomraTextSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: LinearProgressIndicator(
+                        value: total == 0 ? 0 : row.value / total,
+                        minHeight: 6,
+                        backgroundColor:
+                            context.fomraSurfaceVar.withValues(alpha: 0.5),
+                        color: AppColors.primary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+        ],
+      ),
+    );
+  }
+
+  /// Broker performance — deals won/dropped/active and conversion rate per
+  /// broker, computed from the same lead data the existing Broker Report
+  /// directory already lists but doesn't score.
+  Widget _brokerPerformanceSection(BuildContext context) {
+    final leads = _filteredLeads
+        .where((l) => l.brokerName.trim().isNotEmpty)
+        .toList();
+
+    final byBroker = <String, List<LandLead>>{};
+    for (final lead in leads) {
+      final key = lead.brokerName.trim();
+      (byBroker[key] ??= []).add(lead);
+    }
+
+    final rows = byBroker.entries.map((e) {
+      final all = e.value;
+      final signed = all.where((l) => l.status == LeadStatus.signed).length;
+      final dropped = all.where((l) => l.status == LeadStatus.dropped).length;
+      final conversion = all.isEmpty ? 0.0 : signed / all.length * 100;
+      return (
+        broker: e.key,
+        total: all.length,
+        signed: signed,
+        dropped: dropped,
+        conversion: conversion,
+      );
+    }).toList()
+      ..sort((a, b) => b.total.compareTo(a.total));
+
+    return AppCard(
+      interactive: false,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _sectionLabel(context, 'Broker Performance', Icons.handshake_outlined,
+              trailing: '${rows.length} brokers'),
+          const SizedBox(height: 12),
+          if (rows.isEmpty)
+            Text(
+              'No broker-sourced leads in the selected range.',
+              style: TextStyle(fontSize: 12.5, color: context.fomraTextSecondary),
+            )
+          else
+            Table(
+              columnWidths: const {
+                0: FlexColumnWidth(2.4),
+                1: FlexColumnWidth(1),
+                2: FlexColumnWidth(1),
+                3: FlexColumnWidth(1.2),
+              },
+              children: [
+                TableRow(
+                  children: [
+                    _brokerHeaderCell(context, 'Broker'),
+                    _brokerHeaderCell(context, 'Leads'),
+                    _brokerHeaderCell(context, 'Signed'),
+                    _brokerHeaderCell(context, 'Conv.'),
+                  ],
+                ),
+                for (final r in rows.take(15))
+                  TableRow(
+                    children: [
+                      _brokerCell(context, r.broker, bold: true),
+                      _brokerCell(context, '${r.total}'),
+                      _brokerCell(context, '${r.signed}'),
+                      _brokerCell(context, '${r.conversion.round()}%'),
+                    ],
+                  ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _brokerHeaderCell(BuildContext context, String text) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Text(
+          text,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w800,
+            color: context.fomraTextSecondary,
+          ),
+        ),
+      );
+
+  Widget _brokerCell(BuildContext context, String text, {bool bold = false}) =>
+      Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Text(
+          text,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: 12.5,
+            fontWeight: bold ? FontWeight.w700 : FontWeight.w500,
+            color: context.fomraTextPrimary,
+          ),
+        ),
+      );
 
   Widget _previewSection(BuildContext context) {
     return AppCard(
