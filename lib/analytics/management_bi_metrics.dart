@@ -376,6 +376,16 @@ class ManagementBiMetrics {
     switch (lead.status) {
       case LeadStatus.dropped:
         return BiFunnelStage.dropped;
+      case LeadStatus.onHold:
+        // Classify by whichever stage it was paused from, so a paused deal
+        // still shows up where it actually sits in the funnel rather than
+        // vanishing into an unclassified bucket. Falls back to the earliest
+        // stage if that wasn't recorded (e.g. legacy rows).
+        final previous = lead.onHoldPreviousStatus;
+        if (previous == null || previous == LeadStatus.onHold) {
+          return BiFunnelStage.newLead;
+        }
+        return _stageFor(lead.copyWith(status: previous), index);
       case LeadStatus.signed:
         return BiFunnelStage.closed;
       case LeadStatus.legal:

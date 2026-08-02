@@ -12,6 +12,7 @@ enum LeadStatus {
   prospectMeetingPending,
   prospectMeetingCompleted,
   managementMeetingCompleted,
+  onHold,
 }
 
 /// Parses status from Supabase, including legacy values saved before the
@@ -144,6 +145,7 @@ class LandLead {
   final String onHoldReason;
   final DateTime? onHoldSince;
   final DateTime? onHoldExpectedResume;
+  final LeadStatus? onHoldPreviousStatus;
 
   LandLead({
     required this.leadId,
@@ -204,6 +206,7 @@ class LandLead {
     this.onHoldReason = '',
     this.onHoldSince,
     this.onHoldExpectedResume,
+    this.onHoldPreviousStatus,
   });
 
   /// Chip / summary label: employee-posted leads use "Posted by".
@@ -267,6 +270,7 @@ class LandLead {
     String? onHoldReason,
     DateTime? onHoldSince,
     DateTime? onHoldExpectedResume,
+    LeadStatus? onHoldPreviousStatus,
   }) =>
       LandLead(
         leadId: leadId,
@@ -331,6 +335,7 @@ class LandLead {
         onHoldSince: onHoldSince ?? this.onHoldSince,
         onHoldExpectedResume:
             onHoldExpectedResume ?? this.onHoldExpectedResume,
+        onHoldPreviousStatus: onHoldPreviousStatus ?? this.onHoldPreviousStatus,
       );
 }
 
@@ -365,6 +370,7 @@ extension LeadStatusLabel on LeadStatus {
         LeadStatus.prospectMeetingCompleted => 'Land owner meeting completed',
         LeadStatus.managementMeetingCompleted =>
           'Management Meeting Completed',
+        LeadStatus.onHold => 'On Hold',
       };
 
   /// Short label for compact chips and KPI cards.
@@ -383,12 +389,17 @@ extension LeadStatusLabel on LeadStatus {
 
   bool get isDropped => this == LeadStatus.dropped;
 
+  bool get isOnHold => this == LeadStatus.onHold;
+
   /// Signed and Dropped are terminal: once finally approved into one of these,
   /// the lead's stage is locked and can no longer change.
   bool get isTerminal =>
       this == LeadStatus.signed || this == LeadStatus.dropped;
 
-  bool get isActive => !isAcquired && !isDropped;
+  /// On Hold is deliberately excluded here — paused, not actively worked,
+  /// but not lost either. It still shows up under "Total leads" and any
+  /// explicit On Hold filter, just not in "active negotiation" counts.
+  bool get isActive => !isAcquired && !isDropped && !isOnHold;
 }
 
 /// Display order for Stage & Status dropdowns and filter chips.
@@ -400,6 +411,7 @@ const leadStatusPipelineOrder = <LeadStatus>[
   LeadStatus.prospectMeetingPending,
   LeadStatus.prospectMeetingCompleted,
   LeadStatus.managementMeetingCompleted,
+  LeadStatus.onHold,
 ];
 
 extension LeadStatusColor on LeadStatus {
@@ -411,5 +423,6 @@ extension LeadStatusColor on LeadStatus {
         LeadStatus.prospectMeetingPending => const Color(0xFFDB2777),
         LeadStatus.prospectMeetingCompleted => const Color(0xFF0891B2),
         LeadStatus.managementMeetingCompleted => const Color(0xFF4F46E5),
+        LeadStatus.onHold => const Color(0xFF64748B),
       };
 }

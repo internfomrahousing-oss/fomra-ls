@@ -1678,6 +1678,7 @@ String _leadPriorityLabel(LandLead lead) {
   return switch (lead.status) {
     LeadStatus.signed => 'Low',
     LeadStatus.dropped => 'Low',
+    LeadStatus.onHold => 'Low',
     LeadStatus.prospectMeetingCompleted => 'Medium',
     LeadStatus.legal => 'Medium',
     _ => 'High',
@@ -1688,6 +1689,7 @@ Color _leadPriorityColor(LandLead lead) {
   return switch (lead.status) {
     LeadStatus.signed => AppColors.success,
     LeadStatus.dropped => AppColors.textSecondary,
+    LeadStatus.onHold => AppColors.textSecondary,
     LeadStatus.prospectMeetingCompleted => AppColors.warning,
     LeadStatus.legal => AppColors.warning,
     _ => AppColors.error,
@@ -1703,5 +1705,6 @@ Color _crmStatusColor(LeadStatus status) {
     LeadStatus.negotiation => AppColors.primary,
     LeadStatus.legal => AppColors.purple,
     LeadStatus.dropped => AppColors.error,
+    LeadStatus.onHold => AppColors.textSecondary,
   };
 }

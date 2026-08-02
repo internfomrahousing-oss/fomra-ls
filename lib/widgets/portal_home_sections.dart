@@ -1667,6 +1667,7 @@ int _leadStatusPerformanceWeight(LeadStatus status) {
     LeadStatus.managementMeetingCompleted => 55,
     LeadStatus.prospectMeetingCompleted => 45,
     LeadStatus.prospectMeetingPending => 25,
+    LeadStatus.onHold => 20,
     LeadStatus.dropped => 0,
   };
 }
@@ -1781,6 +1782,7 @@ class _PortalPerformanceRowState extends State<PortalPerformanceRow> {
     return switch (lead.status) {
       LeadStatus.signed => 'Low',
       LeadStatus.dropped => 'Low',
+      LeadStatus.onHold => 'Low',
       LeadStatus.prospectMeetingCompleted => 'Medium',
       LeadStatus.legal => 'Medium',
       _ => 'High',
@@ -1791,6 +1793,7 @@ class _PortalPerformanceRowState extends State<PortalPerformanceRow> {
     return switch (lead.status) {
       LeadStatus.signed => StatusTone.success,
       LeadStatus.dropped => StatusTone.neutral,
+      LeadStatus.onHold => StatusTone.neutral,
       LeadStatus.prospectMeetingCompleted => StatusTone.warning,
       LeadStatus.legal => StatusTone.warning,
       _ => StatusTone.danger,
@@ -2032,6 +2035,7 @@ StatusTone _statusTone(LeadStatus status) {
     LeadStatus.legal => StatusTone.warning,
     LeadStatus.signed => StatusTone.success,
     LeadStatus.dropped => StatusTone.neutral,
+    LeadStatus.onHold => StatusTone.neutral,
   };
 }
 
