@@ -47,6 +47,7 @@ import 'calls_log_dialog.dart';
 import 'follow_up_dialog.dart';
 import 'lead_drop_reason_dialog.dart';
 import 'legal_documents_dialog.dart';
+import 'deal_risk_details_dialog.dart';
 import 'meeting_log_dialog.dart';
 import 'notes_log_dialog.dart';
 import 'signed_project_dialog.dart';
@@ -717,6 +718,25 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
 
   Future<void> _showActionDialog(String label) async {
     final viewOnly = _isViewOnlyAction(label);
+
+    if (label == 'Deal & Risk') {
+      if (viewOnly) {
+        AppFeedback.info(context,
+            _isLocked
+                ? 'This lead is ${lead.status.label} and locked.'
+                : 'Management view is read-only. Sign in as employee to edit.');
+        return;
+      }
+      final updated = await showFomraDialog<LandLead>(
+        context: context,
+        builder: (ctx) => DealRiskDetailsDialog(lead: lead),
+      );
+      if (updated == null || !mounted) return;
+      setState(() => lead = updated);
+      AppStore.instance.replaceLead(updated);
+      return;
+    }
+
     if (label == 'Calls') {
       await showFomraDialog<void>(
         context: context,
@@ -1687,6 +1707,7 @@ class _ActionToolbar extends StatelessWidget {
       (Icons.notifications_active_outlined, 'Follow-up', AppColors.purple),
       (Icons.gavel_outlined, 'Legal', AppColors.purple),
       (Icons.draw_outlined, 'Signed', AppColors.purple),
+      (Icons.currency_rupee_rounded, 'Deal & Risk', AppColors.purple),
     ];
 
     Widget pill((IconData, String, Color) action) {

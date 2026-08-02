@@ -572,6 +572,99 @@ class LandLeadService {
     return updated;
   }
 
+  /// Targeted update for the "Deal & Risk Details" dialog — touches only
+  /// the pricing/risk/multi-broker/milestone columns added in the Land
+  /// Sourcing Module Review, leaving every other lead field untouched.
+  /// Deliberately separate from [update] so this can't accidentally clobber
+  /// core lead fields, and vice versa.
+  static Future<LandLead> updateDealAndRiskDetails({
+    required String leadId,
+    LandLead? previous,
+    double? askingPrice,
+    double? expectedPrice,
+    double? guidelineValue,
+    double? marketValueEstimate,
+    required String litigationStatus,
+    required String encumbranceStatus,
+    required String waterAvailability,
+    required String electricityAvailability,
+    required String governmentRestrictions,
+    required List<OwnerContact> additionalBrokers,
+    double? tokenAdvanceAmount,
+    DateTime? tokenAdvanceDate,
+    required String tokenAdvanceNotes,
+    required String agreementStatus,
+    DateTime? agreementDate,
+    required String agreementNotes,
+  }) async {
+    final payload = <String, dynamic>{
+      'asking_price': askingPrice,
+      'expected_price': expectedPrice,
+      'guideline_value': guidelineValue,
+      'market_value_estimate': marketValueEstimate,
+      'litigation_status': litigationStatus,
+      'encumbrance_status': encumbranceStatus,
+      'water_availability': waterAvailability,
+      'electricity_availability': electricityAvailability,
+      'government_restrictions': governmentRestrictions.trim(),
+      'additional_brokers':
+          additionalBrokers.map((b) => b.toJson()).toList(),
+      'token_advance_amount': tokenAdvanceAmount,
+      'token_advance_date': tokenAdvanceDate?.toUtc().toIso8601String(),
+      'token_advance_notes': tokenAdvanceNotes.trim(),
+      'agreement_status': agreementStatus,
+      'agreement_date': agreementDate?.toUtc().toIso8601String(),
+      'agreement_notes': agreementNotes.trim(),
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    };
+
+    final row = await _db
+        .from('land_leads')
+        .update(payload)
+        .eq('id', leadId)
+        .select()
+        .single();
+    final updated = _fromRow(row);
+
+    final userId = _db.auth.currentUser?.id;
+    final userName = AuthService.instance.currentUser?.fullName ?? '';
+    Future<void> logPrice(String type, double? oldV, double? newV) async {
+      if (newV == null || newV == oldV) return;
+      await _db.from('land_lead_price_history').insert({
+        'lead_id': leadId,
+        'price_type': type,
+        'amount': newV,
+        'recorded_by': userId,
+        'recorded_by_name': userName,
+      });
+    }
+
+    if (previous != null) {
+      await logPrice('asking', previous.askingPrice, askingPrice);
+      await logPrice('expected', previous.expectedPrice, expectedPrice);
+      await logPrice('guideline', previous.guidelineValue, guidelineValue);
+      await logPrice(
+          'market_estimate', previous.marketValueEstimate, marketValueEstimate);
+    }
+
+    final ctx = _auditContextFor(leadId);
+    await AuditLogService.log(
+      action: 'update',
+      entityType: 'lead',
+      entityId: leadId,
+      field: 'deal_and_risk_details',
+      oldValue: '',
+      newValue: 'updated',
+      module: 'Lead',
+      leadId: leadId,
+      ownerName: updated.ownerName,
+      brokerName: updated.brokerName,
+      executiveName: ctx.executive,
+    );
+
+    return updated;
+  }
+
   static Future<void> delete(String leadId) async {
     final ctx = _auditContextFor(leadId);
     await _db.from('land_leads').delete().eq('id', leadId);
