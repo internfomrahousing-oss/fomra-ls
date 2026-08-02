@@ -25,5 +25,21 @@ jobs:
           cache: true
 
       - run: flutter pub get
-      - run: flutter analyze --no-fatal-infos --no-fatal-warnings
+      - name: flutter analyze
+        id: analyze
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings 2>&1 | tee analyze_output.txt
+      - name: Post analyze failure as a commit comment
+        if: failure() && steps.analyze.outcome == 'failure'
+        run: |
+          BODY=$(python3 -c "
+import json
+with open('analyze_output.txt') as f:
+    text = f.read()[-60000:]
+print(json.dumps({'body': '### flutter analyze failed\n\n```\n' + text + '\n```'}))
+")
+          curl -s -X POST \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/commits/${{ github.sha }}/comments" \
+            -d "$BODY"
       - run: flutter test
