@@ -450,20 +450,18 @@ class LandLeadService {
   /// than "every field" (e.g. notes/photos churn too often to be useful
   /// signal here); the generic 'lead' entry below still covers a save as a
   /// whole.
-  static const _auditedFields = <String, String Function(LandLead)>{
-    'owner_name': _s((l) => l.ownerName),
-    'contact_details': _s((l) => l.contactDetails),
-    'broker_name': _s((l) => l.brokerName),
-    'broker_contact': _s((l) => l.brokerContact),
-    'land_extent': _s((l) => l.landExtent),
-    'survey_number': _s((l) => l.surveyNumber),
-    'sub_division': _s((l) => l.subDivision),
-    'village': _s((l) => l.village),
-    'taluk': _s((l) => l.taluk),
-    'district': _s((l) => l.district),
+  static final _auditedFields = <String, String Function(LandLead)>{
+    'owner_name': (l) => l.ownerName,
+    'contact_details': (l) => l.contactDetails,
+    'broker_name': (l) => l.brokerName,
+    'broker_contact': (l) => l.brokerContact,
+    'land_extent': (l) => l.landExtent,
+    'survey_number': (l) => l.surveyNumber,
+    'sub_division': (l) => l.subDivision,
+    'village': (l) => l.village,
+    'taluk': (l) => l.taluk,
+    'district': (l) => l.district,
   };
-
-  static String Function(LandLead) _s(String Function(LandLead) f) => f;
 
   static Future<void> _logFieldChanges(
     LandLead previous,
