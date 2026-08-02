@@ -667,6 +667,9 @@ class LandLeadService {
 
   /// Puts an active (non-terminal) lead on hold — excluded from the "active
   /// negotiation" reading without being counted as lost. Requires a reason.
+  /// Puts an active (non-terminal, not already on hold) lead into the
+  /// On Hold stage — remembers the current stage in on_hold_previous_status
+  /// so resume() can default back into it. Requires a reason.
   static Future<LandLead> setOnHold({
     required String leadId,
     required String reason,
@@ -676,9 +679,25 @@ class LandLeadService {
     if (trimmedReason.isEmpty) {
       throw ArgumentError('A reason is required to put a lead on hold.');
     }
+    final current = await _db
+        .from('land_leads')
+        .select('status')
+        .eq('id', leadId)
+        .maybeSingle();
+    if (current == null) throw Exception('Lead $leadId was not found.');
+    final currentStatus = parseLeadStatus(current['status'] as String?);
+    if (currentStatus.isTerminal) {
+      throw StateError('A Signed or Dropped lead cannot be put on hold.');
+    }
+    if (currentStatus == LeadStatus.onHold) {
+      throw StateError('This lead is already on hold.');
+    }
+
     final row = await _db
         .from('land_leads')
         .update({
+          'status': LeadStatus.onHold.name,
+          'on_hold_previous_status': currentStatus.name,
           'is_on_hold': true,
           'on_hold_reason': trimmedReason,
           'on_hold_since': DateTime.now().toUtc().toIso8601String(),
@@ -687,23 +706,19 @@ class LandLeadService {
           'updated_at': DateTime.now().toUtc().toIso8601String(),
         })
         .eq('id', leadId)
-        .eq('is_on_hold', false)
+        .neq('status', LeadStatus.onHold.name)
         .select()
         .single();
     final updated = _fromRow(row);
-    if (updated.status.isTerminal) {
-      // Shouldn't normally be reachable (the UI hides this action on locked
-      // leads), but guard server-side too rather than trust the client.
-      throw StateError('A Signed or Dropped lead cannot be put on hold.');
-    }
+
     final ctx = _auditContextFor(leadId);
     await AuditLogService.log(
       action: 'hold',
       entityType: 'lead',
       entityId: leadId,
-      field: 'is_on_hold',
-      oldValue: 'false',
-      newValue: 'true ($trimmedReason)',
+      field: 'status',
+      oldValue: currentStatus.name,
+      newValue: 'onHold ($trimmedReason)',
       module: 'Lead',
       leadId: leadId,
       ownerName: updated.ownerName,
@@ -713,12 +728,32 @@ class LandLeadService {
     return updated;
   }
 
-  /// Resumes a lead that was on hold — the lead's underlying [LeadStatus]
-  /// never changed while paused, so this is just clearing the flag.
-  static Future<LandLead> clearOnHold(String leadId) async {
+  /// Resumes a lead out of On Hold, back into [targetStatus] — defaults to
+  /// whichever stage it was paused from if not specified.
+  static Future<LandLead> clearOnHold(
+    String leadId, {
+    LeadStatus? targetStatus,
+  }) async {
+    final current = await _db
+        .from('land_leads')
+        .select('status, on_hold_previous_status')
+        .eq('id', leadId)
+        .maybeSingle();
+    if (current == null) throw Exception('Lead $leadId was not found.');
+    if (current['status'] != LeadStatus.onHold.name) {
+      throw StateError('This lead is not currently on hold.');
+    }
+    final resumeInto = targetStatus ??
+        parseLeadStatus(current['on_hold_previous_status'] as String?);
+    if (resumeInto.isTerminal || resumeInto == LeadStatus.onHold) {
+      throw ArgumentError('Cannot resume into ${resumeInto.name}.');
+    }
+
     final row = await _db
         .from('land_leads')
         .update({
+          'status': resumeInto.name,
+          'on_hold_previous_status': null,
           'is_on_hold': false,
           'on_hold_reason': '',
           'on_hold_since': null,
@@ -726,17 +761,19 @@ class LandLeadService {
           'updated_at': DateTime.now().toUtc().toIso8601String(),
         })
         .eq('id', leadId)
+        .eq('status', LeadStatus.onHold.name)
         .select()
         .single();
     final updated = _fromRow(row);
+
     final ctx = _auditContextFor(leadId);
     await AuditLogService.log(
       action: 'resume',
       entityType: 'lead',
       entityId: leadId,
-      field: 'is_on_hold',
-      oldValue: 'true',
-      newValue: 'false',
+      field: 'status',
+      oldValue: 'onHold',
+      newValue: resumeInto.name,
       module: 'Lead',
       leadId: leadId,
       ownerName: updated.ownerName,
@@ -874,6 +911,9 @@ class LandLeadService {
       onHoldReason: r['on_hold_reason'] as String? ?? '',
       onHoldSince: parseTs(r['on_hold_since']),
       onHoldExpectedResume: parseTs(r['on_hold_expected_resume']),
+      onHoldPreviousStatus: r['on_hold_previous_status'] != null
+          ? parseLeadStatus(r['on_hold_previous_status'] as String?)
+          : null,
     );
   }
 }

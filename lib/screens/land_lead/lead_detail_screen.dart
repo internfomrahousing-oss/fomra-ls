@@ -490,6 +490,39 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
       return;
     }
 
+    // Going on hold always needs a reason, so route through the dedicated
+    // dialog rather than a bare status write — same pattern as Signed/Dropped
+    // above.
+    if (status == LeadStatus.onHold) {
+      await _putOnHold();
+      return;
+    }
+
+    // Picking any other stage while currently on hold is a resume: use
+    // clearOnHold so the on-hold metadata (reason/since/previous-status) is
+    // cleared correctly rather than left stale by a bare status write.
+    if (lead.status == LeadStatus.onHold) {
+      final previous = lead;
+      final updated = lead.copyWith(
+        status: status,
+        isOnHold: false,
+        onHoldReason: '',
+      );
+      setState(() => lead = updated);
+      AppStore.instance.replaceLead(updated);
+      try {
+        await LandLeadService.clearOnHold(lead.leadId, targetStatus: status);
+        if (!mounted) return;
+        AppFeedback.success(context, 'Resumed into ${status.label}');
+      } catch (e) {
+        if (!mounted) return;
+        setState(() => lead = previous);
+        AppStore.instance.replaceLead(previous);
+        AppFeedback.error(context, 'Could not resume: $e');
+      }
+      return;
+    }
+
     final previous = lead.status;
     final previousDropReason = lead.dropReason;
     final previousDropNotes = lead.dropNotes;
@@ -624,8 +657,9 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'The lead keeps its current stage — this just excludes it '
-                'from active-negotiation counts until resumed.',
+                'This moves the lead to the On Hold stage and excludes it '
+                'from active-negotiation counts until resumed. It remembers '
+                'the current stage so Resume can default back into it.',
                 style: TextStyle(fontSize: 12.5),
               ),
               const SizedBox(height: 14),
@@ -693,33 +727,62 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
   }
 
   Future<void> _resumeFromHold() async {
+    var target = lead.onHoldPreviousStatus ??
+        LeadStatus.prospectMeetingPending;
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Resume Lead'),
-        content: Text(
-          'On hold since: ${lead.onHoldReason.isEmpty ? "(no reason given)" : lead.onHoldReason}\n\n'
-          'This will resume the lead in ${lead.status.label}.',
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: const Text('Resume Lead'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'On hold: ${lead.onHoldReason.isEmpty ? "(no reason given)" : lead.onHoldReason}',
+                style: const TextStyle(fontSize: 12.5),
+              ),
+              const SizedBox(height: 14),
+              DropdownButtonFormField<LeadStatus>(
+                initialValue: target,
+                decoration: const InputDecoration(
+                  labelText: 'Resume into stage',
+                  border: OutlineInputBorder(),
+                ),
+                items: leadStatusPipelineOrder
+                    .where((s) => !s.isTerminal && s != LeadStatus.onHold)
+                    .map((s) =>
+                        DropdownMenuItem(value: s, child: Text(s.label)))
+                    .toList(),
+                onChanged: (v) {
+                  if (v != null) setDialogState(() => target = v);
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Resume'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Resume'),
-          ),
-        ],
       ),
     );
     if (confirmed != true || !mounted) return;
     try {
-      final updated = await LandLeadService.clearOnHold(lead.leadId);
+      final updated = await LandLeadService.clearOnHold(
+        lead.leadId,
+        targetStatus: target,
+      );
       if (!mounted) return;
       setState(() => lead = updated);
       AppStore.instance.replaceLead(updated);
-      AppFeedback.success(context, 'Lead resumed');
+      AppFeedback.success(context, 'Lead resumed into ${target.label}');
     } catch (e) {
       if (!mounted) return;
       AppFeedback.error(context, 'Could not resume: $e');
@@ -842,7 +905,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
                 : 'Management view is read-only. Sign in as employee to edit.');
         return;
       }
-      if (lead.isOnHold) {
+      if (lead.status == LeadStatus.onHold) {
         await _resumeFromHold();
       } else {
         await _putOnHold();
@@ -1307,7 +1370,7 @@ class _LeadSummaryCard extends StatelessWidget {
       ('Type', lead.landType.label),
       if (lead.createdByName.trim().isNotEmpty)
         ('Executive', lead.createdByName.trim()),
-      if (lead.isOnHold)
+      if (lead.status == LeadStatus.onHold)
         (
           'On Hold',
           lead.onHoldReason.trim().isEmpty

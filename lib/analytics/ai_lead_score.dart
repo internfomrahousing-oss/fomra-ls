@@ -97,6 +97,7 @@ abstract final class AiLeadScore {
   ) {
     final stagePts = switch (lead.status) {
       LeadStatus.dropped => 0.0,
+      LeadStatus.onHold => 20.0,
       LeadStatus.prospectMeetingPending => 20.0,
       LeadStatus.prospectMeetingCompleted => 40.0,
       LeadStatus.managementMeetingCompleted => 50.0,

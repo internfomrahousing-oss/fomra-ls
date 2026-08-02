@@ -42,6 +42,7 @@ String followUpLabelForLead(LandLead lead) => switch (lead.status) {
       LeadStatus.negotiation =>
         'Continue negotiation — log calls and meetings',
       LeadStatus.legal => 'Complete legal verification and documents',
+      LeadStatus.onHold => '',
       LeadStatus.signed => '',
       LeadStatus.dropped => '',
     };
