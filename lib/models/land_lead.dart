@@ -104,6 +104,42 @@ class LandLead {
   final String dropReason;
   final String dropNotes;
 
+  // ── Added 2026-08 (Land Sourcing Module Review) ───────────────────────────
+  final double? askingPrice;
+  final double? expectedPrice;
+  final double? guidelineValue;
+  final double? marketValueEstimate;
+
+  /// unknown / none / suspected / confirmed / cleared
+  final String litigationStatus;
+  /// unknown / clear / encumbered / cleared
+  final String encumbranceStatus;
+  /// unknown / available / not_available
+  final String waterAvailability;
+  /// unknown / available / not_available
+  final String electricityAvailability;
+  final String governmentRestrictions;
+
+  /// Co-brokers beyond the primary [brokerName]/[brokerContact] pair.
+  final List<OwnerContact> additionalBrokers;
+
+  final double? tokenAdvanceAmount;
+  final DateTime? tokenAdvanceDate;
+  final String tokenAdvanceNotes;
+
+  /// not_started / drafted / under_review / executed
+  final String agreementStatus;
+  final DateTime? agreementDate;
+  final String agreementNotes;
+
+  final DateTime? reopenedAt;
+  final String reopenedByName;
+  final String reopenReason;
+  final int reopenCount;
+
+  final String? splitFromLeadId;
+  final List<String> mergedFromLeadIds;
+
   LandLead({
     required this.leadId,
     required this.inputSource,
@@ -137,6 +173,28 @@ class LandLead {
     this.status = LeadStatus.prospectMeetingPending,
     this.dropReason = '',
     this.dropNotes = '',
+    this.askingPrice,
+    this.expectedPrice,
+    this.guidelineValue,
+    this.marketValueEstimate,
+    this.litigationStatus = 'unknown',
+    this.encumbranceStatus = 'unknown',
+    this.waterAvailability = 'unknown',
+    this.electricityAvailability = 'unknown',
+    this.governmentRestrictions = '',
+    this.additionalBrokers = const [],
+    this.tokenAdvanceAmount,
+    this.tokenAdvanceDate,
+    this.tokenAdvanceNotes = '',
+    this.agreementStatus = 'not_started',
+    this.agreementDate,
+    this.agreementNotes = '',
+    this.reopenedAt,
+    this.reopenedByName = '',
+    this.reopenReason = '',
+    this.reopenCount = 0,
+    this.splitFromLeadId,
+    this.mergedFromLeadIds = const [],
   });
 
   /// Chip / summary label: employee-posted leads use "Posted by".
@@ -174,6 +232,28 @@ class LandLead {
     LeadStatus? status,
     String? dropReason,
     String? dropNotes,
+    double? askingPrice,
+    double? expectedPrice,
+    double? guidelineValue,
+    double? marketValueEstimate,
+    String? litigationStatus,
+    String? encumbranceStatus,
+    String? waterAvailability,
+    String? electricityAvailability,
+    String? governmentRestrictions,
+    List<OwnerContact>? additionalBrokers,
+    double? tokenAdvanceAmount,
+    DateTime? tokenAdvanceDate,
+    String? tokenAdvanceNotes,
+    String? agreementStatus,
+    DateTime? agreementDate,
+    String? agreementNotes,
+    DateTime? reopenedAt,
+    String? reopenedByName,
+    String? reopenReason,
+    int? reopenCount,
+    String? splitFromLeadId,
+    List<String>? mergedFromLeadIds,
   }) =>
       LandLead(
         leadId: leadId,
@@ -209,6 +289,30 @@ class LandLead {
         status: status ?? this.status,
         dropReason: dropReason ?? this.dropReason,
         dropNotes: dropNotes ?? this.dropNotes,
+        askingPrice: askingPrice ?? this.askingPrice,
+        expectedPrice: expectedPrice ?? this.expectedPrice,
+        guidelineValue: guidelineValue ?? this.guidelineValue,
+        marketValueEstimate: marketValueEstimate ?? this.marketValueEstimate,
+        litigationStatus: litigationStatus ?? this.litigationStatus,
+        encumbranceStatus: encumbranceStatus ?? this.encumbranceStatus,
+        waterAvailability: waterAvailability ?? this.waterAvailability,
+        electricityAvailability:
+            electricityAvailability ?? this.electricityAvailability,
+        governmentRestrictions:
+            governmentRestrictions ?? this.governmentRestrictions,
+        additionalBrokers: additionalBrokers ?? this.additionalBrokers,
+        tokenAdvanceAmount: tokenAdvanceAmount ?? this.tokenAdvanceAmount,
+        tokenAdvanceDate: tokenAdvanceDate ?? this.tokenAdvanceDate,
+        tokenAdvanceNotes: tokenAdvanceNotes ?? this.tokenAdvanceNotes,
+        agreementStatus: agreementStatus ?? this.agreementStatus,
+        agreementDate: agreementDate ?? this.agreementDate,
+        agreementNotes: agreementNotes ?? this.agreementNotes,
+        reopenedAt: reopenedAt ?? this.reopenedAt,
+        reopenedByName: reopenedByName ?? this.reopenedByName,
+        reopenReason: reopenReason ?? this.reopenReason,
+        reopenCount: reopenCount ?? this.reopenCount,
+        splitFromLeadId: splitFromLeadId ?? this.splitFromLeadId,
+        mergedFromLeadIds: mergedFromLeadIds ?? this.mergedFromLeadIds,
       );
 }
 

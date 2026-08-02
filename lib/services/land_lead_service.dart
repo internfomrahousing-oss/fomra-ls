@@ -617,6 +617,23 @@ class LandLeadService {
             .toList()
         : <SurveyEntry>[];
 
+    final additionalBrokersRaw = r['additional_brokers'];
+    final additionalBrokers = additionalBrokersRaw is List
+        ? additionalBrokersRaw
+            .whereType<Map>()
+            .map((m) => OwnerContact.fromJson(Map<String, dynamic>.from(m)))
+            .toList()
+        : <OwnerContact>[];
+
+    final mergedFromRaw = r['merged_from_lead_ids'];
+    final mergedFromLeadIds = mergedFromRaw is List
+        ? mergedFromRaw.map((e) => e.toString()).toList()
+        : <String>[];
+
+    DateTime? parseTs(dynamic v) =>
+        v is String && v.isNotEmpty ? DateTime.tryParse(v) : null;
+    double? parseNum(dynamic v) => v is num ? v.toDouble() : null;
+
     return LandLead(
       leadId: r['id'] as String,
       inputSource: InputSource.values.firstWhere(
@@ -656,6 +673,29 @@ class LandLeadService {
       status: parseLeadStatus(r['status'] as String?),
       dropReason: r['drop_reason'] as String? ?? '',
       dropNotes: r['drop_notes'] as String? ?? '',
+      askingPrice: parseNum(r['asking_price']),
+      expectedPrice: parseNum(r['expected_price']),
+      guidelineValue: parseNum(r['guideline_value']),
+      marketValueEstimate: parseNum(r['market_value_estimate']),
+      litigationStatus: r['litigation_status'] as String? ?? 'unknown',
+      encumbranceStatus: r['encumbrance_status'] as String? ?? 'unknown',
+      waterAvailability: r['water_availability'] as String? ?? 'unknown',
+      electricityAvailability:
+          r['electricity_availability'] as String? ?? 'unknown',
+      governmentRestrictions: r['government_restrictions'] as String? ?? '',
+      additionalBrokers: additionalBrokers,
+      tokenAdvanceAmount: parseNum(r['token_advance_amount']),
+      tokenAdvanceDate: parseTs(r['token_advance_date']),
+      tokenAdvanceNotes: r['token_advance_notes'] as String? ?? '',
+      agreementStatus: r['agreement_status'] as String? ?? 'not_started',
+      agreementDate: parseTs(r['agreement_date']),
+      agreementNotes: r['agreement_notes'] as String? ?? '',
+      reopenedAt: parseTs(r['reopened_at']),
+      reopenedByName: r['reopened_by_name'] as String? ?? '',
+      reopenReason: r['reopen_reason'] as String? ?? '',
+      reopenCount: (r['reopen_count'] as num?)?.toInt() ?? 0,
+      splitFromLeadId: r['split_from_lead_id'] as String?,
+      mergedFromLeadIds: mergedFromLeadIds,
     );
   }
 }
