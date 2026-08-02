@@ -16,6 +16,7 @@ import '../../widgets/fomra_app_shell.dart';
 import '../../widgets/ui/app_components.dart';
 import '../../widgets/ui/app_feedback.dart';
 import '../../widgets/ui/app_table.dart';
+import '../land_lead/filtered_leads_screen.dart';
 
 /// Management + admins can export reports, and executives can export their own
 /// (report data is already scoped to their leads via [AppStore.visibleLeads]).
@@ -906,14 +907,14 @@ class _ReportsScreenState extends State<ReportsScreen> {
     final dropped =
         _filteredLeads.where((l) => l.status == LeadStatus.dropped).toList();
 
-    final counts = <String, int>{};
+    final byReason = <String, List<LandLead>>{};
     for (final lead in dropped) {
       final reason = lead.dropReason.trim();
       final key = reason.isEmpty ? 'Not specified' : reason;
-      counts[key] = (counts[key] ?? 0) + 1;
+      (byReason[key] ??= []).add(lead);
     }
-    final rows = counts.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
+    final rows = byReason.entries.toList()
+      ..sort((a, b) => b.value.length.compareTo(a.value.length));
     final total = dropped.length;
 
     return AppCard(
@@ -931,7 +932,15 @@ class _ReportsScreenState extends State<ReportsScreen> {
             )
           else
             for (final row in rows) ...[
-              Padding(
+              InkWell(
+                borderRadius: BorderRadius.circular(8),
+                onTap: () => FilteredLeadsScreen.openList(
+                  context,
+                  title: 'Dropped — ${row.key}',
+                  subtitle: 'Lost Deal Analysis',
+                  leads: row.value,
+                ),
+                child: Padding(
                 padding: const EdgeInsets.only(bottom: 10),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -949,20 +958,23 @@ class _ReportsScreenState extends State<ReportsScreen> {
                           ),
                         ),
                         Text(
-                          '${row.value} (${total == 0 ? 0 : (row.value / total * 100).round()}%)',
+                          '${row.value.length} (${total == 0 ? 0 : (row.value.length / total * 100).round()}%)',
                           style: TextStyle(
                             fontSize: 12.5,
                             fontWeight: FontWeight.w700,
                             color: context.fomraTextSecondary,
                           ),
                         ),
+                        const SizedBox(width: 4),
+                        Icon(Icons.chevron_right_rounded,
+                            size: 16, color: context.fomraTextSecondary),
                       ],
                     ),
                     const SizedBox(height: 4),
                     ClipRRect(
                       borderRadius: BorderRadius.circular(4),
                       child: LinearProgressIndicator(
-                        value: total == 0 ? 0 : row.value / total,
+                        value: total == 0 ? 0 : row.value.length / total,
                         minHeight: 6,
                         backgroundColor:
                             context.fomraSurfaceVar.withValues(alpha: 0.5),
@@ -970,6 +982,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                       ),
                     ),
                   ],
+                ),
                 ),
               ),
             ],
@@ -1020,34 +1033,40 @@ class _ReportsScreenState extends State<ReportsScreen> {
               'No broker-sourced leads in the selected range.',
               style: TextStyle(fontSize: 12.5, color: context.fomraTextSecondary),
             )
-          else
-            Table(
-              columnWidths: const {
-                0: FlexColumnWidth(2.4),
-                1: FlexColumnWidth(1),
-                2: FlexColumnWidth(1),
-                3: FlexColumnWidth(1.2),
-              },
+          else ...[
+            Row(
               children: [
-                TableRow(
-                  children: [
-                    _brokerHeaderCell(context, 'Broker'),
-                    _brokerHeaderCell(context, 'Leads'),
-                    _brokerHeaderCell(context, 'Signed'),
-                    _brokerHeaderCell(context, 'Conv.'),
-                  ],
-                ),
-                for (final r in rows.take(15))
-                  TableRow(
-                    children: [
-                      _brokerCell(context, r.broker, bold: true),
-                      _brokerCell(context, '${r.total}'),
-                      _brokerCell(context, '${r.signed}'),
-                      _brokerCell(context, '${r.conversion.round()}%'),
-                    ],
-                  ),
+                Expanded(flex: 24, child: _brokerHeaderCell(context, 'Broker')),
+                Expanded(flex: 10, child: _brokerHeaderCell(context, 'Leads')),
+                Expanded(flex: 10, child: _brokerHeaderCell(context, 'Signed')),
+                Expanded(flex: 12, child: _brokerHeaderCell(context, 'Conv.')),
+                const SizedBox(width: 16),
               ],
             ),
+            for (final r in rows.take(15))
+              InkWell(
+                borderRadius: BorderRadius.circular(8),
+                onTap: () => FilteredLeadsScreen.openList(
+                  context,
+                  title: r.broker,
+                  subtitle: 'Broker Performance',
+                  leads: byBroker[r.broker] ?? const [],
+                ),
+                child: Row(
+                  children: [
+                    Expanded(flex: 24, child: _brokerCell(context, r.broker, bold: true)),
+                    Expanded(flex: 10, child: _brokerCell(context, '${r.total}')),
+                    Expanded(flex: 10, child: _brokerCell(context, '${r.signed}')),
+                    Expanded(flex: 12, child: _brokerCell(context, '${r.conversion.round()}%')),
+                    SizedBox(
+                      width: 16,
+                      child: Icon(Icons.chevron_right_rounded,
+                          size: 15, color: context.fomraTextSecondary),
+                    ),
+                  ],
+                ),
+              ),
+          ],
         ],
       ),
     );
