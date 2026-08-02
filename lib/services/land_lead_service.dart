@@ -783,6 +783,140 @@ class LandLeadService {
     return updated;
   }
 
+  /// Splits part of [parent] off into a new, independently-tracked lead —
+  /// e.g. part of a parcel is dropped while another part proceeds. Reuses
+  /// [create] for the actual insert rather than duplicating that logic.
+  /// The parent lead is left untouched apart from a note; if its survey
+  /// list should shrink to reflect the split, that's a deliberate manual
+  /// edit via the normal Edit Lead flow, not an automatic side effect here.
+  static Future<LandLead> splitLead({
+    required LandLead parent,
+    required String newSurveyNumber,
+    String newSubDivision = '',
+    List<SurveyEntry> additionalSurveyNumbers = const [],
+    required String newLandExtent,
+  }) async {
+    if (newSurveyNumber.trim().isEmpty) {
+      throw ArgumentError('A survey number is required for the split lead.');
+    }
+    final draft = LandLead(
+      leadId: '',
+      inputSource: parent.inputSource,
+      location: parent.location,
+      gpsCoordinates: parent.gpsCoordinates,
+      village: parent.village,
+      taluk: parent.taluk,
+      district: parent.district,
+      pincode: parent.pincode,
+      surveyNumber: newSurveyNumber.trim(),
+      subDivision: newSubDivision.trim(),
+      additionalSurveyNumbers: additionalSurveyNumbers,
+      landExtent: newLandExtent.trim(),
+      ownerName: parent.ownerName,
+      contactDetails: parent.contactDetails,
+      additionalOwners: parent.additionalOwners,
+      brokerName: parent.brokerName,
+      brokerContact: parent.brokerContact,
+      sourceContactName: parent.sourceContactName,
+      sourceContactNumber: parent.sourceContactNumber,
+      landType: parent.landType,
+      landTypeOther: parent.landTypeOther,
+      roadWidth: parent.roadWidth,
+      accessDetails: '',
+      notes: 'Split from lead ${parent.leadId}.',
+      // Inherits the parent's current stage — the relationship/trust with
+      // the owner already carries over, this isn't starting from zero.
+      status: parent.status,
+      addedOn: DateTime.now(),
+      splitFromLeadId: parent.leadId,
+    );
+    final created = await create(draft);
+
+    final ctx = _auditContextFor(parent.leadId);
+    await AuditLogService.log(
+      action: 'split',
+      entityType: 'lead',
+      entityId: parent.leadId,
+      field: 'split',
+      oldValue: '',
+      newValue: 'split into ${created.leadId}',
+      module: 'Lead',
+      leadId: parent.leadId,
+      ownerName: ctx.owner,
+      brokerName: ctx.broker,
+      executiveName: ctx.executive,
+    );
+    return created;
+  }
+
+  /// Merges [source] into [target] — [target] survives and absorbs
+  /// [source]'s survey numbers; [source] is kept (never deleted) and gets
+  /// merged_from tracking plus an explanatory note, but its status is left
+  /// untouched — closing it out (e.g. marking Dropped) is a separate,
+  /// deliberate action via the normal flow, not an automatic side effect.
+  static Future<LandLead> mergeLeads({
+    required LandLead target,
+    required LandLead source,
+  }) async {
+    if (target.leadId == source.leadId) {
+      throw ArgumentError('Cannot merge a lead into itself.');
+    }
+    if (target.status.isTerminal) {
+      throw StateError(
+        'Cannot merge into a ${target.status.label} lead — it is locked.',
+      );
+    }
+
+    final combinedSurveys = <SurveyEntry>[
+      ...target.additionalSurveyNumbers,
+      SurveyEntry(
+        surveyNumber: source.surveyNumber,
+        subDivision: source.subDivision,
+      ),
+      ...source.additionalSurveyNumbers,
+    ];
+    final mergedIds = <String>{
+      ...target.mergedFromLeadIds,
+      source.leadId,
+    }.toList();
+
+    final row = await _db
+        .from('land_leads')
+        .update({
+          'additional_survey_numbers':
+              combinedSurveys.map((s) => s.toJson()).toList(),
+          'merged_from_lead_ids': mergedIds,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('id', target.leadId)
+        .select()
+        .single();
+    final updatedTarget = _fromRow(row);
+
+    final sourceCtx = _auditContextFor(source.leadId);
+    await _db.from('land_leads').update({
+      'notes': source.notes.isEmpty
+          ? 'Merged into lead ${target.leadId}.'
+          : '${source.notes}\n\n[Merged into lead ${target.leadId}.]',
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    }).eq('id', source.leadId);
+
+    await AuditLogService.log(
+      action: 'merge',
+      entityType: 'lead',
+      entityId: target.leadId,
+      field: 'merged_from_lead_ids',
+      oldValue: target.leadId,
+      newValue: 'merged in ${source.leadId}',
+      module: 'Lead',
+      leadId: target.leadId,
+      ownerName: updatedTarget.ownerName,
+      brokerName: updatedTarget.brokerName,
+      executiveName: sourceCtx.executive,
+    );
+    return updatedTarget;
+  }
+
   static Future<void> delete(String leadId) async {
     final ctx = _auditContextFor(leadId);
     await _db.from('land_leads').delete().eq('id', leadId);

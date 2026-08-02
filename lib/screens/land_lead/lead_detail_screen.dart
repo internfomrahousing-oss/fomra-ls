@@ -48,6 +48,8 @@ import 'follow_up_dialog.dart';
 import 'lead_drop_reason_dialog.dart';
 import 'legal_documents_dialog.dart';
 import 'deal_risk_details_dialog.dart';
+import 'split_lead_dialog.dart';
+import 'merge_lead_dialog.dart';
 import 'meeting_log_dialog.dart';
 import 'notes_log_dialog.dart';
 import 'signed_project_dialog.dart';
@@ -910,6 +912,43 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
       } else {
         await _putOnHold();
       }
+      return;
+    }
+
+    if (label == 'Split Lead') {
+      if (viewOnly) {
+        AppFeedback.info(context,
+            _isLocked
+                ? 'This lead is ${lead.status.label} and locked.'
+                : 'Management view is read-only. Sign in as employee to edit.');
+        return;
+      }
+      final created = await showFomraDialog<LandLead>(
+        context: context,
+        builder: (ctx) => SplitLeadDialog(parent: lead),
+      );
+      if (created == null || !mounted) return;
+      AppStore.instance.replaceLead(created);
+      AppFeedback.success(context, 'Created ${created.leadId}');
+      return;
+    }
+
+    if (label == 'Merge Lead') {
+      if (viewOnly) {
+        AppFeedback.info(context,
+            _isLocked
+                ? 'This lead is ${lead.status.label} and locked.'
+                : 'Management view is read-only. Sign in as employee to edit.');
+        return;
+      }
+      final updated = await showFomraDialog<LandLead>(
+        context: context,
+        builder: (ctx) => MergeLeadDialog(target: lead),
+      );
+      if (updated == null || !mounted) return;
+      setState(() => lead = updated);
+      AppStore.instance.replaceLead(updated);
+      AppFeedback.success(context, 'Merged in successfully');
       return;
     }
 
@@ -1910,6 +1949,8 @@ class _ActionToolbar extends StatelessWidget {
       (Icons.draw_outlined, 'Signed', AppColors.purple),
       (Icons.currency_rupee_rounded, 'Deal & Risk', AppColors.purple),
       (Icons.pause_circle_outline, 'On Hold', AppColors.purple),
+      (Icons.call_split_rounded, 'Split Lead', AppColors.purple),
+      (Icons.call_merge_rounded, 'Merge Lead', AppColors.purple),
     ];
 
     Widget pill((IconData, String, Color) action) {
