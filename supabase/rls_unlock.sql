@@ -1,3 +1,19 @@
+-- #############################################################################
+-- ##  DANGER — DO NOT RUN THIS AGAINST PRODUCTION WITHOUT A DELIBERATE,      ##
+-- ##  DOCUMENTED DECISION TO DO SO.                                         ##
+-- ##                                                                        ##
+-- ##  This script re-opens land_leads to the *anonymous* (unauthenticated)  ##
+-- ##  internet — anyone holding the public anon key (embedded in the web    ##
+-- ##  build, not a secret) would be able to read, edit and delete every     ##
+-- ##  land lead with no login. It exists only as a break-glass rollback for ##
+-- ##  the moment rls_lockdown.sql / rls_lockdown_2_2026-08.sql were first   ##
+-- ##  applied, in case they blocked normal use before every login was       ##
+-- ##  confirmed to use a real authenticated session. That migration is long ##
+-- ##  since verified safe in production — this file should not be needed   ##
+-- ##  again. If the app is genuinely broken, diagnose the specific failing  ##
+-- ##  policy instead of reverting to a fully open database.                 ##
+-- #############################################################################
+--
 -- EMERGENCY REVERT of rls_lockdown.sql — restores the previous open policies so
 -- the app works again (anon + authenticated can read/write). Run this in the
 -- Supabase SQL Editor. Safe to re-run; skips tables that don't exist.
