@@ -1,10 +1,14 @@
 name: CI
+#
+# Auto runs on push/PR are OFF: this fired automatically on every single
+# push and PR update, actually running (and repeatedly failing) on billed
+# GitHub-hosted runners — a real, avoidable contributor to Actions billing.
+# Matches the manual-only pattern flutter.yml already used for the same
+# reason. Run manually via the Actions tab, or restore the triggers below
+# once billing is confirmed clear and this workflow is confirmed green.
 
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+  workflow_dispatch:
 
 jobs:
   flutter:
