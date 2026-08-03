@@ -1049,6 +1049,12 @@ class LandLeadService {
           ? parseLeadStatus(r['on_hold_previous_status'] as String?)
           : null,
       landownerMeetingCompletedAt: parseTs(r['landowner_meeting_completed_at']),
+      numOwners: r['num_owners'] as String? ?? '',
+      ownerOccupation: r['owner_occupation'] as String? ?? '',
+      locationRating: r['location_rating'] as String? ?? 'unknown',
+      brokerKnowsOwner: r['broker_knows_owner'] as bool?,
+      managementMetOwner: r['management_met_owner'] as bool?,
+      ownerMeetingLocation: r['owner_meeting_location'] as String? ?? '',
     );
   }
 }

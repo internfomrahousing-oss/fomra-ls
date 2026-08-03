@@ -153,6 +153,14 @@ class LandLead {
   /// happened to them" regardless of current stage.
   final DateTime? landownerMeetingCompletedAt;
 
+  final String numOwners;
+  final String ownerOccupation;
+  /// unknown / poor / average / good
+  final String locationRating;
+  final bool? brokerKnowsOwner;
+  final bool? managementMetOwner;
+  final String ownerMeetingLocation;
+
   LandLead({
     required this.leadId,
     required this.inputSource,
@@ -214,6 +222,12 @@ class LandLead {
     this.onHoldExpectedResume,
     this.onHoldPreviousStatus,
     this.landownerMeetingCompletedAt,
+    this.numOwners = '',
+    this.ownerOccupation = '',
+    this.locationRating = 'unknown',
+    this.brokerKnowsOwner,
+    this.managementMetOwner,
+    this.ownerMeetingLocation = '',
   });
 
   /// Chip / summary label: employee-posted leads use "Posted by".
@@ -279,6 +293,12 @@ class LandLead {
     DateTime? onHoldExpectedResume,
     LeadStatus? onHoldPreviousStatus,
     DateTime? landownerMeetingCompletedAt,
+    String? numOwners,
+    String? ownerOccupation,
+    String? locationRating,
+    bool? brokerKnowsOwner,
+    bool? managementMetOwner,
+    String? ownerMeetingLocation,
   }) =>
       LandLead(
         leadId: leadId,
@@ -346,6 +366,12 @@ class LandLead {
         onHoldPreviousStatus: onHoldPreviousStatus ?? this.onHoldPreviousStatus,
         landownerMeetingCompletedAt:
             landownerMeetingCompletedAt ?? this.landownerMeetingCompletedAt,
+        numOwners: numOwners ?? this.numOwners,
+        ownerOccupation: ownerOccupation ?? this.ownerOccupation,
+        locationRating: locationRating ?? this.locationRating,
+        brokerKnowsOwner: brokerKnowsOwner ?? this.brokerKnowsOwner,
+        managementMetOwner: managementMetOwner ?? this.managementMetOwner,
+        ownerMeetingLocation: ownerMeetingLocation ?? this.ownerMeetingLocation,
       );
 }
 
