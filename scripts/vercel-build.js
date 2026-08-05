@@ -128,6 +128,12 @@ process.env.FLUTTER_SUPPRESS_ANALYTICS = 'true';
 run(`git config --global --add safe.directory "${flutterDir}"`);
 
 run('flutter pub get');
+// TEMPORARY — running the test suite as part of this scratch-branch build
+// only, to get real `flutter test` output via Vercel's build logs (no other
+// way to run the actual Dart/Flutter toolchain is available). Not meant to
+// be merged — see the commit message.
+run('flutter test 2>&1 | tee /tmp/flutter_test_output.txt || true');
+run('cat /tmp/flutter_test_output.txt');
 run('flutter build web --release');
 
 const index = path.join(repoRoot, 'build', 'web', 'index.html');
