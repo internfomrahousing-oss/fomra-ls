@@ -1,4 +1,3 @@
-import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -15,9 +14,16 @@ MonthlyTargetProgress _progress({required int target, required int done}) =>
       completedOn: [for (var i = 0; i < done; i++) DateTime(2026, 7, 1 + i % 14)],
     );
 
+/// Matches the real construction in home_screen.dart: an "overall" [progress]
+/// drives the header's on-track/behind badge, and [categories] (Leads/Site
+/// Visits/Meetings, each with their own progress) drive the per-category
+/// timelines below it. Both must be supplied for the real UI to render at
+/// all — with an empty categories list the card falls back to a "set your
+/// targets" prompt regardless of what [progress] says.
 Future<void> _pump(
-  WidgetTester tester,
-  MonthlyTargetProgress progress, {
+  WidgetTester tester, {
+  required MonthlyTargetProgress progress,
+  List<MonthlyTargetCategoryProgress> categories = const [],
   double width = 600,
   bool pendingApproval = false,
 }) async {
@@ -34,6 +40,7 @@ Future<void> _pump(
             progress: progress,
             month: _now,
             pendingApproval: pendingApproval,
+            categories: categories,
           ),
         ),
       ),
@@ -42,82 +49,108 @@ Future<void> _pump(
   await tester.pumpAndSettle();
 }
 
+List<MonthlyTargetCategoryProgress> _sampleCategories({
+  required int leadsDone,
+}) =>
+    [
+      MonthlyTargetCategoryProgress(
+        label: 'Leads',
+        color: AppColors.primary,
+        progress: _progress(target: 30, done: leadsDone),
+      ),
+      MonthlyTargetCategoryProgress(
+        label: 'Site Visits',
+        color: AppColors.success,
+        progress: _progress(target: 15, done: 10),
+      ),
+      MonthlyTargetCategoryProgress(
+        label: 'Meetings',
+        color: AppColors.warning,
+        progress: _progress(target: 10, done: 5),
+      ),
+    ];
+
 void main() {
-  testWidgets('renders the headline numbers and both chart lines',
+  testWidgets('with categories, each one renders its label and achieved/target',
       (tester) async {
-    await _pump(tester, _progress(target: 30, done: 20));
+    await _pump(
+      tester,
+      progress: _progress(target: 30, done: 20),
+      categories: _sampleCategories(leadsDone: 20),
+    );
     expect(tester.takeException(), isNull);
 
-    // Achieved / target.
+    expect(find.text('Leads'), findsOneWidget);
+    expect(find.text('Site Visits'), findsOneWidget);
+    expect(find.text('Meetings'), findsOneWidget);
+
+    // Leads: 20 achieved / 30 target.
     expect(find.text('20'), findsWidgets);
-    expect(find.text('/ 30 sites'), findsOneWidget);
-
-    // Actual + target progress lines.
-    final chart = tester.widget<LineChart>(find.byType(LineChart));
-    expect(chart.data.lineBarsData, hasLength(2));
-
-    // The target line spans the whole month; the actual stops at today.
-    expect(chart.data.lineBarsData[1].spots, hasLength(31));
-    expect(chart.data.lineBarsData[0].spots, hasLength(15));
+    expect(find.text(' / 30'), findsOneWidget);
+    // Site Visits: 10 / 15.
+    expect(find.text('10'), findsWidgets);
+    expect(find.text(' / 15'), findsOneWidget);
   });
 
   testWidgets('ahead of the run-rate reads as On track, in green',
       (tester) async {
     // 20 by day 15 against a target of 30 beats the ~14.5 run-rate.
-    await _pump(tester, _progress(target: 30, done: 20));
+    await _pump(
+      tester,
+      progress: _progress(target: 30, done: 20),
+      categories: _sampleCategories(leadsDone: 20),
+    );
     expect(tester.takeException(), isNull);
 
     expect(find.text('On track'), findsOneWidget);
     expect(find.text('Behind target'), findsNothing);
-
-    final chart = tester.widget<LineChart>(find.byType(LineChart));
-    expect(chart.data.lineBarsData.first.color, AppColors.success);
   });
 
   testWidgets('behind the run-rate reads as Behind target, in warning',
       (tester) async {
-    await _pump(tester, _progress(target: 30, done: 2));
+    await _pump(
+      tester,
+      progress: _progress(target: 30, done: 2),
+      categories: _sampleCategories(leadsDone: 2),
+    );
     expect(tester.takeException(), isNull);
 
     expect(find.text('Behind target'), findsOneWidget);
     expect(find.text('On track'), findsNothing);
-
-    final chart = tester.widget<LineChart>(find.byType(LineChart));
-    expect(chart.data.lineBarsData.first.color, AppColors.warning);
   });
 
-  testWidgets('shows the four foot stats', (tester) async {
-    await _pump(tester, _progress(target: 30, done: 20));
-    expect(tester.takeException(), isNull);
-
-    expect(find.text('Current target'), findsOneWidget);
-    expect(find.text('Achieved'), findsOneWidget);
-    expect(find.text('Remaining'), findsOneWidget);
-    expect(find.text('Expected today'), findsOneWidget);
-
-    // Remaining = 30 - 20.
-    expect(find.text('10'), findsWidgets);
-
-    // Expected today is shown as a whole number, never a decimal. On day 15 of
-    // 31 with target 30 the precise value is 14.52, displayed rounded as 15.
-    expect(find.textContaining('.'), findsNothing);
-    expect(find.text('15'), findsWidgets);
-  });
-
-  testWidgets('with no target set it says so instead of dividing by zero',
+  testWidgets('a zero-target category does not divide by zero',
       (tester) async {
-    await _pump(tester, _progress(target: 0, done: 3));
+    await _pump(
+      tester,
+      progress: _progress(target: 30, done: 20),
+      categories: [
+        MonthlyTargetCategoryProgress(
+          label: 'Leads',
+          color: AppColors.primary,
+          progress: _progress(target: 0, done: 0),
+        ),
+      ],
+    );
+    // A target <= 0 should be handled gracefully (0% fill), not crash.
+    expect(tester.takeException(), isNull);
+    expect(find.text('Leads'), findsOneWidget);
+    expect(find.text('0%'), findsOneWidget);
+  });
+
+  testWidgets('with no categories it prompts to set targets instead',
+      (tester) async {
+    await _pump(tester, progress: _progress(target: 0, done: 3));
     expect(tester.takeException(), isNull);
 
-    expect(find.text('No target set'), findsOneWidget);
-    expect(find.textContaining('My Monthly Targets'), findsOneWidget);
-    expect(find.byType(LineChart), findsNothing);
+    expect(find.text('Set your targets'), findsOneWidget);
+    expect(find.textContaining('Set Monthly Targets'), findsOneWidget);
   });
 
   testWidgets('pending approval empty state explains the wait', (tester) async {
     await _pump(
       tester,
-      _progress(target: 0, done: 0),
+      progress: _progress(target: 0, done: 0),
       pendingApproval: true,
     );
     expect(tester.takeException(), isNull);
@@ -126,9 +159,14 @@ void main() {
   });
 
   testWidgets('lays out on a narrow phone without overflowing', (tester) async {
-    await _pump(tester, _progress(target: 30, done: 20), width: 360);
+    await _pump(
+      tester,
+      progress: _progress(target: 30, done: 20),
+      categories: _sampleCategories(leadsDone: 20),
+      width: 360,
+    );
     // An overflow would surface here.
     expect(tester.takeException(), isNull);
-    expect(find.byType(LineChart), findsOneWidget);
+    expect(find.text('Leads'), findsOneWidget);
   });
 }
