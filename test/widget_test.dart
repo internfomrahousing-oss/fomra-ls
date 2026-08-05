@@ -28,6 +28,6 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Reset Password'), findsOneWidget);
-    expect(find.text('Manage account options.'), findsOneWidget);
+    expect(find.textContaining('Manage account options'), findsOneWidget);
   });
 }

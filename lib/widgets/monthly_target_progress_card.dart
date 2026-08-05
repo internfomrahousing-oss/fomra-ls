@@ -232,12 +232,15 @@ class _ProgressTimeline extends StatelessWidget {
       children: [
         Icon(_iconFor(category.label), size: 15, color: color),
         const SizedBox(width: 7),
-        Text(
-          category.label,
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w700,
-            color: context.fomraTextPrimary,
+        Flexible(
+          child: Text(
+            category.label,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: context.fomraTextPrimary,
+            ),
           ),
         ),
         const Spacer(),
