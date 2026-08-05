@@ -6,6 +6,8 @@ import '../../analytics/monthly_target_progress.dart';
 import '../../models/land_lead_meeting.dart';
 import '../../models/monthly_target_submission.dart';
 import '../../services/management_bi_activity_service.dart';
+import '../../analytics/management_bi_metrics.dart';
+import '../../widgets/management_bi_sections.dart';
 import '../land_lead/add_lead_screen.dart';
 import '../../models/lead_list_filter.dart';
 import '../land_lead/filtered_leads_screen.dart';
@@ -1031,6 +1033,34 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     ),
                   ),
                 ),
+                if (_myLeads.isNotEmpty) ...[
+                  const SizedBox(height: AppSpacing.lg),
+                  PortalFadeSection(
+                    index: 4,
+                    child: PortalSectionCard(
+                      title: canManageTeam ? "Team's Pipeline" : 'My Pipeline',
+                      subtitle: 'Tap any stage or bucket to see those leads',
+                      icon: Icons.timeline_rounded,
+                      child: Builder(
+                        builder: (context) {
+                          final snapshot =
+                              ManagementBiMetrics.build(leads: _myLeads);
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              BiPipelineSection(
+                                summary: snapshot.pipeline,
+                                leads: _myLeads,
+                              ),
+                              const SizedBox(height: AppSpacing.lg),
+                              BiAgeingSection(rows: snapshot.ageing),
+                            ],
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                ],
               ],
               const SizedBox(height: 88),
             ],
