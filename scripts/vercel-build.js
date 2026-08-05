@@ -128,6 +128,21 @@ process.env.FLUTTER_SUPPRESS_ANALYTICS = 'true';
 run(`git config --global --add safe.directory "${flutterDir}"`);
 
 run('flutter pub get');
+
+// Run the test suite here (not just flutter build) since Vercel is currently
+// the only place a full Flutter SDK is actually available end-to-end — no
+// working GitHub Actions runner, no Flutter/Dart SDK reachable from most
+// sandboxed dev environments. Deliberately non-blocking: a test failure is
+// logged clearly but does not fail the deploy, so this adds a real
+// verification signal without introducing a new way to block production
+// releases. Revisit this trade-off if/once GitHub Actions is reliable again.
+try {
+  run('flutter test --reporter expanded');
+  console.log('flutter test: ALL TESTS PASSED');
+} catch (err) {
+  console.log('flutter test: ONE OR MORE TESTS FAILED (see output above) — continuing the build anyway, this step is non-blocking by design.');
+}
+
 run('flutter build web --release');
 
 const index = path.join(repoRoot, 'build', 'web', 'index.html');
