@@ -16,6 +16,8 @@ import '../../widgets/fomra_app_shell.dart';
 import '../../widgets/lead_portfolio_breakdown.dart';
 import '../../widgets/fomra_breadcrumb.dart';
 import '../../widgets/portal_page_layout.dart';
+import '../../widgets/ui/multi_select_field.dart';
+import 'filtered_leads_screen.dart';
 import 'lead_detail_screen.dart';
 
 class _PlottedLead {
@@ -51,15 +53,15 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
   final TextEditingController _searchCtrl = TextEditingController();
   String _search = '';
   final Set<LeadStatus> _stages = {};
-  String? _executive;
-  String? _broker;
+  Set<String> _executive = {};
+  Set<String> _broker = {};
   DateTime? _dateFilter;
 
   /// Filters excluding the free-text search — drives the "Filters" badge.
   bool get _hasFieldFilters =>
       _stages.isNotEmpty ||
-      _executive != null ||
-      _broker != null ||
+      _executive.isNotEmpty ||
+      _broker.isNotEmpty ||
       _dateFilter != null;
 
   bool get _hasActiveFilters => _hasFieldFilters || _search.trim().isNotEmpty;
@@ -68,8 +70,8 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
     _search = '';
     _searchCtrl.clear();
     _stages.clear();
-    _executive = null;
-    _broker = null;
+    _executive = {};
+    _broker = {};
     _dateFilter = null;
   }
 
@@ -100,10 +102,13 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
     final q = _search.trim().toLowerCase();
     return _scopedLeads.where((l) {
       if (_stages.isNotEmpty && !_stages.contains(l.status)) return false;
-      if (_executive != null && l.createdByName.trim() != _executive) {
+      if (_executive.isNotEmpty &&
+          !_executive.contains(l.createdByName.trim())) {
         return false;
       }
-      if (_broker != null && l.brokerName.trim() != _broker) return false;
+      if (_broker.isNotEmpty && !_broker.contains(l.brokerName.trim())) {
+        return false;
+      }
       if (_dateFilter != null) {
         final d = DateTime(l.addedOn.year, l.addedOn.month, l.addedOn.day);
         final sel =
@@ -140,7 +145,8 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
     final plotted = _plottedFrom(filtered);
     final totalAcres =
         filtered.fold<double>(0, (s, l) => s + leadPortfolioAcres(l));
-    final missingGps = filtered.length - plotted.length;
+    final missingGpsLeads =
+        filtered.where((l) => parseLeadGps(l.gpsCoordinates) == null).toList();
 
     // Initial view uses the full (unfiltered) set so the camera is stable.
     final allPlotted = _plottedFrom(_scopedLeads);
@@ -169,7 +175,7 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
           : LayoutBuilder(
               builder: (context, constraints) {
                 final wide = constraints.maxWidth >= 900;
-                final map = _buildMap(context, plotted, initialView, missingGps);
+                final map = _buildMap(context, plotted, initialView, missingGpsLeads);
                 if (wide) {
                   return Row(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -235,7 +241,7 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
     BuildContext context,
     List<_PlottedLead> plotted,
     (LatLng, double)? initialView,
-    int missingGps,
+    List<LandLead> missingGpsLeads,
   ) {
     return Stack(
       children: [
@@ -304,7 +310,7 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
             ),
           ],
         ),
-        if (missingGps > 0)
+        if (missingGpsLeads.isNotEmpty)
           Positioned(
             left: 12,
             right: 12,
@@ -313,16 +319,34 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
               color: context.fomraSurface.withValues(alpha: 0.95),
               borderRadius: BorderRadius.circular(16),
               elevation: 2,
-              child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                child: Text(
-                  '$missingGps matching site${missingGps == 1 ? '' : 's'} '
-                  'without GPS — not shown on the map.',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: context.fomraTextSecondary,
-                    height: 1.35,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(16),
+                onTap: () => FilteredLeadsScreen.openList(
+                  context,
+                  title: 'Sites without GPS',
+                  subtitle: 'Not shown on the map — add coordinates to plot these',
+                  leads: missingGpsLeads,
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 10),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '${missingGpsLeads.length} matching site'
+                          '${missingGpsLeads.length == 1 ? '' : 's'} '
+                          'without GPS — not shown on the map.',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: context.fomraTextSecondary,
+                            height: 1.35,
+                          ),
+                        ),
+                      ),
+                      Icon(Icons.chevron_right_rounded,
+                          size: 16, color: context.fomraTextSecondary),
+                    ],
                   ),
                 ),
               ),
@@ -590,20 +614,36 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
       children: [
         _sectionLabel(context, 'SITE STAGE'),
         const SizedBox(height: 8),
-        Wrap(
-          spacing: 6,
-          runSpacing: 6,
-          children: [
-            for (final s in leadStatusPipelineOrder)
-              _stageChip(context, s, apply),
-          ],
+        MultiSelectField<LeadStatus>(
+          label: 'Stage',
+          icon: Icons.timeline_rounded,
+          options: leadStatusPipelineOrder,
+          selected: _stages,
+          labelOf: (s) => s.label,
+          onChanged: (v) => apply(() {
+            _stages
+              ..clear()
+              ..addAll(v);
+          }),
         ),
         const SizedBox(height: _kControlGap + 4),
-        _dropdown(context, 'Assigned Executive', _executive,
-            _distinct((l) => l.createdByName), (v) => apply(() => _executive = v)),
+        MultiSelectField<String>(
+          label: 'Assigned Executive',
+          icon: Icons.person_outline_rounded,
+          options: _distinct((l) => l.createdByName),
+          selected: _executive,
+          labelOf: (s) => s,
+          onChanged: (v) => apply(() => _executive = v),
+        ),
         const SizedBox(height: _kControlGap),
-        _dropdown(context, 'Broker', _broker, _distinct((l) => l.brokerName),
-            (v) => apply(() => _broker = v)),
+        MultiSelectField<String>(
+          label: 'Broker',
+          icon: Icons.handshake_outlined,
+          options: _distinct((l) => l.brokerName),
+          selected: _broker,
+          labelOf: (s) => s,
+          onChanged: (v) => apply(() => _broker = v),
+        ),
         const SizedBox(height: _kControlGap),
         _dateField(context, apply),
         const SizedBox(height: _kControlGap + 6),
@@ -644,38 +684,6 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
     );
   }
 
-  // Compact stage chip — reduced height, selected highlight uses status color.
-  Widget _stageChip(
-    BuildContext context,
-    LeadStatus s,
-    void Function(VoidCallback) apply,
-  ) {
-    final selected = _stages.contains(s);
-    return FilterChip(
-      label: Text(s.label),
-      selected: selected,
-      showCheckmark: false,
-      onSelected: (v) =>
-          apply(() => v ? _stages.add(s) : _stages.remove(s)),
-      backgroundColor: context.fomraSurfaceVar,
-      selectedColor: s.color.withValues(alpha: 0.18),
-      side: BorderSide(
-        color: selected ? s.color : context.fomraBorder,
-        width: selected ? 1.4 : 1,
-      ),
-      labelStyle: TextStyle(
-        fontSize: 11.5,
-        fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
-        color: selected ? s.color : context.fomraTextSecondary,
-      ),
-      labelPadding: const EdgeInsets.symmetric(horizontal: 3),
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
-      visualDensity: const VisualDensity(horizontal: -3, vertical: -3),
-      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-    );
-  }
-
   InputDecoration _fieldDecoration(
     BuildContext context, {
     required String label,
@@ -710,28 +718,6 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
     );
   }
 
-  Widget _dropdown(
-    BuildContext context,
-    String label,
-    String? value,
-    List<String> options,
-    ValueChanged<String?> onChanged,
-  ) {
-    return DropdownButtonFormField<String?>(
-      key: ValueKey('$label-${value ?? 'all'}'),
-      initialValue: value,
-      isExpanded: true,
-      style: TextStyle(fontSize: 13, color: context.fomraTextPrimary),
-      decoration: _fieldDecoration(context, label: label),
-      items: [
-        const DropdownMenuItem<String?>(value: null, child: Text('All')),
-        for (final o in options)
-          DropdownMenuItem<String?>(value: o, child: Text(o)),
-      ],
-      onChanged: onChanged,
-    );
-  }
-
   // Compact outlined date field with a calendar icon — matches the dropdowns.
   Widget _dateField(
     BuildContext context,
@@ -748,6 +734,7 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
           initialDate: _dateFilter ?? now,
           firstDate: DateTime(now.year - 5),
           lastDate: DateTime(now.year + 1),
+          initialEntryMode: DatePickerEntryMode.input,
         );
         if (picked != null) apply(() => _dateFilter = picked);
       },
