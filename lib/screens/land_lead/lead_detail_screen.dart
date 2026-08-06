@@ -11,6 +11,7 @@ import '../../models/land_lead_site_visit.dart';
 import '../../models/lead_call_log.dart';
 import '../../models/lead_follow_up.dart';
 import '../../services/app_store.dart';
+import '../../services/employee_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/role_access.dart';
 import '../../services/lead_drop_approval_service.dart';
@@ -48,6 +49,8 @@ import 'follow_up_dialog.dart';
 import 'lead_drop_reason_dialog.dart';
 import 'legal_documents_dialog.dart';
 import 'deal_risk_details_dialog.dart';
+import 'split_lead_dialog.dart';
+import 'merge_lead_dialog.dart';
 import 'meeting_log_dialog.dart';
 import 'notes_log_dialog.dart';
 import 'signed_project_dialog.dart';
@@ -789,6 +792,92 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
     }
   }
 
+  Future<void> _reassignLead() async {
+    if (AppStore.instance.employees.isEmpty) {
+      try {
+        final list = await EmployeeService.getAll();
+        if (list.isNotEmpty) AppStore.instance.setEmployees(list);
+      } catch (_) {
+        // Picker just falls back to whatever's already loaded, if anything.
+      }
+    }
+    final currentName = lead.createdByName.trim().toLowerCase();
+    final names = AppStore.instance.employees
+        .map((e) => e.fullName.trim())
+        .where((n) => n.isNotEmpty && n.toLowerCase() != currentName)
+        .toSet()
+        .toList()
+      ..sort();
+    if (!mounted) return;
+    if (names.isEmpty) {
+      AppFeedback.info(context, 'No other employees to assign this lead to.');
+      return;
+    }
+
+    final name = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: context.fomraSurface,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+            child: Row(children: [
+              Text('Reassign ${lead.leadId} to',
+                  style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: context.fomraTextPrimary)),
+            ]),
+          ),
+          const Divider(height: 1),
+          Flexible(
+            child: ListView(
+              shrinkWrap: true,
+              children: names
+                  .map((n) => ListTile(
+                        leading: CircleAvatar(
+                          backgroundColor:
+                              AppColors.primary.withValues(alpha: 0.12),
+                          child: Text(n.isNotEmpty ? n[0].toUpperCase() : '?',
+                              style: const TextStyle(
+                                  color: AppColors.primary,
+                                  fontWeight: FontWeight.bold)),
+                        ),
+                        title: Text(n),
+                        onTap: () => Navigator.pop(ctx, n),
+                      ))
+                  .toList(),
+            ),
+          ),
+          const SizedBox(height: 8),
+        ]),
+      ),
+    );
+    if (name == null || !mounted) return;
+
+    final previousName = lead.createdByName;
+    final previousRole = lead.createdByRole;
+    setState(() {
+      lead = lead.copyWith(createdByName: name, createdByRole: 'management');
+    });
+    AppStore.instance.replaceLead(lead);
+    try {
+      await LandLeadService.assignTo(lead.leadId, name);
+      if (!mounted) return;
+      AppFeedback.success(context, 'Reassigned to $name');
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        lead = lead.copyWith(
+            createdByName: previousName, createdByRole: previousRole);
+      });
+      AppStore.instance.replaceLead(lead);
+      AppFeedback.error(context, 'Could not reassign: $e');
+    }
+  }
+
   Future<void> _launchContact(String scheme) async {
     if (_readOnly) return;
     final raw = lead.contactDetails.replaceAll(RegExp(r'[^\d+]'), '');
@@ -910,6 +999,55 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
       } else {
         await _putOnHold();
       }
+      return;
+    }
+
+    if (label == 'Reassign') {
+      if (viewOnly) {
+        AppFeedback.info(context,
+            _isLocked
+                ? 'This lead is ${lead.status.label} and locked.'
+                : 'Management view is read-only. Sign in as employee to edit.');
+        return;
+      }
+      await _reassignLead();
+      return;
+    }
+
+    if (label == 'Split Lead') {
+      if (viewOnly) {
+        AppFeedback.info(context,
+            _isLocked
+                ? 'This lead is ${lead.status.label} and locked.'
+                : 'Management view is read-only. Sign in as employee to edit.');
+        return;
+      }
+      final created = await showFomraDialog<LandLead>(
+        context: context,
+        builder: (ctx) => SplitLeadDialog(parent: lead),
+      );
+      if (created == null || !mounted) return;
+      AppStore.instance.replaceLead(created);
+      AppFeedback.success(context, 'Created ${created.leadId}');
+      return;
+    }
+
+    if (label == 'Merge Lead') {
+      if (viewOnly) {
+        AppFeedback.info(context,
+            _isLocked
+                ? 'This lead is ${lead.status.label} and locked.'
+                : 'Management view is read-only. Sign in as employee to edit.');
+        return;
+      }
+      final updated = await showFomraDialog<LandLead>(
+        context: context,
+        builder: (ctx) => MergeLeadDialog(target: lead),
+      );
+      if (updated == null || !mounted) return;
+      setState(() => lead = updated);
+      AppStore.instance.replaceLead(updated);
+      AppFeedback.success(context, 'Merged in successfully');
       return;
     }
 
@@ -1910,6 +2048,9 @@ class _ActionToolbar extends StatelessWidget {
       (Icons.draw_outlined, 'Signed', AppColors.purple),
       (Icons.currency_rupee_rounded, 'Deal & Risk', AppColors.purple),
       (Icons.pause_circle_outline, 'On Hold', AppColors.purple),
+      (Icons.call_split_rounded, 'Split Lead', AppColors.purple),
+      (Icons.call_merge_rounded, 'Merge Lead', AppColors.purple),
+      (Icons.person_add_alt_1_rounded, 'Reassign', AppColors.purple),
     ];
 
     Widget pill((IconData, String, Color) action) {

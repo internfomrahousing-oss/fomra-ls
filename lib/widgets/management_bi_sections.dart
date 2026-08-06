@@ -467,9 +467,14 @@ class _AgeTile extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: row.leads.isEmpty || onViewLead == null
+        onTap: row.leads.isEmpty
             ? null
-            : () => onViewLead!(row.leads.first),
+            : () => FilteredLeadsScreen.openList(
+                  context,
+                  title: 'Site Ageing — ${row.bucket.label}',
+                  subtitle: '${row.leads.length} lead${row.leads.length == 1 ? '' : 's'}',
+                  leads: row.leads,
+                ),
         borderRadius: BorderRadius.circular(12),
         child: Ink(
           decoration: BoxDecoration(

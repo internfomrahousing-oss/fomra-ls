@@ -489,10 +489,10 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
 
   Widget _buildTaskStatsStrip({bool onPageBg = false}) {
     final stats = [
-      ('To Do', _statusCount(TaskStatus.todo), AppColors.textSecondary, Icons.radio_button_unchecked_rounded),
-      ('In Progress', _statusCount(TaskStatus.inProgress), AppColors.info, Icons.autorenew_rounded),
-      ('Done', _statusCount(TaskStatus.done), AppColors.success, Icons.check_circle_outline_rounded),
-      ('Overdue', _statusCount(TaskStatus.overdue), AppColors.error, Icons.warning_amber_rounded),
+      ('To Do', _statusCount(TaskStatus.todo), AppColors.textSecondary, Icons.radio_button_unchecked_rounded, 1),
+      ('In Progress', _statusCount(TaskStatus.inProgress), AppColors.info, Icons.autorenew_rounded, 2),
+      ('Done', _statusCount(TaskStatus.done), AppColors.success, Icons.check_circle_outline_rounded, 3),
+      ('Overdue', _statusCount(TaskStatus.overdue), AppColors.error, Icons.warning_amber_rounded, 4),
     ];
 
     if (onPageBg) {
@@ -504,6 +504,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
                 value: s.$2,
                 icon: s.$4,
                 accent: s.$3,
+                onTap: () => _tabController.animateTo(s.$5),
               ),
             )
             .toList(),
@@ -522,7 +523,10 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
         separatorBuilder: (_, __) => const SizedBox(width: 10),
         itemBuilder: (_, i) {
           final item = stats[i];
-          return Container(
+          return InkWell(
+            onTap: () => _tabController.animateTo(item.$5),
+            borderRadius: BorderRadius.circular(14),
+            child: Container(
             width: 130,
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
@@ -552,6 +556,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen>
                   ),
                 ),
               ],
+            ),
             ),
           );
         },

@@ -301,6 +301,9 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
   void _applyFilters(LandWorkspaceFilters next) {
     setState(() {
       _filters.status = next.status;
+      _filters.statuses
+        ..clear()
+        ..addAll(next.statuses);
       _filters.landTypes
         ..clear()
         ..addAll(next.landTypes);
@@ -309,12 +312,27 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
         ..addAll(next.sources);
       _filters.highPriority = next.highPriority;
       _filters.assignedEmployee = next.assignedEmployee;
+      _filters.assignedEmployees
+        ..clear()
+        ..addAll(next.assignedEmployees);
       _filters.createdFrom = next.createdFrom;
       _filters.createdTo = next.createdTo;
       _filters.district = next.district;
+      _filters.districts
+        ..clear()
+        ..addAll(next.districts);
       _filters.taluk = next.taluk;
+      _filters.taluks
+        ..clear()
+        ..addAll(next.taluks);
       _filters.village = next.village;
+      _filters.villages
+        ..clear()
+        ..addAll(next.villages);
       _filters.broker = next.broker;
+      _filters.brokers
+        ..clear()
+        ..addAll(next.brokers);
       _filters.acresMin = next.acresMin;
       _filters.acresMax = next.acresMax;
       _filters.pendingStatus = next.pendingStatus;

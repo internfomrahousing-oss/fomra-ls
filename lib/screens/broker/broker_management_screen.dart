@@ -133,6 +133,9 @@ class _BrokerManagementScreenState extends State<BrokerManagementScreen> {
     if (applied == null || !mounted) return;
     setState(() {
       _filters.status = applied.status;
+      _filters.statuses
+        ..clear()
+        ..addAll(applied.statuses);
       _filters.landTypes
         ..clear()
         ..addAll(applied.landTypes);
@@ -141,11 +144,23 @@ class _BrokerManagementScreenState extends State<BrokerManagementScreen> {
         ..addAll(applied.sources);
       _filters.highPriority = applied.highPriority;
       _filters.assignedEmployee = applied.assignedEmployee;
+      _filters.assignedEmployees
+        ..clear()
+        ..addAll(applied.assignedEmployees);
       _filters.createdFrom = applied.createdFrom;
       _filters.createdTo = applied.createdTo;
       _filters.district = applied.district;
+      _filters.districts
+        ..clear()
+        ..addAll(applied.districts);
       _filters.taluk = applied.taluk;
+      _filters.taluks
+        ..clear()
+        ..addAll(applied.taluks);
       _filters.village = applied.village;
+      _filters.villages
+        ..clear()
+        ..addAll(applied.villages);
       _filters.broker = applied.broker;
       _filters.brokers
         ..clear()
