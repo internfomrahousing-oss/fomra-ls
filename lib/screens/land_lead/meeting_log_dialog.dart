@@ -34,6 +34,8 @@ class _MeetingLogDialogState extends State<MeetingLogDialog> {
   late DateTime _metAt = DateTime.now();
   final _durationCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
+  final Set<String> _attendeeTypes = {};
+  bool _managementPresent = false;
   bool _saving = false;
   String? _formError;
   bool _loading = true;
@@ -100,6 +102,10 @@ class _MeetingLogDialogState extends State<MeetingLogDialog> {
       setState(() => _formError = 'Enter meeting duration');
       return;
     }
+    if (_attendeeTypes.isEmpty) {
+      setState(() => _formError = 'Select who was met');
+      return;
+    }
     if (_saving) return;
 
     setState(() {
@@ -112,6 +118,8 @@ class _MeetingLogDialogState extends State<MeetingLogDialog> {
         metAt: _metAt,
         duration: duration,
         notes: _notesCtrl.text.trim(),
+        attendeeTypes: _attendeeTypes.toList(),
+        managementPresent: _managementPresent,
       );
       if (!mounted) return;
       widget.onMeetingSaved?.call();
@@ -279,6 +287,46 @@ class _MeetingLogDialogState extends State<MeetingLogDialog> {
           onEditTime: _editTime,
         ),
         const SizedBox(height: 12),
+        Text(
+          'Who was met',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: context.fomraTextSecondary,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final type in MeetingAttendeeTypes.all)
+              FilterChip(
+                label: Text(type, style: const TextStyle(fontSize: 12)),
+                selected: _attendeeTypes.contains(type),
+                selectedColor: AppColors.purple.withValues(alpha: 0.18),
+                checkmarkColor: AppColors.purple,
+                onSelected: (selected) => setState(() {
+                  if (selected) {
+                    _attendeeTypes.add(type);
+                  } else {
+                    _attendeeTypes.remove(type);
+                  }
+                }),
+              ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        CheckboxListTile(
+          value: _managementPresent,
+          onChanged: (v) => setState(() => _managementPresent = v ?? false),
+          title: const Text('Management was present',
+              style: TextStyle(fontSize: 13)),
+          controlAffinity: ListTileControlAffinity.leading,
+          contentPadding: EdgeInsets.zero,
+          dense: true,
+        ),
+        const SizedBox(height: 4),
         TextField(
           controller: _durationCtrl,
           keyboardType: TextInputType.number,
@@ -330,6 +378,32 @@ class _MeetingLogDialogState extends State<MeetingLogDialog> {
   }
 }
 
+class _MiniTag extends StatelessWidget {
+  final String label;
+  final Color color;
+
+  const _MiniTag({required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 10.5,
+          fontWeight: FontWeight.w700,
+          color: color,
+        ),
+      ),
+    );
+  }
+}
+
 class _PreviousMeetingTile extends StatelessWidget {
   final LandLeadMeeting meeting;
 
@@ -377,6 +451,19 @@ class _PreviousMeetingTile extends StatelessWidget {
                 fontSize: 11,
                 color: context.fomraTextSecondary,
               ),
+            ),
+          ],
+          if (meeting.attendeeTypes.isNotEmpty || meeting.managementPresent) ...[
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 6,
+              runSpacing: 4,
+              children: [
+                for (final type in meeting.attendeeTypes)
+                  _MiniTag(label: type, color: AppColors.purple),
+                if (meeting.managementPresent)
+                  _MiniTag(label: 'Management present', color: AppColors.info),
+              ],
             ),
           ],
           if (meeting.notes.isNotEmpty) ...[

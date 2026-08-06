@@ -6,7 +6,6 @@ ios/
 linux/
 macos/
 windows/
-test/
 .dart_tool/
 .pub-cache/
 .pub/

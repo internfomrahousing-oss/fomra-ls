@@ -16,6 +16,7 @@ import '../../widgets/fomra_app_shell.dart';
 import '../../widgets/ui/app_components.dart';
 import '../../widgets/ui/app_feedback.dart';
 import '../../widgets/ui/app_table.dart';
+import '../land_lead/filtered_leads_screen.dart';
 
 /// Management + admins can export reports, and executives can export their own
 /// (report data is already scoped to their leads via [AppStore.visibleLeads]).
@@ -573,6 +574,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
             const SizedBox(height: 20),
             _liveSummarySection(context),
             const SizedBox(height: 20),
+            _landownerMeetingOutcomeSection(context),
+            const SizedBox(height: 20),
             _lostDealAnalysisSection(context),
             const SizedBox(height: 20),
             _brokerPerformanceSection(context),
@@ -902,18 +905,128 @@ class _ReportsScreenState extends State<ReportsScreen> {
   /// Groups Dropped leads by drop_reason — the data has always been
   /// captured (lead_drop_reason.dart / the drop dialog), it just never had
   /// anywhere to be seen in aggregate before this.
+  /// The report this whole feature was built for: of leads where we
+  /// actually completed a landowner (or agreement-holder) meeting, what's
+  /// their CURRENT status — regardless of how many times it's changed
+  /// since, or whether it later went to Legal, got dropped, went on hold,
+  /// or signed. Powered by landowner_meeting_completed_at, which is set
+  /// once from the meeting log and never touched by later status changes —
+  /// see land_lead_meeting_service.dart for how it's derived.
+  Widget _landownerMeetingOutcomeSection(BuildContext context) {
+    final met = _filteredLeads
+        .where((l) => l.landownerMeetingCompletedAt != null)
+        .toList();
+
+    final byStatus = <LeadStatus, List<LandLead>>{};
+    for (final lead in met) {
+      (byStatus[lead.status] ??= []).add(lead);
+    }
+    final rows = byStatus.entries.toList()
+      ..sort((a, b) => b.value.length.compareTo(a.value.length));
+    final total = met.length;
+
+    return AppCard(
+      interactive: false,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _sectionLabel(
+              context, 'Landowner Meeting Outcome', Icons.groups_outlined,
+              trailing: '$total met'),
+          const SizedBox(height: 4),
+          Text(
+            'Of leads where we actually completed a landowner or agreement-holder '
+            'meeting, where do they stand today.',
+            style: TextStyle(fontSize: 12, color: context.fomraTextSecondary),
+          ),
+          const SizedBox(height: 12),
+          if (rows.isEmpty)
+            Text(
+              'No leads with a completed landowner meeting in the selected range.',
+              style: TextStyle(fontSize: 12.5, color: context.fomraTextSecondary),
+            )
+          else
+            for (final row in rows) ...[
+              InkWell(
+                borderRadius: BorderRadius.circular(8),
+                onTap: () => FilteredLeadsScreen.openList(
+                  context,
+                  title: '${row.key.label} — met the owner',
+                  subtitle: 'Landowner Meeting Outcome',
+                  leads: row.value,
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            width: 8,
+                            height: 8,
+                            margin: const EdgeInsets.only(right: 8),
+                            decoration: BoxDecoration(
+                              color: row.key.color,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          Expanded(
+                            child: Text(
+                              row.key.label,
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: context.fomraTextPrimary,
+                              ),
+                            ),
+                          ),
+                          Text(
+                            '${row.value.length} (${total == 0 ? 0 : (row.value.length / total * 100).round()}%)',
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w700,
+                              color: context.fomraTextSecondary,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Icon(Icons.chevron_right_rounded,
+                              size: 16, color: context.fomraTextSecondary),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: LinearProgressIndicator(
+                          value: total == 0 ? 0 : row.value.length / total,
+                          minHeight: 6,
+                          backgroundColor:
+                              context.fomraSurfaceVar.withValues(alpha: 0.5),
+                          color: row.key.color,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+        ],
+      ),
+    );
+  }
+
   Widget _lostDealAnalysisSection(BuildContext context) {
     final dropped =
         _filteredLeads.where((l) => l.status == LeadStatus.dropped).toList();
 
-    final counts = <String, int>{};
+    final byReason = <String, List<LandLead>>{};
     for (final lead in dropped) {
       final reason = lead.dropReason.trim();
       final key = reason.isEmpty ? 'Not specified' : reason;
-      counts[key] = (counts[key] ?? 0) + 1;
+      (byReason[key] ??= []).add(lead);
     }
-    final rows = counts.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
+    final rows = byReason.entries.toList()
+      ..sort((a, b) => b.value.length.compareTo(a.value.length));
     final total = dropped.length;
 
     return AppCard(
@@ -931,7 +1044,15 @@ class _ReportsScreenState extends State<ReportsScreen> {
             )
           else
             for (final row in rows) ...[
-              Padding(
+              InkWell(
+                borderRadius: BorderRadius.circular(8),
+                onTap: () => FilteredLeadsScreen.openList(
+                  context,
+                  title: 'Dropped — ${row.key}',
+                  subtitle: 'Lost Deal Analysis',
+                  leads: row.value,
+                ),
+                child: Padding(
                 padding: const EdgeInsets.only(bottom: 10),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -949,20 +1070,23 @@ class _ReportsScreenState extends State<ReportsScreen> {
                           ),
                         ),
                         Text(
-                          '${row.value} (${total == 0 ? 0 : (row.value / total * 100).round()}%)',
+                          '${row.value.length} (${total == 0 ? 0 : (row.value.length / total * 100).round()}%)',
                           style: TextStyle(
                             fontSize: 12.5,
                             fontWeight: FontWeight.w700,
                             color: context.fomraTextSecondary,
                           ),
                         ),
+                        const SizedBox(width: 4),
+                        Icon(Icons.chevron_right_rounded,
+                            size: 16, color: context.fomraTextSecondary),
                       ],
                     ),
                     const SizedBox(height: 4),
                     ClipRRect(
                       borderRadius: BorderRadius.circular(4),
                       child: LinearProgressIndicator(
-                        value: total == 0 ? 0 : row.value / total,
+                        value: total == 0 ? 0 : row.value.length / total,
                         minHeight: 6,
                         backgroundColor:
                             context.fomraSurfaceVar.withValues(alpha: 0.5),
@@ -970,6 +1094,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                       ),
                     ),
                   ],
+                ),
                 ),
               ),
             ],
@@ -1020,34 +1145,40 @@ class _ReportsScreenState extends State<ReportsScreen> {
               'No broker-sourced leads in the selected range.',
               style: TextStyle(fontSize: 12.5, color: context.fomraTextSecondary),
             )
-          else
-            Table(
-              columnWidths: const {
-                0: FlexColumnWidth(2.4),
-                1: FlexColumnWidth(1),
-                2: FlexColumnWidth(1),
-                3: FlexColumnWidth(1.2),
-              },
+          else ...[
+            Row(
               children: [
-                TableRow(
-                  children: [
-                    _brokerHeaderCell(context, 'Broker'),
-                    _brokerHeaderCell(context, 'Leads'),
-                    _brokerHeaderCell(context, 'Signed'),
-                    _brokerHeaderCell(context, 'Conv.'),
-                  ],
-                ),
-                for (final r in rows.take(15))
-                  TableRow(
-                    children: [
-                      _brokerCell(context, r.broker, bold: true),
-                      _brokerCell(context, '${r.total}'),
-                      _brokerCell(context, '${r.signed}'),
-                      _brokerCell(context, '${r.conversion.round()}%'),
-                    ],
-                  ),
+                Expanded(flex: 24, child: _brokerHeaderCell(context, 'Broker')),
+                Expanded(flex: 10, child: _brokerHeaderCell(context, 'Leads')),
+                Expanded(flex: 10, child: _brokerHeaderCell(context, 'Signed')),
+                Expanded(flex: 12, child: _brokerHeaderCell(context, 'Conv.')),
+                const SizedBox(width: 16),
               ],
             ),
+            for (final r in rows.take(15))
+              InkWell(
+                borderRadius: BorderRadius.circular(8),
+                onTap: () => FilteredLeadsScreen.openList(
+                  context,
+                  title: r.broker,
+                  subtitle: 'Broker Performance',
+                  leads: byBroker[r.broker] ?? const [],
+                ),
+                child: Row(
+                  children: [
+                    Expanded(flex: 24, child: _brokerCell(context, r.broker, bold: true)),
+                    Expanded(flex: 10, child: _brokerCell(context, '${r.total}')),
+                    Expanded(flex: 10, child: _brokerCell(context, '${r.signed}')),
+                    Expanded(flex: 12, child: _brokerCell(context, '${r.conversion.round()}%')),
+                    SizedBox(
+                      width: 16,
+                      child: Icon(Icons.chevron_right_rounded,
+                          size: 15, color: context.fomraTextSecondary),
+                    ),
+                  ],
+                ),
+              ),
+          ],
         ],
       ),
     );
