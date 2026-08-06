@@ -7,6 +7,7 @@ import '../theme/fomra_layout.dart';
 import '../theme/fomra_theme_context.dart';
 import '../utils/lead_location_parser.dart';
 import 'ui/app_components.dart';
+import 'ui/multi_select_field.dart';
 
 /// Compact stat pill for the workspace header.
 class LandWorkspaceStatPill extends StatelessWidget {
@@ -188,6 +189,15 @@ class LandWorkspaceFilters {
   String? village;
   String? broker;
 
+  /// Multi-select versions of the location/people filters above. The
+  /// singular fields are kept for backward compatibility with any code
+  /// still reading them, but the filter sheet UI now writes only to these
+  /// — same pattern already established for brokers/broker below.
+  final Set<String> districts;
+  final Set<String> taluks;
+  final Set<String> villages;
+  final Set<String> assignedEmployees;
+
   /// Multi-select brokers (OR). Used by the Broker page's filter; the Land
   /// Workspace filter leaves this empty and uses [broker] instead, so its
   /// behaviour is unchanged.
@@ -209,12 +219,20 @@ class LandWorkspaceFilters {
     this.taluk,
     this.village,
     this.broker,
+    Set<String>? districts,
+    Set<String>? taluks,
+    Set<String>? villages,
+    Set<String>? assignedEmployees,
     Set<String>? brokers,
     this.acresMin,
     this.acresMax,
     this.pendingStatus,
   })  : landTypes = landTypes ?? {},
         sources = sources ?? {},
+        districts = districts ?? {},
+        taluks = taluks ?? {},
+        villages = villages ?? {},
+        assignedEmployees = assignedEmployees ?? {},
         brokers = brokers ?? {};
 
   static const propertyTypeOptions = [
@@ -252,6 +270,10 @@ class LandWorkspaceFilters {
         taluk: taluk,
         village: village,
         broker: broker,
+        districts: {...districts},
+        taluks: {...taluks},
+        villages: {...villages},
+        assignedEmployees: {...assignedEmployees},
         brokers: {...brokers},
         acresMin: acresMin,
         acresMax: acresMax,
@@ -270,6 +292,10 @@ class LandWorkspaceFilters {
     taluk = null;
     village = null;
     broker = null;
+    districts.clear();
+    taluks.clear();
+    villages.clear();
+    assignedEmployees.clear();
     brokers.clear();
     acresMin = null;
     acresMax = null;
@@ -283,10 +309,14 @@ class LandWorkspaceFilters {
     n += sources.length;
     if (highPriority) n++;
     if (assignedEmployee != null && assignedEmployee!.trim().isNotEmpty) n++;
+    n += assignedEmployees.length;
     if (createdFrom != null || createdTo != null) n++;
     if (district != null && district!.trim().isNotEmpty) n++;
+    n += districts.length;
     if (taluk != null && taluk!.trim().isNotEmpty) n++;
+    n += taluks.length;
     if (village != null && village!.trim().isNotEmpty) n++;
+    n += villages.length;
     if (broker != null && broker!.trim().isNotEmpty) n++;
     n += brokers.length;
     if (acresMin != null || acresMax != null) n++;
@@ -317,12 +347,30 @@ class LandWorkspaceFilters {
       return false;
     }
     if (!matchesText(assignedEmployee, lead.createdByName)) return false;
+    if (assignedEmployees.isNotEmpty) {
+      final name = lead.createdByName.trim().toLowerCase();
+      if (!assignedEmployees.any((e) => e.trim().toLowerCase() == name)) {
+        return false;
+      }
+    }
     final added = lead.addedOn.toLocal();
     if (createdFrom != null && added.isBefore(createdFrom!)) return false;
     if (createdTo != null && added.isAfter(createdTo!)) return false;
     if (!matchesText(district, lead.district)) return false;
+    if (districts.isNotEmpty) {
+      final d = lead.district.trim().toLowerCase();
+      if (!districts.any((x) => x.trim().toLowerCase() == d)) return false;
+    }
     if (!matchesText(taluk, lead.taluk)) return false;
+    if (taluks.isNotEmpty) {
+      final t = lead.taluk.trim().toLowerCase();
+      if (!taluks.any((x) => x.trim().toLowerCase() == t)) return false;
+    }
     if (!matchesText(village, lead.village)) return false;
+    if (villages.isNotEmpty) {
+      final v = lead.village.trim().toLowerCase();
+      if (!villages.any((x) => x.trim().toLowerCase() == v)) return false;
+    }
     if (!matchesText(broker, lead.brokerName)) return false;
     // Multi-select brokers: keep the lead if its broker is ANY of the selected
     // (OR). Empty set means "no broker filter".
@@ -778,93 +826,10 @@ class _LandWorkspaceFilterPanel extends StatefulWidget {
 class _LandWorkspaceFilterPanelState extends State<_LandWorkspaceFilterPanel> {
   late LandWorkspaceFilters _draft;
 
-  /// Search text for the multi-select broker list.
-  String _brokerSearch = '';
-
   @override
   void initState() {
     super.initState();
     _draft = widget.initial.copy();
-  }
-
-  /// Multi-select broker picker: search box, removable chips for the chosen
-  /// brokers, then a checkable list of the rest. OR semantics live in
-  /// [LandWorkspaceFilters.matches].
-  Widget _brokerMultiSelect(BuildContext context) {
-    final all = _distinctField((l) => l.brokerName);
-    final q = _brokerSearch.trim().toLowerCase();
-    final options =
-        q.isEmpty ? all : all.where((b) => b.toLowerCase().contains(q)).toList();
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (_draft.brokers.isNotEmpty) ...[
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: [
-              for (final b in _draft.brokers)
-                Chip(
-                  label: Text(b, style: const TextStyle(fontSize: 12)),
-                  onDeleted: () => setState(() => _draft.brokers.remove(b)),
-                  deleteIcon: const Icon(Icons.close_rounded, size: 15),
-                  visualDensity: VisualDensity.compact,
-                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  backgroundColor: AppColors.primary.withValues(alpha: 0.10),
-                ),
-            ],
-          ),
-          const SizedBox(height: 8),
-        ],
-        TextField(
-          decoration: InputDecoration(
-            hintText: 'Search brokers…',
-            prefixIcon: const Icon(Icons.search_rounded, size: 20),
-            isDense: true,
-            filled: true,
-            fillColor: context.fomraSurfaceVar,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none,
-            ),
-          ),
-          onChanged: (v) => setState(() => _brokerSearch = v),
-        ),
-        const SizedBox(height: 4),
-        if (options.isEmpty)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            child: Text(
-              all.isEmpty ? 'No brokers on any lead yet.' : 'No brokers match your search.',
-              style: TextStyle(fontSize: 12, color: context.fomraTextSecondary),
-            ),
-          )
-        else
-          ConstrainedBox(
-            // Cap the list so a long roster doesn't push Apply off-screen; it
-            // scrolls within the panel's own ListView.
-            constraints: const BoxConstraints(maxHeight: 220),
-            child: ListView(
-              shrinkWrap: true,
-              children: [
-                for (final b in options)
-                  _checkTile(
-                    label: b,
-                    checked: _draft.brokers.contains(b),
-                    onChanged: (v) => setState(() {
-                      if (v) {
-                        _draft.brokers.add(b);
-                      } else {
-                        _draft.brokers.remove(b);
-                      }
-                    }),
-                  ),
-              ],
-            ),
-          ),
-      ],
-    );
   }
 
   Future<void> _pickDate({required bool isFrom}) async {
@@ -875,6 +840,7 @@ class _LandWorkspaceFilterPanelState extends State<_LandWorkspaceFilterPanel> {
       initialDate: initial,
       firstDate: DateTime(2020),
       lastDate: DateTime(now.year + 1),
+      initialEntryMode: DatePickerEntryMode.input,
     );
     if (picked == null) return;
     setState(() {
@@ -898,48 +864,6 @@ class _LandWorkspaceFilterPanelState extends State<_LandWorkspaceFilterPanel> {
     }
     final list = set.toList()..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
     return list;
-  }
-
-  Widget _dropdownFilter({
-    required BuildContext context,
-    required String label,
-    required String? value,
-    required List<String> options,
-    required ValueChanged<String?> onChanged,
-  }) {
-    final items = <String?>[null, ...options];
-    final effective = items.contains(value) ? value : null;
-    return DropdownButtonFormField<String?>(
-      key: ValueKey('$label-${effective ?? 'all'}'),
-      initialValue: effective,
-      isExpanded: true,
-      decoration: InputDecoration(
-        labelText: label,
-        filled: true,
-        fillColor: context.fomraSurfaceVar,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none,
-        ),
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 14,
-          vertical: 12,
-        ),
-      ),
-      items: [
-        DropdownMenuItem<String?>(
-          value: null,
-          child: Text('All $label'),
-        ),
-        ...options.map(
-          (n) => DropdownMenuItem<String?>(
-            value: n,
-            child: Text(n, overflow: TextOverflow.ellipsis),
-          ),
-        ),
-      ],
-      onChanged: onChanged,
-    );
   }
 
   @override
@@ -1017,14 +941,6 @@ class _LandWorkspaceFilterPanelState extends State<_LandWorkspaceFilterPanel> {
                         );
                       }),
                       const SizedBox(height: 8),
-                      // Broker Name sits directly below Lead Status on the
-                      // Broker page (multi-select with search + chips).
-                      if (widget.brokerMultiSelect) ...[
-                        const Divider(height: 28),
-                        _sectionTitle('Broker Name'),
-                        const SizedBox(height: 8),
-                        _brokerMultiSelect(context),
-                      ],
                       const Divider(height: 28),
                       _sectionTitle('Property Type'),
                       const SizedBox(height: 4),
@@ -1083,77 +999,69 @@ class _LandWorkspaceFilterPanelState extends State<_LandWorkspaceFilterPanel> {
                       const Divider(height: 28),
                       _sectionTitle('Location'),
                       const SizedBox(height: 8),
-                      _dropdownFilter(
-                        context: context,
+                      MultiSelectField<String>(
                         label: 'District',
-                        value: _draft.district,
                         options: _distinctField((l) => l.district),
-                        onChanged: (v) => setState(() => _draft.district = v),
+                        selected: _draft.districts,
+                        labelOf: (s) => s,
+                        onChanged: (v) => setState(() {
+                          _draft.districts
+                            ..clear()
+                            ..addAll(v);
+                        }),
                       ),
                       const SizedBox(height: 10),
-                      _dropdownFilter(
-                        context: context,
+                      MultiSelectField<String>(
                         label: 'Taluk',
-                        value: _draft.taluk,
                         options: _distinctField((l) => l.taluk),
-                        onChanged: (v) => setState(() => _draft.taluk = v),
+                        selected: _draft.taluks,
+                        labelOf: (s) => s,
+                        onChanged: (v) => setState(() {
+                          _draft.taluks
+                            ..clear()
+                            ..addAll(v);
+                        }),
                       ),
                       const SizedBox(height: 10),
-                      _dropdownFilter(
-                        context: context,
+                      MultiSelectField<String>(
                         label: 'Village',
-                        value: _draft.village,
                         options: _distinctField((l) => l.village),
-                        onChanged: (v) => setState(() => _draft.village = v),
+                        selected: _draft.villages,
+                        labelOf: (s) => s,
+                        onChanged: (v) => setState(() {
+                          _draft.villages
+                            ..clear()
+                            ..addAll(v);
+                        }),
                       ),
-                      // Single-select broker for the workspace; the Broker page
-                      // shows the multi-select version below Lead Status above.
-                      if (!widget.brokerMultiSelect) ...[
-                        const Divider(height: 28),
-                        _sectionTitle('Broker'),
-                        const SizedBox(height: 8),
-                        _dropdownFilter(
-                          context: context,
-                          label: 'Broker',
-                          value: _draft.broker,
-                          options: _distinctField((l) => l.brokerName),
-                          onChanged: (v) => setState(() => _draft.broker = v),
-                        ),
-                      ],
+                      const Divider(height: 28),
+                      _sectionTitle('Broker'),
+                      const SizedBox(height: 8),
+                      MultiSelectField<String>(
+                        label: 'Broker',
+                        options: _distinctField((l) => l.brokerName),
+                        selected: _draft.brokers,
+                        labelOf: (s) => s,
+                        onChanged: (v) => setState(() {
+                          _draft.brokers
+                            ..clear()
+                            ..addAll(v);
+                        }),
+                      ),
                       if (widget.employeeNames.isNotEmpty) ...[
                         const Divider(height: 28),
                         _sectionTitle('Executive'),
                         const SizedBox(height: 8),
-                        DropdownButtonFormField<String?>(
-                          key: ValueKey(_draft.assignedEmployee ?? 'all'),
-                          initialValue: _draft.assignedEmployee,
-                          isExpanded: true,
-                          decoration: InputDecoration(
-                            filled: true,
-                            fillColor: context.fomraSurfaceVar,
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide.none,
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 12,
-                            ),
-                          ),
-                          items: [
-                            const DropdownMenuItem<String?>(
-                              value: null,
-                              child: Text('All executives'),
-                            ),
-                            ...widget.employeeNames.map(
-                              (n) => DropdownMenuItem<String?>(
-                                value: n,
-                                child: Text(n),
-                              ),
-                            ),
-                          ],
-                          onChanged: (v) =>
-                              setState(() => _draft.assignedEmployee = v),
+                        MultiSelectField<String>(
+                          label: 'Executive',
+                          options: widget.employeeNames,
+                          selected: _draft.assignedEmployees,
+                          labelOf: (s) => s,
+                          onChanged: (v) => setState(() {
+                            _draft.assignedEmployees
+                              ..clear()
+                              ..addAll(v);
+                          }),
                         ),
                       ],
                       const Divider(height: 28),
