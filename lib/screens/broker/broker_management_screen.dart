@@ -133,6 +133,9 @@ class _BrokerManagementScreenState extends State<BrokerManagementScreen> {
     if (applied == null || !mounted) return;
     setState(() {
       _filters.status = applied.status;
+      _filters.statuses
+        ..clear()
+        ..addAll(applied.statuses);
       _filters.landTypes
         ..clear()
         ..addAll(applied.landTypes);

@@ -301,6 +301,9 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
   void _applyFilters(LandWorkspaceFilters next) {
     setState(() {
       _filters.status = next.status;
+      _filters.statuses
+        ..clear()
+        ..addAll(next.statuses);
       _filters.landTypes
         ..clear()
         ..addAll(next.landTypes);

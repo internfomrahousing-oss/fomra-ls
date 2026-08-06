@@ -178,6 +178,7 @@ class _LandWorkspaceStatusCardState extends State<LandWorkspaceStatusCard> {
 /// Snapshot of workspace list filters (client-side only).
 class LandWorkspaceFilters {
   LeadStatus? status;
+  final Set<LeadStatus> statuses;
   final Set<LandType> landTypes;
   final Set<InputSource> sources;
   bool highPriority;
@@ -209,6 +210,7 @@ class LandWorkspaceFilters {
 
   LandWorkspaceFilters({
     this.status,
+    Set<LeadStatus>? statuses,
     Set<LandType>? landTypes,
     Set<InputSource>? sources,
     this.highPriority = false,
@@ -228,6 +230,7 @@ class LandWorkspaceFilters {
     this.acresMax,
     this.pendingStatus,
   })  : landTypes = landTypes ?? {},
+        statuses = statuses ?? {},
         sources = sources ?? {},
         districts = districts ?? {},
         taluks = taluks ?? {},
@@ -260,6 +263,7 @@ class LandWorkspaceFilters {
 
   LandWorkspaceFilters copy() => LandWorkspaceFilters(
         status: status,
+        statuses: {...statuses},
         landTypes: {...landTypes},
         sources: {...sources},
         highPriority: highPriority,
@@ -282,6 +286,7 @@ class LandWorkspaceFilters {
 
   void clear() {
     status = null;
+    statuses.clear();
     landTypes.clear();
     sources.clear();
     highPriority = false;
@@ -305,6 +310,7 @@ class LandWorkspaceFilters {
   int get activeCount {
     var n = 0;
     if (status != null) n++;
+    n += statuses.length;
     n += landTypes.length;
     n += sources.length;
     if (highPriority) n++;
@@ -339,6 +345,7 @@ class LandWorkspaceFilters {
     }
 
     if (status != null && lead.status != status) return false;
+    if (statuses.isNotEmpty && !statuses.contains(lead.status)) return false;
     if (landTypes.isNotEmpty && !landTypes.contains(lead.landType)) return false;
     if (sources.isNotEmpty && !sources.contains(lead.inputSource)) return false;
     if (highPriority &&
@@ -924,22 +931,17 @@ class _LandWorkspaceFilterPanelState extends State<_LandWorkspaceFilterPanel> {
                     children: [
                       _sectionTitle('Lead Status'),
                       const SizedBox(height: 8),
-                      _radioTile(
-                        label: 'All Leads',
-                        selected: _draft.status == null,
-                        onTap: () => setState(() => _draft.status = null),
+                      MultiSelectField<LeadStatus>(
+                        label: 'Stage',
+                        options: LandWorkspaceFilters.statusOptions,
+                        selected: _draft.statuses,
+                        labelOf: (s) => s.label,
+                        onChanged: (v) => setState(() {
+                          _draft.statuses
+                            ..clear()
+                            ..addAll(v);
+                        }),
                       ),
-                      ...LandWorkspaceFilters.statusOptions.map((s) {
-                        return _radioTile(
-                          label: s.label,
-                          selected: _draft.status == s,
-                          leading: CircleAvatar(
-                            radius: 5,
-                            backgroundColor: s.color,
-                          ),
-                          onTap: () => setState(() => _draft.status = s),
-                        );
-                      }),
                       const SizedBox(height: 8),
                       const Divider(height: 28),
                       _sectionTitle('Property Type'),
