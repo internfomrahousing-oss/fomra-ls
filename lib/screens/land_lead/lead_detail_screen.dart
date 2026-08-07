@@ -3141,6 +3141,9 @@ class _LeadInfoCards extends StatelessWidget {
 
   String _v(String raw) => raw.trim().isEmpty ? '—' : raw.trim();
 
+  String _capitalize(String raw) =>
+      raw.isEmpty ? raw : raw[0].toUpperCase() + raw.substring(1);
+
   /// Formats a survey number + sub-division pair as `survey/subDivision`, or
   /// just `survey` when there's no sub-division.
   String _surveyLabel(String survey, String subDivision) {
@@ -3192,8 +3195,48 @@ class _LeadInfoCards extends StatelessWidget {
           if (lead.accessDetails.trim().isNotEmpty)
             _Field('Terms', lead.accessDetails.trim(),
                 style: _FieldStyle.chips, wide: true),
+          if (lead.landTypeOther.trim().isNotEmpty)
+            _Field('Land Description', lead.landTypeOther.trim(),
+                wide: true),
+          if (lead.governmentRestrictions.trim().isNotEmpty)
+            _Field('CMDA / DTCP / Zoning', lead.governmentRestrictions.trim(),
+                wide: true),
         ],
       ),
+      if (lead.numOwners.trim().isNotEmpty ||
+          lead.ownerOccupation.trim().isNotEmpty ||
+          lead.ownerMeetingLocation.trim().isNotEmpty ||
+          lead.locationRating != 'unknown' ||
+          lead.brokerKnowsOwner != null ||
+          lead.managementMetOwner != null)
+        (
+          title: 'Field Notes',
+          icon: Icons.assignment_outlined,
+          fields: [
+            if (lead.numOwners.trim().isNotEmpty)
+              _Field('Number of Owners', lead.numOwners.trim()),
+            if (lead.ownerOccupation.trim().isNotEmpty)
+              _Field('Owner Occupation', lead.ownerOccupation.trim()),
+            if (lead.ownerMeetingLocation.trim().isNotEmpty)
+              _Field('Owner Meeting Location',
+                  lead.ownerMeetingLocation.trim()),
+            if (lead.locationRating != 'unknown')
+              _Field('Location Rating', _capitalize(lead.locationRating),
+                  style: _FieldStyle.badge,
+                  color: switch (lead.locationRating) {
+                    'good' => AppColors.success,
+                    'average' => AppColors.warning,
+                    'poor' => AppColors.error,
+                    _ => AppColors.textSecondary,
+                  }),
+            if (lead.brokerKnowsOwner != null)
+              _Field('Broker Knows Owner Directly',
+                  lead.brokerKnowsOwner! ? 'Yes' : 'No'),
+            if (lead.managementMetOwner != null)
+              _Field('Management Met Owner',
+                  lead.managementMetOwner! ? 'Yes' : 'No'),
+          ],
+        ),
       if (showStatusTimeline || lead.status == LeadStatus.dropped)
         (
           title: 'Status & Timeline',
@@ -3214,6 +3257,14 @@ class _LeadInfoCards extends StatelessWidget {
             if (lead.status == LeadStatus.dropped &&
                 lead.dropNotes.trim().isNotEmpty)
               _Field('Drop notes', lead.dropNotes.trim(), wide: true),
+            if ((lead.splitFromLeadId ?? '').trim().isNotEmpty)
+              _Field('Split From', 'Lead #${lead.splitFromLeadId}'),
+            if (lead.mergedFromLeadIds.isNotEmpty)
+              _Field(
+                'Merged From',
+                lead.mergedFromLeadIds.map((id) => '#$id').join(', '),
+                wide: lead.mergedFromLeadIds.length > 2,
+              ),
           ],
         ),
     ];
