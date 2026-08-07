@@ -117,7 +117,7 @@ class FomraLSApp extends StatelessWidget {
                                       portalMode: TaskPortalMode.management),
           '/land-lead':           (_) => const LandWorkspaceScreen(initialTab: 0),
           '/employee-management': (_) => const SettingsScreen(),
-          '/task-management':     (_) => const LandWorkspaceScreen(initialTab: 0),
+          '/task-management':     (_) => const TaskManagementScreen(),
           '/market-intelligence': (_) => const HomeScreen(),
           '/legal-verification':  (_) => const LegalVerificationScreen(),
           '/broker-management':   (_) => const BrokerManagementScreen(),
