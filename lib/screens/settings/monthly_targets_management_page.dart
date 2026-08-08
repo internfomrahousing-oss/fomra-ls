@@ -1,8 +1,14 @@
 import 'package:flutter/material.dart';
 
+import '../../analytics/monthly_target_progress.dart';
 import '../../models/employee_profile.dart';
+import '../../models/land_lead.dart';
+import '../../models/land_lead_meeting.dart';
+import '../../models/land_lead_site_visit.dart';
 import '../../models/monthly_target_submission.dart';
+import '../../services/app_store.dart';
 import '../../services/employee_service.dart';
+import '../../services/management_bi_activity_service.dart';
 import '../../services/monthly_target_submission_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_theme_context.dart';
@@ -73,6 +79,9 @@ class _TargetTabState extends State<_TargetTab> {
   final DateTime _now = DateTime.now();
   List<EmployeeProfile> _employees = const [];
   Map<String, MonthlyTargetSubmission> _byEmail = const {};
+  List<LandLead> _leads = const [];
+  List<LandLeadMeeting> _meetings = const [];
+  List<LandLeadSiteVisit> _siteVisits = const [];
   bool _loading = true;
 
   String get _period => MonthlyTargetSubmission.periodOf(_now.year, _now.month);
@@ -88,6 +97,8 @@ class _TargetTabState extends State<_TargetTab> {
     final results = await Future.wait([
       EmployeeService.getAll(),
       MonthlyTargetSubmissionService.allForPeriod(_period),
+      ManagementBiActivityService.loadMeetings(),
+      ManagementBiActivityService.loadSiteVisits(),
     ]);
     if (!mounted) return;
     final employees = (results[0] as List<EmployeeProfile>)
@@ -99,8 +110,45 @@ class _TargetTabState extends State<_TargetTab> {
     setState(() {
       _employees = employees;
       _byEmail = {for (final s in subs) s.employeeEmail: s};
+      _meetings = results[2] as List<LandLeadMeeting>;
+      _siteVisits = results[3] as List<LandLeadSiteVisit>;
+      _leads = AppStore.instance.leads;
       _loading = false;
     });
+  }
+
+  /// Achieved *dates* for [employee] this month, per mandatory category —
+  /// dates rather than a plain count so MonthlyTargetProgress (the same
+  /// run-rate/on-track logic the employee's own Home card uses) can be
+  /// reused here directly instead of a second, separately-maintained copy
+  /// of that math.
+  Map<TargetCategory, List<DateTime>> _achievedDatesFor(EmployeeProfile employee) {
+    final name = employee.fullName.trim().toLowerCase();
+    if (name.isEmpty) return const {};
+    final myLeadIds = {
+      for (final l in _leads)
+        if (l.createdByName.trim().toLowerCase() == name) l.leadId,
+    };
+    if (myLeadIds.isEmpty) return const {};
+
+    final siteVisits = <DateTime>[];
+    final selfMeetings = <DateTime>[];
+    final managementMeetings = <DateTime>[];
+    for (final v in _siteVisits) {
+      if (v.visitType == LandLeadSiteVisitType.employee &&
+          myLeadIds.contains(v.leadId)) {
+        siteVisits.add(v.visitedAt);
+      }
+    }
+    for (final m in _meetings) {
+      if (!myLeadIds.contains(m.leadId)) continue;
+      (m.managementPresent ? managementMeetings : selfMeetings).add(m.metAt);
+    }
+    return {
+      TargetCategory.siteVisits: siteVisits,
+      TargetCategory.selfMeetings: selfMeetings,
+      TargetCategory.managementMeetings: managementMeetings,
+    };
   }
 
   Future<void> _edit(EmployeeProfile e) async {
@@ -171,6 +219,62 @@ class _TargetTabState extends State<_TargetTab> {
     );
   }
 
+  /// Target vs. achieved for the three mandatory categories — what
+  /// management was missing entirely before: the Target tab showed only
+  /// the goal number, never how each executive is actually tracking
+  /// against it.
+  Widget _achievementRow(
+    BuildContext context,
+    EmployeeProfile e,
+    Map<String, int> targetValues,
+  ) {
+    final dates = _achievedDatesFor(e);
+    final cats = [
+      TargetCategory.siteVisits,
+      TargetCategory.selfMeetings,
+      TargetCategory.managementMeetings,
+    ];
+    return Wrap(
+      spacing: 8,
+      runSpacing: 6,
+      children: [
+        for (final c in cats)
+          if (targetValues.containsKey(c.key))
+            _achievementChip(
+              context,
+              label: c.label,
+              progress: MonthlyTargetProgress.forMonth(
+                target: targetValues[c.key] ?? 0,
+                now: _now,
+                completedOn: dates[c] ?? const [],
+              ),
+            ),
+      ],
+    );
+  }
+
+  Widget _achievementChip(
+    BuildContext context, {
+    required String label,
+    required MonthlyTargetProgress progress,
+  }) {
+    final onTrack = progress.target <= 0 || progress.isOnTrack;
+    final color = onTrack ? AppColors.success : AppColors.warning;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Text(
+        '$label: ${progress.achieved}/${progress.target}',
+        style: TextStyle(
+            fontSize: 11, fontWeight: FontWeight.w700, color: color),
+      ),
+    );
+  }
+
   Widget _row(BuildContext context, EmployeeProfile e) {
     final sub = _byEmail[e.email.trim().toLowerCase()];
     final values = sub?.effectiveValues ?? const <String, int>{};
@@ -226,6 +330,10 @@ class _TargetTabState extends State<_TargetTab> {
                             fontWeight: FontWeight.w700,
                             color: sub.status.color)),
                   ),
+                ],
+                if (sub != null && sub.status == TargetSubmissionStatus.approved) ...[
+                  const SizedBox(height: 8),
+                  _achievementRow(context, e, values),
                 ],
               ],
             ),
