@@ -440,14 +440,14 @@ extension LeadStatusLabel on LeadStatus {
 
 /// Display order for Stage & Status dropdowns and filter chips.
 const leadStatusPipelineOrder = <LeadStatus>[
-  LeadStatus.negotiation,
-  LeadStatus.legal,
-  LeadStatus.signed,
-  LeadStatus.dropped,
   LeadStatus.prospectMeetingPending,
   LeadStatus.prospectMeetingCompleted,
   LeadStatus.managementMeetingCompleted,
+  LeadStatus.negotiation,
+  LeadStatus.legal,
+  LeadStatus.signed,
   LeadStatus.onHold,
+  LeadStatus.dropped,
 ];
 
 extension LeadStatusColor on LeadStatus {

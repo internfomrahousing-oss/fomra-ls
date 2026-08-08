@@ -44,21 +44,27 @@ class LandLeadMeetingService {
         .single();
 
     // Auto-derived milestone (see the migration comment for the full
-    // rationale): the first time a meeting with the owner/agreement-holder
-    // is logged, stamp it on the lead so it survives future status changes.
-    // Conditioned on the column still being null so an earlier, genuinely
-    // first meeting's timestamp is never overwritten by a later one.
+    // rationale): stamp the earliest date any owner/agreement-holder
+    // meeting happened, so it survives future status changes.
+    //
+    // Meetings can be logged out of chronological order — metAt is a
+    // user-picked date (see meeting_log_dialog.dart's pickLogDate), so
+    // someone catching up on a backlog might log a later meeting before
+    // an earlier one. "First logged wins" would then permanently record
+    // the wrong (later) date. Comparing against the existing value and
+    // only updating when the new meeting is actually earlier — or there's
+    // no value yet — keeps this correct regardless of entry order.
     final qualifies = attendeeTypes.any(
       (t) => MeetingAttendeeTypes.countsAsLandownerMeeting.contains(t),
     );
     if (qualifies) {
+      final metAtIso = metAt.toUtc().toIso8601String();
       await _db
           .from('land_leads')
-          .update({
-            'landowner_meeting_completed_at': metAt.toUtc().toIso8601String(),
-          })
+          .update({'landowner_meeting_completed_at': metAtIso})
           .eq('id', leadId)
-          .isFilter('landowner_meeting_completed_at', null);
+          .or('landowner_meeting_completed_at.is.null,'
+              'landowner_meeting_completed_at.gt.$metAtIso');
     }
 
     return LandLeadMeeting.fromJson(row);
