@@ -850,10 +850,16 @@ class LandLeadService {
   }
 
   /// Merges [source] into [target] — [target] survives and absorbs
-  /// [source]'s survey numbers; [source] is kept (never deleted) and gets
-  /// merged_from tracking plus an explanatory note, but its status is left
-  /// untouched — closing it out (e.g. marking Dropped) is a separate,
-  /// deliberate action via the normal flow, not an automatic side effect.
+  /// [source]'s survey numbers; [source] is kept (never deleted), gets
+  /// merged_from tracking plus an explanatory note, and is transitioned to
+  /// Dropped so it stops being counted as an independent active lead
+  /// alongside its target. (Earlier revisions left the status untouched as
+  /// a deliberate manual follow-up — verified nothing in the app actually
+  /// reminds anyone to do that, so it silently double-counted the merged
+  /// parcel in every pipeline/ageing/dashboard count instead.) Blocks the
+  /// merge entirely if [source] is already terminal (Signed/Dropped),
+  /// since overwriting an already-Signed lead's status here would erase
+  /// a real completed transaction.
   static Future<LandLead> mergeLeads({
     required LandLead target,
     required LandLead source,
@@ -864,6 +870,12 @@ class LandLeadService {
     if (target.status.isTerminal) {
       throw StateError(
         'Cannot merge into a ${target.status.label} lead — it is locked.',
+      );
+    }
+    if (source.status.isTerminal) {
+      throw StateError(
+        'Cannot merge a ${source.status.label} lead — it is locked. '
+        '${source.status == LeadStatus.signed ? "It represents a completed deal." : ""}',
       );
     }
 
@@ -894,10 +906,20 @@ class LandLeadService {
     final updatedTarget = _fromRow(row);
 
     final sourceCtx = _auditContextFor(source.leadId);
+    // The source lead is now represented by target — without this, it would
+    // remain in whatever active stage it was in and keep being counted
+    // everywhere (pipeline, ageing, dashboards) as an independent lead,
+    // double-counting the same physical parcel alongside its target.
+    // Dropped (rather than a new status) reuses existing, already-tested
+    // "no longer active but kept for history" semantics — every report
+    // that excludes dropped leads from active counts handles this for
+    // free, with no new status to teach the rest of the app about.
     await _db.from('land_leads').update({
       'notes': source.notes.isEmpty
           ? 'Merged into lead ${target.leadId}.'
           : '${source.notes}\n\n[Merged into lead ${target.leadId}.]',
+      'status': LeadStatus.dropped.name,
+      'drop_reason': 'Merged into lead ${target.leadId}',
       'updated_at': DateTime.now().toUtc().toIso8601String(),
     }).eq('id', source.leadId);
 
