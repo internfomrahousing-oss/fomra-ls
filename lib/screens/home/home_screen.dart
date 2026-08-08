@@ -253,8 +253,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
 
     // Per-category boxes/lines only when the target is the employee's approved
-    // submission. Brokers is intentionally excluded — the card tracks Leads,
-    // Site Visits (employee visits only) and Meetings.
+    // submission. New Brokers / Broker Meetings are optional categories and
+    // intentionally excluded here — this card tracks the three mandatory
+    // ones: Site Visits, Self Meetings, and Management Meetings.
     var categories = const <MonthlyTargetCategoryProgress>[];
     final tv = _approvedTargetValues;
     if (_monthlyTargetFromEmployee && tv.isNotEmpty) {
@@ -264,30 +265,41 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               visibleIds.contains(v.leadId))
             v.visitedAt,
       ];
-      final meetingDates = [
+      // Self vs Management Meetings is a real distinction, not a relabeling —
+      // it's exactly what land_lead_meetings.management_present already
+      // records (see meeting_log_dialog.dart's "Management present" toggle).
+      final selfMeetingDates = [
         for (final m in _targetMeetings)
-          if (visibleIds.contains(m.leadId)) m.metAt,
+          if (visibleIds.contains(m.leadId) && !m.managementPresent) m.metAt,
+      ];
+      final managementMeetingDates = [
+        for (final m in _targetMeetings)
+          if (visibleIds.contains(m.leadId) && m.managementPresent) m.metAt,
       ];
       categories = [
         MonthlyTargetCategoryProgress(
-          label: 'Leads',
+          label: 'Site Visits',
           color: AppColors.primary,
           progress: MonthlyTargetProgress.forMonth(
-              target: tv['leads'] ?? 0, now: now, completedOn: leadDates),
-        ),
-        MonthlyTargetCategoryProgress(
-          label: 'Site Visits',
-          color: AppColors.success,
-          progress: MonthlyTargetProgress.forMonth(
-              target: tv['site_visits'] ?? 0,
+              target: tv[TargetCategory.siteVisits.key] ?? 0,
               now: now,
               completedOn: visitDates),
         ),
         MonthlyTargetCategoryProgress(
-          label: 'Meetings',
+          label: 'Self Meetings',
+          color: AppColors.success,
+          progress: MonthlyTargetProgress.forMonth(
+              target: tv[TargetCategory.selfMeetings.key] ?? 0,
+              now: now,
+              completedOn: selfMeetingDates),
+        ),
+        MonthlyTargetCategoryProgress(
+          label: 'Management Meetings',
           color: AppColors.warning,
           progress: MonthlyTargetProgress.forMonth(
-              target: tv['meetings'] ?? 0, now: now, completedOn: meetingDates),
+              target: tv[TargetCategory.managementMeetings.key] ?? 0,
+              now: now,
+              completedOn: managementMeetingDates),
         ),
       ];
     }

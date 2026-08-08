@@ -35,20 +35,37 @@ class _EmployeeMonthlyTargetsPageState
   bool _loading = true;
   bool _submitting = false;
   String? _error;
+  var _editorKey = GlobalKey<MonthlyTargetEditorState>();
 
   String get _email =>
       (AuthService.instance.currentUser?.email ?? '').trim().toLowerCase();
   String get _name => AuthService.instance.currentUser?.fullName ?? '';
+
+  /// The month this page is for — always the *next* calendar month, since
+  /// targets are meant to be set before the month they cover begins, not
+  /// during it.
+  DateTime get _targetMonth => DateTime(_now.year, _now.month + 1);
   String get _period =>
+      MonthlyTargetSubmission.periodOf(_targetMonth.year, _targetMonth.month);
+
+  /// The current month's period — used only to check whether it was ever
+  /// submitted, so a missed deadline can be surfaced clearly.
+  String get _currentPeriod =>
       MonthlyTargetSubmission.periodOf(_now.year, _now.month);
 
-  /// This month's submission, if the employee already has one.
-  MonthlyTargetSubmission? get _current {
+  MonthlyTargetSubmission? _forPeriod(String period) {
     for (final s in _history) {
-      if (s.period == _period) return s;
+      if (s.period == period) return s;
     }
     return null;
   }
+
+  /// This month's submission, if the employee already has one.
+  MonthlyTargetSubmission? get _current => _forPeriod(_period);
+
+  /// True when there's no submission at all for the month that's already
+  /// under way — the deadline (before that month began) has passed.
+  bool get _currentMonthMissed => _forPeriod(_currentPeriod) == null;
 
   /// Editable when there's no submission yet, or the last one was rejected.
   bool get _editable {
@@ -73,13 +90,16 @@ class _EmployeeMonthlyTargetsPageState
       _history = results[0] as List<MonthlyTargetSubmission>;
       _profile = results[1] as EmployeeProfile?;
       _values = _current?.submittedValues ?? const {};
+      _editorKey = GlobalKey<MonthlyTargetEditorState>();
       _loading = false;
     });
   }
 
   Future<void> _submit() async {
-    if (_values.isEmpty) {
-      setState(() => _error = 'Select at least one category and enter a target.');
+    final missing = _editorKey.currentState?.missingMandatory ?? const [];
+    if (missing.isNotEmpty) {
+      setState(() => _error =
+          '${missing.map((c) => c.label).join(', ')} ${missing.length == 1 ? 'is' : 'are'} required.');
       return;
     }
     setState(() {
@@ -88,8 +108,8 @@ class _EmployeeMonthlyTargetsPageState
     });
     try {
       await MonthlyTargetSubmissionService.submit(
-        year: _now.year,
-        month: _now.month,
+        year: _targetMonth.year,
+        month: _targetMonth.month,
         values: _values,
         employeeEmail: _email,
         employeeName: _name,
@@ -126,10 +146,15 @@ class _EmployeeMonthlyTargetsPageState
                 SectionHeader(
                   title: 'My Monthly Targets',
                   subtitle:
-                      'Propose your targets for ${MonthlyTargetSubmission.monthName(_now.month)} ${_now.year} and submit them for management approval.',
+                      'Propose your targets for ${MonthlyTargetSubmission.monthName(_targetMonth.month)} ${_targetMonth.year} and submit them for management approval before that month begins.',
                   icon: Icons.flag_outlined,
                 ),
+                if (_currentMonthMissed) ...[
+                  const SizedBox(height: AppSpacing.md),
+                  _missedDeadlineBanner(context),
+                ],
                 if (_current != null) ...[
+                  const SizedBox(height: AppSpacing.md),
                   _statusBanner(context, _current!),
                   const SizedBox(height: AppSpacing.md),
                 ],
@@ -138,6 +163,37 @@ class _EmployeeMonthlyTargetsPageState
                 _historyCard(context),
               ],
             ),
+    );
+  }
+
+  Widget _missedDeadlineBanner(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.error.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.warning_amber_rounded,
+              color: AppColors.error, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'No target was set for ${MonthlyTargetSubmission.monthName(_now.month)} '
+              '${_now.year} before it began. Targets are due before the month they '
+              "cover starts — this month's window has passed.",
+              style: const TextStyle(
+                fontSize: 12.5,
+                color: AppColors.error,
+                height: 1.4,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -241,8 +297,7 @@ class _EmployeeMonthlyTargetsPageState
           ),
           const SizedBox(height: AppSpacing.md),
           MonthlyTargetEditor(
-            // Rebuild the editor when the underlying submission changes.
-            key: ValueKey('${_current?.id ?? 'new'}-${_current?.status.dbValue}'),
+            key: _editorKey,
             initial: _values,
             readOnly: !editable,
             onChanged: (v) {

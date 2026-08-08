@@ -3,26 +3,52 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 
 /// The target categories an employee can propose for a month.
-enum TargetCategory { leads, siteVisits, meetings }
+///
+/// Site Visits / Self Meetings / Management Meetings are mandatory — every
+/// submission must include a value for all three. New Brokers and Broker
+/// Meetings are optional, proposed only when relevant.
+enum TargetCategory {
+  siteVisits,
+  selfMeetings,
+  managementMeetings,
+  newBrokers,
+  brokerMeetings,
+}
 
 extension TargetCategoryX on TargetCategory {
   /// Stable storage key (also the JSON key in submitted/approved values).
   String get key => switch (this) {
-        TargetCategory.leads => 'leads',
         TargetCategory.siteVisits => 'site_visits',
-        TargetCategory.meetings => 'meetings',
+        TargetCategory.selfMeetings => 'self_meetings',
+        TargetCategory.managementMeetings => 'management_meetings',
+        TargetCategory.newBrokers => 'new_brokers',
+        TargetCategory.brokerMeetings => 'broker_meetings',
       };
 
   String get label => switch (this) {
-        TargetCategory.leads => 'Leads',
         TargetCategory.siteVisits => 'Site Visits',
-        TargetCategory.meetings => 'Meetings',
+        TargetCategory.selfMeetings => 'Self Meetings',
+        TargetCategory.managementMeetings => 'Management Meetings',
+        TargetCategory.newBrokers => 'New Brokers',
+        TargetCategory.brokerMeetings => 'Broker Meetings',
       };
 
   IconData get icon => switch (this) {
-        TargetCategory.leads => Icons.person_add_alt_1_outlined,
         TargetCategory.siteVisits => Icons.location_on_outlined,
-        TargetCategory.meetings => Icons.groups_outlined,
+        TargetCategory.selfMeetings => Icons.person_outline,
+        TargetCategory.managementMeetings => Icons.groups_outlined,
+        TargetCategory.newBrokers => Icons.handshake_outlined,
+        TargetCategory.brokerMeetings => Icons.forum_outlined,
+      };
+
+  /// Site Visits, Self Meetings, and Management Meetings must be filled in
+  /// on every submission. New Brokers and Broker Meetings are optional.
+  bool get mandatory => switch (this) {
+        TargetCategory.siteVisits ||
+        TargetCategory.selfMeetings ||
+        TargetCategory.managementMeetings =>
+          true,
+        TargetCategory.newBrokers || TargetCategory.brokerMeetings => false,
       };
 
   static TargetCategory? fromKey(String key) {
@@ -119,14 +145,14 @@ class MonthlyTargetSubmission {
   Map<String, int> get effectiveValues => approvedValues ?? submittedValues;
 
   /// Number used by the home Monthly Target Progress card (sites sourced).
-  /// Walks Leads → Site Visits → Meetings and returns the first positive value
-  /// so an approved submission always surfaces on home.
+  /// Walks the three mandatory categories in order and returns the first
+  /// positive value, so an approved submission always surfaces on home.
   int get sitesProgressTarget {
     final v = effectiveValues;
     for (final key in [
-      TargetCategory.leads.key,
       TargetCategory.siteVisits.key,
-      TargetCategory.meetings.key,
+      TargetCategory.selfMeetings.key,
+      TargetCategory.managementMeetings.key,
     ]) {
       final n = v[key];
       if (n != null && n > 0) return n;
