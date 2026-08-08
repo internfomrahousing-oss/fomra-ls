@@ -866,6 +866,12 @@ class LandLeadService {
         'Cannot merge into a ${target.status.label} lead — it is locked.',
       );
     }
+    if (source.status.isTerminal) {
+      throw StateError(
+        'Cannot merge a ${source.status.label} lead — it is locked. '
+        '${source.status == LeadStatus.signed ? "It represents a completed deal." : ""}',
+      );
+    }
 
     final combinedSurveys = <SurveyEntry>[
       ...target.additionalSurveyNumbers,
@@ -894,10 +900,20 @@ class LandLeadService {
     final updatedTarget = _fromRow(row);
 
     final sourceCtx = _auditContextFor(source.leadId);
+    // The source lead is now represented by target — without this, it would
+    // remain in whatever active stage it was in and keep being counted
+    // everywhere (pipeline, ageing, dashboards) as an independent lead,
+    // double-counting the same physical parcel alongside its target.
+    // Dropped (rather than a new status) reuses existing, already-tested
+    // "no longer active but kept for history" semantics — every report
+    // that excludes dropped leads from active counts handles this for
+    // free, with no new status to teach the rest of the app about.
     await _db.from('land_leads').update({
       'notes': source.notes.isEmpty
           ? 'Merged into lead ${target.leadId}.'
           : '${source.notes}\n\n[Merged into lead ${target.leadId}.]',
+      'status': LeadStatus.dropped.name,
+      'drop_reason': 'Merged into lead ${target.leadId}',
       'updated_at': DateTime.now().toUtc().toIso8601String(),
     }).eq('id', source.leadId);
 
