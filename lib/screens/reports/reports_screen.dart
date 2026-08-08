@@ -17,6 +17,7 @@ import '../../widgets/ui/app_components.dart';
 import '../../widgets/ui/app_feedback.dart';
 import '../../widgets/ui/app_table.dart';
 import '../land_lead/filtered_leads_screen.dart';
+import '../land_lead/lead_detail_screen.dart';
 
 /// Management + admins can export reports, and executives can export their own
 /// (report data is already scoped to their leads via [AppStore.visibleLeads]).
@@ -1295,8 +1296,32 @@ class _ReportsScreenState extends State<ReportsScreen> {
               minWidth: 520,
               columns: [for (final h in section.headers) AppTableColumn(h)],
               rows: [
-                for (final row in section.rows.take(8))
-                  AppTableRow(cells: [for (final c in row) Text(c)]),
+                for (var i = 0; i < section.rows.take(8).length; i++)
+                  AppTableRow(
+                    cells: [for (final c in section.rows[i]) Text(c)],
+                    onTap: i >= section.rowLeads.length ||
+                            section.rowLeads[i].isEmpty
+                        ? null
+                        : () {
+                            final rowLeads = section.rowLeads[i];
+                            if (rowLeads.length == 1) {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => LeadDetailScreen(
+                                      lead: rowLeads.first),
+                                ),
+                              );
+                            } else {
+                              FilteredLeadsScreen.openList(
+                                context,
+                                title: section.title,
+                                subtitle: section.rows[i].first,
+                                leads: rowLeads,
+                              );
+                            }
+                          },
+                  ),
               ],
             ),
           if (section.rows.length > 8)

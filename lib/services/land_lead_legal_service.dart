@@ -74,7 +74,17 @@ class LandLeadLegalService {
           ),
         );
 
-    final fileUrl = _db.storage.from(_bucket).getPublicUrl(path);
+    // Bucket is private (see supabase/private_legal_docs_and_profile_photos_buckets_2026-08.sql).
+    // A signed URL is unpredictable and file-specific, unlike the old public
+    // URL — a real security improvement even at a long expiry. True
+    // short-lived, regenerate-on-view URLs would need this (and the several
+    // places this gets persisted downstream, e.g. signed_project_dialog.dart)
+    // to store a path instead of a URL and resolve it fresh on each view —
+    // flagged as a follow-up, not attempted here given how many places
+    // already persist this URL.
+    final fileUrl = await _db.storage
+        .from(_bucket)
+        .createSignedUrl(path, 60 * 60 * 24 * 365 * 5); // 5 years
     final verified = (verifiedAt ?? DateTime.now()).toUtc();
 
     final row = await _db
