@@ -127,7 +127,7 @@ class _TargetTabState extends State<_TargetTab> {
     if (name.isEmpty) return const {};
     final myLeadIds = {
       for (final l in _leads)
-        if (l.createdByName.trim().toLowerCase() == name) l.id,
+        if (l.createdByName.trim().toLowerCase() == name) l.leadId,
     };
     if (myLeadIds.isEmpty) return const {};
 
