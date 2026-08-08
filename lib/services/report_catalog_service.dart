@@ -28,10 +28,18 @@ class ReportPreviewSection {
   final List<List<String>> rows;
   final String emptyMessage;
 
+  /// The lead(s) each row in [rows] represents, in the same order and same
+  /// length — lets the UI make a row clickable without re-deriving which
+  /// leads it summarizes. Empty (the default) for report kinds not yet
+  /// wired for click-through; the UI falls back to a plain, non-clickable
+  /// row when a given index has no entry here.
+  final List<List<LandLead>> rowLeads;
+
   const ReportPreviewSection({
     required this.title,
     required this.headers,
     required this.rows,
+    this.rowLeads = const [],
     this.emptyMessage = 'No data.',
   });
 
@@ -328,6 +336,7 @@ class ReportCatalogService {
             title: 'Employee Leads · $requested',
             headers: _leadHeaders(),
             rows: _maybeCap(_leadRows(mine), cap),
+            rowLeads: _maybeCapLeads(mine.map((l) => [l]).toList(), cap),
             emptyMessage: 'No leads for $requested.',
           ),
         ],
@@ -338,23 +347,30 @@ class ReportCatalogService {
       ...employees.map((e) => e.fullName.trim()).where((n) => n.isNotEmpty),
       ...leads.map((l) => l.createdByName.trim()).where((n) => n.isNotEmpty),
     };
-    final rows = names.map((name) {
-      final mine = leads
-          .where((l) =>
-              l.createdByName.trim().toLowerCase() == name.toLowerCase())
-          .toList();
+    final byName = <String, List<LandLead>>{
+      for (final name in names)
+        name: leads
+            .where((l) =>
+                l.createdByName.trim().toLowerCase() == name.toLowerCase())
+            .toList(),
+    };
+    final entries = names.map((name) {
+      final mine = byName[name]!;
       final acquired = mine.where((l) => l.status.isAcquired).length;
       final rate =
           mine.isEmpty ? 0 : ((acquired / mine.length) * 100).round();
-      return [
+      final row = [
         name,
         '${mine.length}',
         '$acquired',
         '${mine.where((l) => l.status.isActive).length}',
         '$rate%',
       ];
+      return (row: row, leads: mine);
     }).toList()
-      ..sort((a, b) => int.parse(b[1]).compareTo(int.parse(a[1])));
+      ..sort((a, b) => b.leads.length.compareTo(a.leads.length));
+    final rows = entries.map((e) => e.row).toList();
+    final rowLeads = entries.map((e) => e.leads).toList();
 
     return ReportPreviewData(
       generatedAt: DateTime.now(),
@@ -373,6 +389,7 @@ class ReportCatalogService {
             'Conversion',
           ],
           rows: _maybeCap(rows, cap),
+          rowLeads: _maybeCapLeads(rowLeads, cap),
           emptyMessage: 'No employee activity.',
         ),
       ],
@@ -389,19 +406,21 @@ class ReportCatalogService {
           l.district.trim().isEmpty ? '(Unspecified)' : l.district.trim();
       (map[d] ??= []).add(l);
     }
-    final rows = map.entries.map((e) {
+    final entries = map.entries.map((e) {
       final acquired = e.value.where((l) => l.status.isAcquired).length;
       final villages = e.value.map((l) => l.village.trim()).where((v) => v.isNotEmpty).toSet();
       final acres = e.value.fold<double>(0, (s, l) => s + biLeadAcres(l));
-      return [
+      final row = [
         e.key,
         '${villages.length}',
         '${e.value.length}',
         '$acquired',
         acres.toStringAsFixed(1),
       ];
+      return (row: row, leads: e.value);
     }).toList()
-      ..sort((a, b) => int.parse(b[2]).compareTo(int.parse(a[2])));
+      ..sort((a, b) => b.leads.length.compareTo(a.leads.length));
+    final rows = entries.map((e) => e.row).toList();
 
     return ReportPreviewData(
       generatedAt: DateTime.now(),
@@ -414,6 +433,8 @@ class ReportCatalogService {
           title: 'District Report',
           headers: const ['District', 'Villages', 'Sites', 'Acquired', 'Acres'],
           rows: _maybeCap(rows, cap),
+          rowLeads:
+              _maybeCapLeads(entries.map((e) => e.leads).toList(), cap),
           emptyMessage: 'No district data.',
         ),
       ],
@@ -429,11 +450,11 @@ class ReportCatalogService {
       final v = l.village.trim().isEmpty ? '(Unspecified)' : l.village.trim();
       (map[v] ??= []).add(l);
     }
-    final rows = map.entries.map((e) {
+    final entries = map.entries.map((e) {
       final acquired = e.value.where((l) => l.status.isAcquired).length;
       final acres =
           e.value.fold<double>(0, (s, l) => s + biLeadAcres(l));
-      return [
+      final row = [
         e.key,
         e.value.first.district.trim().isEmpty
             ? '-'
@@ -442,8 +463,10 @@ class ReportCatalogService {
         '$acquired',
         acres.toStringAsFixed(1),
       ];
+      return (row: row, leads: e.value);
     }).toList()
-      ..sort((a, b) => int.parse(b[2]).compareTo(int.parse(a[2])));
+      ..sort((a, b) => b.leads.length.compareTo(a.leads.length));
+    final rows = entries.map((e) => e.row).toList();
 
     return ReportPreviewData(
       generatedAt: DateTime.now(),
@@ -462,6 +485,8 @@ class ReportCatalogService {
             'Acres',
           ],
           rows: _maybeCap(rows, cap),
+          rowLeads:
+              _maybeCapLeads(entries.map((e) => e.leads).toList(), cap),
           emptyMessage: 'No village data.',
         ),
       ],
@@ -504,6 +529,8 @@ class ReportCatalogService {
             'Lead IDs',
           ],
           rows: _maybeCap(rows, cap),
+          rowLeads:
+              _maybeCapLeads(entries.map((e) => e.leads).toList(), cap),
           emptyMessage: isOwner ? 'No owners found.' : 'No brokers found.',
         ),
       ],
@@ -953,6 +980,15 @@ class ReportCatalogService {
         '… truncated ${rows.length - kReportPdfRowCap} more rows (export Excel for full set)',
       ),
     ];
+  }
+
+  /// Caps [rowLeads] to the same length _maybeCap would produce for the
+  /// parallel string rows, so the two stay index-aligned. The synthetic
+  /// "truncated" row (if any) gets an empty lead list — nothing to click.
+  static List<List<LandLead>> _maybeCapLeads(
+      List<List<LandLead>> rowLeads, bool cap) {
+    if (!cap || rowLeads.length <= kReportPdfRowCap) return rowLeads;
+    return [...rowLeads.take(kReportPdfRowCap), const []];
   }
 
   // ── Excel ────────────────────────────────────────────────────────────────
