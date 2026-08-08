@@ -850,10 +850,16 @@ class LandLeadService {
   }
 
   /// Merges [source] into [target] — [target] survives and absorbs
-  /// [source]'s survey numbers; [source] is kept (never deleted) and gets
-  /// merged_from tracking plus an explanatory note, but its status is left
-  /// untouched — closing it out (e.g. marking Dropped) is a separate,
-  /// deliberate action via the normal flow, not an automatic side effect.
+  /// [source]'s survey numbers; [source] is kept (never deleted), gets
+  /// merged_from tracking plus an explanatory note, and is transitioned to
+  /// Dropped so it stops being counted as an independent active lead
+  /// alongside its target. (Earlier revisions left the status untouched as
+  /// a deliberate manual follow-up — verified nothing in the app actually
+  /// reminds anyone to do that, so it silently double-counted the merged
+  /// parcel in every pipeline/ageing/dashboard count instead.) Blocks the
+  /// merge entirely if [source] is already terminal (Signed/Dropped),
+  /// since overwriting an already-Signed lead's status here would erase
+  /// a real completed transaction.
   static Future<LandLead> mergeLeads({
     required LandLead target,
     required LandLead source,
