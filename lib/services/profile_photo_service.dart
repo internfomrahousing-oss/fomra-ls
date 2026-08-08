@@ -32,6 +32,12 @@ class ProfilePhotoService extends ChangeNotifier {
 
   /// sanitized file basename (e.g. `vijay_fomra_com`) -> cache-busting version.
   final Map<String, int> _versions = {};
+  /// sanitized file basename -> a resolved signed URL, populated during
+  /// reconcileWithBucket() since the bucket is private (see
+  /// supabase/private_legal_docs_and_profile_photos_buckets_2026-08.sql).
+  /// Kept as a cache rather than generating one per urlFor() call so the
+  /// method can stay synchronous — it's called directly from build().
+  final Map<String, String> _signedUrls = {};
   bool _loaded = false;
 
   String _sanitize(String email) =>
@@ -87,6 +93,16 @@ class ProfilePhotoService extends ChangeNotifier {
           _versions[basename] = ts;
           changed = true;
         }
+        if (!_signedUrls.containsKey(basename)) {
+          try {
+            _signedUrls[basename] = await _db.storage
+                .from(_bucket)
+                .createSignedUrl(name, 60 * 60 * 24 * 365 * 5); // 5 years
+            changed = true;
+          } catch (_) {
+            // One bad file shouldn't block the rest of the reconcile pass.
+          }
+        }
       }
       if (changed) {
         await _persist();
@@ -106,20 +122,15 @@ class ProfilePhotoService extends ChangeNotifier {
     }
   }
 
-  /// Public URL of the photo for [email], or null when unavailable. The URL is
-  /// deterministic; [Image.network] falls back to initials if the file is
-  /// missing (404), so callers can render it unconditionally.
+  /// Signed URL of the photo for [email], or null when unavailable (no
+  /// photo, or the signed URL hasn't been resolved by reconcileWithBucket()
+  /// yet). [Image.network] falls back to initials if the file is missing
+  /// (404) or this returns null, so callers can render it unconditionally.
   String? urlFor(String? email) {
     final e = (email ?? '').trim().toLowerCase();
     if (e.isEmpty) return null;
-    try {
-      final name = _sanitize(e);
-      final base = _db.storage.from(_bucket).getPublicUrl('$name.jpg');
-      final v = _versions[name];
-      return v == null ? base : '$base?v=$v';
-    } catch (_) {
-      return null;
-    }
+    final name = _sanitize(e);
+    return _signedUrls[name];
   }
 
   String? get currentUserUrl =>
@@ -152,6 +163,13 @@ class ProfilePhotoService extends ChangeNotifier {
               const FileOptions(contentType: 'image/jpeg', upsert: true),
         );
     _versions[name] = DateTime.now().millisecondsSinceEpoch;
+    try {
+      _signedUrls[name] = await _db.storage
+          .from(_bucket)
+          .createSignedUrl('$name.jpg', 60 * 60 * 24 * 365 * 5); // 5 years
+    } catch (_) {
+      // Falls back to initials until the next reconcile; non-fatal.
+    }
     notifyListeners();
     await _persist();
   }
