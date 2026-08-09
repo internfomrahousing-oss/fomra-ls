@@ -125,15 +125,17 @@ class _TargetTabState extends State<_TargetTab> {
   Map<TargetCategory, List<DateTime>> _achievedDatesFor(EmployeeProfile employee) {
     final name = employee.fullName.trim().toLowerCase();
     if (name.isEmpty) return const {};
-    final myLeadIds = {
+    final myLeads = [
       for (final l in _leads)
-        if (l.createdByName.trim().toLowerCase() == name) l.leadId,
-    };
-    if (myLeadIds.isEmpty) return const {};
+        if (l.createdByName.trim().toLowerCase() == name) l,
+    ];
+    if (myLeads.isEmpty) return const {};
+    final myLeadIds = {for (final l in myLeads) l.leadId};
 
     final siteVisits = <DateTime>[];
     final selfMeetings = <DateTime>[];
     final managementMeetings = <DateTime>[];
+    final brokerMeetings = <DateTime>[];
     for (final v in _siteVisits) {
       if (v.visitType == LandLeadSiteVisitType.employee &&
           myLeadIds.contains(v.leadId)) {
@@ -143,11 +145,27 @@ class _TargetTabState extends State<_TargetTab> {
     for (final m in _meetings) {
       if (!myLeadIds.contains(m.leadId)) continue;
       (m.managementPresent ? managementMeetings : selfMeetings).add(m.metAt);
+      if (m.attendeeTypes.contains(MeetingAttendeeTypes.broker)) {
+        brokerMeetings.add(m.metAt);
+      }
+    }
+    // A broker counts as "new" the first time their name appears on any of
+    // this employee's leads — same rule as the employee's own Home card.
+    final firstSeen = <String, DateTime>{};
+    for (final l in myLeads) {
+      final broker = l.brokerName.trim().toLowerCase();
+      if (broker.isEmpty) continue;
+      final existing = firstSeen[broker];
+      if (existing == null || l.addedOn.isBefore(existing)) {
+        firstSeen[broker] = l.addedOn;
+      }
     }
     return {
       TargetCategory.siteVisits: siteVisits,
       TargetCategory.selfMeetings: selfMeetings,
       TargetCategory.managementMeetings: managementMeetings,
+      TargetCategory.brokerMeetings: brokerMeetings,
+      TargetCategory.newBrokers: firstSeen.values.toList(),
     };
   }
 
@@ -233,6 +251,8 @@ class _TargetTabState extends State<_TargetTab> {
       TargetCategory.siteVisits,
       TargetCategory.selfMeetings,
       TargetCategory.managementMeetings,
+      TargetCategory.brokerMeetings,
+      TargetCategory.newBrokers,
     ];
     return Wrap(
       spacing: 8,
