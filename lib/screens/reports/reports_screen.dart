@@ -16,6 +16,7 @@ import '../../widgets/fomra_app_shell.dart';
 import '../../widgets/ui/app_components.dart';
 import '../../widgets/ui/app_feedback.dart';
 import '../../widgets/ui/app_table.dart';
+import '../../widgets/ui/multi_select_field.dart';
 import '../land_lead/filtered_leads_screen.dart';
 import '../land_lead/lead_detail_screen.dart';
 
@@ -104,11 +105,11 @@ class _ReportsScreenState extends State<ReportsScreen> {
   ReportPreviewData? _previewData;
 
   DateTimeRange? _dateRange;
-  String? _executive;
-  String? _district;
-  String? _village;
-  String? _broker;
-  String? _owner;
+  Set<String> _executive = {};
+  Set<String> _district = {};
+  Set<String> _village = {};
+  Set<String> _broker = {};
+  Set<String> _owner = {};
   final Set<LeadStatus> _stages = {};
   _StatusFilter? _status;
 
@@ -128,11 +129,11 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
   int get _activeFilterCount =>
       (_dateRange != null ? 1 : 0) +
-      (_executive != null ? 1 : 0) +
-      (_district != null ? 1 : 0) +
-      (_village != null ? 1 : 0) +
-      (_broker != null ? 1 : 0) +
-      (_owner != null ? 1 : 0) +
+      (_executive.isNotEmpty ? 1 : 0) +
+      (_district.isNotEmpty ? 1 : 0) +
+      (_village.isNotEmpty ? 1 : 0) +
+      (_broker.isNotEmpty ? 1 : 0) +
+      (_owner.isNotEmpty ? 1 : 0) +
       (_stages.isNotEmpty ? 1 : 0) +
       (_status != null ? 1 : 0);
 
@@ -141,11 +142,11 @@ class _ReportsScreenState extends State<ReportsScreen> {
   void _clearFilters() {
     setState(() {
       _dateRange = null;
-      _executive = null;
-      _district = null;
-      _village = null;
-      _broker = null;
-      _owner = null;
+      _executive = {};
+      _district = {};
+      _village = {};
+      _broker = {};
+      _owner = {};
       _stages.clear();
       _status = null;
     });
@@ -170,11 +171,11 @@ class _ReportsScreenState extends State<ReportsScreen> {
             .add(const Duration(hours: 23, minutes: 59, seconds: 59));
         if (d.isBefore(start) || d.isAfter(end)) return false;
       }
-      if (_executive != null && l.createdByName != _executive) return false;
-      if (_district != null && l.district != _district) return false;
-      if (_village != null && l.village != _village) return false;
-      if (_broker != null && l.brokerName != _broker) return false;
-      if (_owner != null && l.ownerName != _owner) return false;
+      if (_executive.isNotEmpty && !_executive.contains(l.createdByName)) return false;
+      if (_district.isNotEmpty && !_district.contains(l.district)) return false;
+      if (_village.isNotEmpty && !_village.contains(l.village)) return false;
+      if (_broker.isNotEmpty && !_broker.contains(l.brokerName)) return false;
+      if (_owner.isNotEmpty && !_owner.contains(l.ownerName)) return false;
       if (_stages.isNotEmpty && !_stages.contains(l.status)) return false;
       if (_status != null && !_status!.matches(l.status)) return false;
       return true;
@@ -419,47 +420,62 @@ class _ReportsScreenState extends State<ReportsScreen> {
                 ),
               ),
               const SizedBox(height: 12),
-              _drawerDropdown('Executive', _executive,
-                  _distinct((l) => l.createdByName),
-                  (v) => apply(() => _executive = v)),
-              _drawerDropdown('District', _district,
-                  _distinct((l) => l.district),
-                  (v) => apply(() => _district = v)),
-              _drawerDropdown('Village', _village,
-                  _distinct((l) => l.village),
-                  (v) => apply(() => _village = v)),
-              _drawerDropdown('Broker', _broker,
-                  _distinct((l) => l.brokerName),
-                  (v) => apply(() => _broker = v)),
-              _drawerDropdown('Owner', _owner, _distinct((l) => l.ownerName),
-                  (v) => apply(() => _owner = v)),
-              const SizedBox(height: 4),
-              Text(
-                'Stage',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: context.fomraTextSecondary,
-                ),
+              MultiSelectField<String>(
+                label: 'Executive',
+                icon: Icons.person_outline_rounded,
+                options: _distinct((l) => l.createdByName),
+                selected: _executive,
+                labelOf: (s) => s,
+                onChanged: (v) => apply(() => _executive = v),
               ),
-              const SizedBox(height: 6),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  for (final s in leadStatusPipelineOrder)
-                    FilterChip(
-                      label: Text(s.label),
-                      selected: _stages.contains(s),
-                      onSelected: (sel) => apply(() {
-                        if (sel) {
-                          _stages.add(s);
-                        } else {
-                          _stages.remove(s);
-                        }
-                      }),
-                    ),
-                ],
+              const SizedBox(height: 8),
+              MultiSelectField<String>(
+                label: 'District',
+                icon: Icons.map_outlined,
+                options: _distinct((l) => l.district),
+                selected: _district,
+                labelOf: (s) => s,
+                onChanged: (v) => apply(() => _district = v),
+              ),
+              const SizedBox(height: 8),
+              MultiSelectField<String>(
+                label: 'Village',
+                icon: Icons.location_city_outlined,
+                options: _distinct((l) => l.village),
+                selected: _village,
+                labelOf: (s) => s,
+                onChanged: (v) => apply(() => _village = v),
+              ),
+              const SizedBox(height: 8),
+              MultiSelectField<String>(
+                label: 'Broker',
+                icon: Icons.handshake_outlined,
+                options: _distinct((l) => l.brokerName),
+                selected: _broker,
+                labelOf: (s) => s,
+                onChanged: (v) => apply(() => _broker = v),
+              ),
+              const SizedBox(height: 8),
+              MultiSelectField<String>(
+                label: 'Owner',
+                icon: Icons.badge_outlined,
+                options: _distinct((l) => l.ownerName),
+                selected: _owner,
+                labelOf: (s) => s,
+                onChanged: (v) => apply(() => _owner = v),
+              ),
+              const SizedBox(height: 8),
+              MultiSelectField<LeadStatus>(
+                label: 'Stage',
+                icon: Icons.timeline_rounded,
+                options: leadStatusPipelineOrder,
+                selected: _stages,
+                labelOf: (s) => s.label,
+                onChanged: (v) => apply(() {
+                  _stages
+                    ..clear()
+                    ..addAll(v);
+                }),
               ),
               const SizedBox(height: 12),
               _statusDropdown((v) => apply(() => _status = v)),
@@ -480,41 +496,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
           ),
         ),
       ],
-    );
-  }
-
-  Widget _drawerDropdown(
-    String label,
-    String? value,
-    List<String> options,
-    ValueChanged<String?> onChanged,
-  ) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: DropdownButtonFormField<String>(
-        key: ValueKey('rp-$label-$value'),
-        initialValue: value,
-        isExpanded: true,
-        decoration: InputDecoration(
-          labelText: label,
-          isDense: true,
-          filled: true,
-          fillColor: context.fomraSurfaceVar,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide.none,
-          ),
-        ),
-        items: [
-          DropdownMenuItem(value: null, child: Text('All $label')),
-          for (final o in options)
-            DropdownMenuItem(
-              value: o,
-              child: Text(o, overflow: TextOverflow.ellipsis),
-            ),
-        ],
-        onChanged: onChanged,
-      ),
     );
   }
 

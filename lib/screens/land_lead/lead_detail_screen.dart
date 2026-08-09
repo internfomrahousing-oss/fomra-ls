@@ -11,6 +11,7 @@ import '../../models/land_lead_site_visit.dart';
 import '../../models/lead_call_log.dart';
 import '../../models/lead_follow_up.dart';
 import '../../services/app_store.dart';
+import 'filtered_leads_screen.dart';
 import '../../services/employee_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/role_access.dart';
@@ -3110,6 +3111,7 @@ class _Field {
   final _FieldStyle style;
   final Color? color;
   final bool wide;
+  final VoidCallback? onTap;
 
   const _Field(
     this.label,
@@ -3117,6 +3119,7 @@ class _Field {
     this.style = _FieldStyle.plain,
     this.color,
     this.wide = false,
+    this.onTap,
   });
 }
 
@@ -3258,12 +3261,54 @@ class _LeadInfoCards extends StatelessWidget {
                 lead.dropNotes.trim().isNotEmpty)
               _Field('Drop notes', lead.dropNotes.trim(), wide: true),
             if ((lead.splitFromLeadId ?? '').trim().isNotEmpty)
-              _Field('Split From', 'Lead #${lead.splitFromLeadId}'),
+              _Field(
+                'Split From',
+                'Lead #${lead.splitFromLeadId}',
+                onTap: () {
+                  final parent = AppStore.instance.leads.where(
+                      (l) => l.leadId == lead.splitFromLeadId);
+                  if (parent.isEmpty) {
+                    AppFeedback.error(
+                        context, 'Lead #${lead.splitFromLeadId} not found.');
+                    return;
+                  }
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => LeadDetailScreen(lead: parent.first),
+                    ),
+                  );
+                },
+              ),
             if (lead.mergedFromLeadIds.isNotEmpty)
               _Field(
                 'Merged From',
                 lead.mergedFromLeadIds.map((id) => '#$id').join(', '),
                 wide: lead.mergedFromLeadIds.length > 2,
+                onTap: () {
+                  final sources = AppStore.instance.leads
+                      .where((l) => lead.mergedFromLeadIds.contains(l.leadId))
+                      .toList();
+                  if (sources.isEmpty) {
+                    AppFeedback.error(context, 'Merged leads not found.');
+                    return;
+                  }
+                  if (sources.length == 1) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => LeadDetailScreen(lead: sources.first),
+                      ),
+                    );
+                    return;
+                  }
+                  FilteredLeadsScreen.openList(
+                    context,
+                    title: 'Merged Into Lead #${lead.leadId}',
+                    subtitle: '${sources.length} leads merged from',
+                    leads: sources,
+                  );
+                },
               ),
           ],
         ),
@@ -3394,24 +3439,39 @@ class _LeadDetailRow extends StatelessWidget {
       ),
     );
 
+    final Widget content;
     // Chips (Terms) stay stacked so they can wrap under a full-width label;
     // everything else reads inline as LABEL  value for a denser grid.
     if (field.style == _FieldStyle.chips) {
-      return Column(
+      content = Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [label, const SizedBox(height: 4), _value(context)],
       );
+    } else {
+      content = Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          label,
+          const SizedBox(width: 8),
+          Expanded(
+            child: Align(alignment: Alignment.centerLeft, child: _value(context)),
+          ),
+          if (field.onTap != null)
+            Icon(Icons.chevron_right_rounded,
+                size: 16, color: context.fomraTextSecondary),
+        ],
+      );
     }
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        label,
-        const SizedBox(width: 8),
-        Expanded(
-          child: Align(alignment: Alignment.centerLeft, child: _value(context)),
-        ),
-      ],
+
+    if (field.onTap == null) return content;
+    return InkWell(
+      onTap: field.onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 2),
+        child: content,
+      ),
     );
   }
 

@@ -253,9 +253,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
 
     // Per-category boxes/lines only when the target is the employee's approved
-    // submission. New Brokers / Broker Meetings are optional categories and
-    // intentionally excluded here — this card tracks the three mandatory
-    // ones: Site Visits, Self Meetings, and Management Meetings.
+    // submission. New Brokers / Broker Meetings only appear when the
+    // executive actually targeted them — they're optional, so an untouched
+    // category shouldn't clutter the card with a permanent "0/0".
     var categories = const <MonthlyTargetCategoryProgress>[];
     final tv = _approvedTargetValues;
     if (_monthlyTargetFromEmployee && tv.isNotEmpty) {
@@ -301,6 +301,34 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               now: now,
               completedOn: managementMeetingDates),
         ),
+        if (tv.containsKey(TargetCategory.brokerMeetings.key))
+          MonthlyTargetCategoryProgress(
+            label: 'Broker Meetings',
+            color: AppColors.purple,
+            progress: MonthlyTargetProgress.forMonth(
+              target: tv[TargetCategory.brokerMeetings.key] ?? 0,
+              now: now,
+              completedOn: [
+                for (final m in _targetMeetings)
+                  if (visibleIds.contains(m.leadId) &&
+                      m.attendeeTypes.contains(MeetingAttendeeTypes.broker))
+                    m.metAt,
+              ],
+            ),
+          ),
+        if (tv.containsKey(TargetCategory.newBrokers.key))
+          MonthlyTargetCategoryProgress(
+            label: 'New Brokers',
+            color: AppColors.cyan,
+            progress: MonthlyTargetProgress.forMonth(
+              target: tv[TargetCategory.newBrokers.key] ?? 0,
+              now: now,
+              // A broker counts as "new" the first time their name appears
+              // on one of this executive's leads — i.e. never seen on any
+              // lead added before that one.
+              completedOn: _newBrokerDatesThisMonth(visible, now),
+            ),
+          ),
       ];
     }
 
@@ -308,6 +336,27 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       _monthlyProgress = overall;
       _monthlyCategories = categories;
     });
+  }
+
+  /// A broker counts toward "New Brokers" the first time their name shows
+  /// up on this executive's leads at all — i.e. the earliest lead carrying
+  /// that broker name was added this month. A broker name seen on any
+  /// earlier lead doesn't count again just because they show up on another
+  /// lead this month.
+  List<DateTime> _newBrokerDatesThisMonth(List<LandLead> leads, DateTime now) {
+    final firstSeen = <String, DateTime>{};
+    for (final l in leads) {
+      final broker = l.brokerName.trim().toLowerCase();
+      if (broker.isEmpty) continue;
+      final existing = firstSeen[broker];
+      if (existing == null || l.addedOn.isBefore(existing)) {
+        firstSeen[broker] = l.addedOn;
+      }
+    }
+    return [
+      for (final d in firstSeen.values)
+        if (d.year == now.year && d.month == now.month) d,
+    ];
   }
 
   void _openMyMonthlyTargets() {
