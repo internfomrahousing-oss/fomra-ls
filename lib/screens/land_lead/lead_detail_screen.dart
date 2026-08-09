@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../config/maptiler_tiles.dart';
+import '../../models/employee_profile.dart';
 import '../../models/land_lead.dart';
 import '../../models/land_lead_legal_document.dart';
 import '../../models/land_lead_meeting.dart';
@@ -858,21 +859,24 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
     );
     if (name == null || !mounted) return;
 
-    final previousName = lead.createdByName;
-    final previousRole = lead.createdByRole;
+    final employee = AppStore.instance.employees
+        .where((e) => e.fullName.trim() == name.trim())
+        .cast<EmployeeProfile?>()
+        .firstOrNull;
+    final previousAssignee = lead.assignedToName;
     setState(() {
-      lead = lead.copyWith(createdByName: name, createdByRole: 'management');
+      lead = lead.copyWith(assignedToName: name);
     });
     AppStore.instance.replaceLead(lead);
     try {
-      await LandLeadService.assignTo(lead.leadId, name);
+      await LandLeadService.assignTo(lead.leadId, name,
+          employeeEmail: employee?.email ?? '');
       if (!mounted) return;
       AppFeedback.success(context, 'Reassigned to $name');
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        lead = lead.copyWith(
-            createdByName: previousName, createdByRole: previousRole);
+        lead = lead.copyWith(assignedToName: previousAssignee);
       });
       AppStore.instance.replaceLead(lead);
       AppFeedback.error(context, 'Could not reassign: $e');
