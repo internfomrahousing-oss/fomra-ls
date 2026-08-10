@@ -763,7 +763,7 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
     if (!confirmed) return false;
 
     try {
-      await LandLeadService.delete(lead.leadId);
+      await LandLeadService.delete(lead);
       AppStore.instance.removeLead(lead.leadId);
       return true;
     } catch (e) {

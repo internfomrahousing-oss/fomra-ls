@@ -961,7 +961,54 @@ class LandLeadService {
     return updatedTarget;
   }
 
-  static Future<void> delete(String leadId) async {
+  /// Deletes [lead] and every file it owns in storage. Confirmed as a real,
+  /// reproducible-via-the-app bug during QA, not just an artifact of manual
+  /// SQL cleanup: this previously only deleted the land_leads row, so every
+  /// site photo and legal document stayed in storage forever with nothing
+  /// left pointing to it. Storage cleanup happens first — if it fails
+  /// partway, the lead (and the surviving files' DB references) are still
+  /// intact rather than the row disappearing while files silently remain.
+  static Future<void> delete(LandLead lead) async {
+    final leadId = lead.leadId;
+
+    // Site photos: no folder structure, just `{leadId}.jpg` / `{leadId}_N.jpg`
+    // — extract the storage path from each stored URL rather than guessing
+    // the naming pattern here a second time.
+    if (lead.sitePhotoUrls.isNotEmpty) {
+      final paths = lead.sitePhotoUrls
+          .map((url) {
+            final marker = '/$_photoBucket/';
+            final i = url.indexOf(marker);
+            if (i == -1) return null;
+            final path = url.substring(i + marker.length);
+            // Strip any query string (cache-busting ?v=... etc).
+            final q = path.indexOf('?');
+            return q == -1 ? path : path.substring(0, q);
+          })
+          .whereType<String>()
+          .toList();
+      if (paths.isNotEmpty) {
+        try {
+          await _db.storage.from(_photoBucket).remove(paths);
+        } catch (_) {
+          // Best-effort — a stale/broken URL shouldn't block the delete.
+        }
+      }
+    }
+
+    // Legal documents: real `{leadId}/filename` folder prefix, so list then
+    // remove everything under it in one go.
+    try {
+      final legalDocsBucket = _db.storage.from('land-lead-legal-docs');
+      final objects = await legalDocsBucket.list(path: leadId);
+      if (objects.isNotEmpty) {
+        await legalDocsBucket
+            .remove(objects.map((o) => '$leadId/${o.name}').toList());
+      }
+    } catch (_) {
+      // Best-effort, same reasoning as above.
+    }
+
     final ctx = _auditContextFor(leadId);
     await _db.from('land_leads').delete().eq('id', leadId);
     await AuditLogService.log(
