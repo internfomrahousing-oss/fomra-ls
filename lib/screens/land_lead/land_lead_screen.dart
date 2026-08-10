@@ -73,7 +73,7 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
     return _employeeNames.where((n) {
       final name = n.trim().toLowerCase();
       final ownsEvery = selected
-          .every((l) => l.createdByName.trim().toLowerCase() == name);
+          .every((l) => l.assignedToName.trim().toLowerCase() == name);
       return !ownsEvery;
     }).toList();
   }
@@ -197,18 +197,19 @@ class _LandLeadScreenState extends State<LandLeadScreen> {
 
   void _assignLeadsTo(List<String> leadIds, String name) {
     final all = AppStore.instance.leads;
+    final employee = AppStore.instance.employees
+        .where((e) => e.fullName.trim() == name.trim())
+        .cast<EmployeeProfile?>()
+        .firstOrNull;
     for (final id in leadIds) {
       final lead = all.where((l) => l.leadId == id).cast<LandLead?>().firstOrNull;
-      if (lead == null || lead.createdByName == name) continue;
-      final previousName = lead.createdByName;
-      final previousRole = lead.createdByRole;
-      AppStore.instance.replaceLead(
-        lead.copyWith(createdByName: name, createdByRole: 'management'),
-      );
-      LandLeadService.assignTo(id, name).catchError((_) {
-        AppStore.instance.replaceLead(
-          lead.copyWith(createdByName: previousName, createdByRole: previousRole),
-        );
+      if (lead == null || lead.assignedToName == name) continue;
+      final previousAssignee = lead.assignedToName;
+      AppStore.instance.replaceLead(lead.copyWith(assignedToName: name));
+      LandLeadService.assignTo(id, name, employeeEmail: employee?.email ?? '')
+          .catchError((_) {
+        AppStore.instance
+            .replaceLead(lead.copyWith(assignedToName: previousAssignee));
       });
     }
     // One targeted notification for the assignee.

@@ -154,4 +154,62 @@ void main() {
       expect(notified, 1);
     });
   });
+
+  group('allows()/scope() — reassignment visibility', () {
+    LandLead lead({required String createdBy, String assignedTo = ''}) =>
+        LandLead(
+          leadId: 'L1',
+          inputSource: InputSource.broker,
+          location: '',
+          gpsCoordinates: '',
+          village: '',
+          taluk: '',
+          district: '',
+          pincode: '',
+          surveyNumber: '',
+          landExtent: '',
+          ownerName: '',
+          contactDetails: '',
+          landType: LandType.other,
+          roadWidth: '',
+          accessDetails: '',
+          notes: '',
+          addedOn: DateTime(2026, 1, 1),
+          createdByName: createdBy,
+          assignedToName: assignedTo,
+        );
+
+    setUp(() {
+      AppStore.instance.setEmployees([_emp('Devaraj', 'devaraj@f.com')]);
+    });
+
+    test(
+        'the original creator keeps visibility after the lead is reassigned '
+        'away from them — the actual bug this locks in', () {
+      final l = lead(createdBy: 'Devaraj', assignedTo: 'Saurabh');
+      final names = LeadVisibility.namesFor(
+          isManagement: false, me: 'Devaraj', email: 'devaraj@f.com');
+      expect(names, {'devaraj'});
+      expect(LeadVisibility.leadMatchesNames(l, names!), isTrue,
+          reason: 'Devaraj created this lead — reassigning it away must not '
+              'erase his own visibility into his prior work on it.');
+    });
+
+    test('the new assignee gains visibility even though someone else created it',
+        () {
+      final l = lead(createdBy: 'Devaraj', assignedTo: 'Saurabh');
+      final names = LeadVisibility.namesFor(
+          isManagement: false, me: 'Saurabh', email: 'saurabh@f.com');
+      expect(names, {'saurabh'});
+      expect(LeadVisibility.leadMatchesNames(l, names!), isTrue);
+    });
+
+    test('an unrelated executive still cannot see a lead that is neither '
+        'theirs nor assigned to them', () {
+      final l = lead(createdBy: 'Devaraj', assignedTo: 'Saurabh');
+      final names = LeadVisibility.namesFor(
+          isManagement: false, me: 'Someone Else', email: 'other@f.com');
+      expect(LeadVisibility.leadMatchesNames(l, names!), isFalse);
+    });
+  });
 }

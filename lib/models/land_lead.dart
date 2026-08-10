@@ -101,6 +101,12 @@ class LandLead {
   /// `employee` when the named person posted the lead themselves;
   /// `management` when management created or assigned it.
   final String createdByRole;
+  /// Current assignee — who's actually meant to be working this lead right
+  /// now. Separate from [createdByName] (who originally sourced/created
+  /// it, never changed by reassignment) so the original executive keeps
+  /// visibility into their own historical work on a lead after it's
+  /// handed to someone else. See LeadVisibility, which checks both.
+  final String assignedToName;
   LeadStatus status;
   final String dropReason;
   final String dropNotes;
@@ -191,6 +197,7 @@ class LandLead {
     required this.addedOn,
     this.createdByName = '',
     this.createdByRole = '',
+    this.assignedToName = '',
     this.status = LeadStatus.prospectMeetingPending,
     this.dropReason = '',
     this.dropNotes = '',
@@ -262,6 +269,7 @@ class LandLead {
     List<String>? sitePhotoUrls,
     String? createdByName,
     String? createdByRole,
+    String? assignedToName,
     LeadStatus? status,
     String? dropReason,
     String? dropNotes,
@@ -331,6 +339,7 @@ class LandLead {
         addedOn: addedOn,
         createdByName: createdByName ?? this.createdByName,
         createdByRole: createdByRole ?? this.createdByRole,
+        assignedToName: assignedToName ?? this.assignedToName,
         status: status ?? this.status,
         dropReason: dropReason ?? this.dropReason,
         dropNotes: dropNotes ?? this.dropNotes,

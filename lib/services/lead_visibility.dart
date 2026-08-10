@@ -7,11 +7,14 @@ import 'view_scope.dart';
 
 /// The one rule for which leads the signed-in user may see.
 ///
-/// Management sees every site. An Executive only ever sees their own. A
-/// Reporting Manager / Head sees either the reporting line *under* them or just
-/// their own sites, depending on [ViewScope] — which is what the header's
-/// Team / Individual toggle drives. Those two views are disjoint: Team is the
-/// people under you, Individual is you.
+/// Management sees every site. An Executive only ever sees their own — where
+/// "their own" means a lead they created OR one currently assigned to them
+/// (see [allows]/[scope]), so reassigning a lead away from someone doesn't
+/// erase their own prior history on it. A Reporting Manager / Head sees
+/// either the reporting line *under* them or just their own sites, depending
+/// on [ViewScope] — which is what the header's Team / Individual toggle
+/// drives. Those two views are disjoint: Team is the people under you,
+/// Individual is you.
 ///
 /// Every lead list, count, chart, report and map marker resolves through this
 /// (via [AppStore.visibleLeads], [leadsVisibleToCurrentUser], or directly), so
@@ -81,14 +84,30 @@ abstract final class LeadVisibility {
       ..remove(name);
   }
 
+  /// A lead is visible if either its original creator OR its current
+  /// assignee is in [names] — reassignment moves who's actively working a
+  /// lead without erasing the original creator's own history on it (their
+  /// prior meetings/calls/visits stay theirs to see). See
+  /// LandLeadService.assignTo(), which deliberately never touches
+  /// createdByName for exactly this reason.
+  /// The real matching rule, exposed so tests can exercise it directly
+  /// without needing a live AuthService session (same reasoning as
+  /// [namesFor] being visible-for-testing).
+  @visibleForTesting
+  static bool leadMatchesNames(LandLead lead, Set<String> names) {
+    return names.contains(_norm(lead.createdByName)) ||
+        (lead.assignedToName.trim().isNotEmpty &&
+            names.contains(_norm(lead.assignedToName)));
+  }
+
   static bool allows(LandLead lead) {
     final names = allowedCreatorNames();
-    return names == null || names.contains(_norm(lead.createdByName));
+    return names == null || leadMatchesNames(lead, names);
   }
 
   static List<LandLead> scope(List<LandLead> leads) {
     final names = allowedCreatorNames();
     if (names == null) return leads;
-    return leads.where((l) => names.contains(_norm(l.createdByName))).toList();
+    return leads.where((l) => leadMatchesNames(l, names)).toList();
   }
 }

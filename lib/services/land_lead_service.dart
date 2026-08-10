@@ -222,11 +222,33 @@ class LandLeadService {
   /// Reassign a lead to an employee (by name). Since a lead's owning employee
   /// is tracked via created_by_name, this makes the lead appear on that
   /// employee's leads page.
-  static Future<void> assignTo(String leadId, String employeeName) async {
+  /// Reassigns a lead to [employeeEmail] ([employeeName] is display-only).
+  /// Deliberately does NOT touch created_by_name/created_by — that stays
+  /// the original creator forever, so their own historical meetings/calls/
+  /// visits on this lead stay visible to them (LeadVisibility checks both
+  /// created_by_name and assigned_to_name — see that class). Resolves the
+  /// assignee's real auth UUID via user_id_for_email() so the RLS policy's
+  /// assigned_to = auth.uid() branch actually grants them write access,
+  /// not just app-level visibility.
+  static Future<void> assignTo(
+    String leadId,
+    String employeeName, {
+    required String employeeEmail,
+  }) async {
+    String? assigneeUuid;
+    if (employeeEmail.trim().isNotEmpty) {
+      try {
+        assigneeUuid =
+            await _db.rpc('user_id_for_email', params: {'target_email': employeeEmail.trim()})
+                as String?;
+      } catch (_) {
+        // Best-effort — app-level visibility (assigned_to_name) still works
+        // even if this couldn't resolve a UUID for some reason.
+      }
+    }
     await _db.from('land_leads').update({
-      'created_by_name': employeeName,
-      // Management reassignment — show as "Assigned", not "Posted by".
-      'created_by_role': 'management',
+      'assigned_to': assigneeUuid,
+      'assigned_to_name': employeeName,
       'updated_at': DateTime.now().toUtc().toIso8601String(),
     }).eq('id', leadId);
     final ctx = _auditContextFor(leadId);
@@ -234,7 +256,7 @@ class LandLeadService {
       action: 'assign',
       entityType: 'lead',
       entityId: leadId,
-      field: 'created_by_name',
+      field: 'assigned_to_name',
       oldValue: '',
       newValue: employeeName,
       module: 'Lead',
@@ -1036,6 +1058,7 @@ class LandLeadService {
       sitePhotoUrls: photoUrls,
       addedOn: DateTime.parse(r['added_on'] as String),
       createdByName: r['created_by_name'] as String? ?? '',
+      assignedToName: r['assigned_to_name'] as String? ?? '',
       createdByRole: r['created_by_role'] as String? ?? '',
       status: parseLeadStatus(r['status'] as String?),
       dropReason: r['drop_reason'] as String? ?? '',
