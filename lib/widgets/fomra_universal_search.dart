@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../models/land_lead.dart';
 import '../screens/home/contact_directory_screen.dart';
+import '../screens/land_lead/filtered_leads_screen.dart';
 import '../screens/land_lead/lead_detail_screen.dart';
 import '../services/app_store.dart';
 import '../services/universal_search_service.dart';
@@ -348,6 +349,13 @@ class _FomraUniversalSearchBarState extends State<FomraUniversalSearchBar> {
     );
   }
 
+  /// Beyond this many lead results, the dropdown shows a capped preview
+  /// plus a "See all" tile instead of cramming every match into the
+  /// fixed-height overlay — searching something broad (a common village
+  /// name, a status) could otherwise match dozens of leads with no way to
+  /// see them as a proper list, only one at a time.
+  static const _kInlineLeadCap = 5;
+
   List<Widget> _buildGroupedResults(BuildContext context) {
     final grouped = <UniversalSearchKind, List<UniversalSearchHit>>{};
     for (final hit in _results) {
@@ -372,7 +380,11 @@ class _FomraUniversalSearchBarState extends State<FomraUniversalSearchBar> {
           ),
         ),
       );
-      for (final hit in items) {
+      final capped = kind == UniversalSearchKind.lead &&
+              items.length > _kInlineLeadCap
+          ? items.take(_kInlineLeadCap).toList()
+          : items;
+      for (final hit in capped) {
         widgets.add(
           ListTile(
             dense: true,
@@ -415,7 +427,49 @@ class _FomraUniversalSearchBarState extends State<FomraUniversalSearchBar> {
           ),
         );
       }
+      if (kind == UniversalSearchKind.lead && items.length > _kInlineLeadCap) {
+        widgets.add(
+          ListTile(
+            dense: true,
+            leading: Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              alignment: Alignment.center,
+              child: const Icon(Icons.list_alt_rounded,
+                  size: 18, color: AppColors.primary),
+            ),
+            title: Text(
+              'See all ${items.length} leads',
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: AppColors.primary,
+              ),
+            ),
+            onTap: () => _openAllLeadResults(items),
+          ),
+        );
+      }
     }
     return widgets;
+  }
+
+  void _openAllLeadResults(List<UniversalSearchHit> leadHits) {
+    _hideOverlay();
+    _focus.unfocus();
+    final query = _ctrl.text.trim();
+    final leads = leadHits.map((h) => h.lead).whereType<LandLead>().toList();
+    _clear();
+    if (!mounted || leads.isEmpty) return;
+    FilteredLeadsScreen.openList(
+      context,
+      title: 'Search results',
+      subtitle: '"$query" — ${leads.length} leads',
+      leads: leads,
+    );
   }
 }
