@@ -14,6 +14,7 @@ import '../../utils/lead_location_parser.dart';
 import '../../utils/maps_navigation.dart';
 import '../../widgets/fomra_app_shell.dart';
 import '../../widgets/lead_portfolio_breakdown.dart';
+import '../../widgets/map_layer_toggle.dart';
 import '../../widgets/fomra_breadcrumb.dart';
 import '../../widgets/portal_page_layout.dart';
 import '../../widgets/ui/multi_select_field.dart';
@@ -39,6 +40,7 @@ class LeadsMapScreen extends StatefulWidget {
 class _LeadsMapScreenState extends State<LeadsMapScreen> {
   final MapController _mapController = MapController();
   bool _mapReady = false;
+  bool _satelliteLayer = false;
 
   /// The pin whose compact details card is shown on the map (null = none).
   _PlottedLead? _selectedPin;
@@ -253,11 +255,9 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
             onMapReady: () => setState(() => _mapReady = true),
           ),
           children: [
-            TileLayer(
-              urlTemplate: MapTilerTiles.standard,
-              fallbackUrl: MapTilerTiles.standardFallback,
-              userAgentPackageName: 'in.fomrahousing.fomrals',
-              maxZoom: 22,
+            MapTilerTiles.tileLayer(
+              urlTemplate: MapTilerTiles.urlFor(satelliteLayer: _satelliteLayer),
+              satelliteLayer: _satelliteLayer,
             ),
             MarkerLayer(
               markers: [
@@ -352,6 +352,16 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
               ),
             ),
           ),
+        // Layer toggle: top-left, offset below the GPS banner's typical
+        // single-line height so the two don't overlap when both are shown.
+        Positioned(
+          left: 12,
+          top: missingGpsLeads.isNotEmpty ? 64 : 12,
+          child: MapLayerToggle(
+            satellite: _satelliteLayer,
+            onChanged: (v) => setState(() => _satelliteLayer = v),
+          ),
+        ),
         // Bottom overlay: the tapped pin's details card floats above the status
         // legend, which now stays visible instead of hiding. The popup is
         // rendered here in the map's outer Stack (not inside the MarkerLayer) so
