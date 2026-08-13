@@ -11,7 +11,6 @@ import '../../models/land_lead.dart';
 import '../../analytics/management_intelligence.dart';
 import '../../services/app_store.dart';
 import '../../theme/app_theme.dart';
-import '../../config/maptiler_tiles.dart';
 import '../../theme/fomra_layout.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../widgets/add_lead_ui.dart';
@@ -161,7 +160,6 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
   int _pinFetchSeq = 0;
 
   static const _kDefaultMapCenter = LatLng(13.0827, 80.2707);
-  static final _kMapTileUrl = MapTilerTiles.standard;
 
   // Terms (serialized deal selection → LandLead.accessDetails)
   String? _termsType;
@@ -1476,7 +1474,6 @@ class _AddLeadScreenState extends State<AddLeadScreen> {
                                 const SizedBox(height: AddLeadUi.fieldGap),
                                 AddLeadMapPicker(
                                   mapController: _mapController,
-                                  tileUrl: _kMapTileUrl,
                                   defaultCenter: _kDefaultMapCenter,
                                   pinnedPoint: _pinnedPoint,
                                   resolving: _resolvingPin,

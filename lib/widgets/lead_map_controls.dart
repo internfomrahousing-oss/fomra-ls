@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
+import '../config/maptiler_tiles.dart';
 import '../theme/app_theme.dart';
 import '../theme/fomra_theme_context.dart';
+import 'map_layer_toggle.dart';
 
 /// Small floating +/- zoom buttons for a [FlutterMap], plus an optional
 /// expand/fullscreen button — used on every inline lead-location map so
@@ -54,10 +56,11 @@ class MapZoomControls extends StatelessWidget {
 }
 
 /// Pushes a full-screen map view. Pass [onTap] to allow repositioning the pin
-/// (Add/Edit Lead); leave it null for a read-only view (View Lead).
+/// (Add/Edit Lead); leave it null for a read-only view (View Lead). Has its
+/// own Standard/Satellite toggle, independent of whatever layer the caller
+/// happened to be showing.
 Future<void> showFullscreenLeadMap(
   BuildContext context, {
-  required String tileUrl,
   required LatLng initialCenter,
   double initialZoom = 16,
   LatLng? pinnedPoint,
@@ -68,7 +71,6 @@ Future<void> showFullscreenLeadMap(
     MaterialPageRoute(
       fullscreenDialog: true,
       builder: (_) => _FullscreenLeadMap(
-        tileUrl: tileUrl,
         initialCenter: initialCenter,
         initialZoom: initialZoom,
         pinnedPoint: pinnedPoint,
@@ -80,7 +82,6 @@ Future<void> showFullscreenLeadMap(
 }
 
 class _FullscreenLeadMap extends StatefulWidget {
-  final String tileUrl;
   final LatLng initialCenter;
   final double initialZoom;
   final LatLng? pinnedPoint;
@@ -88,7 +89,6 @@ class _FullscreenLeadMap extends StatefulWidget {
   final String title;
 
   const _FullscreenLeadMap({
-    required this.tileUrl,
     required this.initialCenter,
     required this.initialZoom,
     required this.pinnedPoint,
@@ -104,6 +104,7 @@ class _FullscreenLeadMapState extends State<_FullscreenLeadMap> {
   final _controller = MapController();
   late LatLng? _pinnedPoint = widget.pinnedPoint;
   bool _updating = false;
+  bool _satelliteLayer = false;
 
   bool get _readOnly => widget.onTap == null;
 
@@ -145,9 +146,10 @@ class _FullscreenLeadMapState extends State<_FullscreenLeadMap> {
               onTap: _readOnly ? null : (_, point) => _handleTap(point),
             ),
             children: [
-              TileLayer(
-                urlTemplate: widget.tileUrl,
-                userAgentPackageName: 'in.fomrahousing.fomrals',
+              MapTilerTiles.tileLayer(
+                urlTemplate:
+                    MapTilerTiles.urlFor(satelliteLayer: _satelliteLayer),
+                satelliteLayer: _satelliteLayer,
               ),
               if (_pinnedPoint != null)
                 MarkerLayer(markers: [
@@ -163,6 +165,14 @@ class _FullscreenLeadMapState extends State<_FullscreenLeadMap> {
                   ),
                 ]),
             ],
+          ),
+          Positioned(
+            left: 16,
+            top: 16,
+            child: MapLayerToggle(
+              satellite: _satelliteLayer,
+              onChanged: (v) => setState(() => _satelliteLayer = v),
+            ),
           ),
           Positioned(
             right: 16,
@@ -210,7 +220,6 @@ class _LeadLocationMapCardState extends State<LeadLocationMapCard> {
   void _openFullscreen() {
     showFullscreenLeadMap(
       context,
-      tileUrl: widget.tileUrl,
       initialCenter: widget.point,
       pinnedPoint: widget.point,
       title: widget.title,

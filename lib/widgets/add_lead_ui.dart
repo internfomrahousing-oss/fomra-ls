@@ -10,6 +10,7 @@ import '../config/maptiler_tiles.dart';
 import '../theme/app_theme.dart';
 import '../theme/fomra_theme_context.dart';
 import '../utils/reverse_geocode.dart';
+import 'map_layer_toggle.dart';
 import 'lead_map_controls.dart';
 
 /// Design tokens for the Add Land Lead enterprise form.
@@ -891,9 +892,8 @@ class _AddLeadLocationSearchState extends State<AddLeadLocationSearch> {
 
 // ── Map section ───────────────────────────────────────────────────────────────
 
-class AddLeadMapPicker extends StatelessWidget {
+class AddLeadMapPicker extends StatefulWidget {
   final MapController mapController;
-  final String tileUrl;
   final LatLng defaultCenter;
   final LatLng? pinnedPoint;
   final bool resolving;
@@ -913,7 +913,6 @@ class AddLeadMapPicker extends StatelessWidget {
   const AddLeadMapPicker({
     super.key,
     required this.mapController,
-    required this.tileUrl,
     required this.defaultCenter,
     required this.pinnedPoint,
     required this.resolving,
@@ -924,10 +923,26 @@ class AddLeadMapPicker extends StatelessWidget {
     this.onMyLocation,
   });
 
-  bool get _readOnly => onTap == null;
+  @override
+  State<AddLeadMapPicker> createState() => _AddLeadMapPickerState();
+}
+
+class _AddLeadMapPickerState extends State<AddLeadMapPicker> {
+  bool _satelliteLayer = false;
+
+  bool get _readOnly => widget.onTap == null;
 
   @override
   Widget build(BuildContext context) {
+    final mapController = widget.mapController;
+    final defaultCenter = widget.defaultCenter;
+    final pinnedPoint = widget.pinnedPoint;
+    final resolving = widget.resolving;
+    final fetchingMyLocation = widget.fetchingMyLocation;
+    final status = widget.status;
+    final onMapReady = widget.onMapReady;
+    final onTap = widget.onTap;
+    final onMyLocation = widget.onMyLocation;
     // The "tap to drop a pin" hint would be a lie on a read-only map.
     final showHint = !_readOnly && pinnedPoint == null && !resolving;
 
@@ -955,7 +970,11 @@ class AddLeadMapPicker extends StatelessWidget {
                 ),
               ),
               children: [
-                MapTilerTiles.tileLayer(urlTemplate: tileUrl),
+                MapTilerTiles.tileLayer(
+                  urlTemplate:
+                      MapTilerTiles.urlFor(satelliteLayer: _satelliteLayer),
+                  satelliteLayer: _satelliteLayer,
+                ),
                 if (pinnedPoint != null)
                   MarkerLayer(markers: [
                     Marker(
@@ -972,13 +991,20 @@ class AddLeadMapPicker extends StatelessWidget {
               ],
             ),
             Positioned(
+              right: 12,
+              top: 12,
+              child: MapLayerToggle(
+                satellite: _satelliteLayer,
+                onChanged: (v) => setState(() => _satelliteLayer = v),
+              ),
+            ),
+            Positioned(
               left: 12,
               bottom: 12,
               child: MapZoomControls(
                 controller: mapController,
                 onExpand: () => showFullscreenLeadMap(
                   context,
-                  tileUrl: tileUrl,
                   initialCenter: pinnedPoint ?? defaultCenter,
                   initialZoom: pinnedPoint != null ? 16 : 11,
                   pinnedPoint: pinnedPoint,
