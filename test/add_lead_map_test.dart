@@ -3,7 +3,6 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:latlong2/latlong.dart';
 
-import 'package:fomra_ls/config/maptiler_tiles.dart';
 import 'package:fomra_ls/widgets/add_lead_ui.dart';
 
 const _captured = LatLng(13.0827, 80.2707);
@@ -22,7 +21,6 @@ Future<void> _pump(
     home: Scaffold(
       body: AddLeadMapPicker(
         mapController: MapController(),
-        tileUrl: MapTilerTiles.standard,
         defaultCenter: const LatLng(13.0827, 80.2707),
         pinnedPoint: pinnedPoint,
         resolving: false,
