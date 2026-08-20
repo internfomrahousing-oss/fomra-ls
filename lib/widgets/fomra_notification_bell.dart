@@ -18,6 +18,65 @@ import 'ui/app_components.dart';
 bool _isMonthlyTargetNotification(AppNotification n) =>
     n.title.trim().toLowerCase().startsWith('monthly target');
 
+/// What tapping a notification actually does — extracted so both the bell's
+/// dropdown and the toast that pops up for a brand-new notification (see
+/// [NotificationToastHost]) open the exact same place, instead of the toast
+/// only ever being a 4-second, un-tappable message with no way to act on it.
+Future<void> openAppNotification(BuildContext context, AppNotification n) async {
+  final isManagement = AuthService.instance.isManagement;
+  if (_isMonthlyTargetNotification(n) &&
+      (n.type == NotificationType.pendingApproval ||
+          n.type == NotificationType.siteVisit) &&
+      isManagement) {
+    if (!context.mounted) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const MonthlyTargetApprovalsPage()),
+    );
+    return;
+  }
+  if ((n.type == NotificationType.siteVisit ||
+          n.type == NotificationType.pendingApproval) &&
+      isManagement) {
+    var visitId = n.referenceId;
+    if (visitId == null && n.leadId != null) {
+      visitId = await LandLeadSiteVisitService.findPendingManagementVisitId(
+        n.leadId!,
+      );
+    }
+    if (!context.mounted) return;
+    if (visitId != null) {
+      await showManagementVisitReviewDialog(
+        context,
+        visitId: visitId,
+        leadId: n.leadId,
+      );
+      return;
+    }
+  }
+  if (n.type != NotificationType.lead &&
+      n.type != NotificationType.siteVisit &&
+      n.type != NotificationType.reminder) {
+    return;
+  }
+  LandLead? lead;
+  for (final l in AppStore.instance.leads) {
+    if (l.leadId == n.leadId) {
+      lead = l;
+      break;
+    }
+  }
+  if (!context.mounted) return;
+  if (lead != null) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => LeadDetailScreen(lead: lead!)),
+    );
+  } else if (n.leadId != null) {
+    Navigator.pushNamed(context, '/land-lead');
+  }
+}
+
 /// The notification bell in [FomraAppBar] — one per page, all reading the same
 /// [NotificationHub], so the badge and panel are identical everywhere.
 class FomraNotificationBell extends StatefulWidget {
@@ -92,58 +151,8 @@ class _FomraNotificationBellState extends State<FomraNotificationBell> {
 
   Future<void> _openNotification(AppNotification n) async {
     _hide();
-    final isManagement = AuthService.instance.isManagement;
-    if (_isMonthlyTargetNotification(n) &&
-        (n.type == NotificationType.pendingApproval ||
-            n.type == NotificationType.siteVisit) &&
-        isManagement) {
-      if (!mounted) return;
-      await Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => const MonthlyTargetApprovalsPage()),
-      );
-      return;
-    }
-    if ((n.type == NotificationType.siteVisit ||
-            n.type == NotificationType.pendingApproval) &&
-        isManagement) {
-      var visitId = n.referenceId;
-      if (visitId == null && n.leadId != null) {
-        visitId = await LandLeadSiteVisitService.findPendingManagementVisitId(
-          n.leadId!,
-        );
-      }
-      if (!mounted) return;
-      if (visitId != null) {
-        await showManagementVisitReviewDialog(
-          context,
-          visitId: visitId,
-          leadId: n.leadId,
-        );
-        return;
-      }
-    }
-    if (n.type != NotificationType.lead &&
-        n.type != NotificationType.siteVisit &&
-        n.type != NotificationType.reminder) {
-      return;
-    }
-    LandLead? lead;
-    for (final l in AppStore.instance.leads) {
-      if (l.leadId == n.leadId) {
-        lead = l;
-        break;
-      }
-    }
     if (!mounted) return;
-    if (lead != null) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => LeadDetailScreen(lead: lead!)),
-      );
-    } else if (n.leadId != null) {
-      Navigator.pushNamed(context, '/land-lead');
-    }
+    await openAppNotification(context, n);
   }
 
   @override
@@ -411,27 +420,9 @@ class NotificationToastHost {
   static void _present(AppNotification n) {
     // The stack may not be mounted on the frame the host is first inserted.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _stackKey.currentState?.push(_ToastData(
-        title: n.title,
-        message: n.message,
-        color: n.type.color,
-        icon: n.type.icon,
-      ));
+      _stackKey.currentState?.push(n);
     });
   }
-}
-
-class _ToastData {
-  final String title;
-  final String message;
-  final Color color;
-  final IconData icon;
-  _ToastData({
-    required this.title,
-    required this.message,
-    required this.color,
-    required this.icon,
-  });
 }
 
 /// Hosts a bottom-right column of stacked toasts. New toasts slide in from the
@@ -444,10 +435,10 @@ class _ToastStack extends StatefulWidget {
 }
 
 class _ToastStackState extends State<_ToastStack> {
-  final List<({int id, _ToastData data})> _toasts = [];
+  final List<({int id, AppNotification data})> _toasts = [];
   int _seq = 0;
 
-  void push(_ToastData data) {
+  void push(AppNotification data) {
     final id = _seq++;
     setState(() => _toasts.add((id: id, data: data)));
     Future.delayed(const Duration(seconds: 4), () => _remove(id));
@@ -488,7 +479,7 @@ class _ToastStackState extends State<_ToastStack> {
 }
 
 class _ToastCard extends StatefulWidget {
-  final _ToastData data;
+  final AppNotification data;
   final VoidCallback onDismiss;
   const _ToastCard({
     super.key,
@@ -531,7 +522,14 @@ class _ToastCardState extends State<_ToastCard>
             key: ValueKey('toast-${widget.key}'),
             direction: DismissDirection.startToEnd, // swipe right to close
             onDismissed: (_) => widget.onDismiss(),
-            child: Container(
+            child: InkWell(
+              borderRadius: BorderRadius.circular(AppColors.radiusMd),
+              onTap: () {
+                widget.onDismiss();
+                NotificationHub.instance.markRead(d.id);
+                openAppNotification(context, d);
+              },
+              child: Container(
               padding: const EdgeInsets.fromLTRB(12, 12, 8, 12),
               decoration: BoxDecoration(
                 color: Colors.white,
@@ -553,10 +551,10 @@ class _ToastCardState extends State<_ToastCard>
                     width: 34,
                     height: 34,
                     decoration: BoxDecoration(
-                      color: d.color.withValues(alpha: 0.12),
+                      color: d.type.color.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(9),
                     ),
-                    child: Icon(d.icon, color: d.color, size: 20),
+                    child: Icon(d.type.icon, color: d.type.color, size: 20),
                   ),
                   const SizedBox(width: 12),
                   Flexible(
@@ -585,7 +583,7 @@ class _ToastCardState extends State<_ToastCard>
                     ),
                   ),
                   const SizedBox(width: 6),
-                  // Close (X) button — tap to dismiss.
+                  // Close (X) button — tap to dismiss without opening it.
                   InkWell(
                     onTap: widget.onDismiss,
                     borderRadius: BorderRadius.circular(999),
@@ -596,6 +594,7 @@ class _ToastCardState extends State<_ToastCard>
                     ),
                   ),
                 ],
+              ),
               ),
             ),
           ),
