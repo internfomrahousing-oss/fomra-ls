@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 
 import '../../models/land_lead_meeting.dart';
 import '../../services/land_lead_meeting_service.dart';
+import '../../services/offline_sync_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_theme_context.dart';
 import '../../widgets/log_dialog_tabs.dart';
@@ -113,6 +114,23 @@ class _MeetingLogDialogState extends State<MeetingLogDialog> {
       _saving = true;
     });
     try {
+      final sync = OfflineSyncService.instance;
+      if (!sync.isOnline) {
+        await sync.enqueueMeeting(
+          leadId: widget.leadId,
+          metAt: _metAt,
+          duration: duration,
+          notes: _notesCtrl.text.trim(),
+          attendeeTypes: _attendeeTypes.toList(),
+          managementPresent: _managementPresent,
+        );
+        if (!mounted) return;
+        widget.onMeetingSaved?.call();
+        AppFeedback.warning(
+            context, 'Saved offline — will sync when network returns.');
+        Navigator.pop(context);
+        return;
+      }
       await LandLeadMeetingService.create(
         leadId: widget.leadId,
         metAt: _metAt,
@@ -126,8 +144,25 @@ class _MeetingLogDialogState extends State<MeetingLogDialog> {
       AppFeedback.success(context, 'Meeting logged');
       Navigator.pop(context);
     } catch (e) {
-      if (mounted) {
-        setState(() => _formError = 'Could not save meeting: $e');
+      // Network failure mid-save → queue for later, same as Add Lead does.
+      try {
+        await OfflineSyncService.instance.enqueueMeeting(
+          leadId: widget.leadId,
+          metAt: _metAt,
+          duration: duration,
+          notes: _notesCtrl.text.trim(),
+          attendeeTypes: _attendeeTypes.toList(),
+          managementPresent: _managementPresent,
+        );
+        if (!mounted) return;
+        widget.onMeetingSaved?.call();
+        AppFeedback.warning(
+            context, 'Saved offline — will sync when network returns.');
+        Navigator.pop(context);
+      } catch (_) {
+        if (mounted) {
+          setState(() => _formError = 'Could not save meeting: $e');
+        }
       }
     } finally {
       if (mounted) setState(() => _saving = false);

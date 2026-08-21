@@ -11,6 +11,7 @@ enum OfflineOpType {
   uploadPhoto,
   uploadVoiceNote,
   createTask,
+  logMeeting,
 }
 
 class OfflineOp {

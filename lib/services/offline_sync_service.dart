@@ -9,6 +9,7 @@ import '../screens/task_management/task_management_screen.dart' as tasks;
 import 'app_store.dart';
 import 'land_lead_service.dart';
 import 'offline_queue_store.dart';
+import 'land_lead_meeting_service.dart';
 import 'voice_note_service.dart';
 
 /// Watches connectivity and drains the offline outbox when the network returns.
@@ -144,6 +145,34 @@ class OfflineSyncService extends ChangeNotifier {
     await refreshPendingCount();
   }
 
+  /// Field executives log meetings right after leaving a landowner's site —
+  /// exactly where connectivity is worst. Meeting logging previously had no
+  /// offline path at all (confirmed by checking every OfflineSyncService
+  /// call site in the app), unlike Add Lead and voice notes.
+  Future<void> enqueueMeeting({
+    required String leadId,
+    required DateTime metAt,
+    required String duration,
+    String notes = '',
+    List<String> attendeeTypes = const [],
+    bool managementPresent = false,
+  }) async {
+    await OfflineQueueStore.enqueue(OfflineOp(
+      id: 'op_${DateTime.now().microsecondsSinceEpoch}',
+      type: OfflineOpType.logMeeting,
+      createdAt: DateTime.now().toUtc(),
+      payload: {
+        'lead_id': leadId,
+        'met_at': metAt.toUtc().toIso8601String(),
+        'duration': duration,
+        'notes': notes,
+        'attendee_types': attendeeTypes,
+        'management_present': managementPresent,
+      },
+    ));
+    await refreshPendingCount();
+  }
+
   Future<void> enqueueCreateTask({
     required String title,
     required String description,
@@ -230,6 +259,8 @@ class OfflineSyncService extends ChangeNotifier {
         await _syncPhoto(op);
       case OfflineOpType.uploadVoiceNote:
         await _syncVoice(op);
+      case OfflineOpType.logMeeting:
+        await _syncMeeting(op);
       case OfflineOpType.createTask:
         // Tasks remain local (sharedTasks); mark as synced by removing op.
         // Persist note is already in sharedTasks from enqueue.
@@ -299,6 +330,18 @@ class OfflineSyncService extends ChangeNotifier {
       leadId: leadId,
       bytes: bytes,
       durationMs: durationMs,
+    );
+  }
+
+  Future<void> _syncMeeting(OfflineOp op) async {
+    await LandLeadMeetingService.create(
+      leadId: op.payload['lead_id'] as String,
+      metAt: DateTime.parse(op.payload['met_at'] as String),
+      duration: op.payload['duration'] as String? ?? '',
+      notes: op.payload['notes'] as String? ?? '',
+      attendeeTypes:
+          (op.payload['attendee_types'] as List?)?.cast<String>() ?? const [],
+      managementPresent: op.payload['management_present'] as bool? ?? false,
     );
   }
 
