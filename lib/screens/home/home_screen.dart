@@ -4,7 +4,9 @@ import '../../analytics/business_module_metrics.dart';
 import '../../models/land_lead.dart';
 import '../../analytics/monthly_target_progress.dart';
 import '../../models/land_lead_meeting.dart';
+import '../../models/lead_follow_up.dart';
 import '../../models/monthly_target_submission.dart';
+import '../../services/lead_follow_up_service.dart';
 import '../../services/management_bi_activity_service.dart';
 import '../land_lead/add_lead_screen.dart';
 import '../../models/lead_list_filter.dart';
@@ -92,12 +94,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   /// per-category boxes and lines on the progress card.
   Map<String, int> _approvedTargetValues = const {};
   List<LandLeadMeeting> _targetMeetings = const [];
+  List<LeadFollowUp> _overdueFollowUps = const [];
   List<LandLeadSiteVisit> _targetSiteVisits = const [];
   List<MonthlyTargetCategoryProgress> _monthlyCategories = const [];
 
   List<LandLead> get _noFutureActivityLeads => NoFutureActivityAnalytics.select(
         AppStore.instance.visibleLeads,
-        _meetings,
+        _isManagement ? _meetings : _targetMeetings,
       );
 
   int get _activeLeads =>
@@ -131,6 +134,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (!_isManagement) {
       _loadMonthlyTarget();
       _loadTargetActivity();
+      _loadOverdueFollowUps();
       // Re-scope the Monthly Target card when the Team / Individual toggle flips.
       ViewScope.instance.addListener(_loadMonthlyTarget);
     }
@@ -142,6 +146,26 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Future<void> _loadMeetings() async {
     final meetings = await ManagementBiActivityService.loadMeetings();
     if (mounted) setState(() => _meetings = meetings);
+  }
+
+  Future<void> _loadOverdueFollowUps() async {
+    final email = AuthService.instance.currentUser?.email ?? '';
+    final due = await LeadFollowUpService.dueForUser(email);
+    if (mounted) setState(() => _overdueFollowUps = due);
+  }
+
+  /// Resolves each follow-up to its actual lead, deduplicated — an
+  /// executive can have more than one overdue follow-up on the same lead,
+  /// but the "Overdue Follow-ups" tile should list each site once.
+  List<LandLead> _leadsFor(List<LeadFollowUp> followUps) {
+    final byId = {for (final l in AppStore.instance.visibleLeads) l.leadId: l};
+    final seen = <String>{};
+    final out = <LandLead>[];
+    for (final f in followUps) {
+      final lead = byId[f.leadId];
+      if (lead != null && seen.add(lead.leadId)) out.add(lead);
+    }
+    return out;
   }
 
   /// Resolves this employee's monthly target for the progress card.
@@ -741,6 +765,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }) {
     final todayTasks = _EmployeeTodayTasksSection(
       employeeName: employeeName,
+      overdueFollowUpLeads: _leadsFor(_overdueFollowUps),
+      staleLeads: _noFutureActivityLeads,
       onOpenLead: (lead) {
         Navigator.push(
           context,
@@ -1186,10 +1212,14 @@ class _RolePerformanceCard extends StatelessWidget {
 class _EmployeeTodayTasksSection extends StatelessWidget {
   final String employeeName;
   final ValueChanged<LandLead> onOpenLead;
+  final List<LandLead> overdueFollowUpLeads;
+  final List<LandLead> staleLeads;
 
   const _EmployeeTodayTasksSection({
     required this.employeeName,
     required this.onOpenLead,
+    this.overdueFollowUpLeads = const [],
+    this.staleLeads = const [],
   });
 
   List<LandLead> get _myActiveLeads => AppStore.instance.leads
@@ -1217,6 +1247,20 @@ class _EmployeeTodayTasksSection extends StatelessWidget {
     final mine = _myActiveLeads;
     final categories = <
         ({String label, IconData icon, Color color, List<LandLead> leads})>[
+      if (overdueFollowUpLeads.isNotEmpty)
+        (
+          label: 'Overdue Follow-ups',
+          icon: Icons.notifications_active_outlined,
+          color: AppColors.error,
+          leads: overdueFollowUpLeads,
+        ),
+      if (staleLeads.isNotEmpty)
+        (
+          label: 'No Recent Activity',
+          icon: Icons.event_busy_outlined,
+          color: AppColors.warning,
+          leads: staleLeads,
+        ),
       (
         label: 'Call Pending',
         icon: Icons.call_outlined,
