@@ -1581,23 +1581,41 @@ class _LeadSummaryCard extends StatelessWidget {
                     ),
                     if (locationLabel.isNotEmpty) ...[
                       const SizedBox(height: 3),
-                      Row(
-                        children: [
-                          Icon(Icons.place_outlined,
-                              size: 13, color: context.fomraTextSecondary),
-                          const SizedBox(width: 4),
-                          Expanded(
-                            child: Text(
-                              locationLabel,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: context.fomraTextSecondary,
+                      InkWell(
+                        onTap: onNavigate,
+                        borderRadius: BorderRadius.circular(6),
+                        child: Row(
+                          children: [
+                            Icon(
+                              onNavigate != null
+                                  ? Icons.location_on_rounded
+                                  : Icons.place_outlined,
+                              size: 13,
+                              color: onNavigate != null
+                                  ? AppColors.purple
+                                  : context.fomraTextSecondary,
+                            ),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                locationLabel,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: onNavigate != null
+                                      ? AppColors.purple
+                                      : context.fomraTextSecondary,
+                                  decoration: onNavigate != null
+                                      ? TextDecoration.underline
+                                      : null,
+                                  decorationColor: AppColors.purple
+                                      .withValues(alpha: 0.4),
+                                ),
                               ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ],
                   ],
