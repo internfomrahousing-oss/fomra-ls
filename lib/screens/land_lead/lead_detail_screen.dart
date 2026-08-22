@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../config/maptiler_tiles.dart';
 import '../../models/employee_profile.dart';
 import '../../models/land_lead.dart';
+import '../../models/land_lead_rename_request.dart';
 import '../../models/land_lead_legal_document.dart';
 import '../../models/land_lead_meeting.dart';
 import '../../models/land_lead_site_visit.dart';
@@ -217,6 +218,12 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
     _tabController.addListener(_onTabChanged);
     _loadActivityData();
     _refreshAutoNotes();
+    if (AuthService.instance.isManagement) _loadPendingRename();
+  }
+
+  Future<void> _loadPendingRename() async {
+    final pending = await LandLeadRenameService.getPendingForLead(lead.leadId);
+    if (mounted) setState(() => _pendingRename = pending);
   }
 
   /// Applies a single Activity Timeline filter, switches to the Activity tab,
@@ -411,11 +418,8 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
     super.dispose();
   }
 
-  String get _displayName => lead.leadName.trim().isNotEmpty
-      ? lead.leadName.trim()
-      : lead.ownerName.trim().isEmpty
-          ? 'Lead #${lead.leadId}'
-          : lead.ownerName.trim();
+  String get _displayName => lead.displayName;
+  LandLeadRenameRequest? _pendingRename;
 
   int get _leadAgeDays => _leadAgeDaysFromReceived(lead.addedOn);
 
@@ -942,9 +946,18 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
     }
   }
 
+  /// Same calendar day, comparing local time — matches
+  /// LandLeadRenameService's own same-day check exactly, so the dialog's
+  /// preview text never disagrees with what the service actually does.
+  bool _isSameCalendarDay(DateTime a, DateTime b) {
+    final la = a.toLocal();
+    final lb = b.toLocal();
+    return la.year == lb.year && la.month == lb.month && la.day == lb.day;
+  }
+
   Future<void> _openRenameDialog() async {
     final ctrl = TextEditingController(text: _displayName);
-    final firstTime = !lead.leadNameLocked;
+    final freeToday = _isSameCalendarDay(lead.addedOn, DateTime.now());
     final newName = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -963,15 +976,15 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
             ),
             const SizedBox(height: 10),
             Text(
-              firstTime
-                  ? 'This is a free, one-time correction. Any rename after '
-                      'this one will need management approval.'
-                  : 'This lead has already been renamed once. This change '
+              freeToday
+                  ? 'Free to rename today — this lead was saved today. From '
+                      'tomorrow, any rename will need management approval.'
+                  : 'This lead was saved on a previous day, so this change '
                       'will be sent to management for approval, not applied '
                       'immediately.',
               style: TextStyle(
                 fontSize: 12,
-                color: firstTime ? context.fomraTextSecondary : AppColors.warning,
+                color: freeToday ? context.fomraTextSecondary : AppColors.warning,
               ),
             ),
           ],
@@ -983,7 +996,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
-            child: Text(firstTime ? 'Save' : 'Send for approval'),
+            child: Text(freeToday ? 'Save' : 'Send for approval'),
           ),
         ],
       ),
@@ -1341,6 +1354,15 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
           lead.gpsCoordinates.trim().isEmpty ? null : _navigateToProperty,
     );
 
+    final renameBanner = _pendingRename == null
+        ? null
+        : _PendingRenameBanner(
+            request: _pendingRename!,
+            onDecided: () {
+              setState(() => _pendingRename = null);
+            },
+          );
+
     // Next Action + Due/Overdue/Pending KPIs — only for the working executive.
     final Widget? guidance = _viewOnly
         ? null
@@ -1457,6 +1479,10 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
                                             CrossAxisAlignment.stretch,
                                         children: [
                                           summary,
+                                          if (renameBanner != null) ...[
+                                            const SizedBox(height: 12),
+                                            renameBanner,
+                                          ],
                                           const SizedBox(height: 12),
                                           infoCards,
                                           if (locationMap != null) ...[
@@ -1493,6 +1519,10 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
                                 controller: _scrollController,
                                 children: [
                                   summary,
+                                  if (renameBanner != null) ...[
+                                    const SizedBox(height: 12),
+                                    renameBanner,
+                                  ],
                                   const SizedBox(height: 12),
                                   _viewMoreDetailsHeader(),
                                   if (_showMoreDetails) ...[
@@ -1544,6 +1574,112 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
 /// Compact lead summary header (point 3): identity, stage, location, and the
 /// key facts (age / extent / terms / type / executive) as scannable pills, plus
 /// the quick actions — all in a short card instead of the old tall hero.
+/// A pending rename request, shown directly on the lead so management
+/// sees exactly what changed and can act right there — not just a
+/// notification that has to be tapped to discover the same thing.
+class _PendingRenameBanner extends StatefulWidget {
+  final LandLeadRenameRequest request;
+  final VoidCallback onDecided;
+  const _PendingRenameBanner({required this.request, required this.onDecided});
+
+  @override
+  State<_PendingRenameBanner> createState() => _PendingRenameBannerState();
+}
+
+class _PendingRenameBannerState extends State<_PendingRenameBanner> {
+  bool _busy = false;
+
+  Future<void> _decide(bool approve) async {
+    setState(() => _busy = true);
+    try {
+      if (approve) {
+        await LandLeadRenameService.approve(widget.request);
+      } else {
+        await LandLeadRenameService.reject(widget.request);
+      }
+      if (!mounted) return;
+      AppFeedback.success(
+          context, approve ? 'Rename approved.' : 'Rename rejected.');
+      widget.onDecided();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _busy = false);
+      AppFeedback.error(context, 'Could not save decision: $e');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final r = widget.request;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.warning.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.warning.withValues(alpha: 0.35)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.edit_note_rounded,
+                  size: 18, color: AppColors.warning),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Rename request pending approval',
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w800,
+                    color: context.fomraTextPrimary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text.rich(
+            TextSpan(
+              style: TextStyle(fontSize: 13, color: context.fomraTextPrimary),
+              children: [
+                TextSpan(
+                    text: r.previousName.isEmpty ? '(unnamed)' : r.previousName,
+                    style: const TextStyle(
+                        decoration: TextDecoration.lineThrough)),
+                const TextSpan(text: '  →  '),
+                TextSpan(
+                    text: r.requestedName,
+                    style: const TextStyle(fontWeight: FontWeight.w800)),
+              ],
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Requested by ${r.requestedByName.isEmpty ? 'an executive' : r.requestedByName}',
+            style: TextStyle(fontSize: 11.5, color: context.fomraTextSecondary),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              OutlinedButton(
+                onPressed: _busy ? null : () => _decide(false),
+                style: OutlinedButton.styleFrom(foregroundColor: AppColors.error),
+                child: const Text('Reject'),
+              ),
+              const SizedBox(width: 8),
+              FilledButton(
+                onPressed: _busy ? null : () => _decide(true),
+                child: const Text('Approve'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _LeadSummaryCard extends StatelessWidget {
   final LandLead lead;
   final String displayName;

@@ -2074,7 +2074,7 @@ class _PerformanceLeadList extends StatelessWidget {
                 Expanded(
                   flex: 18,
                   child: Text(
-                    lead.ownerName.trim().isEmpty ? 'Lead #${lead.leadId}' : lead.ownerName.trim(),
+                    lead.displayName,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(

@@ -186,9 +186,7 @@ class _CostCalculatorScreenState extends State<CostCalculatorScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        lead.ownerName.trim().isEmpty
-                            ? 'Lead #${lead.leadId}'
-                            : lead.ownerName,
+                        lead.displayName,
                         style: TextStyle(
                           fontWeight: FontWeight.w800,
                           color: context.fomraTextPrimary,
