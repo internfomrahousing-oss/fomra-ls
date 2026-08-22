@@ -1106,6 +1106,8 @@ class LandLeadService {
       addedOn: DateTime.parse(r['added_on'] as String),
       createdByName: r['created_by_name'] as String? ?? '',
       assignedToName: r['assigned_to_name'] as String? ?? '',
+      leadName: r['lead_name'] as String? ?? '',
+      leadNameLocked: r['lead_name_locked'] as bool? ?? false,
       createdByRole: r['created_by_role'] as String? ?? '',
       status: parseLeadStatus(r['status'] as String?),
       dropReason: r['drop_reason'] as String? ?? '',

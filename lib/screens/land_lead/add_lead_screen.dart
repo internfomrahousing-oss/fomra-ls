@@ -2202,7 +2202,7 @@ class _OwnerFields extends StatelessWidget {
       ),
       _Field(
         ctrl: entry.contactCtrl,
-        label: index == 0 ? 'Contact Number' : 'Owner ${index + 1} Contact',
+        label: index == 0 ? 'Owner Contact Number' : 'Owner ${index + 1} Contact',
         hint: '10-digit mobile number',
         icon: Icons.phone_outlined,
         keyboardType: TextInputType.phone,
@@ -2211,7 +2211,7 @@ class _OwnerFields extends StatelessWidget {
         required: false,
         inputFormatters: PhoneValidation.inputFormatters,
         validator: PhoneValidation.validator(
-          index == 0 ? 'Contact Number' : 'Owner ${index + 1} Contact',
+          index == 0 ? 'Owner Contact Number' : 'Owner ${index + 1} Contact',
           required: false,
         ),
       ),

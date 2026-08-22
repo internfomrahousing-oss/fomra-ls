@@ -21,6 +21,7 @@ import '../../services/lead_drop_reason_catalog_service.dart';
 import '../../models/land_lead_signed_request.dart';
 import '../../services/land_lead_legal_service.dart';
 import '../../services/land_lead_meeting_service.dart';
+import '../../services/land_lead_rename_service.dart';
 import '../../services/land_lead_service.dart';
 import '../../services/land_lead_signed_service.dart';
 import '../../services/lead_follow_up_service.dart';
@@ -410,9 +411,11 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
     super.dispose();
   }
 
-  String get _displayName => lead.ownerName.trim().isEmpty
-      ? 'Lead #${lead.leadId}'
-      : lead.ownerName.trim();
+  String get _displayName => lead.leadName.trim().isNotEmpty
+      ? lead.leadName.trim()
+      : lead.ownerName.trim().isEmpty
+          ? 'Lead #${lead.leadId}'
+          : lead.ownerName.trim();
 
   int get _leadAgeDays => _leadAgeDaysFromReceived(lead.addedOn);
 
@@ -939,6 +942,77 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
     }
   }
 
+  Future<void> _openRenameDialog() async {
+    final ctrl = TextEditingController(text: _displayName);
+    final firstTime = !lead.leadNameLocked;
+    final newName = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Rename Lead'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TextField(
+              controller: ctrl,
+              autofocus: true,
+              decoration: const InputDecoration(
+                labelText: 'Lead name',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              firstTime
+                  ? 'This is a free, one-time correction. Any rename after '
+                      'this one will need management approval.'
+                  : 'This lead has already been renamed once. This change '
+                      'will be sent to management for approval, not applied '
+                      'immediately.',
+              style: TextStyle(
+                fontSize: 12,
+                color: firstTime ? context.fomraTextSecondary : AppColors.warning,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+            child: Text(firstTime ? 'Save' : 'Send for approval'),
+          ),
+        ],
+      ),
+    );
+    if (newName == null || newName.trim().isEmpty || !mounted) return;
+    if (newName.trim() == _displayName) return;
+
+    try {
+      final appliedImmediately = await LandLeadRenameService.renameLead(
+        leadId: lead.leadId,
+        previousName: _displayName,
+        newName: newName.trim(),
+      );
+      if (!mounted) return;
+      if (appliedImmediately) {
+        setState(() {
+          lead = lead.copyWith(leadName: newName.trim(), leadNameLocked: true);
+        });
+        AppStore.instance.replaceLead(lead);
+        AppFeedback.success(context, 'Lead renamed.');
+      } else {
+        AppFeedback.success(
+            context, 'Rename request sent to management for approval.');
+      }
+    } catch (e) {
+      if (mounted) AppFeedback.error(context, 'Could not rename lead: $e');
+    }
+  }
+
   bool _isViewOnlyAction(String label) {
     // A locked (Signed/Dropped) lead opens every activity dialog read-only —
     // history stays visible, but nothing new can be logged.
@@ -1262,6 +1336,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
       onCreateTask: _openCreateTask,
       onViewTasks: _openViewTasks,
       onEdit: _canEditSite ? _openEdit : null,
+      onRename: _canEditSite ? _openRenameDialog : null,
       onNavigate:
           lead.gpsCoordinates.trim().isEmpty ? null : _navigateToProperty,
     );
@@ -1483,6 +1558,10 @@ class _LeadSummaryCard extends StatelessWidget {
   /// Edit the lead. Null when the current user can't edit this lead.
   final VoidCallback? onEdit;
 
+  /// Rename the lead. Null when the current user can't edit this lead —
+  /// same gate as onEdit, renaming is a lead-editing action.
+  final VoidCallback? onRename;
+
   const _LeadSummaryCard({
     required this.lead,
     required this.displayName,
@@ -1494,6 +1573,7 @@ class _LeadSummaryCard extends StatelessWidget {
     required this.onViewTasks,
     this.onNavigate,
     this.onEdit,
+    this.onRename,
   });
 
   @override
@@ -1569,15 +1649,35 @@ class _LeadSummaryCard extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 3),
-                    Text(
-                      displayName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w800,
-                        color: context.fomraTextPrimary,
-                      ),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            displayName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w800,
+                              color: context.fomraTextPrimary,
+                            ),
+                          ),
+                        ),
+                        if (onRename != null) ...[
+                          const SizedBox(width: 4),
+                          InkWell(
+                            onTap: onRename,
+                            borderRadius: BorderRadius.circular(14),
+                            child: Padding(
+                              padding: const EdgeInsets.all(3),
+                              child: Icon(Icons.edit_outlined,
+                                  size: 15,
+                                  color: context.fomraTextSecondary),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                     if (locationLabel.isNotEmpty) ...[
                       const SizedBox(height: 3),
@@ -3198,10 +3298,11 @@ class _LeadInfoCards extends StatelessWidget {
         icon: Icons.contacts_outlined,
         fields: [
           _Field('Owner', _v(lead.ownerName)),
-          _Field('Contact', _v(lead.contactDetails)),
+          _Field('Owner Number', _v(lead.contactDetails)),
           _Field('Executive', _v(lead.createdByName),
               style: _FieldStyle.badge, color: AppColors.purple),
           _Field('Broker', _v(lead.brokerName)),
+          _Field('Broker Number', _v(lead.brokerContact)),
           _Field('Input Source', lead.inputSource.label),
         ],
       ),

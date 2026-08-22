@@ -107,6 +107,12 @@ class LandLead {
   /// visibility into their own historical work on a lead after it's
   /// handed to someone else. See LeadVisibility, which checks both.
   final String assignedToName;
+  /// Optional custom display name — empty falls back to owner name, then
+  /// "Lead #id". The first rename is free; every rename after that needs
+  /// management approval (see LandLeadService.renameLead and
+  /// land_lead_rename_requests).
+  final String leadName;
+  final bool leadNameLocked;
   LeadStatus status;
   final String dropReason;
   final String dropNotes;
@@ -198,6 +204,8 @@ class LandLead {
     this.createdByName = '',
     this.createdByRole = '',
     this.assignedToName = '',
+    this.leadName = '',
+    this.leadNameLocked = false,
     this.status = LeadStatus.prospectMeetingPending,
     this.dropReason = '',
     this.dropNotes = '',
@@ -270,6 +278,8 @@ class LandLead {
     String? createdByName,
     String? createdByRole,
     String? assignedToName,
+    String? leadName,
+    bool? leadNameLocked,
     LeadStatus? status,
     String? dropReason,
     String? dropNotes,
@@ -340,6 +350,8 @@ class LandLead {
         createdByName: createdByName ?? this.createdByName,
         createdByRole: createdByRole ?? this.createdByRole,
         assignedToName: assignedToName ?? this.assignedToName,
+        leadName: leadName ?? this.leadName,
+        leadNameLocked: leadNameLocked ?? this.leadNameLocked,
         status: status ?? this.status,
         dropReason: dropReason ?? this.dropReason,
         dropNotes: dropNotes ?? this.dropNotes,
