@@ -2,10 +2,12 @@ import 'dart:typed_data';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/land_lead.dart';
+import '../models/lead_change_request.dart';
 import '../utils/image_compressor.dart';
 import 'app_store.dart';
 import 'audit_log_service.dart';
 import 'auth_service.dart';
+import 'lead_change_approval_service.dart';
 import 'role_access.dart';
 
 typedef LeadSaveProgressCallback = void Function(String message);
@@ -537,34 +539,61 @@ class LandLeadService {
       onProgress?.call('Finalizing lead…');
     }
 
+    // Core identifying info (see _auditedFields / leadChangeFieldLabels):
+    // free to fill in when blank, free to change on the same calendar day
+    // the lead was saved, otherwise held back for management approval and
+    // simply never written below — unlike renaming, there's no "apply
+    // then revert" here, a pending field's DB value never moves until
+    // approved. Fields outside this curated set (status, GPS, notes,
+    // photos, etc.) are unaffected and keep applying immediately, same as
+    // always — they already have their own dedicated rules elsewhere
+    // (status) or aren't the kind of "lead info" this rule targets.
+    final pendingChanges = <LeadFieldChange>[];
+    final sameDay = previous != null &&
+        _isSameCalendarDay(previous.addedOn, DateTime.now());
+    final auditedPayload = <String, dynamic>{};
+    for (final entry in _auditedFields.entries) {
+      final newVal = entry.value(lead).trim();
+      if (previous == null) {
+        // No previous state to gate against — apply directly (matches the
+        // old, ungated behavior; every real call site passes previous).
+        auditedPayload[entry.key] = newVal;
+        continue;
+      }
+      final oldVal = entry.value(previous).trim();
+      if (oldVal == newVal) continue; // unchanged — nothing to do either way
+      final blankToFilled = oldVal.isEmpty && newVal.isNotEmpty;
+      if (sameDay || blankToFilled) {
+        auditedPayload[entry.key] = newVal;
+      } else {
+        pendingChanges.add(LeadFieldChange(
+          field: entry.key,
+          label: leadChangeFieldLabels[entry.key] ?? entry.key,
+          oldValue: oldVal,
+          newValue: newVal,
+        ));
+      }
+    }
+
     final row = await _updateLandLead(
       lead.leadId,
       {
         'input_source': lead.inputSource.name,
-        'location': lead.location,
         'gps_coordinates': lead.gpsCoordinates,
-        'village': lead.village,
-        'taluk': lead.taluk,
-        'district': lead.district,
         'pincode': lead.pincode,
-        'survey_number': lead.surveyNumber,
-        'sub_division': lead.subDivision,
-        'land_extent': lead.landExtent,
-        'owner_name': lead.ownerName,
-        'contact_details': lead.contactDetails,
-        'broker_name': lead.brokerName,
-        'broker_contact': lead.brokerContact,
-        'source_contact_name': lead.sourceContactName,
-        'source_contact_number': lead.sourceContactNumber,
         'land_type': lead.landType.name,
         'land_type_other': lead.landTypeOther,
         'road_width': lead.roadWidth,
         'access_details': lead.accessDetails,
         'notes': lead.notes,
         'status': lead.status.name,
+        'source_contact_name': lead.sourceContactName,
+        'source_contact_number': lead.sourceContactNumber,
+        'location': lead.location,
         'site_photo_url': sitePhotoUrl,
         'site_photo_urls': sitePhotoUrls,
         'updated_at': DateTime.now().toUtc().toIso8601String(),
+        ...auditedPayload,
       },
       lead.additionalOwners,
       lead.additionalSurveyNumbers,
@@ -589,9 +618,27 @@ class LandLeadService {
       executiveName: updated.createdByName,
     );
     if (previous != null) {
+      // updated reflects the DB row as actually written — pending fields
+      // were never in the payload above, so this correctly still shows
+      // their old value and _logFieldChanges naturally skips them (no
+      // diff to log for a field that didn't actually change in the DB).
       await _logFieldChanges(previous, updated);
     }
+    if (pendingChanges.isNotEmpty) {
+      await LeadChangeApprovalService.submitPending(
+        leadId: lead.leadId,
+        changes: pendingChanges,
+      );
+    }
     return updated;
+  }
+
+  /// Same calendar day, comparing local time — the free-edit window for
+  /// both this and LandLeadRenameService's identical rule.
+  static bool _isSameCalendarDay(DateTime a, DateTime b) {
+    final la = a.toLocal();
+    final lb = b.toLocal();
+    return la.year == lb.year && la.month == lb.month && la.day == lb.day;
   }
 
   /// Targeted update for the "Deal & Risk Details" dialog — touches only
