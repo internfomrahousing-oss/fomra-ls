@@ -1132,10 +1132,7 @@ class _LeadListRowState extends State<_LeadListRow> {
   bool get _hoverEnabled =>
       !widget.selectionMode && FomraLayout.isDesktop(context);
 
-  String get _title {
-    final owner = widget.lead.ownerName.trim();
-    return owner.isNotEmpty ? owner : 'Lead #${widget.lead.leadId}';
-  }
+  String get _title => widget.lead.displayName;
 
   String get _locationText {
     final parts = <String>[];

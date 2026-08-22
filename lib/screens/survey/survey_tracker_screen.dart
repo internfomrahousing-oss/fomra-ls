@@ -258,9 +258,7 @@ class _SurveyTrackerScreenState extends State<SurveyTrackerScreen> {
                           children: [
                             Expanded(
                               child: Text(
-                                lead.ownerName.trim().isEmpty
-                                    ? 'Lead #${lead.leadId}'
-                                    : lead.ownerName,
+                                lead.displayName,
                                 style: TextStyle(
                                   fontWeight: FontWeight.w800,
                                   color: context.fomraTextPrimary,

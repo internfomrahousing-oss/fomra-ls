@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../analytics/business_module_metrics.dart';
+import '../../models/land_lead.dart';
 import '../../services/app_store.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/fomra_layout.dart';
@@ -186,9 +187,7 @@ class _CostCalculatorScreenState extends State<CostCalculatorScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        lead.ownerName.trim().isEmpty
-                            ? 'Lead #${lead.leadId}'
-                            : lead.ownerName,
+                        lead.displayName,
                         style: TextStyle(
                           fontWeight: FontWeight.w800,
                           color: context.fomraTextPrimary,

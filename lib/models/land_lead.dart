@@ -483,3 +483,16 @@ extension LeadStatusColor on LeadStatus {
         LeadStatus.onHold => const Color(0xFF64748B),
       };
 }
+
+/// The one place a lead's display name/title is computed, so every screen —
+/// Lead Detail, the leads list, search results, reports, map popups,
+/// notifications — shows exactly the same name for the same lead. Prefers
+/// the custom name once set (see LandLeadRenameService), falling back to
+/// the owner's name, falling back to the bare lead number.
+extension LandLeadDisplayName on LandLead {
+  String get displayName => leadName.trim().isNotEmpty
+      ? leadName.trim()
+      : ownerName.trim().isEmpty
+          ? 'Lead #$leadId'
+          : ownerName.trim();
+}

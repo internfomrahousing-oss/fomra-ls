@@ -5,12 +5,14 @@ import 'audit_log_service.dart';
 import 'auth_service.dart';
 import 'notifications_service.dart';
 
-/// Renaming a lead is free the first time, then requires management
-/// approval for every rename after that — per direct product decision.
-/// A lead's name (or its fallback: owner name, or "Lead #id") is the
-/// canonical label people refer to it by across reports and
-/// conversations, so repeated casual renaming is deliberately made a
-/// little harder after the first correction, rather than left wide open.
+/// Renaming a lead is free on the same calendar day it was saved — any
+/// number of corrections — then requires management approval for every
+/// rename after that day. A lead's name (or its fallback: owner name, or
+/// "Lead #id") is the canonical label people refer to it by across
+/// reports and conversations, so casual renaming once the initial entry
+/// window has passed is deliberately made a little harder, rather than
+/// left wide open. (Revised from an earlier "free once, ever" rule to
+/// this time-based one, per direct product decision.)
 class LandLeadRenameService {
   static SupabaseClient get _db => Supabase.instance.client;
 
@@ -30,20 +32,32 @@ class LandLeadRenameService {
 
     final current = await _db
         .from('land_leads')
-        .select('lead_name_locked')
+        .select('added_on')
         .eq('id', leadId)
         .maybeSingle();
     if (current == null) {
       throw Exception('Lead $leadId was not found.');
     }
-    final alreadyLocked = current['lead_name_locked'] as bool? ?? false;
+    final addedOn = DateTime.tryParse(current['added_on'] as String? ?? '');
+    // Free to rename (any number of times) on the same calendar day the
+    // lead was saved. Once that day has passed, every rename needs
+    // approval — replacing the old "free once, then always needs
+    // approval" rule with a time-based one, per direct product decision.
+    final now = DateTime.now();
+    final sameDay = addedOn != null &&
+        addedOn.toLocal().year == now.year &&
+        addedOn.toLocal().month == now.month &&
+        addedOn.toLocal().day == now.day;
 
     final userName = AuthService.instance.currentUser?.fullName ?? '';
     final userEmail = AuthService.instance.currentUser?.email ?? '';
     final userId = _db.auth.currentUser?.id;
 
-    if (!alreadyLocked) {
-      // First rename — free, applies immediately, locks it for next time.
+    if (sameDay) {
+      // Free — same calendar day the lead was saved. Still stamps
+      // lead_name_locked for historical/informational purposes (has this
+      // lead ever been renamed at all), but that flag no longer gates
+      // anything here.
       await _db.from('land_leads').update({
         'lead_name': trimmed,
         'lead_name_locked': true,
@@ -98,6 +112,28 @@ class LandLeadRenameService {
           .toList();
     } catch (_) {
       return const [];
+    }
+  }
+
+  /// The one pending rename request for [leadId], if any — used by the
+  /// Lead Detail screen to show a real, actionable approval banner
+  /// directly on the lead, rather than management only ever discovering
+  /// this via a notification.
+  static Future<LandLeadRenameRequest?> getPendingForLead(String leadId) async {
+    try {
+      final rows = await _db
+          .from('land_lead_rename_requests')
+          .select()
+          .eq('lead_id', leadId)
+          .eq('status', 'pending')
+          .order('created_at', ascending: false)
+          .limit(1);
+      final list = (rows as List);
+      if (list.isEmpty) return null;
+      return LandLeadRenameRequest.fromJson(
+          Map<String, dynamic>.from(list.first));
+    } catch (_) {
+      return null;
     }
   }
 
