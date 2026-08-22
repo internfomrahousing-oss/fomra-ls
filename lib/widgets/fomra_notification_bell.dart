@@ -5,6 +5,7 @@ import '../models/land_lead.dart';
 import '../models/notification_type_ext.dart';
 import '../screens/land_lead/lead_detail_screen.dart';
 import '../screens/land_lead/management_visit_review_dialog.dart';
+import '../screens/land_lead/rename_approval_dialog.dart';
 import '../screens/settings/monthly_target_approvals_page.dart';
 import '../services/app_store.dart';
 import '../services/auth_service.dart';
@@ -35,6 +36,14 @@ Future<void> openNotificationTarget(BuildContext context, AppNotification n) asy
       context,
       MaterialPageRoute(builder: (_) => const MonthlyTargetApprovalsPage()),
     );
+    return;
+  }
+  if (n.title.trim().startsWith('Lead rename request') &&
+      n.type == NotificationType.pendingApproval &&
+      isManagement &&
+      n.leadId != null) {
+    if (!context.mounted) return;
+    await showRenameApprovalDialog(context, leadId: n.leadId!);
     return;
   }
   if ((n.type == NotificationType.siteVisit ||
