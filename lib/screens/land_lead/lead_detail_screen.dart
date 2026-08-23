@@ -7,6 +7,7 @@ import '../../config/maptiler_tiles.dart';
 import '../../models/employee_profile.dart';
 import '../../models/land_lead.dart';
 import '../../models/land_lead_rename_request.dart';
+import '../../models/lead_change_request.dart';
 import '../../models/land_lead_legal_document.dart';
 import '../../models/land_lead_meeting.dart';
 import '../../models/land_lead_site_visit.dart';
@@ -23,6 +24,7 @@ import '../../models/land_lead_signed_request.dart';
 import '../../services/land_lead_legal_service.dart';
 import '../../services/land_lead_meeting_service.dart';
 import '../../services/land_lead_rename_service.dart';
+import '../../services/lead_change_approval_service.dart';
 import '../../services/land_lead_service.dart';
 import '../../services/land_lead_signed_service.dart';
 import '../../services/lead_follow_up_service.dart';
@@ -218,12 +220,20 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
     _tabController.addListener(_onTabChanged);
     _loadActivityData();
     _refreshAutoNotes();
-    if (AuthService.instance.isManagement) _loadPendingRename();
+    if (AuthService.instance.isManagement) {
+      _loadPendingRename();
+      _loadPendingChanges();
+    }
   }
 
   Future<void> _loadPendingRename() async {
     final pending = await LandLeadRenameService.getPendingForLead(lead.leadId);
     if (mounted) setState(() => _pendingRename = pending);
+  }
+
+  Future<void> _loadPendingChanges() async {
+    final pending = await LeadChangeApprovalService.getPendingForLead(lead.leadId);
+    if (mounted) setState(() => _pendingChanges = pending);
   }
 
   /// Applies a single Activity Timeline filter, switches to the Activity tab,
@@ -420,6 +430,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
 
   String get _displayName => lead.displayName;
   LandLeadRenameRequest? _pendingRename;
+  LeadChangeRequest? _pendingChanges;
 
   int get _leadAgeDays => _leadAgeDaysFromReceived(lead.addedOn);
 
@@ -1363,6 +1374,15 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
             },
           );
 
+    final changesBanner = _pendingChanges == null
+        ? null
+        : _PendingChangesBanner(
+            request: _pendingChanges!,
+            onDecided: () {
+              setState(() => _pendingChanges = null);
+            },
+          );
+
     // Next Action + Due/Overdue/Pending KPIs — only for the working executive.
     final Widget? guidance = _viewOnly
         ? null
@@ -1483,6 +1503,10 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
                                             const SizedBox(height: 12),
                                             renameBanner,
                                           ],
+                                          if (changesBanner != null) ...[
+                                            const SizedBox(height: 12),
+                                            changesBanner,
+                                          ],
                                           const SizedBox(height: 12),
                                           infoCards,
                                           if (locationMap != null) ...[
@@ -1522,6 +1546,10 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
                                   if (renameBanner != null) ...[
                                     const SizedBox(height: 12),
                                     renameBanner,
+                                  ],
+                                  if (changesBanner != null) ...[
+                                    const SizedBox(height: 12),
+                                    changesBanner,
                                   ],
                                   const SizedBox(height: 12),
                                   _viewMoreDetailsHeader(),
@@ -1577,6 +1605,126 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
 /// A pending rename request, shown directly on the lead so management
 /// sees exactly what changed and can act right there — not just a
 /// notification that has to be tapped to discover the same thing.
+/// A pending field-change request — the generalized version of
+/// _PendingRenameBanner, showing every field an executive wants to
+/// change (owner name, contact, broker info, land extent, survey
+/// number, village/taluk/district) together as one request, since an
+/// executive editing several fields at once should resolve that as one
+/// decision, not several.
+class _PendingChangesBanner extends StatefulWidget {
+  final LeadChangeRequest request;
+  final VoidCallback onDecided;
+  const _PendingChangesBanner({required this.request, required this.onDecided});
+
+  @override
+  State<_PendingChangesBanner> createState() => _PendingChangesBannerState();
+}
+
+class _PendingChangesBannerState extends State<_PendingChangesBanner> {
+  bool _busy = false;
+
+  Future<void> _decide(bool approve) async {
+    setState(() => _busy = true);
+    try {
+      if (approve) {
+        await LeadChangeApprovalService.approve(widget.request);
+      } else {
+        await LeadChangeApprovalService.reject(widget.request);
+      }
+      if (!mounted) return;
+      AppFeedback.success(
+          context, approve ? 'Changes approved.' : 'Changes rejected.');
+      widget.onDecided();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _busy = false);
+      AppFeedback.error(context, 'Could not save decision: $e');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final r = widget.request;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.warning.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.warning.withValues(alpha: 0.35)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.fact_check_outlined,
+                  size: 18, color: AppColors.warning),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  r.changes.length == 1
+                      ? 'Info change pending approval'
+                      : '${r.changes.length} info changes pending approval',
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w800,
+                    color: context.fomraTextPrimary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          for (final c in r.changes) ...[
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text.rich(
+                TextSpan(
+                  style:
+                      TextStyle(fontSize: 13, color: context.fomraTextPrimary),
+                  children: [
+                    TextSpan(
+                        text: '${c.label}: ',
+                        style: const TextStyle(fontWeight: FontWeight.w700)),
+                    TextSpan(
+                        text: c.oldValue.isEmpty ? '(blank)' : c.oldValue,
+                        style: const TextStyle(
+                            decoration: TextDecoration.lineThrough)),
+                    const TextSpan(text: '  →  '),
+                    TextSpan(
+                        text: c.newValue,
+                        style: const TextStyle(fontWeight: FontWeight.w800)),
+                  ],
+                ),
+              ),
+            ),
+          ],
+          const SizedBox(height: 4),
+          Text(
+            'Requested by ${r.requestedByName.isEmpty ? 'an executive' : r.requestedByName}',
+            style: TextStyle(fontSize: 11.5, color: context.fomraTextSecondary),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              OutlinedButton(
+                onPressed: _busy ? null : () => _decide(false),
+                style: OutlinedButton.styleFrom(foregroundColor: AppColors.error),
+                child: const Text('Reject'),
+              ),
+              const SizedBox(width: 8),
+              FilledButton(
+                onPressed: _busy ? null : () => _decide(true),
+                child: const Text('Approve'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _PendingRenameBanner extends StatefulWidget {
   final LandLeadRenameRequest request;
   final VoidCallback onDecided;
