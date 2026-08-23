@@ -53,6 +53,7 @@ import 'add_lead_screen.dart';
 import 'calls_log_dialog.dart';
 import 'follow_up_dialog.dart';
 import 'lead_drop_reason_dialog.dart';
+import 'management_visit_review_dialog.dart';
 import 'legal_documents_dialog.dart';
 import 'deal_risk_details_dialog.dart';
 import 'split_lead_dialog.dart';
@@ -223,7 +224,14 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
     if (AuthService.instance.isManagement) {
       _loadPendingRename();
       _loadPendingChanges();
+      _loadPendingSiteVisit();
     }
+  }
+
+  Future<void> _loadPendingSiteVisit() async {
+    final visitId =
+        await LandLeadSiteVisitService.findPendingManagementVisitId(lead.leadId);
+    if (mounted) setState(() => _pendingSiteVisitId = visitId);
   }
 
   Future<void> _loadPendingRename() async {
@@ -431,6 +439,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
   String get _displayName => lead.displayName;
   LandLeadRenameRequest? _pendingRename;
   LeadChangeRequest? _pendingChanges;
+  String? _pendingSiteVisitId;
 
   int get _leadAgeDays => _leadAgeDaysFromReceived(lead.addedOn);
 
@@ -1383,6 +1392,21 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
             },
           );
 
+    final siteVisitBanner = _pendingSiteVisitId == null
+        ? null
+        : _PendingSiteVisitBanner(
+            onReview: () async {
+              final decided = await showManagementVisitReviewDialog(
+                context,
+                visitId: _pendingSiteVisitId!,
+                leadId: lead.leadId,
+              );
+              if (decided != null && mounted) {
+                setState(() => _pendingSiteVisitId = null);
+              }
+            },
+          );
+
     // Next Action + Due/Overdue/Pending KPIs — only for the working executive.
     final Widget? guidance = _viewOnly
         ? null
@@ -1507,6 +1531,10 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
                                             const SizedBox(height: 12),
                                             changesBanner,
                                           ],
+                                          if (siteVisitBanner != null) ...[
+                                            const SizedBox(height: 12),
+                                            siteVisitBanner,
+                                          ],
                                           const SizedBox(height: 12),
                                           infoCards,
                                           if (locationMap != null) ...[
@@ -1550,6 +1578,10 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
                                   if (changesBanner != null) ...[
                                     const SizedBox(height: 12),
                                     changesBanner,
+                                  ],
+                                  if (siteVisitBanner != null) ...[
+                                    const SizedBox(height: 12),
+                                    siteVisitBanner,
                                   ],
                                   const SizedBox(height: 12),
                                   _viewMoreDetailsHeader(),
@@ -1611,6 +1643,55 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
 /// number, village/taluk/district) together as one request, since an
 /// executive editing several fields at once should resolve that as one
 /// decision, not several.
+/// A site visit awaiting management review already had a real review
+/// dialog (ManagementVisitReviewDialog, unchanged here) — the actual gap
+/// was that it was only ever reachable via a notification, with nothing
+/// on Lead Detail itself beyond a bare "Pending" word buried in the
+/// activity timeline. This is a thin prompt, not a reimplementation —
+/// tapping it opens the existing dialog directly.
+class _PendingSiteVisitBanner extends StatelessWidget {
+  final VoidCallback onReview;
+  const _PendingSiteVisitBanner({required this.onReview});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.warning.withValues(alpha: 0.08),
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onReview,
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: AppColors.warning.withValues(alpha: 0.35)),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.apartment_outlined,
+                  size: 18, color: AppColors.warning),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Management site visit awaiting your review',
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w800,
+                    color: context.fomraTextPrimary,
+                  ),
+                ),
+              ),
+              const Icon(Icons.chevron_right_rounded,
+                  size: 18, color: AppColors.warning),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _PendingChangesBanner extends StatefulWidget {
   final LeadChangeRequest request;
   final VoidCallback onDecided;
