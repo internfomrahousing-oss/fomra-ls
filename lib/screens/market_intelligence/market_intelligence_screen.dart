@@ -1816,7 +1816,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                   const SizedBox(height: 4),
                   Text('${distKm.toStringAsFixed(1)} km away',
                       style: TextStyle(
-                          fontSize: 10, color: context.fomraTextSecondary)),
+                          fontSize: 11, color: context.fomraTextSecondary)),
                 ],
                 if (developer.isNotEmpty && isTnrera) ...[
                   const SizedBox(height: 3),
@@ -3047,7 +3047,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
                   Text(
                     'Usually 5–15 seconds for the first load.',
                     style: TextStyle(
-                        fontSize: 10, color: context.fomraTextSecondary),
+                        fontSize: 11, color: context.fomraTextSecondary),
                   ),
                 ],
               ),
@@ -3081,7 +3081,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
             Text(
               'Weighted: Education 25% · Healthcare 20% · Roads 25% · Commercial 15% · Transport 15%. Nearest-amenity + count scoring.',
               style: TextStyle(
-                  fontSize: 10, color: context.fomraTextSecondary, height: 1.35),
+                  fontSize: 11, color: context.fomraTextSecondary, height: 1.35),
             ),
             const SizedBox(height: 18),
             Container(
@@ -3463,7 +3463,7 @@ class _MarketIntelligenceScreenState extends State<MarketIntelligenceScreen> {
       ]),
       const SizedBox(height: 6),
       Text('Tap Investment or Risk to see why.',
-          style: TextStyle(fontSize: 10, color: context.fomraTextSecondary)),
+          style: TextStyle(fontSize: 11, color: context.fomraTextSecondary)),
     ]);
   }
 
@@ -6138,7 +6138,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
           const SizedBox(height: 8),
           Text(
             'Tap the card above to open full screen, or use Open in new tab inside the viewer.',
-            style: TextStyle(fontSize: 10, color: context.fomraTextSecondary, height: 1.35),
+            style: TextStyle(fontSize: 11, color: context.fomraTextSecondary, height: 1.35),
           ),
         ],
       );
@@ -6320,7 +6320,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
                     Text(
                       subtitle,
                       style: TextStyle(
-                        fontSize: 10,
+                        fontSize: 11,
                         color: context.fomraTextSecondary,
                       ),
                     ),
@@ -6402,7 +6402,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
             style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800)),
         const SizedBox(height: 8),
         Text(_ecSource ?? 'TNGIS GI Viewer',
-            style: const TextStyle(fontSize: 10, color: AppColors.textSecondary)),
+            style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
         const SizedBox(height: 10),
         PattaDocumentPreview(
           pdfBytes: _ecPdfBytes,
@@ -6860,7 +6860,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
         if (_pattaSource != null) ...[
           const SizedBox(height: 4),
           Text('Source: $_pattaSource',
-              style: const TextStyle(fontSize: 10, color: AppColors.textSecondary)),
+              style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
         ],
         const SizedBox(height: 10),
         if (_pattaFields != null)
@@ -6916,7 +6916,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
         if (patta['note'] != null) {
           pattaChildren.add(const SizedBox(height: 4));
           pattaChildren.add(Text(patta['note'].toString(),
-              style: const TextStyle(fontSize: 10, color: AppColors.textSecondary)));
+              style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)));
         }
       } else if (patta['error'] != null) {
         pattaChildren.add(Text(patta['error'].toString(),
@@ -7063,7 +7063,7 @@ class _GovtDocsSectionState extends State<_GovtDocsSection> {
       if (_ecSource != null) ...[
         const SizedBox(height: 4),
         Text('Source: $_ecSource',
-            style: const TextStyle(fontSize: 10, color: AppColors.textSecondary)),
+            style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
       ],
       if (_ecEntries.length > 1) ...[
         const SizedBox(height: 10),
