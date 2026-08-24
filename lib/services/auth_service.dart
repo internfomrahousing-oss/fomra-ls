@@ -203,6 +203,9 @@ class AuthService {
     LoginPortal portal,
   ) async {
     final normalizedEmail = email.trim().toLowerCase();
+    // Same real mobile-keyboard/autofill bug as login() below — a trailing
+    // space on the password field breaks an otherwise-correct password.
+    password = password.trim();
 
     if (portal == LoginPortal.management &&
         normalizedEmail != managementEmail) {
@@ -259,6 +262,13 @@ class AuthService {
 
   Future<void> login(String email, String password) async {
     final normalized = email.trim().toLowerCase();
+    // Real bug, not theoretical: mobile keyboards/autofill are prone to
+    // appending a trailing space (tapping a suggestion, password-manager
+    // autofill) in a way desktop physical keyboards rarely do — an
+    // otherwise-correct password then fails because the extra character
+    // is real to the auth check. The email field already normalizes for
+    // exactly this class of issue; the password field never did.
+    password = password.trim();
 
     LoginPortal? portal;
     if (normalized == managementEmail) {
