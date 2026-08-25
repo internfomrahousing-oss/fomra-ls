@@ -140,7 +140,7 @@ class _ContactDirectoryScreenState extends State<ContactDirectoryScreen> {
                       return ListTile(
                         contentPadding: EdgeInsets.zero,
                         title: Text(
-                          'Lead #${lead.leadId}',
+                          lead.displayName,
                           style: TextStyle(
                             fontWeight: FontWeight.w700,
                             color: context.fomraTextPrimary,

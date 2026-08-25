@@ -868,7 +868,7 @@ class _LeadsMapScreenState extends State<LeadsMapScreen> {
           breadcrumbs: [
             FomraBreadcrumbs.home,
             const FomraBreadcrumbItem.pop('Project Map'),
-            FomraBreadcrumbItem.current('Lead #${lead.leadId}'),
+            FomraBreadcrumbItem.current(lead.displayName),
           ],
         ),
       ),

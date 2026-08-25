@@ -988,9 +988,7 @@ class _SlaList extends StatelessWidget {
                 style: const TextStyle(fontWeight: FontWeight.w600),
               ),
               subtitle: Text(
-                item.lead.ownerName.trim().isEmpty
-                    ? '${item.ageDays}d old'
-                    : '${item.lead.ownerName} · ${item.ageDays}d old',
+                '${item.lead.displayName} · ${item.ageDays}d old',
               ),
               trailing: Text(
                 item.daysRemaining < 0

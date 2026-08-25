@@ -934,7 +934,7 @@ class _LeadDetailScreenState extends State<LeadDetailScreen>
     await showCreateTaskSheet(
       context,
       leadId: lead.leadId,
-      leadLabel: lead.ownerName.trim().isNotEmpty ? lead.ownerName.trim() : null,
+      leadLabel: lead.displayName,
     );
     if (mounted) setState(() {});
   }

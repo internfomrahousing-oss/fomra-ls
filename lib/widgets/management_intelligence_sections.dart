@@ -83,7 +83,7 @@ class IntelRemindersSection extends StatelessWidget {
               _IntelRow(
                 title: item.kind.label,
                 subtitle:
-                    'Lead #${item.lead.leadId} · ${item.detail} · ${item.daysStale}d',
+                    '${item.lead.displayName} · ${item.detail} · ${item.daysStale}d',
                 color: AppColors.warning,
                 onTap: onViewLead == null
                     ? null
@@ -128,7 +128,7 @@ class IntelEscalationsSection extends StatelessWidget {
               _IntelRow(
                 title: item.reason,
                 subtitle:
-                    'Lead #${item.lead.leadId} · ${item.overdueDays}d overdue',
+                    '${item.lead.displayName} · ${item.overdueDays}d overdue',
                 color: AppColors.error,
                 onTap: onViewLead == null
                     ? null

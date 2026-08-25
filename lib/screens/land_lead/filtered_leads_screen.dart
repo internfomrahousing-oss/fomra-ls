@@ -154,8 +154,7 @@ class _FilteredLeadRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final owner = lead.ownerName.trim();
-    final title = owner.isNotEmpty ? owner : 'Lead #${lead.leadId}';
+    final title = lead.displayName;
     final location = [
       lead.location,
       lead.village,

@@ -212,9 +212,7 @@ abstract final class UniversalSearchService {
       ].join(', ');
       hits.add(UniversalSearchHit(
         kind: UniversalSearchKind.lead,
-        title: lead.ownerName.trim().isNotEmpty
-            ? lead.ownerName.trim()
-            : 'Lead #${lead.leadId}',
+        title: lead.displayName,
         subtitle: [
           'Lead #${lead.leadId}',
           if (location.isNotEmpty) location,

@@ -59,7 +59,7 @@ abstract final class NotificationCenterService {
         audience: audience,
         title: 'Pending Approval · ${item.kind.label}',
         message:
-            'Lead #${item.lead.leadId} · ${item.lead.ownerName} — ${item.detail}',
+            '${item.lead.displayName} — ${item.detail}',
         type: 'pending_approval',
         leadId: item.lead.leadId,
         referenceId: item.visitId,
@@ -73,7 +73,7 @@ abstract final class NotificationCenterService {
         audience: audience,
         title: 'SLA Breach · ${item.kind.label}',
         message:
-            'Lead #${item.lead.leadId} · ${item.lead.ownerName} exceeded ${item.kind.targetDays}-day SLA.',
+            '${item.lead.displayName} exceeded ${item.kind.targetDays}-day SLA.',
         type: 'sla_breach',
         leadId: item.lead.leadId,
       );
@@ -97,7 +97,7 @@ abstract final class NotificationCenterService {
         audience: audience,
         title: 'Pending Lead',
         message:
-            'Lead #${lead.leadId} · ${lead.ownerName} still open (${DateTime.now().difference(lead.addedOn).inDays} days).',
+            '${lead.displayName} still open (${DateTime.now().difference(lead.addedOn).inDays} days).',
         type: 'pending_lead',
         leadId: lead.leadId,
       );
@@ -125,7 +125,7 @@ abstract final class NotificationCenterService {
         audience: audience,
         title: 'Pending Lead',
         message:
-            'Lead #${lead.leadId} · ${lead.ownerName} needs follow-up ($days days).',
+            '${lead.displayName} needs follow-up ($days days).',
         type: 'pending_lead',
         leadId: lead.leadId,
       );
