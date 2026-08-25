@@ -162,9 +162,35 @@ class EmployeeService {
     }
   }
 
+  /// Whether [email] belongs to an active employee — used by
+  /// AuthService.login() to decide the portal *before* authentication
+  /// completes, which means this runs as an anonymous request.
+  ///
+  /// Real bug this fixes, not theoretical: employee_profiles' RLS is
+  /// authenticated-only (narrowed for real security reasons earlier —
+  /// at the time believed to have no pre-login dependency, which turned
+  /// out to be wrong, this exact call is one). A plain findByEmail() call
+  /// here silently returns null for every anonymous caller — confirmed
+  /// directly against production that an anonymous query for a real,
+  /// active employee's email returns zero rows — so login failed with
+  /// "Invalid email or password" for a completely correct password,
+  /// every time, for anyone without an already-cached profile lookup.
+  /// employee_email_is_active() is a security-definer function that
+  /// answers only this yes/no, leaking no actual profile data (name,
+  /// phone, designation, etc.) to anonymous callers the way a broader
+  /// anonymous read policy on the table would.
   static Future<bool> emailExists(String email) async {
-    final profile = await findByEmail(email);
-    return profile != null && profile.status == EmployeeStatus.active;
+    try {
+      final result = await _db.rpc('employee_email_is_active',
+          params: {'target_email': email.trim()});
+      return result == true;
+    } catch (_) {
+      // Fall back to the authenticated-only path — correct once a
+      // session exists (e.g. checked again post-login somewhere), best
+      // effort if the RPC itself is ever unreachable.
+      final profile = await findByEmail(email);
+      return profile != null && profile.status == EmployeeStatus.active;
+    }
   }
 
   static Future<EmployeeProfile?> findByEmail(String email) async {
