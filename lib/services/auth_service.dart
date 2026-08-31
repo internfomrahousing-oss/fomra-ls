@@ -228,22 +228,62 @@ class AuthService {
     // (authenticated-only) RLS work. If Supabase accepts the credentials we're
     // done; the password that logs you in is guaranteed to be the auth password.
     var supabaseOk = false;
+    // Distinguish *why* sign-in failed instead of collapsing every case into
+    // "Invalid email or password" — that masking previously took real
+    // debugging time to see through (the Aug-24 sessionStorage bug looked
+    // identical to a wrong password until server-side timestamps proved
+    // otherwise). A network failure, a rate limit, and a genuinely wrong
+    // password are different problems with different fixes; the person
+    // typing the password deserves to know which one they're looking at.
+    String? networkOrOtherDetail;
+    var rateLimited = false;
     try {
       await _client.auth.signInWithPassword(
         email: normalizedEmail,
         password: password,
       );
       supabaseOk = _client.auth.currentUser != null;
-    } on AuthException {
+    } on AuthRetryableFetchException catch (e) {
       supabaseOk = false;
-    } catch (_) {
+      networkOrOtherDetail = e.message;
+    } on AuthApiException catch (e) {
       supabaseOk = false;
+      final code = (e.code ?? '').toLowerCase();
+      final msg = e.message.toLowerCase();
+      if (code.contains('rate_limit') || msg.contains('rate limit')) {
+        rateLimited = true;
+      }
+      // Anything else (e.g. actual invalid_credentials) falls through to
+      // the standard "Invalid email or password" below — that part of the
+      // original behavior was correct.
+    } catch (e) {
+      supabaseOk = false;
+      networkOrOtherDetail = e.toString();
     }
 
     // Real Supabase Auth is the ONLY accepted credential now — there is no
     // default ('fomra@2024') or local-password fallback. Each account's
     // password is the one the user set (via their invite / a change).
     if (!supabaseOk) {
+      if (networkOrOtherDetail != null || rateLimited) {
+        debugPrint(
+          '[auth] sign-in did not succeed for $normalizedEmail '
+          '(network/other detail: $networkOrOtherDetail, rateLimited: $rateLimited)',
+        );
+      }
+      if (networkOrOtherDetail != null) {
+        throw ApiException(
+          statusCode: 0,
+          message:
+              "Couldn't reach the server. Check your connection and try again.",
+        );
+      }
+      if (rateLimited) {
+        throw const ApiException(
+          statusCode: 429,
+          message: 'Too many attempts. Please wait a few minutes and try again.',
+        );
+      }
       throw const ApiException(
         statusCode: 401,
         message: 'Invalid email or password.',
